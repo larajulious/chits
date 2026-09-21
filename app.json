@@ -4,20 +4,24 @@
     "slug": "Chits",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/app_icon.png",
     "scheme": "chits",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/app_icon.png",
+      "bundleIdentifier": "com.larajulious.Chits"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#FCFCFA",
+        "foregroundImage": "./assets/images/app_icon.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "package": "com.larajulious.Chits"
     },
     "web": {
       "output": "static",
@@ -28,11 +32,33 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#FCFCFA",
+          "image": "./assets/images/app_splash_screen.png",
+          "imageWidth": 360,
+          "resizeMode": "contain"
         }
-      ]
+      ],
+      "expo-sqlite",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Chits to add selected photos and videos to your private chat.",
+          "cameraPermission": false,
+          "microphonePermission": "Allow Chits to record a voice note for your private chat."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Chits to record a voice note for your private chat.",
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      "expo-video",
+      "expo-asset",
+      "expo-sharing",
+      "react-native-zip-archive"
     ],
     "experiments": {
       "typedRoutes": true,
