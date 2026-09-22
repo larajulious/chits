@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { LoadingState } from '@/components/ui/primitives';
 import { AppDrawerProvider } from '@/components/navigation/app-drawer';
+import { AppDialogProvider } from '@/components/dialogs/app-dialog-provider';
 import { ThemeProvider, useTheme } from '@/components/theme-provider';
 // eslint-disable-next-line import/no-unresolved -- Expo resolves platform file suffixes at runtime.
 import { DatabaseProvider } from '@/db/provider';
@@ -13,16 +14,17 @@ import { subscribeToAppReset } from '@/services/app-reset';
 function ThemedApp() {
   const { scheme, tokens } = useTheme();
   return (
-    <AppDrawerProvider><StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: tokens.background } }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="archive" />
-        <Stack.Screen name="settings" />
-        <Stack.Screen name="unorganized" />
-        <Stack.Screen name="board/[id]" />
-        <Stack.Screen name="card/[id]" />
-      </Stack>
-    </AppDrawerProvider>
+    <AppDialogProvider>
+      <AppDrawerProvider><StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+        <Stack screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: tokens.background } }}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="settings" />
+          <Stack.Screen name="unorganized" />
+          <Stack.Screen name="board/[id]" />
+          <Stack.Screen name="card/[id]" />
+        </Stack>
+      </AppDrawerProvider>
+    </AppDialogProvider>
   );
 }
 

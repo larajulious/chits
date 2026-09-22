@@ -10,18 +10,14 @@ import { spacing } from '@/constants/theme';
 type DrawerContextValue = { openDrawer: () => void; closeDrawer: () => void };
 type IconName = ComponentProps<typeof Ionicons>['name'];
 type Destination = {
-  label: 'Boards' | 'Archive' | 'Settings';
-  path: '/' | '/archive' | '/settings';
+  label: 'Settings';
+  path: '/settings';
   icon: IconName;
 };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
-// Boards is the app's landing screen (route "/"); Chat lives at "/chat" and is
-// reached via the persistent bottom Chat action, not a drawer destination.
-const contentDestinations: Destination[] = [
-  { label: 'Boards', path: '/', icon: 'grid-outline' },
-  { label: 'Archive', path: '/archive', icon: 'archive-outline' },
-];
+// Boards, Chat, and Archive are all globally reachable from the bottom navigation
+// now — the drawer only carries Settings plus secondary utilities.
 const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
 
 export function useAppDrawer() {
@@ -31,8 +27,7 @@ export function useAppDrawer() {
 }
 
 function isDestinationActive(pathname: string, destination: Destination) {
-  if (destination.path !== '/') return pathname === destination.path;
-  return pathname === '/' || pathname.startsWith('/board/') || pathname.startsWith('/card/') || pathname === '/unorganized';
+  return pathname === destination.path;
 }
 
 function NavigationRow({ destination, pathname, close }: { destination: Destination; pathname: string; close: () => void }) {
@@ -78,29 +73,8 @@ function DrawerContent({ close }: { close: () => void }) {
         </Pressable>
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
-        {contentDestinations.map((destination) => (
-          <NavigationRow key={destination.path} destination={destination} pathname={pathname} close={close} />
-        ))}
-        <View style={styles.settingsGap}>
-          <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
-        </View>
+        <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
       </ScrollView>
-      <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Open Chat"
-          accessibilityHint="Open Chat to capture a new thought."
-          onPress={() => {
-            close();
-            router.navigate('/chat');
-          }}
-          style={({ pressed }) => [styles.chatButton, { backgroundColor: tokens.accent }, pressed && styles.chatButtonPressed]}>
-          <View accessible={false} style={styles.iconSlot}>
-            <Ionicons accessible={false} name="chatbubble-outline" size={21} color={tokens.accentText} />
-          </View>
-          <Text style={[styles.chatText, { color: tokens.accentText }]}>Chat</Text>
-        </Pressable>
-      </View>
     </SafeAreaView>
   );
 }
@@ -154,23 +128,5 @@ const styles = StyleSheet.create({
   iconSlot: { width: 24, alignItems: 'center', justifyContent: 'center' },
   itemText: { fontSize: 16 },
   itemTextSelected: { fontWeight: '700' },
-  settingsGap: { marginTop: spacing.sm },
-  footer: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  chatButton: {
-    alignSelf: 'flex-end',
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: 22,
-  },
-  chatText: { fontSize: 15, fontWeight: '700' },
-  chatButtonPressed: { opacity: 0.82 },
   pressed: { opacity: 0.62 },
 });

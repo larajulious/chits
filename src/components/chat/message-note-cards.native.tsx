@@ -93,8 +93,10 @@ function TextWithLinks({ text, style }: { text: string; style: StyleProp<TextSty
     : <Text key={`${index}-${segment.text}`}>{segment.text}</Text>)}</Text>;
 }
 
-function StructuredContent({ text, mode }: { text: string; mode: ContentMode }) {
+function StructuredContent({ text, mode, accentColor }: { text: string; mode: ContentMode; accentColor?: string }) {
   const { tokens } = useTheme();
+  const bulletColor = accentColor ?? tokens.accent;
+  const checkedIconColor = accentColor ? '#FFFFFF' : tokens.accentText;
   const lines = parseStructuredText(text);
   return <View style={[styles.structuredBody, mode === 'detail' && styles.structuredBodyDetail]}>
     {lines.map((line) => {
@@ -102,15 +104,15 @@ function StructuredContent({ text, mode }: { text: string; mode: ContentMode }) 
       if (line.kind === 'copy') return <TextWithLinks key={line.key} text={line.text} style={[mode === 'detail' ? styles.structuredCopyDetail : styles.structuredCopy, { color: tokens.textPrimary }]} />;
       return <View key={line.key} style={[styles.itemRow, mode === 'detail' && styles.itemRowDetail]}>
         {line.checked === null
-          ? <View style={[styles.bullet, mode === 'detail' && styles.bulletDetail, { backgroundColor: tokens.accent }]} />
-          : <View style={[styles.checkbox, mode === 'detail' && styles.checkboxDetail, { borderColor: line.checked ? tokens.accent : tokens.borderSubtle, backgroundColor: line.checked ? tokens.accent : 'transparent' }]}>{line.checked ? <Ionicons accessible={false} name="checkmark" size={mode === 'detail' ? 14 : 12} color={tokens.accentText} /> : null}</View>}
+          ? <View style={[styles.bullet, mode === 'detail' && styles.bulletDetail, { backgroundColor: bulletColor }]} />
+          : <View style={[styles.checkbox, mode === 'detail' && styles.checkboxDetail, { borderColor: line.checked ? bulletColor : tokens.borderSubtle, backgroundColor: line.checked ? bulletColor : 'transparent' }]}>{line.checked ? <Ionicons accessible={false} name="checkmark" size={mode === 'detail' ? 14 : 12} color={checkedIconColor} /> : null}</View>}
         <TextWithLinks text={line.text} style={[mode === 'detail' ? styles.itemTextDetail : styles.itemText, { color: tokens.textPrimary }]} />
       </View>;
     })}
   </View>;
 }
 
-export function MessageContentRenderer({ message, mode, focused = false, onActions, renderAttachments }: { message: Message; mode: ContentMode; focused?: boolean; onActions?: () => void; renderAttachments?: () => ReactNode }) {
+export function MessageContentRenderer({ message, mode, focused = false, accentColor, onActions, renderAttachments }: { message: Message; mode: ContentMode; focused?: boolean; accentColor?: string; onActions?: () => void; renderAttachments?: () => ReactNode }) {
   const { tokens } = useTheme();
   const presentation = classifyMessage(message);
   const actions = onActions ?? (() => undefined);
@@ -124,7 +126,7 @@ export function MessageContentRenderer({ message, mode, focused = false, onActio
   return <View style={styles.detailContent}>
     {message.attachments.length ? renderAttachments?.() : null}
     {message.text ? textPresentation === 'structured-note'
-      ? <StructuredContent text={message.text} mode="detail" />
+      ? <StructuredContent text={message.text} mode="detail" accentColor={accentColor} />
       : <PlainTextContent text={message.text} mode="detail" color={tokens.textPrimary} /> : null}
   </View>;
 }

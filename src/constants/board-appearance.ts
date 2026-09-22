@@ -30,3 +30,25 @@ export const BOARD_ACCENTS: { value: string | null; label: string; color: string
 export function resolveBoardIcon(icon: string | null): BoardIconName {
   return BOARD_ICONS.some((choice) => choice.name === icon) ? (icon as BoardIconName) : 'folder-outline';
 }
+
+function hexToRgb(hex: string): [number, number, number] {
+  const value = hex.replace('#', '');
+  return [parseInt(value.slice(0, 2), 16), parseInt(value.slice(2, 4), 16), parseInt(value.slice(4, 6), 16)];
+}
+
+function channelToHex(channel: number) {
+  return Math.round(Math.min(255, Math.max(0, channel))).toString(16).padStart(2, '0');
+}
+
+// Mixes `accent` into `base` as a solid, opaque color rather than layering `accent`
+// on top with alpha transparency. A translucent fill composites with whatever sits
+// behind it — the screen background in light mode, but a near-black one in dark
+// mode — so the "soft tint" turns muddy/dark exactly where a raw accent is darkest
+// or most saturated. Mixing toward `base` first means the result is always close to
+// `base`'s own lightness, softening any accent automatically, and is a single flat
+// color with no stacking artifacts against whatever's underneath.
+export function tintWithAccent(base: string, accent: string, ratio = 0.08): string {
+  const [br, bg, bb] = hexToRgb(base);
+  const [ar, ag, ab] = hexToRgb(accent);
+  return `#${channelToHex(br + (ar - br) * ratio)}${channelToHex(bg + (ag - bg) * ratio)}${channelToHex(bb + (ab - bb) * ratio)}`;
+}

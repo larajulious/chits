@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -13,15 +13,17 @@ import * as Sharing from 'expo-sharing';
 import { AttachmentContent } from '@/components/chat/message-row';
 import { MessageContentRenderer } from '@/components/chat/message-note-cards';
 import { AddCardAttachmentSheet } from '@/components/boards/add-card-attachment-sheet';
+import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
 import { AppHeader, EmptyState, IconButton, Screen, Toast } from '@/components/ui/primitives';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { radii, spacing, type ThemeTokens } from '@/constants/theme';
+import { tintWithAccent } from '@/constants/board-appearance';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
 import { persistCardAttachment, removeCardAttachmentFile } from '@/services/card-attachment-storage';
 import type { CardAttachment, Message } from '@/db/types';
 
-type Detail = { id: string; title: string | null; explicitTitle: string | null; boardId: string; boardName: string; columnId: string; columnName: string; createdAt: number; pinned: number; attachmentCount: number };
+type Detail = { id: string; title: string | null; explicitTitle: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; pinned: number; attachmentCount: number };
 type Comment = { id: string; cardId: string; text: string; createdAt: number; updatedAt: number };
 const messageFallback = (message: Message) => {
   const attachment = message.attachments[0];
@@ -38,6 +40,7 @@ export default function CardDetailScreen() {
   const repository = useMemo(() => createBoardRepository(database), [database]);
   const messageRepository = useMemo(() => createMessageRepository(database), [database]);
   const { tokens: theme } = useTheme();
+  const { confirm, actionSheet } = useAppDialog();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [detail, setDetail] = useState<Detail | null | undefined>();
@@ -189,17 +192,23 @@ export default function CardDetailScreen() {
     void repository.deleteComment(comment.id).catch(() => { setComments(previous); setNotice('Chits could not delete that comment.'); });
   };
 
-  const confirmDeleteComment = (comment: Comment) => Alert.alert('Delete comment?', 'This can’t be undone.', [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'Delete', style: 'destructive', onPress: () => deleteComment(comment) },
-  ]);
+  const confirmDeleteComment = (comment: Comment) => confirm({
+    type: 'destructive',
+    icon: 'trash-outline',
+    title: 'Delete comment?',
+    message: 'This can’t be undone.',
+    confirmText: 'Delete comment',
+    onConfirm: () => deleteComment(comment),
+  });
 
-  const openCommentActions = (comment: Comment) => Alert.alert('Comment', undefined, [
-    { text: 'Edit', onPress: () => startCommentEdit(comment) },
-    { text: 'Copy', onPress: () => void copyComment(comment) },
-    { text: 'Delete', style: 'destructive', onPress: () => confirmDeleteComment(comment) },
-    { text: 'Cancel', style: 'cancel' },
-  ]);
+  const openCommentActions = (comment: Comment) => actionSheet({
+    title: 'Comment',
+    options: [
+      { label: 'Edit', icon: 'create-outline', onPress: () => startCommentEdit(comment) },
+      { label: 'Copy', icon: 'copy-outline', onPress: () => void copyComment(comment) },
+      { label: 'Delete', icon: 'trash-outline', destructive: true, onPress: () => confirmDeleteComment(comment) },
+    ],
+  });
 
   // Supporting material for the card itself — never a Chat message, never a Chits
   // talk-back event, and never touches the linked thought's own source attachment.
@@ -275,20 +284,22 @@ export default function CardDetailScreen() {
     }
   };
 
-  const confirmDeleteCardAttachment = (attachment: CardAttachment) => Alert.alert('Delete attachment?', undefined, [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'Delete', style: 'destructive', onPress: () => void deleteCardAttachmentNow(attachment) },
-  ]);
+  const confirmDeleteCardAttachment = (attachment: CardAttachment) => confirm({
+    type: 'destructive',
+    icon: 'trash-outline',
+    title: 'Delete attachment?',
+    message: 'This attachment will be permanently removed from the card.',
+    confirmText: 'Delete attachment',
+    onConfirm: () => void deleteCardAttachmentNow(attachment),
+  });
 
-  const openCardAttachmentActions = (attachment: CardAttachment) => Alert.alert(
-    attachment.type === 'file' ? (attachment.originalName ?? 'File') : attachment.type === 'photo' ? 'Photo' : 'Video',
-    undefined,
-    [
-      { text: 'Share', onPress: () => void shareCardAttachment(attachment) },
-      { text: 'Delete', style: 'destructive', onPress: () => confirmDeleteCardAttachment(attachment) },
-      { text: 'Cancel', style: 'cancel' },
+  const openCardAttachmentActions = (attachment: CardAttachment) => actionSheet({
+    title: attachment.type === 'file' ? (attachment.originalName ?? 'File') : attachment.type === 'photo' ? 'Photo' : 'Video',
+    options: [
+      { label: 'Share', icon: 'share-outline', onPress: () => void shareCardAttachment(attachment) },
+      { label: 'Delete', icon: 'trash-outline', destructive: true, onPress: () => confirmDeleteCardAttachment(attachment) },
     ],
-  );
+  });
 
   const isSameDay = (a: number, b: number) => { const da = new Date(a); const db = new Date(b); return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate(); };
   const commentTimeLabel = (timestamp: number) => {
@@ -296,19 +307,28 @@ export default function CardDetailScreen() {
     return isSameDay(timestamp, renderedAt) ? `Today · ${time}` : `${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(timestamp)} · ${time}`;
   };
 
-  const archive = () => Alert.alert('Archive card?', 'Your original messages remain in Chat.', [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'Archive', onPress: () => void (async () => { await repository.archiveCard(id); router.back(); })() },
-  ]);
+  const archive = () => confirm({
+    type: 'default',
+    icon: 'archive-outline',
+    title: 'Archive card?',
+    message: 'You can restore it later from Archive. Your original messages remain in Chat.',
+    confirmText: 'Archive card',
+    accentColor: detail?.boardAccent ?? null,
+    onConfirm: async () => { await repository.archiveCard(id); router.back(); },
+  });
 
-  const destroy = () => Alert.alert('Delete card?', 'Removing this card does not delete your original messages.', [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'Delete card', style: 'destructive', onPress: () => void (async () => {
+  const destroy = () => confirm({
+    type: 'destructive',
+    icon: 'trash-outline',
+    title: 'Delete card?',
+    message: 'Removing this card does not delete your original messages — they remain in Chat.',
+    confirmText: 'Delete card',
+    onConfirm: async () => {
       const removableUris = await repository.deleteCard(id);
       await Promise.all(removableUris.map((uri) => removeCardAttachmentFile(uri)));
       router.back();
-    })() },
-  ]);
+    },
+  });
 
   if (detail === undefined) return <Screen>{showCardLoader ? <View style={styles.cardLoader}><ChitsLoader label="Loading card…" /></View> : null}</Screen>;
   if (!detail) return <Screen>
@@ -324,6 +344,18 @@ export default function CardDetailScreen() {
 
   const singleThoughtEditable = messages.length === 1 && Boolean(messages[0]?.text) && editingMessageId !== messages[0]?.id;
 
+  // The Content card takes its color from the card's own board — same source of
+  // truth as the board detail screen — rather than the generic theme accent, so
+  // it stays visually tied to where the card lives.
+  const contentAccentTint = detail.boardAccent ? tintWithAccent(theme.background, detail.boardAccent, 0.08) : theme.accentSoft;
+  const contentAccentBorder = detail.boardAccent ?? theme.accentBorder;
+  const contentAccentStrong = detail.boardAccent ?? theme.accentStrong;
+  // For solid fills (Save buttons) and the focused-input underline — the full
+  // accent rather than the softer "strong" variant, matching what these already
+  // used before they followed the board's color (tokens.accent, not accentStrong).
+  const contentAccentSolid = detail.boardAccent ?? theme.accent;
+  const contentAccentOn = detail.boardAccent ? '#FFFFFF' : theme.accentText;
+
   return <Screen edges={['top', 'left', 'right']}>
     <AppHeader
       title="Card details"
@@ -334,15 +366,15 @@ export default function CardDetailScreen() {
       <ScrollView ref={scrollRef} style={styles.flex} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
         <View style={styles.hero}>
           {titleEditing ? <View style={styles.editor}>
-            <TextInput autoFocus accessibilityLabel="Card title" value={titleDraft} onChangeText={setTitleDraft} placeholder="Card title" placeholderTextColor={theme.textMuted} maxLength={120} returnKeyType="done" onSubmitEditing={() => void saveTitle()} style={styles.titleInput} />
+            <TextInput autoFocus accessibilityLabel="Card title" value={titleDraft} onChangeText={setTitleDraft} placeholder="Card title" placeholderTextColor={theme.textMuted} maxLength={120} returnKeyType="done" onSubmitEditing={() => void saveTitle()} style={[styles.titleInput, { borderColor: contentAccentSolid }]} />
             <View style={styles.editActions}>
-              <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => void saveTitle()} style={[styles.editSave, { backgroundColor: theme.accent }, savingEdit && styles.disabled]}><Text style={[styles.editSaveText, { color: theme.accentText }]}>{savingEdit ? 'Saving…' : 'Save title'}</Text></Pressable>
+              <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => void saveTitle()} style={[styles.editSave, { backgroundColor: contentAccentSolid }, savingEdit && styles.disabled]}><Text style={[styles.editSaveText, { color: contentAccentOn }]}>{savingEdit ? 'Saving…' : 'Save title'}</Text></Pressable>
               <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => { setTitleDraft(detail.explicitTitle ?? ''); setTitleEditing(false); }} style={styles.editCancel}><Text style={styles.editCancelText}>Cancel</Text></Pressable>
             </View>
           </View> : displayTitle ? <Pressable accessibilityRole="button" accessibilityLabel="Edit card title" onPress={startTitleEdit} style={({ pressed }) => [styles.titleRow, pressed && styles.pressed]}>
             <Text style={styles.title}>{displayTitle}</Text>
-            <View style={styles.titleEditButton}><Ionicons accessible={false} name="create-outline" size={17} color={theme.textMuted} /></View>
-          </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel={detail.explicitTitle ? 'Edit card title' : 'Add a card title'} onPress={startTitleEdit} style={({ pressed }) => [styles.addTitle, pressed && styles.pressed]}><Ionicons accessible={false} name={detail.explicitTitle ? 'create-outline' : 'add'} size={17} color={theme.accent} /><Text style={styles.editHint}>{detail.explicitTitle ? 'Edit title' : 'Add title'}</Text></Pressable>}
+            <View style={styles.titleEditButton}><Ionicons accessible={false} name="create-outline" size={17} color={contentAccentStrong} /></View>
+          </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel={detail.explicitTitle ? 'Edit card title' : 'Add a card title'} onPress={startTitleEdit} style={({ pressed }) => [styles.addTitle, pressed && styles.pressed]}><Ionicons accessible={false} name={detail.explicitTitle ? 'create-outline' : 'add'} size={17} color={contentAccentStrong} /><Text style={[styles.editHint, { color: contentAccentStrong }]}>{detail.explicitTitle ? 'Edit title' : 'Add title'}</Text></Pressable>}
         </View>
 
         {notice ? <View accessibilityRole="alert" style={styles.noticePanel}>
@@ -350,14 +382,14 @@ export default function CardDetailScreen() {
           <View style={styles.noticeCopy}><Text style={styles.notice}>{notice}</Text></View>
         </View> : null}
 
-        <View style={[styles.contentCard, { backgroundColor: theme.accentSoft, borderColor: theme.accentBorder }]}>
+        <View style={[styles.contentCard, { backgroundColor: contentAccentTint, borderColor: contentAccentBorder }]}>
           <View style={styles.contentCardHeader}>
             <View style={styles.contentCardTitleRow}>
-              <View style={[styles.contentIconMark, { backgroundColor: theme.surface }]}><Ionicons accessible={false} name="document-text-outline" size={14} color={theme.accentStrong} /></View>
-              <Text accessibilityRole="header" style={[styles.contentSectionTitle, { color: theme.accentStrong }]}>CONTENT</Text>
+              <View style={[styles.contentIconMark, { backgroundColor: theme.surface }]}><Ionicons accessible={false} name="document-text-outline" size={14} color={contentAccentStrong} /></View>
+              <Text accessibilityRole="header" style={[styles.contentSectionTitle, { color: contentAccentStrong }]}>CONTENT</Text>
             </View>
-            {singleThoughtEditable ? <Pressable accessibilityRole="button" accessibilityLabel="Edit content" hitSlop={8} onPress={() => startContentEdit(messages[0])} style={styles.sectionEditButton}><Ionicons accessible={false} name="create-outline" size={16} color={theme.accentStrong} /></Pressable>
-              : messages.length > 1 ? <View style={[styles.countBadge, { backgroundColor: theme.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.accentBorder }]}><Text style={styles.countText}>{messages.length}</Text></View> : null}
+            {singleThoughtEditable ? <Pressable accessibilityRole="button" accessibilityLabel="Edit content" hitSlop={8} onPress={() => startContentEdit(messages[0])} style={styles.sectionEditButton}><Ionicons accessible={false} name="create-outline" size={16} color={contentAccentStrong} /></Pressable>
+              : messages.length > 1 ? <View style={[styles.countBadge, { backgroundColor: theme.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: contentAccentBorder }]}><Text style={styles.countText}>{messages.length}</Text></View> : null}
           </View>
           <Text style={styles.contentSectionHint}>Changes here also update the original thought in Chat.</Text>
 
@@ -368,14 +400,14 @@ export default function CardDetailScreen() {
                 {message.text && editingMessageId !== message.id ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit thought ${index + 1}`} hitSlop={8} onPress={() => startContentEdit(message)} style={styles.inlineEdit}><Ionicons accessible={false} name="create-outline" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Edit</Text></Pressable> : null}
               </View> : null}
               {editingMessageId === message.id ? <View style={styles.editor}>
-                {message.attachments.length ? <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" /></View>)}</View> : null}
-                <TextInput autoFocus accessibilityLabel="Card content" multiline value={contentDraft} onChangeText={setContentDraft} placeholder="Write card content" placeholderTextColor={theme.textMuted} textAlignVertical="top" style={styles.contentInput} />
+                {message.attachments.length ? <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} /></View>)}</View> : null}
+                <TextInput autoFocus accessibilityLabel="Card content" multiline value={contentDraft} onChangeText={setContentDraft} placeholder="Write card content" placeholderTextColor={theme.textMuted} textAlignVertical="top" style={[styles.contentInput, { borderColor: contentAccentSolid }]} />
                 <View style={styles.editActions}>
-                  <Pressable accessibilityRole="button" disabled={savingEdit || (!contentDraft.trim() && !message.attachments.length)} onPress={() => void saveContent()} style={[styles.editSave, { backgroundColor: theme.accent }, (savingEdit || (!contentDraft.trim() && !message.attachments.length)) && styles.disabled]}><Text style={[styles.editSaveText, { color: theme.accentText }]}>{savingEdit ? 'Saving…' : 'Save changes'}</Text></Pressable>
+                  <Pressable accessibilityRole="button" disabled={savingEdit || (!contentDraft.trim() && !message.attachments.length)} onPress={() => void saveContent()} style={[styles.editSave, { backgroundColor: contentAccentSolid }, (savingEdit || (!contentDraft.trim() && !message.attachments.length)) && styles.disabled]}><Text style={[styles.editSaveText, { color: contentAccentOn }]}>{savingEdit ? 'Saving…' : 'Save changes'}</Text></Pressable>
                   <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => { setEditingMessageId(null); setContentDraft(''); }} style={styles.editCancel}><Text style={styles.editCancelText}>Cancel</Text></Pressable>
                 </View>
               </View> : <>
-                <MessageContentRenderer message={message} mode="detail" renderAttachments={() => <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" /></View>)}</View>} />
+                <MessageContentRenderer message={message} mode="detail" accentColor={detail.boardAccent ?? undefined} renderAttachments={() => <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} /></View>)}</View>} />
                 {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={`Add a description to ${messageFallback(message)}`} onPress={() => startContentEdit(message)} style={styles.addDescription}><Ionicons accessible={false} name="add" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Add description</Text></Pressable> : null}
               </>}
               {index < messages.length - 1 ? <View style={styles.thoughtDivider} /> : null}
@@ -404,19 +436,19 @@ export default function CardDetailScreen() {
         {cardAttachments.length === 0 ? <View style={styles.commentsEmpty}>
           <Text style={styles.commentsEmptyTitle}>No attachments yet.</Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Add attachment" disabled={attachmentBusy} onPress={openAddAttachment} style={styles.addDescription}>
-            {showAttachmentLoader ? <ChitsLoader size="small" /> : <Ionicons accessible={false} name="add" size={16} color={theme.accent} />}
-            <Text style={styles.inlineEditText}>Add attachment</Text>
+            {showAttachmentLoader ? <ChitsLoader size="small" /> : <Ionicons accessible={false} name="add" size={16} color={contentAccentStrong} />}
+            <Text style={[styles.inlineEditText, { color: contentAccentStrong }]}>Add attachment</Text>
           </Pressable>
         </View> : <>
           {cardAttachments.some((attachment) => attachment.type !== 'file') ? <View style={styles.attachmentGrid}>
-            {cardAttachments.filter((attachment) => attachment.type !== 'file').map((attachment) => <View key={attachment.id} style={[styles.cardAttachment, styles.attachmentGridItem]}><AttachmentContent attachment={attachment} variant="board" onLongPress={() => openCardAttachmentActions(attachment)} /></View>)}
+            {cardAttachments.filter((attachment) => attachment.type !== 'file').map((attachment) => <View key={attachment.id} style={[styles.cardAttachment, styles.attachmentGridItem]}><AttachmentContent attachment={attachment} variant="board" accentColor={detail.boardAccent ?? undefined} onLongPress={() => openCardAttachmentActions(attachment)} /></View>)}
           </View> : null}
           {cardAttachments.some((attachment) => attachment.type === 'file') ? <View style={[styles.attachmentList, styles.attachmentFileList]}>
-            {cardAttachments.filter((attachment) => attachment.type === 'file').map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" onLongPress={() => openCardAttachmentActions(attachment)} /></View>)}
+            {cardAttachments.filter((attachment) => attachment.type === 'file').map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} onLongPress={() => openCardAttachmentActions(attachment)} /></View>)}
           </View> : null}
           <Pressable accessibilityRole="button" accessibilityLabel="Add attachment" disabled={attachmentBusy} onPress={openAddAttachment} style={styles.addAttachmentRow}>
-            {showAttachmentLoader ? <ChitsLoader size="small" /> : <Ionicons accessible={false} name="add" size={16} color={theme.accent} />}
-            <Text style={styles.inlineEditText}>Add attachment</Text>
+            {showAttachmentLoader ? <ChitsLoader size="small" /> : <Ionicons accessible={false} name="add" size={16} color={contentAccentStrong} />}
+            <Text style={[styles.inlineEditText, { color: contentAccentStrong }]}>Add attachment</Text>
           </Pressable>
         </>}
 

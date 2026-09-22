@@ -13,7 +13,7 @@ import { AttachmentContent } from '@/components/chat/message-row';
 import { AddNoteSheet } from '@/components/boards/add-note-sheet';
 import { ColumnManagementSheet } from '@/components/boards/column-management-sheet';
 import { EditBoardSheet } from '@/components/boards/edit-board-sheet';
-import { resolveBoardIcon, type BoardIconName } from '@/constants/board-appearance';
+import { resolveBoardIcon, tintWithAccent, type BoardIconName } from '@/constants/board-appearance';
 import { spacing } from '@/constants/theme';
 import { createBoardRepository } from '@/db/repositories';
 import { useTheme } from '@/components/theme-provider';
@@ -40,7 +40,7 @@ const FULL_PRELOAD_CARD_LIMIT = 800;
 // still near a boundary or drifts by a couple of pixels.
 const REORDER_HYSTERESIS = 8;
 
-function ColumnNavigator({ columns, cards, columnStatus, columnCounts, columnIndex, reduceMotion, onSelect, onAddColumn }: { columns: Column[]; cards: Card[]; columnStatus: Record<string, 'loading' | 'loaded' | 'error'>; columnCounts: Record<string, number>; columnIndex: number; reduceMotion: boolean; onSelect: (index: number) => void; onAddColumn: () => void }) {
+function ColumnNavigator({ columns, cards, columnStatus, columnCounts, columnIndex, reduceMotion, accent, onSelect, onAddColumn }: { columns: Column[]; cards: Card[]; columnStatus: Record<string, 'loading' | 'loaded' | 'error'>; columnCounts: Record<string, number>; columnIndex: number; reduceMotion: boolean; accent: string; onSelect: (index: number) => void; onAddColumn: () => void }) {
   const { tokens: theme } = useTheme();
   const listRef = useRef<ScrollView>(null);
   const [layouts, setLayouts] = useState<Record<string, { x: number; width: number }>>({});
@@ -69,7 +69,7 @@ function ColumnNavigator({ columns, cards, columnStatus, columnCounts, columnInd
   }, [activeLayout, indicatorX, reduceMotion, viewportWidth]);
   const indicatorStyle = useAnimatedStyle(() => ({ transform: [{ translateX: indicatorX.get() }] }));
   return <GlassSurface style={[styles.navigatorSurface, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}><ScrollView ref={listRef} horizontal showsHorizontalScrollIndicator={false} onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)} contentContainerStyle={styles.navigatorContent} style={styles.navigator}>
-    <Animated.View pointerEvents="none" style={[styles.navigatorIndicator, { backgroundColor: theme.accent }, indicatorStyle]} />
+    <Animated.View pointerEvents="none" style={[styles.navigatorIndicator, { backgroundColor: accent }, indicatorStyle]} />
     {columns.map((column, index) => { const selected = index === columnIndex; const count = counts.get(column.id) ?? 0; return <Pressable key={column.id} accessibilityRole="tab" accessibilityLabel={`${column.name} column, ${count} ${count === 1 ? 'card' : 'cards'}, ${index + 1} of ${columns.length}`} accessibilityState={{ selected }} onLayout={(event) => { const { x, width } = event.nativeEvent.layout; setLayouts((current) => current[column.id]?.x === x && current[column.id]?.width === width ? current : { ...current, [column.id]: { x, width } }); }} onPress={() => onSelect(index)} style={({ pressed }) => [styles.navigatorItem, pressed && styles.navigatorItemPressed]}><View style={styles.navigatorNameFrame}><Text accessible={false} numberOfLines={1} style={[styles.navigatorName, styles.navigatorNameMeasure]}>{column.name}</Text><Text numberOfLines={1} style={[styles.navigatorName, styles.navigatorNameVisible, { color: selected ? theme.textPrimary : theme.textMuted }, selected && styles.navigatorNameSelected]}>{column.name}</Text></View></Pressable>; })}
     <Pressable accessibilityRole="button" accessibilityLabel="Add column" onPress={onAddColumn} style={({ pressed }) => [styles.navigatorAddItem, { borderColor: theme.borderSubtle }, pressed && styles.navigatorItemPressed]}><Ionicons accessible={false} name="add" size={16} color={theme.textMuted} /></Pressable>
   </ScrollView><Text accessibilityElementsHidden importantForAccessibility="no" style={[styles.navigatorPosition, { color: theme.textMuted }]}>{columnIndex + 1} of {columns.length}</Text></GlassSurface>;
@@ -132,8 +132,14 @@ function DragHandle({ index, total, translationY, handleRef, columnName, canMove
   return <GestureDetector gesture={gesture}><Pressable ref={handleRef} collapsable={false} hitSlop={4} accessibilityRole="adjustable" accessibilityLabel={`Drag handle. Reorder card. Card ${index + 1} of ${total} in ${columnName}.`} accessibilityActions={actions} onPress={(event) => event.stopPropagation()} onAccessibilityAction={(event) => { const name = event.nativeEvent.actionName; if (name === 'decrement') onReorder(-1); if (name === 'increment') onReorder(1); if (name === 'movePrevColumn') onMoveColumn(-1); if (name === 'moveNextColumn') onMoveColumn(1); }} style={styles.dragHandle}><DragDots /></Pressable></GestureDetector>;
 }
 
-const CardSurface = memo(function CardSurface({ card, index, total, translationY, dragging = false, interactive = true, highlighted = false, columnName = '', canMovePrevColumn = false, canMoveNextColumn = false, onBeginDrag, onDragMove, onDragEnd, onDragCancel, onOpenMove, onReorder, onMoveColumn }: { card: Card; index: number; total: number; translationY?: SharedValue<number>; dragging?: boolean; interactive?: boolean; highlighted?: boolean; columnName?: string; canMovePrevColumn?: boolean; canMoveNextColumn?: boolean; onBeginDrag?: () => void; onDragMove?: (dx: number, dy: number, pageX: number, pageY: number) => void; onDragEnd?: () => void; onDragCancel?: () => void; onOpenMove?: () => void; onReorder?: (direction: -1 | 1) => void; onMoveColumn?: (direction: -1 | 1) => void }) {
+const CardSurface = memo(function CardSurface({ card, index, total, translationY, dragging = false, interactive = true, highlighted = false, accent, accentTint, accentBorderColor, columnName = '', canMovePrevColumn = false, canMoveNextColumn = false, onBeginDrag, onDragMove, onDragEnd, onDragCancel, onOpenMove, onReorder, onMoveColumn }: { card: Card; index: number; total: number; translationY?: SharedValue<number>; dragging?: boolean; interactive?: boolean; highlighted?: boolean; accent?: string; accentTint?: string; accentBorderColor?: string; columnName?: string; canMovePrevColumn?: boolean; canMoveNextColumn?: boolean; onBeginDrag?: () => void; onDragMove?: (dx: number, dy: number, pageX: number, pageY: number) => void; onDragEnd?: () => void; onDragCancel?: () => void; onOpenMove?: () => void; onReorder?: (direction: -1 | 1) => void; onMoveColumn?: (direction: -1 | 1) => void }) {
   const { tokens: theme } = useTheme();
+  // The board's own accent, resolved by the caller — see the equivalent constants
+  // in BoardScreen — falling back to the generic theme tokens when not passed
+  // (e.g. any future standalone usage) so this component stays safe on its own.
+  const resolvedAccent = accent ?? theme.accent;
+  const resolvedAccentTint = accentTint ?? theme.accentSoft;
+  const resolvedAccentBorder = accentBorderColor ?? theme.accentBorder;
   const handleRef = useAnimatedRef<View>();
   const footerRef = useAnimatedRef<View>();
   // Briefly tints the card that was just landed on from the Unorganized "Add to
@@ -187,7 +193,7 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
       .onFinalize((_, success) => { if (!success) runOnJS(onDragCancel)(); });
   }, [draggable, footerRef, handleRef, onBeginDrag, onDragCancel, onDragEnd, onDragMove, translationY]);
   const cardSurface = <Pressable disabled={!interactive} accessibilityRole="button" accessibilityLabel={`Open ${card.title || card.preview || 'untitled thought'}${accessibleMetadata ? `, ${accessibleMetadata}` : ''}`} accessibilityHint="Opens card details" onPress={() => router.push(`/card/${card.id}`)} style={({ pressed }) => [styles.card, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, dragging && styles.cardDragging, pressed && interactive && styles.cardPressed]}>
-    <Animated.View pointerEvents="none" accessible={false} style={[StyleSheet.absoluteFill, styles.cardHighlight, { backgroundColor: theme.accentSoft, borderColor: theme.accentBorder }, highlightStyle]} />
+    <Animated.View pointerEvents="none" accessible={false} style={[StyleSheet.absoluteFill, styles.cardHighlight, { backgroundColor: resolvedAccentTint, borderColor: resolvedAccentBorder }, highlightStyle]} />
     {media ? <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.cardMedia, { borderBottomColor: theme.borderSubtle }]}><AttachmentContent attachment={media} variant="board" /></View> : null}
     <View style={styles.cardBody}>
       <View style={styles.cardTop}>
@@ -205,11 +211,11 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
 
       <View style={[styles.cardDivider, { backgroundColor: theme.borderSubtle }]} />
       <View ref={footerRef} collapsable={false} style={styles.cardControls}>
-        <Pressable disabled={!interactive} accessibilityRole="button" accessibilityLabel="Move to another column" onPress={(event) => { event.stopPropagation(); onOpenMove?.(); }} style={({ pressed }) => [styles.move, { backgroundColor: theme.surfaceElevated }, !interactive && styles.reorderButtonDisabled, pressed && styles.controlPressed]}><Ionicons accessible={false} name="swap-horizontal-outline" size={17} color={theme.accent} /><Text style={[styles.moveText, { color: theme.accent }]}>Move</Text></Pressable>
+        <Pressable disabled={!interactive} accessibilityRole="button" accessibilityLabel="Move to another column" onPress={(event) => { event.stopPropagation(); onOpenMove?.(); }} style={({ pressed }) => [styles.move, { backgroundColor: theme.surfaceElevated }, !interactive && styles.reorderButtonDisabled, pressed && styles.controlPressed]}><Ionicons accessible={false} name="swap-horizontal-outline" size={17} color={resolvedAccent} /><Text style={[styles.moveText, { color: resolvedAccent }]}>Move</Text></Pressable>
         <View style={[styles.reorderGroup, { backgroundColor: theme.surfaceElevated }]}>
-          <Pressable disabled={!interactive || index === 0} accessibilityRole="button" accessibilityLabel="Move card up" accessibilityState={{ disabled: !interactive || index === 0 }} onPress={(event) => { event.stopPropagation(); onReorder?.(-1); }} style={({ pressed }) => [styles.reorderButton, (index === 0 || !interactive) && styles.reorderButtonDisabled, pressed && styles.reorderButtonPressed]}><Ionicons accessible={false} name="arrow-up-outline" size={17} color={theme.accent} /></Pressable>
+          <Pressable disabled={!interactive || index === 0} accessibilityRole="button" accessibilityLabel="Move card up" accessibilityState={{ disabled: !interactive || index === 0 }} onPress={(event) => { event.stopPropagation(); onReorder?.(-1); }} style={({ pressed }) => [styles.reorderButton, (index === 0 || !interactive) && styles.reorderButtonDisabled, pressed && styles.reorderButtonPressed]}><Ionicons accessible={false} name="arrow-up-outline" size={17} color={resolvedAccent} /></Pressable>
           <View style={[styles.reorderDivider, { backgroundColor: theme.borderSubtle }]} />
-          <Pressable disabled={!interactive || index === total - 1} accessibilityRole="button" accessibilityLabel="Move card down" accessibilityState={{ disabled: !interactive || index === total - 1 }} onPress={(event) => { event.stopPropagation(); onReorder?.(1); }} style={({ pressed }) => [styles.reorderButton, (index === total - 1 || !interactive) && styles.reorderButtonDisabled, pressed && styles.reorderButtonPressed]}><Ionicons accessible={false} name="arrow-down-outline" size={17} color={theme.accent} /></Pressable>
+          <Pressable disabled={!interactive || index === total - 1} accessibilityRole="button" accessibilityLabel="Move card down" accessibilityState={{ disabled: !interactive || index === total - 1 }} onPress={(event) => { event.stopPropagation(); onReorder?.(1); }} style={({ pressed }) => [styles.reorderButton, (index === total - 1 || !interactive) && styles.reorderButtonDisabled, pressed && styles.reorderButtonPressed]}><Ionicons accessible={false} name="arrow-down-outline" size={17} color={resolvedAccent} /></Pressable>
         </View>
       </View>
     </View>
@@ -217,12 +223,12 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
   return cardGesture ? <GestureDetector gesture={cardGesture}>{cardSurface}</GestureDetector> : cardSurface;
 });
 
-const BoardCardRow = memo(function BoardCardRow({ card, index, total, translationY, highlighted, columnName, canMovePrevColumn, canMoveNextColumn, onBeginDrag, onDragMove, onDragEnd, onDragCancel, onOpenMove, onReorder, onMoveColumn }: { card: Card; index: number; total: number; translationY: SharedValue<number>; highlighted?: boolean; columnName?: string; canMovePrevColumn?: boolean; canMoveNextColumn?: boolean; onBeginDrag: (card: Card, index: number) => void; onDragMove: (dx: number, dy: number, pageX: number, pageY: number) => void; onDragEnd: () => void; onDragCancel: () => void; onOpenMove: (card: Card) => void; onReorder: (card: Card, index: number, direction: -1 | 1) => void; onMoveColumn?: (card: Card, direction: -1 | 1) => void }) {
+const BoardCardRow = memo(function BoardCardRow({ card, index, total, translationY, highlighted, accent, accentTint, accentBorderColor, columnName, canMovePrevColumn, canMoveNextColumn, onBeginDrag, onDragMove, onDragEnd, onDragCancel, onOpenMove, onReorder, onMoveColumn }: { card: Card; index: number; total: number; translationY: SharedValue<number>; highlighted?: boolean; accent?: string; accentTint?: string; accentBorderColor?: string; columnName?: string; canMovePrevColumn?: boolean; canMoveNextColumn?: boolean; onBeginDrag: (card: Card, index: number) => void; onDragMove: (dx: number, dy: number, pageX: number, pageY: number) => void; onDragEnd: () => void; onDragCancel: () => void; onOpenMove: (card: Card) => void; onReorder: (card: Card, index: number, direction: -1 | 1) => void; onMoveColumn?: (card: Card, direction: -1 | 1) => void }) {
   const begin = useCallback(() => onBeginDrag(card, index), [card, index, onBeginDrag]);
   const openMove = useCallback(() => onOpenMove(card), [card, onOpenMove]);
   const moveEarlierOrLater = useCallback((direction: -1 | 1) => onReorder(card, index, direction), [card, index, onReorder]);
   const moveColumn = useCallback((direction: -1 | 1) => onMoveColumn?.(card, direction), [card, onMoveColumn]);
-  return <CardSurface card={card} index={index} total={total} translationY={translationY} highlighted={highlighted} columnName={columnName} canMovePrevColumn={canMovePrevColumn} canMoveNextColumn={canMoveNextColumn} onBeginDrag={begin} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={onDragCancel} onOpenMove={openMove} onReorder={moveEarlierOrLater} onMoveColumn={onMoveColumn ? moveColumn : undefined} />;
+  return <CardSurface card={card} index={index} total={total} translationY={translationY} highlighted={highlighted} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={columnName} canMovePrevColumn={canMovePrevColumn} canMoveNextColumn={canMoveNextColumn} onBeginDrag={begin} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={onDragCancel} onOpenMove={openMove} onReorder={moveEarlierOrLater} onMoveColumn={onMoveColumn ? moveColumn : undefined} />;
 });
 
 function reorder(items: Card[], from: number, to: number) { const next = [...items]; const [item] = next.splice(from, 1); next.splice(Math.max(0, Math.min(to, next.length)), 0, item); return next.map((card, position) => ({ ...card, position })); }
@@ -530,9 +536,16 @@ export default function BoardScreen() {
   const columnCardCount = (column: Column | undefined, laneCardsLength: number) => column && columnStatus[column.id] !== 'loaded' ? (columnCounts[column.id] ?? laneCardsLength) : laneCardsLength;
   const activeCardCount = columnCardCount(currentColumn, currentCards.length);
   const metadata = `${columnIndex + 1} of ${columns.length} columns · ${activeCardCount} ${activeCardCount === 1 ? 'card' : 'cards'}`;
-  // A soft tint of the board's own accent, matching the strength of the generic
-  // accentSoft token it replaces, rather than the accent's full saturation.
-  const columnTint = board.accent ? `${board.accent}1F` : theme.accentSoft;
+  // The board's own accent, resolved once, stands in everywhere this screen would
+  // otherwise reach for the generic theme accent — full strength for solid fills/
+  // text-on-accent, a soft *opaque* tint (mixed into the screen's own background,
+  // not layered with alpha — see tintWithAccent) for backgrounds, and the accent
+  // itself for borders/highlights, all falling back to the theme's tokens when the
+  // board has no accent set.
+  const accent = board.accent ?? theme.accent;
+  const accentOn = board.accent ? '#FFFFFF' : theme.accentText;
+  const accentTint = board.accent ? tintWithAccent(theme.background, board.accent, 0.08) : theme.accentSoft;
+  const accentBorderColor = board.accent ?? theme.accentBorder;
   const reservedNavigatorHeight = board.showColumnNavigator ? navigatorDockHeight : 0;
   const addButtonBottom = board.showColumnNavigator && navigatorDockHeight
     ? navigatorDockHeight - spacing.md
@@ -545,17 +558,17 @@ export default function BoardScreen() {
   const buildLaneRows = (column: Column, laneCards: Card[]): ReactNode[] => {
     const isSource = drag?.sourceColumnId === column.id;
     const isDestination = drag?.destinationColumnId === column.id;
-    if (!drag || (!isSource && !isDestination)) { const columnPosition = columns.findIndex((item) => item.id === column.id); return laneCards.map((card, index) => <Animated.View key={`card:${card.id}`} layout={cardLayoutTransition} entering={!reduceMotion && card.id === justAddedCardId ? FadeIn.duration(240) : undefined} onLayout={(event) => { layoutsRef.current[card.id] = event.nativeEvent.layout; }}><BoardCardRow card={card} index={index} total={laneCards.length} translationY={gestureTranslationY} highlighted={card.id === justAddedCardId} columnName={column.name} canMovePrevColumn={columnPosition > 0} canMoveNextColumn={columnPosition >= 0 && columnPosition < columns.length - 1} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} /></Animated.View>); }
+    if (!drag || (!isSource && !isDestination)) { const columnPosition = columns.findIndex((item) => item.id === column.id); return laneCards.map((card, index) => <Animated.View key={`card:${card.id}`} layout={cardLayoutTransition} entering={!reduceMotion && card.id === justAddedCardId ? FadeIn.duration(240) : undefined} onLayout={(event) => { layoutsRef.current[card.id] = event.nativeEvent.layout; }}><BoardCardRow card={card} index={index} total={laneCards.length} translationY={gestureTranslationY} highlighted={card.id === justAddedCardId} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={column.name} canMovePrevColumn={columnPosition > 0} canMoveNextColumn={columnPosition >= 0 && columnPosition < columns.length - 1} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} /></Animated.View>); }
     const rows: ReactNode[] = [];
     const displayCards = isSource ? laneCards.filter((card) => card.id !== drag.card.id) : laneCards;
     const placeholderIndex = isDestination ? drag.toIndex : undefined;
     const total = laneCards.length + (isDestination && !isSource ? 1 : 0);
-    const placeholder = <Animated.View key={`placeholder:${drag.card.id}`} layout={cardLayoutTransition} onLayout={(event) => { placeholderYRef.current = event.nativeEvent.layout.y; }} style={[styles.placeholder, { height: drag.height, borderColor: theme.accentBorder, backgroundColor: theme.accentSoft }]} />;
+    const placeholder = <Animated.View key={`placeholder:${drag.card.id}`} layout={cardLayoutTransition} onLayout={(event) => { placeholderYRef.current = event.nativeEvent.layout.y; }} style={[styles.placeholder, { height: drag.height, borderColor: accentBorderColor, backgroundColor: accentTint }]} />;
     for (const card of displayCards) {
       const trueIndex = laneCards.findIndex((item) => item.id === card.id);
       const filteredIndex = isSource && trueIndex > drag.fromIndex ? trueIndex - 1 : trueIndex;
       if (isDestination && filteredIndex === placeholderIndex) rows.push(placeholder);
-      rows.push(<Animated.View key={`card:${card.id}`} layout={cardLayoutTransition} onLayout={(event) => { layoutsRef.current[card.id] = event.nativeEvent.layout; }}><BoardCardRow card={card} index={trueIndex} total={total} translationY={gestureTranslationY} columnName={column.name} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} /></Animated.View>);
+      rows.push(<Animated.View key={`card:${card.id}`} layout={cardLayoutTransition} onLayout={(event) => { layoutsRef.current[card.id] = event.nativeEvent.layout; }}><BoardCardRow card={card} index={trueIndex} total={total} translationY={gestureTranslationY} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={column.name} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} /></Animated.View>);
     }
     if (isDestination && placeholderIndex === displayCards.length) rows.push(placeholder);
     // Must stay the same element TYPE (Animated.View) as the normal-flow card wrapper
@@ -564,7 +577,7 @@ export default function BoardScreen() {
     // key moves from the plain map into this responderKeeper slot; if the type
     // differed, React would unmount+remount it right then, destroying the native
     // gesture recognizer mid-stream (drag would lift but never track movement again).
-    if (isSource) rows.push(<Animated.View key={`card:${drag.card.id}`} style={styles.responderKeeper}><BoardCardRow card={drag.card} index={drag.fromIndex} total={total} translationY={gestureTranslationY} columnName={column.name} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} /></Animated.View>);
+    if (isSource) rows.push(<Animated.View key={`card:${drag.card.id}`} style={styles.responderKeeper}><BoardCardRow card={drag.card} index={drag.fromIndex} total={total} translationY={gestureTranslationY} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={column.name} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} /></Animated.View>);
     return rows;
   };
   return <Screen><View style={styles.header}>
@@ -606,7 +619,7 @@ export default function BoardScreen() {
           // right next to an active one tinted by the accent, which reads as a bug
           // rather than a resting state.
           const columnBorder = active || dropTarget
-            ? (board.accent ?? theme.accentBorder)
+            ? accentBorderColor
             : board.accent ? `${board.accent}40` : theme.borderSubtle;
           // `columnIndex` only commits on momentum-end (or immediately on a navigator
           // tap, before its animated scroll even visually arrives) — never mid-swipe.
@@ -627,9 +640,9 @@ export default function BoardScreen() {
           // here yet" while a prefetch is still in flight.
           const notYetLoaded = !showList && status !== 'loaded' && status !== 'error';
           const loadFailed = !showList && status === 'error';
-          return <View style={[styles.columnFrame, { width: columnWidth, marginHorizontal: columnGap / 2, backgroundColor: columnTint, borderColor: columnBorder }, active && styles.activeColumn, dropTarget && styles.dropTargetColumn]}>
+          return <View style={[styles.columnFrame, { width: columnWidth, marginHorizontal: columnGap / 2, backgroundColor: accentTint, borderColor: columnBorder }, active && styles.activeColumn, dropTarget && styles.dropTargetColumn]}>
             <View style={styles.columnHeader}>
-              <View style={[styles.columnIcon, { backgroundColor: theme.surface }]}><Ionicons accessible={false} name="albums-outline" size={19} color={theme.accent} /></View>
+              <View style={[styles.columnIcon, { backgroundColor: theme.surface }]}><Ionicons accessible={false} name="albums-outline" size={19} color={accent} /></View>
               <View style={styles.columnHeaderCopy}><Text numberOfLines={1} style={[styles.columnTitle, { color: theme.textPrimary }]}>{column.name}</Text><Text style={[styles.columnCount, { color: theme.textSecondary }]}>{columnCardCount(column, laneCards.length)} {columnCardCount(column, laneCards.length) === 1 ? 'card' : 'cards'}</Text></View>
               <Pressable accessibilityRole="button" accessibilityLabel={`Add note to ${column.name}`} onPress={() => openAddNote(column)} style={({ pressed }) => [styles.columnMenu, pressed && styles.headerButtonPressed]}><Ionicons accessible={false} name="add" size={22} color={theme.textSecondary} /></Pressable>
               <Pressable accessibilityRole="button" accessibilityLabel={`Manage ${column.name} column`} onPress={() => { if (!active) goToColumn(index); setSettingsOpen(true); }} style={({ pressed }) => [styles.columnMenu, pressed && styles.headerButtonPressed]}><Ionicons accessible={false} name="ellipsis-horizontal" size={20} color={theme.textSecondary} /></Pressable>
@@ -638,21 +651,21 @@ export default function BoardScreen() {
               {buildLaneRows(column, laneCards)}
               <Animated.View key="add-note-row" layout={cardLayoutTransition}>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Add note to ${column.name}`} onPress={() => openAddNote(column)} style={({ pressed }) => [styles.addNoteRow, { borderColor: theme.borderSubtle, backgroundColor: theme.surface }, pressed && styles.emptyDropPressed]}>
-                  <Ionicons accessible={false} name="add" size={18} color={theme.accent} />
-                  <Text style={[styles.addNoteText, { color: theme.accent }]}>Add note</Text>
+                  <Ionicons accessible={false} name="add" size={18} color={accent} />
+                  <Text style={[styles.addNoteText, { color: accent }]}>Add note</Text>
                 </Pressable>
               </Animated.View>
             </View> : notYetLoaded ? <ColumnSkeleton />
-            : loadFailed ? <Pressable accessibilityRole="button" accessibilityLabel={`Retry loading ${column.name}`} onPress={() => fetchColumn(column.id, { force: true })} style={({ pressed }) => [styles.emptyDrop, { borderColor: theme.accentBorder, backgroundColor: theme.surface }, pressed && styles.emptyDropPressed]}><View style={[styles.emptyIcon, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name="refresh" size={24} color={theme.textMuted} /></View><Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>Couldn’t load this column</Text><Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>Tap to retry.</Text></Pressable>
-            : <View style={[styles.emptyDrop, { borderColor: theme.accentBorder, backgroundColor: theme.surface }]}><View style={[styles.emptyIcon, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name="document-text-outline" size={24} color={theme.textMuted} /></View><Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>No notes here yet</Text><Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>Add something directly or move a note here.</Text><Pressable accessibilityRole="button" accessibilityLabel={`Add note to ${column.name}`} onPress={() => openAddNote(column)} style={({ pressed }) => [styles.emptyAddButton, { backgroundColor: theme.accent }, pressed && styles.emptyDropPressed]}><Ionicons accessible={false} name="add" size={16} color={theme.accentText} /><Text style={[styles.emptyAddText, { color: theme.accentText }]}>Add note</Text></Pressable></View>}</ScrollView> : <View pointerEvents="none" style={styles.neighborCards}>{status === 'loaded' || laneCards.length ? <>{laneCards.slice(0, 3).map((card) => <View key={card.id} style={[styles.neighborCard, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}><Text numberOfLines={2} style={[styles.neighborCardTitle, { color: theme.textPrimary }]}>{card.title || card.preview || 'Untitled thought'}</Text></View>)}{!laneCards.length ? <View style={[styles.neighborEmpty, { borderColor: theme.accentBorder }]}><Ionicons accessible={false} name="add" size={20} color={theme.textMuted} /><Text style={[styles.neighborEmptyText, { color: theme.textMuted }]}>Add a card</Text></View> : null}</> : [0, 1].map((key) => <View key={key} style={[styles.neighborCard, styles.neighborCardSkeleton, { backgroundColor: theme.surfaceElevated }]} />)}</View>}
+            : loadFailed ? <Pressable accessibilityRole="button" accessibilityLabel={`Retry loading ${column.name}`} onPress={() => fetchColumn(column.id, { force: true })} style={({ pressed }) => [styles.emptyDrop, { borderColor: accentBorderColor, backgroundColor: theme.surface }, pressed && styles.emptyDropPressed]}><View style={[styles.emptyIcon, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name="refresh" size={24} color={theme.textMuted} /></View><Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>Couldn’t load this column</Text><Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>Tap to retry.</Text></Pressable>
+            : <View style={[styles.emptyDrop, { borderColor: accentBorderColor, backgroundColor: theme.surface }]}><View style={[styles.emptyIcon, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name="document-text-outline" size={24} color={theme.textMuted} /></View><Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>No notes here yet</Text><Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>Add something directly or move a note here.</Text><Pressable accessibilityRole="button" accessibilityLabel={`Add note to ${column.name}`} onPress={() => openAddNote(column)} style={({ pressed }) => [styles.emptyAddButton, { backgroundColor: accent }, pressed && styles.emptyDropPressed]}><Ionicons accessible={false} name="add" size={16} color={accentOn} /><Text style={[styles.emptyAddText, { color: accentOn }]}>Add note</Text></Pressable></View>}</ScrollView> : <View pointerEvents="none" style={styles.neighborCards}>{status === 'loaded' || laneCards.length ? <>{laneCards.slice(0, 3).map((card) => <View key={card.id} style={[styles.neighborCard, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}><Text numberOfLines={2} style={[styles.neighborCardTitle, { color: theme.textPrimary }]}>{card.title || card.preview || 'Untitled thought'}</Text></View>)}{!laneCards.length ? <View style={[styles.neighborEmpty, { borderColor: accentBorderColor }]}><Ionicons accessible={false} name="add" size={20} color={theme.textMuted} /><Text style={[styles.neighborEmptyText, { color: theme.textMuted }]}>Add a card</Text></View> : null}</> : [0, 1].map((key) => <View key={key} style={[styles.neighborCard, styles.neighborCardSkeleton, { backgroundColor: theme.surfaceElevated }]} />)}</View>}
           </View>;
         }}
       />
-      {drag ? <Animated.View pointerEvents="none" style={[styles.dragLayer, { top: drag.overlayTop, left: (screenWidth - columnWidth) / 2 + spacing.md, width: columnWidth - spacing.xl }, animatedDragStyle]}><CardSurface card={drag.card} index={drag.fromIndex} total={Math.max(1, currentCards.length)} dragging interactive={false} /></Animated.View> : null}
-      {drag ? <Animated.View pointerEvents="none" style={[styles.edgeGlow, styles.edgeGlowLeft, { backgroundColor: theme.accentSoft }, edgeGlowLeftStyle]} /> : null}
-      {drag ? <Animated.View pointerEvents="none" style={[styles.edgeGlow, styles.edgeGlowRight, { backgroundColor: theme.accentSoft }, edgeGlowRightStyle]} /> : null}
-      {board.showColumnNavigator ? <View onLayout={(event) => setNavigatorDockHeight(Math.ceil(event.nativeEvent.layout.height))} style={styles.navigatorDock}><ColumnNavigator columns={columns} cards={cards} columnStatus={columnStatus} columnCounts={columnCounts} columnIndex={columnIndex} reduceMotion={reduceMotion} onSelect={goToColumn} onAddColumn={openAddColumnSheet} /></View> : null}
-      <Pressable accessibilityRole="button" accessibilityLabel="Add from Unorganized" accessibilityHint="Opens unorganized thoughts to add to this board" onPress={() => router.push('/unorganized')} style={({ pressed }) => [styles.add, { bottom: addButtonBottom, backgroundColor: board.accent ?? theme.accent }, pressed && styles.addPressed]}><Ionicons accessible={false} name="add-outline" size={28} color={board.accent ? '#FFFFFF' : theme.accentText} /></Pressable>
+      {drag ? <Animated.View pointerEvents="none" style={[styles.dragLayer, { top: drag.overlayTop, left: (screenWidth - columnWidth) / 2 + spacing.md, width: columnWidth - spacing.xl }, animatedDragStyle]}><CardSurface card={drag.card} index={drag.fromIndex} total={Math.max(1, currentCards.length)} dragging interactive={false} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} /></Animated.View> : null}
+      {drag ? <Animated.View pointerEvents="none" style={[styles.edgeGlow, styles.edgeGlowLeft, { backgroundColor: accentTint }, edgeGlowLeftStyle]} /> : null}
+      {drag ? <Animated.View pointerEvents="none" style={[styles.edgeGlow, styles.edgeGlowRight, { backgroundColor: accentTint }, edgeGlowRightStyle]} /> : null}
+      {board.showColumnNavigator ? <View onLayout={(event) => setNavigatorDockHeight(Math.ceil(event.nativeEvent.layout.height))} style={styles.navigatorDock}><ColumnNavigator columns={columns} cards={cards} columnStatus={columnStatus} columnCounts={columnCounts} columnIndex={columnIndex} reduceMotion={reduceMotion} accent={accent} onSelect={goToColumn} onAddColumn={openAddColumnSheet} /></View> : null}
+      <Pressable accessibilityRole="button" accessibilityLabel="Add from Unorganized" accessibilityHint="Opens unorganized thoughts to add to this board" onPress={() => router.push('/unorganized')} style={({ pressed }) => [styles.add, { bottom: addButtonBottom, backgroundColor: accent }, pressed && styles.addPressed]}><Ionicons accessible={false} name="add-outline" size={28} color={accentOn} /></Pressable>
     </View> : <View style={styles.carousel}><AddColumnPlaceholder variant="empty" onPress={openAddColumnSheet} /></View>}</View>{error ? <Text accessibilityRole="alert" style={[styles.error, { backgroundColor: theme.danger }]}>{error}</Text> : null}
     <Modal visible={!!moveCard} transparent animationType="fade" onRequestClose={() => setMoveCard(null)}><View style={styles.backdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setMoveCard(null)} /><View style={[styles.modal, { backgroundColor: theme.surface }]}><Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Move to…</Text><Text style={[styles.modalCopy, { color: theme.textSecondary }]}>Choose a destination column.</Text>{columns.map((column) => <Pressable key={column.id} onPress={() => void move(column)} style={[styles.option, { borderTopColor: theme.borderSubtle }]}><Text style={[styles.optionText, { color: theme.textPrimary }]}>{column.name}</Text><Text style={[styles.optionArrow, { color: theme.textMuted }]}>›</Text></Pressable>)}</View></View></Modal>
     <ColumnManagementSheet

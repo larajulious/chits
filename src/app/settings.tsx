@@ -1,4 +1,5 @@
 import { useAppDrawer } from '@/components/navigation/app-drawer';
+import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme, type AppAppearance } from '@/components/theme-provider';
 import { IconButton } from '@/components/ui/primitives';
 import { ChitsLoaderOverlay } from '@/components/ui/chits-loader';
@@ -11,10 +12,10 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import Constants from 'expo-constants';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Sheet = 'appearance' | 'backup' | null;
@@ -36,6 +37,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 export default function SettingsScreen() {
   const { openDrawer } = useAppDrawer();
   const { appearance, setAppearance, themeKey, setThemeKey, themes, tokens } = useTheme();
+  const { confirm, alert } = useAppDialog();
   const database = useSQLiteContext();
   const [sheet, setSheet] = useState<Sheet>(null);
   const [busy, setBusy] = useState(false);
@@ -86,7 +88,7 @@ export default function SettingsScreen() {
       const now = Date.now();
       await database.runAsync("INSERT INTO app_settings (key, value, updated_at) VALUES ('last_backup_at', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at", String(now), now);
       setLastBackup(String(now));
-      Alert.alert('Backup created', 'Your Chits backup is ready.');
+      setToast('Backup created');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Chits could not create a backup. Please try again.');
     } finally {
@@ -99,10 +101,22 @@ export default function SettingsScreen() {
     try {
       await restoreBackup(extractedDir);
       setBackupBusy(null);
-      Alert.alert('Restore complete', 'Your Chits data has been restored.', [{ text: 'Continue', onPress: () => { setSheet(null); triggerAppReset(); } }]);
+      alert({
+        type: 'success',
+        icon: 'checkmark-circle-outline',
+        title: 'Restore complete',
+        message: 'Your Chits data has been restored.',
+        actionText: 'Continue',
+        onDismiss: () => { setSheet(null); triggerAppReset(); },
+      });
     } catch {
       setBackupBusy(null);
-      Alert.alert('Restore failed', 'Your current data was not changed.');
+      alert({
+        type: 'warning',
+        icon: 'alert-circle-outline',
+        title: 'Restore failed',
+        message: 'Your current data was not changed.',
+      });
     }
   };
 
@@ -121,18 +135,26 @@ export default function SettingsScreen() {
     setBackupBusy('restore'); setError(null);
     const validation = await validateBackup(fileUri);
     setBackupBusy(null);
-    if (!validation.valid) { Alert.alert('Invalid backup', validation.reason); return; }
-    Alert.alert('Restore this backup?', 'Your current Chits data will be replaced by the data in this backup.', [
-      { text: 'Cancel', style: 'cancel', onPress: () => void discardValidatedBackup(validation.extractedDir) },
-      { text: 'Restore', style: 'destructive', onPress: () => void performRestore(validation.extractedDir) },
-    ]);
+    if (!validation.valid) {
+      alert({ type: 'warning', icon: 'alert-circle-outline', title: 'Invalid backup', message: validation.reason });
+      return;
+    }
+    confirm({
+      type: 'destructive',
+      icon: 'refresh-outline',
+      title: 'Restore this backup?',
+      message: 'Your current Chits data will be replaced by the data in this backup. This can’t be undone.',
+      confirmText: 'Restore backup',
+      onConfirm: () => performRestore(validation.extractedDir),
+      onCancel: () => discardValidatedBackup(validation.extractedDir),
+    });
   };
 
   const links = Constants.expoConfig?.extra ?? {};
   const externalRows = [['Support', links.supportUrl], ['Privacy Policy', links.privacyPolicyUrl], ['Terms', links.termsUrl]] as const;
   const validLink = (value: unknown): value is string => typeof value === 'string' && /^(https:\/\/|mailto:)/.test(value);
   return <SafeAreaView style={[styles.screen, { backgroundColor: tokens.background }]}>
-    <View style={styles.header}><IconButton label="Open navigation" onPress={openDrawer}><Ionicons accessible={false} name="reorder-two-outline" size={24} color={tokens.textPrimary} /></IconButton><Text accessibilityRole="header" style={[styles.headerTitle, { color: tokens.textPrimary }]}>Settings</Text><View style={styles.headerBalance} /></View>
+    <View style={styles.header}><IconButton label="Open navigation" onPress={openDrawer}><Ionicons accessible={false} name="reorder-two-outline" size={24} color={tokens.textPrimary} /></IconButton><Text accessibilityRole="header" style={[styles.headerTitle, { color: tokens.textPrimary }]}>Settings</Text><IconButton label="Close settings" onPress={() => router.canGoBack() ? router.back() : router.navigate('/')}><Ionicons accessible={false} name="close" size={24} color={tokens.textPrimary} /></IconButton></View>
     <ScrollView contentContainerStyle={styles.content}>
       {error && !sheet ? <Text accessibilityRole="alert" style={{ color: tokens.danger }}>{error}</Text> : null}
       <Section title="NOTESPACE">
@@ -200,7 +222,7 @@ export default function SettingsScreen() {
 }
 const styles = StyleSheet.create({
   screen: { flex: 1 }, header: { minHeight: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600' }, headerBalance: { width: 44 },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600' },
   content: { paddingHorizontal: 20, paddingBottom: 28 }, section: { marginTop: 18 },
   sectionLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 0.8, marginBottom: 4 },
   row: { minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },

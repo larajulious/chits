@@ -1,14 +1,25 @@
-import { Stack } from 'expo-router';
+import { Tabs } from 'expo-router/tabs';
 
-// Boards owns the group's index route ("/"), so it's simply what a cold launch
-// resolves to — no initialRouteName trick needed (that only affects back-stack
-// behavior for deep links, not which route a plain app open resolves to). Chat
-// lives at "/chat" and gets its own push/slide transition (rather than the group's
-// default fade) so leaving/returning feels like a natural stack push.
+import { BottomNav } from '@/components/navigation/bottom-nav';
+import { ChatTransitionProvider } from '@/components/navigation/chat-transition';
+
+// Boards, Chat, and Archive are the app's 3 persistent destinations (see PHASE:
+// REDESIGN CHITS BOTTOM NAVIGATION) — a real Tabs navigator, not a Stack, so each
+// keeps its own mounted state when switching between them instead of remounting.
+// Search stays a normal screen in this group (still reachable via router.push) but
+// isn't one of the 3 buttons BottomNav renders. ChatTransitionProvider wraps the
+// navigator (not just BottomNav) so it can own navigation into/out of Chat itself
+// and paint its balloon-expansion overlay above every screen — see PHASE: REFINE
+// CHAT NAVIGATION TRANSITION and chat-transition.tsx.
 export default function TabLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
-      <Stack.Screen name="chat" options={{ animation: 'slide_from_right' }} />
-    </Stack>
+    <ChatTransitionProvider>
+      <Tabs tabBar={(props) => <BottomNav {...props} />} screenOptions={{ headerShown: false }}>
+        <Tabs.Screen name="index" />
+        <Tabs.Screen name="chat" />
+        <Tabs.Screen name="archive" />
+        <Tabs.Screen name="search" />
+      </Tabs>
+    </ChatTransitionProvider>
   );
 }

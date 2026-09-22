@@ -55,18 +55,16 @@ type ContextItem = {
 };
 type IconName = ComponentProps<typeof Ionicons>['name'];
 type Destination = {
-  label: 'Boards' | 'Archive' | 'Settings';
-  path: '/' | '/archive' | '/settings';
+  label: 'Settings';
+  path: '/settings';
   icon: IconName;
 };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
-// Boards is the app's landing screen (route "/"); Chat lives at "/chat" and is
-// reached via the persistent bottom Chat action, not a drawer destination.
-const contentDestinations: Destination[] = [
-  { label: 'Boards', path: '/', icon: 'grid-outline' },
-  { label: 'Archive', path: '/archive', icon: 'archive-outline' },
-];
+// Boards, Chat, and Archive are all globally reachable from the bottom navigation
+// now (see PHASE: REDESIGN CHITS BOTTOM NAVIGATION) — the drawer only carries
+// Settings plus secondary utilities (search, pinned, recent) that don't belong
+// in that 3-item bar.
 const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
 
 export function useAppDrawer() {
@@ -76,8 +74,7 @@ export function useAppDrawer() {
 }
 
 function isDestinationActive(pathname: string, destination: Destination) {
-  if (destination.path !== '/') return pathname === destination.path;
-  return pathname === '/' || pathname.startsWith('/board/') || pathname.startsWith('/card/') || pathname === '/unorganized';
+  return pathname === destination.path;
 }
 
 function DrawerIcon({ name, color }: { name: IconName; color: string }) {
@@ -319,30 +316,11 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
         </Pressable>
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
-        {contentDestinations.map((destination) => (
-          <NavigationRow key={destination.path} destination={destination} pathname={pathname} close={close} />
-        ))}
-        <View style={styles.settingsGap}>
-          <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
-        </View>
+        <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
         {hasShortcuts ? <View style={[styles.divider, { backgroundColor: tokens.borderSubtle }]} /> : null}
         <PinnedSection items={pinned} close={close} onUnpin={unpinItem} />
         <ShortcutSection label="RECENT" items={recent.slice(0, 5)} close={close} />
       </ScrollView>
-      <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Open Chat"
-          accessibilityHint="Open Chat to capture a new thought."
-          onPress={() => {
-            close();
-            router.navigate('/chat');
-          }}
-          style={({ pressed }) => [styles.chatButton, { backgroundColor: tokens.accent }, pressed && styles.chatButtonPressed]}>
-          <DrawerIcon name="chatbubble-outline" color={tokens.accentText} />
-          <Text style={[styles.chatText, { color: tokens.accentText }]}>Chat to Note</Text>
-        </Pressable>
-      </View>
       <Toast message={toast} />
     </SafeAreaView>
   );
@@ -447,7 +425,6 @@ const styles = StyleSheet.create({
   itemText: { fontSize: 16 },
   itemTextSelected: { fontWeight: '700' },
   iconSlot: { width: 24, alignItems: 'center', justifyContent: 'center' },
-  settingsGap: { marginTop: spacing.sm },
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.lg, marginTop: spacing.md },
   section: { paddingTop: spacing.lg },
   sectionLabel: {
@@ -487,22 +464,5 @@ const styles = StyleSheet.create({
   unpinButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
   unpinPressed: { opacity: 0.55 },
   pinnedNoResults: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, fontSize: 13 },
-  footer: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  chatButton: {
-    alignSelf: 'flex-end',
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: 22,
-  },
-  chatButtonPressed: { opacity: 0.82 },
-  chatText: { fontSize: 15, fontWeight: '700' },
   pressed: { opacity: 0.62 },
 });

@@ -1,7 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import * as Haptics from 'expo-haptics';
 import { useCallback, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -23,7 +22,7 @@ import { GlassSurface } from '@/components/ui/glass-surface';
 import { AppHeader, IconButton, Screen } from '@/components/ui/primitives';
 import { BoardAppearanceFields } from '@/components/boards/board-appearance-fields';
 import { resolveBoardIcon, type BoardIconName } from '@/constants/board-appearance';
-import { radii, spacing } from '@/constants/theme';
+import { spacing } from '@/constants/theme';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
 import type { Board } from '@/db/types';
 
@@ -47,7 +46,6 @@ export default function BoardsScreen() {
   const [accent, setAccent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [chatButtonHeight, setChatButtonHeight] = useState(56);
   // Same single source of truth Chat's own header edits (app_settings.chat_title) —
   // Boards is the app's home screen now, so its header must show that title too,
   // not a second hardcoded "Chits" string that would drift the moment it's renamed.
@@ -80,13 +78,6 @@ export default function BoardsScreen() {
     setCreateOpen(true);
   };
 
-  // Boards is home; Chat is one tap away via the persistent pill below rather than
-  // a header action, per the product split (Boards = workspace, Chat = capture).
-  const openChat = () => {
-    void Haptics.selectionAsync();
-    router.navigate('/chat');
-  };
-
   const closeCreate = () => {
     if (saving) return;
     setCreateOpen(false);
@@ -116,7 +107,7 @@ export default function BoardsScreen() {
   };
 
   return (
-    <Screen style={{ backgroundColor: theme.background }}>
+    <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: theme.background }}>
       <AppHeader
         title={appTitle}
         subtitle={pluralize(boards.length, 'board')}
@@ -133,7 +124,7 @@ export default function BoardsScreen() {
       />
 
       {!ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : (
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: chatButtonHeight + spacing.lg }]}>
+      <ScrollView contentContainerStyle={styles.content}>
         <Text style={[styles.intro, { color: theme.textSecondary }]}>
           Keep related thoughts together and easy to find.
         </Text>
@@ -211,18 +202,6 @@ export default function BoardsScreen() {
         )}
       </ScrollView>
       )}
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Open Chat"
-        accessibilityHint="Open Chat to capture a new thought."
-        onLayout={(event) => setChatButtonHeight(Math.ceil(event.nativeEvent.layout.height))}
-        onPress={openChat}
-        style={({ pressed }) => [styles.chatButton, { backgroundColor: theme.accent }, pressed && styles.chatButtonPressed]}
-      >
-        <Ionicons accessible={false} name="chatbubble-outline" size={19} color={theme.accentText} />
-        <Text style={[styles.chatButtonText, { color: theme.accentText }]}>Chat to Note</Text>
-      </Pressable>
 
       <Modal visible={createOpen} transparent animationType="slide" onRequestClose={closeCreate}>
         <KeyboardAvoidingView
@@ -318,11 +297,6 @@ const styles = StyleSheet.create({
   emptyCreateButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.lg, borderRadius: 12 },
   emptyCreateText: { fontWeight: '700', fontSize: 15 },
   pressed: { opacity: 0.58 },
-  // Compact floating pill, not a full-width bar or a giant circular FAB — content-
-  // driven width, centered, sitting above Screen's own safe-area inset padding.
-  chatButton: { position: 'absolute', alignSelf: 'center', bottom: spacing.md, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.lg, borderRadius: radii.pill, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 6 },
-  chatButtonPressed: { opacity: 0.86, transform: [{ scale: 0.96 }] },
-  chatButtonText: { fontSize: 15, fontWeight: '700' },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,23,0.34)' },
   sheetSafeArea: { flexShrink: 1, maxHeight: '100%', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   sheet: { flexShrink: 1, maxHeight: '100%', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth },

@@ -1,8 +1,8 @@
 import { forwardRef } from 'react';
 import { LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, UIManager, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router } from 'expo-router';
 import { useTheme } from '@/components/theme-provider';
+import { useChatTransition } from '@/components/navigation/chat-transition';
 import type { Message } from '@/db/types';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -35,7 +35,7 @@ type Props = {
 // its default and expanded-search layouts, so nothing else on screen shifts.
 export const ChatHeader = forwardRef<TextInput, Props>(function ChatHeader({ onHeight, pinned, onOpenPinned, searchOpen, searchQuery, onOpenSearch, onCloseSearch, onSearchChange }, searchInputRef) {
   const { tokens } = useTheme();
-  const close = () => { if (router.canGoBack()) router.back(); else router.navigate('/'); };
+  const { closeChat } = useChatTransition();
   const openSearch = () => { LayoutAnimation.configureNext(HEADER_TRANSITION); onOpenSearch(); };
   const closeSearch = () => { LayoutAnimation.configureNext(HEADER_TRANSITION); onCloseSearch(); };
   return <View style={[styles.overlay, { backgroundColor: tokens.background }]} onLayout={({ nativeEvent }) => onHeight(Math.ceil(nativeEvent.layout.height))}>
@@ -67,7 +67,7 @@ export const ChatHeader = forwardRef<TextInput, Props>(function ChatHeader({ onH
         {/* Pinned items fill the same row as the search/close icons, inline
             between them, rather than a separate banner above or below. */}
         {pinned.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pinnedScroller} contentContainerStyle={styles.pinnedList}>{pinned.map((message) => <Pressable key={message.id} accessibilityRole="button" accessibilityLabel={`Pinned thought: ${pinnedPreview(message)}. Opens this thought in Chat.`} onPress={() => onOpenPinned(message)} style={({ pressed }) => [styles.pinnedItem, { backgroundColor: tokens.surfaceElevated }, pressed && styles.pinnedItemPressed]}><Ionicons accessible={false} name="pin-outline" size={13} color={tokens.accentStrong} /><Text numberOfLines={1} ellipsizeMode="tail" style={[styles.pinnedText, { color: tokens.textPrimary }]}>{pinnedPreview(message)}</Text></Pressable>)}</ScrollView> : <View style={styles.spacer} />}
-        <Pressable accessibilityRole="button" accessibilityLabel="Close" accessibilityHint="Closes Chat and returns to where you came from" onPress={close} style={({ pressed }) => [styles.iconButton, { backgroundColor: tokens.surface }, pressed && { backgroundColor: tokens.surfaceElevated }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close" accessibilityHint="Closes Chat and returns to where you came from" onPress={closeChat} style={({ pressed }) => [styles.iconButton, { backgroundColor: tokens.surface }, pressed && { backgroundColor: tokens.surfaceElevated }]}>
           <Ionicons accessible={false} name="close" size={22} color={tokens.textPrimary} />
         </Pressable>
       </>}
