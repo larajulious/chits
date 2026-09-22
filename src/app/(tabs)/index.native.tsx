@@ -21,39 +21,13 @@ import { useTheme } from '@/components/theme-provider';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { AppHeader, IconButton, Screen } from '@/components/ui/primitives';
+import { BoardAppearanceFields } from '@/components/boards/board-appearance-fields';
+import { resolveBoardIcon, type BoardIconName } from '@/constants/board-appearance';
 import { radii, spacing } from '@/constants/theme';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
 import type { Board } from '@/db/types';
 
-const ICONS = [
-  { name: 'folder-outline' as const, label: 'Folder' },
-  { name: 'briefcase-outline' as const, label: 'Briefcase' },
-  { name: 'bulb-outline' as const, label: 'Lightbulb' },
-  { name: 'heart-outline' as const, label: 'Heart' },
-  { name: 'home-outline' as const, label: 'Home' },
-  { name: 'book-outline' as const, label: 'Book' },
-  { name: 'paw-outline' as const, label: 'Paw' },
-  { name: 'person-outline' as const, label: 'Person' },
-  { name: 'star-outline' as const, label: 'Star' },
-  { name: 'checkbox-outline' as const, label: 'Checklist' },
-];
-
-const ACCENTS = [
-  { value: null, label: 'Neutral', color: null },
-  { value: '#3D6E5C', label: 'Green', color: '#3D6E5C' },
-  { value: '#4E639B', label: 'Blue', color: '#4E639B' },
-  { value: '#9A5E33', label: 'Orange', color: '#9A5E33' },
-  { value: '#765A97', label: 'Purple', color: '#765A97' },
-  { value: '#A45E6E', label: 'Rose', color: '#A45E6E' },
-] as const;
-
 type BoardSummary = Board & { columnCount: number; cardCount: number };
-
-function boardIcon(icon: string | null) {
-  return ICONS.some((choice) => choice.name === icon)
-    ? (icon as (typeof ICONS)[number]['name'])
-    : 'folder-outline';
-}
 
 function pluralize(count: number, singular: string) {
   return `${count} ${count === 1 ? singular : `${singular}s`}`;
@@ -69,7 +43,7 @@ export default function BoardsScreen() {
   const [unorganizedCount, setUnorganizedCount] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState('');
-  const [icon, setIcon] = useState<string | null>(null);
+  const [icon, setIcon] = useState<BoardIconName | null>(null);
   const [accent, setAccent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -212,7 +186,7 @@ export default function BoardsScreen() {
                   <View style={[styles.boardMark, { backgroundColor: board.accent ?? theme.accentSoft }]}>
                     <Ionicons
                       accessible={false}
-                      name={boardIcon(board.icon)}
+                      name={resolveBoardIcon(board.icon)}
                       size={19}
                       color={board.accent ? '#FFFFFF' : theme.accentStrong}
                     />
@@ -247,7 +221,7 @@ export default function BoardsScreen() {
         style={({ pressed }) => [styles.chatButton, { backgroundColor: theme.accent }, pressed && styles.chatButtonPressed]}
       >
         <Ionicons accessible={false} name="chatbubble-outline" size={19} color={theme.accentText} />
-        <Text style={[styles.chatButtonText, { color: theme.accentText }]}>Chat</Text>
+        <Text style={[styles.chatButtonText, { color: theme.accentText }]}>Chat to Note</Text>
       </Pressable>
 
       <Modal visible={createOpen} transparent animationType="slide" onRequestClose={closeCreate}>
@@ -290,66 +264,7 @@ export default function BoardsScreen() {
                 />
 
                 <Text style={[styles.optionalLabel, { color: theme.textMuted }]}>OPTIONAL PERSONALIZATION</Text>
-                <Text style={[styles.label, { color: theme.textSecondary }]}>Icon</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.iconChoices}>
-                  <Pressable
-                    accessibilityRole="radio"
-                    accessibilityLabel="No icon"
-                    accessibilityState={{ selected: icon === null }}
-                    onPress={() => setIcon(null)}
-                    style={[
-                      styles.iconChoice,
-                      { backgroundColor: theme.surfaceElevated },
-                      icon === null && { borderColor: theme.accentStrong, backgroundColor: theme.accentSoft },
-                    ]}
-                  >
-                    <Ionicons accessible={false} name="remove" size={20} color={theme.textSecondary} />
-                  </Pressable>
-                  {ICONS.map((choice) => (
-                    <Pressable
-                      key={choice.name}
-                      accessibilityRole="radio"
-                      accessibilityLabel={choice.label}
-                      accessibilityState={{ selected: icon === choice.name }}
-                      onPress={() => setIcon(choice.name)}
-                      style={[
-                        styles.iconChoice,
-                        { backgroundColor: theme.surfaceElevated },
-                        icon === choice.name && { borderColor: theme.accentStrong, backgroundColor: theme.accentSoft },
-                      ]}
-                    >
-                      <Ionicons accessible={false} name={choice.name} size={20} color={theme.textPrimary} />
-                    </Pressable>
-                  ))}
-                </ScrollView>
-
-                <Text style={[styles.label, { color: theme.textSecondary }]}>Accent</Text>
-                <View style={styles.swatches}>
-                  {ACCENTS.map((choice) => (
-                    <Pressable
-                      key={choice.label}
-                      accessibilityRole="radio"
-                      accessibilityLabel={`${choice.label} accent`}
-                      accessibilityState={{ selected: accent === choice.value }}
-                      onPress={() => setAccent(choice.value)}
-                      style={[
-                        styles.swatchHit,
-                        accent === choice.value && { borderColor: theme.textPrimary },
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.swatch,
-                          { backgroundColor: choice.color ?? theme.surfaceElevated, borderColor: theme.borderSubtle },
-                        ]}
-                      >
-                        {accent === choice.value ? (
-                          <Ionicons accessible={false} name="checkmark" size={16} color={choice.value ? '#FFFFFF' : theme.textPrimary} />
-                        ) : null}
-                      </View>
-                    </Pressable>
-                  ))}
-                </View>
+                <BoardAppearanceFields icon={icon} accent={accent} onIconChange={setIcon} onAccentChange={setAccent} />
 
                 {error ? <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
 
@@ -418,11 +333,6 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, fontWeight: '600', marginTop: spacing.xs },
   nameInput: { minHeight: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: spacing.sm, fontSize: 17 },
   optionalLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginTop: spacing.sm },
-  iconChoices: { gap: spacing.xs, paddingVertical: spacing.xs },
-  iconChoice: { width: 44, height: 42, borderRadius: 11, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'transparent' },
-  swatches: { flexDirection: 'row', gap: spacing.xs, paddingVertical: spacing.xs },
-  swatchHit: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
-  swatch: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
   error: { fontSize: 13, marginTop: spacing.xs },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
   secondary: { minHeight: 44, paddingHorizontal: spacing.md, alignItems: 'center', justifyContent: 'center' },

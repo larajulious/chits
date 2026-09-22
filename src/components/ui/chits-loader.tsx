@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { useTheme } from '@/components/theme-provider';
-import { spacing } from '@/constants/theme';
+import { useOptionalTheme } from '@/components/theme-provider';
+import { spacing, tokens as staticTokens } from '@/constants/theme';
 
 // The one recognizable Chits loading animation — every screen-level/blocking
 // loading state in the app should render through this component rather than a
@@ -27,7 +27,10 @@ function useReduceMotion() {
 }
 
 export function ChitsLoader({ size = 'medium', label, fullscreen = false }: { size?: ChitsLoaderSize; label?: string; fullscreen?: boolean }) {
-  const { tokens: theme } = useTheme();
+  // Can render before ThemeProvider mounts (it's the root Suspense fallback) —
+  // fall back to the static default tokens rather than crashing on a missing
+  // context, same as primitives.tsx's LoadingState did before it used this.
+  const theme = useOptionalTheme()?.tokens ?? staticTokens;
   const reduceMotion = useReduceMotion();
   const dimension = SIZES[size];
   // A label means this is a meaningful, named wait (e.g. "Restoring backup…") worth
@@ -57,7 +60,7 @@ export function ChitsLoader({ size = 'medium', label, fullscreen = false }: { si
 // Restore) — the current screen stays visible underneath a light semantic scrim so
 // the user can't accidentally interact with data mid-operation.
 export function ChitsLoaderOverlay({ label }: { label?: string }) {
-  const { tokens: theme } = useTheme();
+  const theme = useOptionalTheme()?.tokens ?? staticTokens;
   return <View pointerEvents="auto" style={[styles.overlay, { backgroundColor: `${theme.background}CC` }]}>
     <ChitsLoader size="large" label={label} />
   </View>;

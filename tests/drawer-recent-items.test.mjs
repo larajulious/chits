@@ -6,7 +6,7 @@ const root = new URL('../', import.meta.url);
 const drawer = readFileSync(new URL('src/components/navigation/app-drawer.native.tsx', root), 'utf8');
 
 test('Recent shortcuts identify cards without redundantly labeling boards', () => {
-  assert.match(drawer, /showKind=\{label === 'RECENT'\}/);
+  assert.match(drawer, /<ContextRow key=\{`\$\{item\.kind\}-\$\{item\.id\}`\} item=\{item\} close=\{close\} showKind \/>/);
   assert.match(drawer, /showKind && item\.kind === 'card'/);
   assert.match(drawer, />CARD</);
   assert.doesNotMatch(drawer, />BOARD</);

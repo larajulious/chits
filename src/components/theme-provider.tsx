@@ -20,3 +20,8 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 export function useTheme() { const value = useContext(ThemeContext); if (!value) throw new Error('useTheme must be used within ThemeProvider.'); return value; }
+// For the rare component that can render before ThemeProvider mounts (e.g. the
+// root Suspense fallback while DatabaseProvider/ThemeProvider are still
+// suspended) — returns null instead of throwing, so callers fall back to the
+// static default tokens rather than crashing.
+export function useOptionalTheme() { return useContext(ThemeContext); }

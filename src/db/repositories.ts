@@ -90,6 +90,27 @@ export function createMessageRepository(database: SQLiteDatabase) {
       const rows = await database.getAllAsync<MessageRow>('SELECT * FROM messages WHERE pinned = 1 AND deleted_at IS NULL AND archived_at IS NULL ORDER BY updated_at DESC, id DESC');
       return withAttachments(rows);
     },
+    // Chat-header search: scoped to the Chat timeline only (messages, including
+    // attachment descriptions since those live in the same `text` column, plus
+    // Chits talk-back events) — deliberately NOT board titles/card comments/other
+    // app content, which stay on the separate global Search screen. A plain LIKE
+    // scan is the deliberately simple MVP the phase asked for rather than FTS.
+    async searchTimeline(term: string, limit = 40): Promise<TimelineItem[]> {
+      const trimmed = term.trim();
+      if (!trimmed) return [];
+      const like = `%${trimmed.replace(/[%_]/g, '\\$&')}%`;
+      const messageRows = await database.getAllAsync<MessageRow>('SELECT * FROM messages WHERE deleted_at IS NULL AND archived_at IS NULL AND text LIKE ? ESCAPE \'\\\' ORDER BY created_at DESC LIMIT ?', like, limit);
+      const messages = await withAttachments(messageRows);
+      const eventPlaceholders = CHAT_TIMELINE_EVENT_TYPES.map(() => '?').join(', ');
+      const eventRows = await database.getAllAsync<EventRow>(`SELECT e.*, b.name AS live_board_name FROM timeline_events e LEFT JOIN boards b ON b.id = e.related_board_id WHERE e.event_type IN (${eventPlaceholders}) AND e.metadata_json LIKE ? ESCAPE '\\' ORDER BY e.created_at DESC LIMIT ?`, ...CHAT_TIMELINE_EVENT_TYPES, like, limit);
+      const events = eventRows.map(eventFromRow);
+      const items: TimelineItem[] = [
+        ...messages.map((message): TimelineItem => ({ kind: 'message', message, createdAt: message.createdAt })),
+        ...events.map((event): TimelineItem => ({ kind: 'event', event, createdAt: event.createdAt })),
+      ];
+      items.sort((a, b) => b.createdAt - a.createdAt);
+      return items.slice(0, limit);
+    },
     async listTimeline(page: TimelinePageOptions = {}): Promise<TimelinePage> {
       const limit = page.limit ?? DEFAULT_PAGE_SIZE;
       const beforeCreatedAt = page.before?.createdAt ?? null;
@@ -265,23 +286,30 @@ export function createBoardRepository(database: SQLiteDatabase) {
       });
       return board;
     },
-    async renameBoard(boardId: string, name: string) {
-      const normalizedName = name.trim();
+    // Edit Board updates name, icon, and accent together in one statement — there's
+    // no partial-save path, matching Create Board where all three are set at once.
+    async updateBoard(boardId: string, input: { name: string; icon: string | null; accent: string | null }) {
+      const normalizedName = input.name.trim();
       if (!normalizedName) throw new Error('Board name can’t be empty.');
       if (normalizedName.length > 80) throw new Error('Board name must be 80 characters or fewer.');
-      const result = await database.runAsync('UPDATE boards SET name = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL', normalizedName, Date.now(), boardId);
+      const result = await database.runAsync('UPDATE boards SET name = ?, icon = ?, accent = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL', normalizedName, input.icon, input.accent, Date.now(), boardId);
       if (result.changes !== 1) throw new Error('That board is no longer available.');
     },
     async setShowColumnNavigator(boardId: string, show: boolean) { const result = await database.runAsync('UPDATE boards SET show_column_navigator = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL', show ? 1 : 0, Date.now(), boardId); if (result.changes !== 1) throw new Error('That board is no longer available.'); },
-    async organizeMessages(boardId: string, messageIds: string[]) {
-      if (!messageIds.length) return [];
+    // Returns the destination column alongside the created card ids so callers can
+    // redirect straight to where the thoughts landed (see PHASE — REDIRECT TO BOARD
+    // AFTER ADDING UNORGANIZED ITEM) without a second query to look the column back up.
+    async organizeMessages(boardId: string, messageIds: string[]): Promise<{ cardIds: string[]; columnId: string | null }> {
+      if (!messageIds.length) return { cardIds: [], columnId: null };
       const now = Date.now();
       const createdCardIds: string[] = [];
+      let destinationColumnId: string | null = null;
       await database.withExclusiveTransactionAsync(async (transaction) => {
         const column = await transaction.getFirstAsync<{ id: string; name: string }>('SELECT id, name FROM board_columns WHERE board_id = ? ORDER BY position ASC LIMIT 1', boardId);
         if (!column) throw new Error('This board is not ready to receive thoughts.');
         const board = await transaction.getFirstAsync<{ id: string }>('SELECT id FROM boards WHERE id = ? AND archived_at IS NULL', boardId);
         if (!board) throw new Error('This board is no longer available.');
+        destinationColumnId = column.id;
         for (const messageId of messageIds) {
           const message = await transaction.getFirstAsync<{ text: string | null; type: MessageType | null; originalName: string | null }>('SELECT m.text, a.type, a.original_name AS originalName FROM messages m LEFT JOIN attachments a ON a.message_id = m.id WHERE m.id = ? AND m.archived_at IS NULL AND m.deleted_at IS NULL ORDER BY a.created_at ASC LIMIT 1', messageId);
           if (!message) continue;
@@ -292,7 +320,7 @@ export function createBoardRepository(database: SQLiteDatabase) {
           createdCardIds.push(cardId);
         }
       });
-      return createdCardIds;
+      return { cardIds: createdCardIds, columnId: destinationColumnId };
     },
     // Contextual capture: creates a brand-new message AND wraps it into a card in one
     // step, targeting a specific column directly — unlike organizeMessages (which

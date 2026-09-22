@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, Alert, FlatList, Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Alert, BackHandler, FlatList, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -65,6 +65,55 @@ function eventCopy(event: TimelineEvent) {
 
 function ChitsRow({ event, onPress }: { event: TimelineEvent; onPress: () => void }) { const { tokens: theme } = useTheme(); const copy = eventCopy(event); return <View style={styles.chitsWrap}><Pressable accessibilityRole="button" accessibilityLabel={`Chits: ${copy.text.replace(/\n/g, '. ')}. ${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(event.createdAt)}`} onPress={onPress} style={({ pressed }) => [styles.chitsBubble, { backgroundColor: theme.surfaceElevated }, pressed && styles.chitsPressed]}><Ionicons accessible={false} name={copy.icon} size={16} color={theme.textSecondary} /><View style={styles.chitsCopy}><Text style={[styles.chitsText, { color: theme.textSecondary }]}>{copy.text}</Text><Text style={[styles.chitsTime, { color: theme.textMuted }]}>{new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(event.createdAt)}</Text></View></Pressable></View>; }
 
+function searchResultPreview(message: Message) {
+  if (message.text?.trim()) return message.text.trim();
+  const attachment = message.attachments[0];
+  if (!attachment) return 'Thought';
+  if (attachment.type === 'photo') return 'Photo';
+  if (attachment.type === 'video') return 'Video';
+  if (attachment.type === 'audio') return 'Audio note';
+  return attachment.originalName?.trim() || 'File';
+}
+
+function searchResultKind(message: Message): string | null {
+  const attachment = message.attachments[0];
+  if (!attachment || !message.text?.trim()) return null;
+  if (attachment.type === 'photo') return 'Photo';
+  if (attachment.type === 'video') return 'Video';
+  if (attachment.type === 'audio') return 'Audio note';
+  return 'File';
+}
+
+function searchResultDateLabel(timestamp: number) {
+  return `${dateLabel(timestamp)} · ${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(timestamp)}`;
+}
+
+function SearchResultRow({ item, onPress }: { item: TimelineItem; onPress: () => void }) {
+  const { tokens: theme } = useTheme();
+  if (item.kind === 'event') {
+    const copy = eventCopy(item.event);
+    const flatText = copy.text.replace(/\n/g, ' ');
+    return <Pressable accessibilityRole="button" accessibilityLabel={`Chits: ${flatText}. ${searchResultDateLabel(item.event.createdAt)}`} onPress={onPress} style={({ pressed }) => [styles.searchResultRow, pressed && styles.searchResultPressed]}>
+      <Ionicons accessible={false} name={copy.icon} size={15} color={theme.textMuted} style={styles.searchResultIcon} />
+      <View style={styles.searchResultCopy}>
+        <Text numberOfLines={2} style={[styles.searchResultText, { color: theme.textMuted }]}>{flatText}</Text>
+        <Text style={[styles.searchResultMeta, { color: theme.textMuted }]}>{searchResultDateLabel(item.event.createdAt)}</Text>
+      </View>
+    </Pressable>;
+  }
+  const message = item.message;
+  const kind = searchResultKind(message);
+  const preview = searchResultPreview(message);
+  const accessibleKind = kind ? `${kind}. ` : !message.text?.trim() && message.attachments[0] ? `${searchResultPreview(message)}. ` : '';
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${accessibleKind}${preview}. ${searchResultDateLabel(message.createdAt)}`} onPress={onPress} style={({ pressed }) => [styles.searchResultRow, pressed && styles.searchResultPressed]}>
+    <View style={styles.searchResultCopy}>
+      {kind ? <Text style={[styles.searchResultKind, { color: theme.accent }]}>{kind}</Text> : null}
+      <Text numberOfLines={2} style={[styles.searchResultText, { color: theme.textPrimary }]}>{preview}</Text>
+      <Text style={[styles.searchResultMeta, { color: theme.textMuted }]}>{searchResultDateLabel(message.createdAt)}</Text>
+    </View>
+  </Pressable>;
+}
+
 function dayStart(timestamp: number) {
   const date = new Date(timestamp);
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
@@ -86,6 +135,8 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList<FeedItem>>(null);
   const inputRef = useRef<TextInput>(null);
+  const searchInputRef = useRef<TextInput>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attachmentPickerRef = useRef<AttachmentPickerHandle>(null);
   const attachmentDraftRef = useRef<AttachmentDraft | null>(null);
   // Initial "land at latest" positioning is gated on three independent readiness
@@ -133,6 +184,12 @@ export default function ChatScreen() {
   const [inputHeight, setInputHeight] = useState(MIN_COMPOSER_INPUT_HEIGHT);
   const [composerHeight, setComposerHeight] = useState(64);
   const [headerHeight, setHeaderHeight] = useState(72);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<TimelineItem[]>([]);
+  const [searching, setSearching] = useState(false);
+  // Debounced (see handleSearchChange) so this never flashes for an instant query.
+  const showSearchLoader = useChitsLoading(searching, { delay: 150, minDuration: 200 });
 
   const refreshPinned = useCallback(async () => {
     const pinned = await repository.listPinned();
@@ -235,13 +292,23 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (!focusedId) return;
-    const index = feed.findIndex((item) => item.kind === 'message' && item.message.id === focusedId);
+    const index = feed.findIndex((item) => (item.kind === 'message' && item.message.id === focusedId) || (item.kind === 'event' && item.event.id === focusedId));
     if (index < 0) return;
     focusedScrollAttempts.current = 0;
     if (focusedScrollRetry.current) clearTimeout(focusedScrollRetry.current);
     const frame = requestAnimationFrame(() => listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.45 }));
     return () => cancelAnimationFrame(frame);
   }, [feed, focusedId]);
+
+  // The highlight is meant to be a brief "here it is" cue (search/pinned/deep-link
+  // jumps all route through focusedId), not a permanent marker — fades on its own
+  // regardless of which of those triggered it.
+  useEffect(() => {
+    if (!focusedId) return;
+    const id = focusedId;
+    const timer = setTimeout(() => setFocusedId((current) => current === id ? null : current), 1000);
+    return () => clearTimeout(timer);
+  }, [focusedId]);
 
   const handleScrollToIndexFailed = useCallback(({ index, averageItemLength }: { index: number; highestMeasuredFrameIndex: number; averageItemLength: number }) => {
     const estimatedOffset = Math.max(0, averageItemLength * index);
@@ -319,6 +386,71 @@ export default function ChatScreen() {
     setShowJumpToLatest(false);
   }, [scrollToLatest]);
 
+  // Chat-header search: scoped to this Chat timeline only (see
+  // repository.searchTimeline) — a separate concern from the global Search screen.
+  const runSearch = useCallback(async (term: string) => {
+    setSearching(true);
+    try { setSearchResults(await repository.searchTimeline(term)); }
+    catch { setSearchResults([]); }
+    finally { setSearching(false); }
+  }, [repository]);
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    const trimmed = value.trim();
+    // Empty query: keep the normal Chat timeline visible rather than showing a
+    // "no results" state before the user has typed anything.
+    if (!trimmed) { setSearchResults([]); setSearching(false); return; }
+    searchTimer.current = setTimeout(() => { void runSearch(trimmed); }, 250);
+  }, [runSearch]);
+
+  const openSearch = useCallback(() => setSearchOpen(true), []);
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearching(false);
+    if (searchTimer.current) { clearTimeout(searchTimer.current); searchTimer.current = null; }
+    Keyboard.dismiss();
+  }, []);
+
+  useEffect(() => () => { if (searchTimer.current) clearTimeout(searchTimer.current); }, []);
+
+  // Android hardware back closes search first rather than leaving Chat — only
+  // takes over while search is actually open.
+  useEffect(() => {
+    if (!searchOpen) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => { closeSearch(); return true; });
+    return () => subscription.remove();
+  }, [searchOpen, closeSearch]);
+
+  const openSearchResult = useCallback((item: TimelineItem) => {
+    closeSearch();
+    const id = item.kind === 'message' ? item.message.id : item.event.id;
+    // Closing search brings the composer back, which re-lays-out timelineLayer —
+    // its onLayout auto-snaps to the latest message whenever nearBottom is still
+    // true, which it is here (the list never scrolled while search was open). That
+    // would silently override this jump the instant it happens, so mark the list
+    // as not-near-bottom first: we're intentionally landing on a point in history,
+    // not necessarily the latest message.
+    nearBottom.current = false;
+    // closeSearch also just triggered a keyboard-dismiss animation (the search
+    // TextInput unmounting) and the composer's reappearance — both resize the
+    // visible viewport over the next couple hundred ms. Scrolling in the same tick
+    // races that resize: depending on device/OS animation timing, the target
+    // sometimes lands correctly and sometimes doesn't, purely by chance. Waiting
+    // for it to settle first makes the landing consistent instead of racy.
+    setTimeout(() => {
+      // The matched item is already fully loaded (it came straight from the
+      // search query) — merge it in directly rather than re-fetching a
+      // surrounding range; the existing loadOlder-on-scroll-up keeps backfilling
+      // from there as normal.
+      setFeed((current) => mergeTimeline(current, [item]));
+      setFocusedId(id);
+    }, 320);
+  }, [closeSearch]);
+
   const send = useCallback(async () => {
     const text = draft.trim();
     const canEditEmptyDescription = Boolean(editing?.attachments.length);
@@ -374,7 +506,9 @@ export default function ChatScreen() {
   };
   const togglePin = (message: Message) => { const pinned = !message.pinned; void runAction(async () => { await repository.setPinned(message.id, pinned); setFeed((current) => current.map((item) => item.kind === 'message' && item.message.id === message.id ? { ...item, message: { ...item.message, pinned } } : item)); await refreshPinned(); void Haptics.selectionAsync(); }, message); };
   const archive = () => { if (!selected) return; const message = selected; void runAction(async () => { await repository.archive(message.id); setFeed((current) => current.filter((item) => item.kind !== 'message' || item.message.id !== message.id)); await refreshPinned(); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }, message); };
-  const addToBoard = () => { if (!selected) return; const message = selected; setSelected(null); router.push(`/unorganized?messageId=${message.id}`); };
+  // Already organized: jump straight to where it lives instead of routing back
+  // through "add to board" (which would just re-organize the same thought).
+  const addToBoard = () => { if (!selected) return; const message = selected; setSelected(null); if (message.organization) { router.push(`/board/${message.organization.boardId}`); return; } router.push(`/unorganized?messageId=${message.id}`); };
   const openPinned = useCallback((message: Message) => { setFocusedId(message.id); setFeed((current) => mergeTimeline(current, [{ kind: 'message', message, createdAt: message.createdAt }])); }, []);
   const remove = () => { if (!selected) return; const message = selected; Alert.alert('Delete thought?', 'This removes it from Chits and from any cards. This can’t be undone.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => void runAction(async () => { const removableUris = await repository.deletePermanently(message.id); setFeed((current) => current.filter((item) => item.kind !== 'message' || item.message.id !== message.id)); await refreshPinned(); await Promise.all(removableUris.map((uri) => deleteAsync(uri, { idempotent: true }).catch(() => undefined))); }, message) }]); };
   const openEvent = useCallback((event: TimelineEvent) => { if (event.relatedBoardId) router.push(`/board/${event.relatedBoardId}`); }, [router]);
@@ -419,7 +553,13 @@ export default function ChatScreen() {
           // small breathing-room gap on top of it.
           ListFooterComponent={<View style={{ height: composerHeight + spacing.md }} />}
           onScrollToIndexFailed={handleScrollToIndexFailed}
-          onScroll={({ nativeEvent }) => { const distance = nativeEvent.contentSize.height - nativeEvent.layoutMeasurement.height - nativeEvent.contentOffset.y; nearBottom.current = distance < 120; const shouldShowJump = distance > 320; setShowJumpToLatest((current) => current === shouldShowJump ? current : shouldShowJump); if (nativeEvent.contentOffset.y < 240) void loadOlder(); }} scrollEventThrottle={50} contentContainerStyle={[styles.list, { paddingTop: headerHeight }]}
+          onScroll={({ nativeEvent }) => {
+            const distance = nativeEvent.contentSize.height - nativeEvent.layoutMeasurement.height - nativeEvent.contentOffset.y;
+            nearBottom.current = distance < 120;
+            const shouldShowJump = distance > 320;
+            setShowJumpToLatest((current) => current === shouldShowJump ? current : shouldShowJump);
+            if (nativeEvent.contentOffset.y < 240) void loadOlder();
+          }} scrollEventThrottle={50} contentContainerStyle={[styles.list, { paddingTop: headerHeight }]}
           onContentSizeChange={() => {
             maybePerformInitialScroll();
             if (pendingScrollToLatest.current) { scrollToLatest(!reduceMotion.current); pendingScrollToLatest.current = false; return; }
@@ -432,18 +572,35 @@ export default function ChatScreen() {
             if (hasPositionedRef.current && nearBottom.current) listRef.current?.scrollToEnd({ animated: false });
           }}
         />}
-        <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.background}00`, `${theme.background}10`, `${theme.background}80`, `${theme.background}EF`, theme.background]} locations={[0, 0.2, 0.5, 0.8, 1]} style={[styles.bottomFade, { height: Math.min(composerHeight, MIN_COMPOSER_INPUT_HEIGHT + spacing.sm) }]} />
-        {showJumpToLatest ? <Pressable accessibilityRole="button" accessibilityLabel="Jump to latest message" onPress={jumpToLatest} style={({ pressed }) => [styles.jumpToLatest, { bottom: composerHeight + (editing ? 52 : spacing.md), backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, pressed && styles.sendPressed]}><Ionicons accessible={false} name="arrow-down" size={20} color={theme.textPrimary} /></Pressable> : null}
-        {editing && <View style={[styles.editing, { bottom: composerHeight + spacing.xs, backgroundColor: theme.surfaceElevated }]}><Text style={[styles.editingText, { color: theme.textSecondary }]}>{editing.attachments.length ? 'Editing description' : 'Editing thought'}</Text><Pressable accessibilityRole="button" onPress={() => { setEditing(null); setDraft(''); }}><Text style={[styles.cancel, { color: theme.accent }]}>Cancel</Text></Pressable></View>}
-        <View onLayout={({ nativeEvent }) => { setComposerHeight(Math.ceil(nativeEvent.layout.height)); composerMeasuredRef.current = true; maybePerformInitialScroll(); }} style={[styles.composerDock, { paddingBottom: keyboardVisible ? spacing.xs : Math.max(spacing.sm, insets.bottom + spacing.xxs) }]}>
+        {searchOpen && searchQuery.trim() ? <View style={[styles.searchOverlay, { backgroundColor: theme.background }]}>
+          {showSearchLoader ? <View style={styles.initialLoader}><ChitsLoader size="small" /></View>
+          : searchResults.length === 0 ? <View style={[styles.noResults, { paddingTop: headerHeight }]}><Text style={[styles.noResultsText, { color: theme.textSecondary }]}>No matching Chits.</Text></View>
+          : <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.searchResultsList, { paddingTop: headerHeight }]}>
+              {searchResults.map((item) => <SearchResultRow key={timelineKey(item)} item={item} onPress={() => openSearchResult(item)} />)}
+            </ScrollView>}
+        </View> : null}
+        {!searchOpen ? <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.background}00`, `${theme.background}10`, `${theme.background}80`, `${theme.background}EF`, theme.background]} locations={[0, 0.2, 0.5, 0.8, 1]} style={[styles.bottomFade, { height: Math.min(composerHeight, MIN_COMPOSER_INPUT_HEIGHT + spacing.sm) }]} /> : null}
+        {!searchOpen && showJumpToLatest ? <Pressable accessibilityRole="button" accessibilityLabel="Jump to latest message" onPress={jumpToLatest} style={({ pressed }) => [styles.jumpToLatest, { bottom: composerHeight + (editing ? 52 : spacing.md), backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, pressed && styles.sendPressed]}><Ionicons accessible={false} name="arrow-down" size={20} color={theme.textPrimary} /></Pressable> : null}
+        {!searchOpen && editing && <View style={[styles.editing, { bottom: composerHeight + spacing.xs, backgroundColor: theme.surfaceElevated }]}><Text style={[styles.editingText, { color: theme.textSecondary }]}>{editing.attachments.length ? 'Editing description' : 'Editing thought'}</Text><Pressable accessibilityRole="button" onPress={() => { setEditing(null); setDraft(''); }}><Text style={[styles.cancel, { color: theme.accent }]}>Cancel</Text></Pressable></View>}
+        {!searchOpen ? <View onLayout={({ nativeEvent }) => { setComposerHeight(Math.ceil(nativeEvent.layout.height)); composerMeasuredRef.current = true; maybePerformInitialScroll(); }} style={[styles.composerDock, { paddingBottom: keyboardVisible ? spacing.xs : Math.max(spacing.sm, insets.bottom + spacing.xxs) }]}>
           {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { backgroundColor: theme.surfaceElevated, borderColor: theme.danger }]}><Ionicons accessible={false} name="alert-circle-outline" size={18} color={theme.danger} /><Text style={[styles.errorText, { color: theme.danger }]}>{error}</Text></View> : null}
-          <GlassSurface style={[styles.composer, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, composerExpanded && styles.composerExpanded, composerFocused && { borderColor: theme.accentBorder }]}> 
+          <GlassSurface style={[styles.composer, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, composerExpanded && styles.composerExpanded, composerFocused && { borderColor: theme.accentBorder }]}>
             {!isRecordingAudio && attachmentDraft ? <AttachmentDraftPreview draft={attachmentDraft} compact={composerFocused} onRemove={removeAttachmentDraft} /> : null}
             {!isRecordingAudio ? <TextInput ref={inputRef} accessibilityLabel={attachmentDraft || editing?.attachments.length ? 'Attachment description' : 'Message yourself'} value={draft} onChangeText={setDraft} onFocus={focusComposer} onContentSizeChange={({ nativeEvent }) => updateInputHeight(nativeEvent.contentSize.height)} placeholder={attachmentDraft || editing?.attachments.length ? 'Add a description...' : editing ? 'Edit thought...' : 'Message yourself...'} placeholderTextColor={theme.textMuted} selectionColor={theme.accent} cursorColor={theme.accent} multiline maxLength={10000} scrollEnabled={!composerFocused || inputHeight >= MAX_COMPOSER_INPUT_HEIGHT} style={[styles.input, composerExpanded ? styles.inputExpanded : styles.inputCompact, { height: visibleInputHeight, color: theme.textPrimary }]} textAlignVertical={composerExpanded ? 'top' : 'center'} /> : null}
             <View pointerEvents={composerExpanded ? 'auto' : 'box-none'} style={[styles.composerActions, isRecordingAudio ? styles.composerActionsRecording : composerExpanded ? styles.composerActionsExpanded : styles.composerActionsCompact]}><AttachmentPicker ref={attachmentPickerRef} disabled={Boolean(attachmentDraft) || Boolean(editing) || isSaving} onSelected={attachmentSelected} onError={setError} onRecordingChange={recordingChanged} />{!isRecordingAudio ? <Pressable accessibilityRole="button" accessibilityLabel={canSend ? 'Send message' : 'Record audio'} accessibilityState={{ disabled: isSaving }} disabled={isSaving} onPress={() => { if (canSend) void send(); else attachmentPickerRef.current?.startAudio(); }} style={({ pressed }) => [styles.sendButton, { backgroundColor: isSaving ? theme.surfaceElevated : theme.accent }, pressed && styles.sendPressed]}><Ionicons accessible={false} name={canSend ? 'arrow-up' : 'mic-outline'} size={20} color={theme.accentText} /></Pressable> : null}</View>
           </GlassSurface>
-        </View>
-        <ChatHeader onHeight={(height) => { setHeaderHeight(height); headerMeasuredRef.current = true; maybePerformInitialScroll(); }} pinned={pinnedMessages} onOpenPinned={openPinned} />
+        </View> : null}
+        <ChatHeader
+          ref={searchInputRef}
+          onHeight={(height) => { setHeaderHeight(height); headerMeasuredRef.current = true; maybePerformInitialScroll(); }}
+          pinned={pinnedMessages}
+          onOpenPinned={openPinned}
+          searchOpen={searchOpen}
+          searchQuery={searchQuery}
+          onOpenSearch={openSearch}
+          onCloseSearch={closeSearch}
+          onSearchChange={handleSearchChange}
+        />
         </View>
       <MessageActions message={selected} onDismiss={() => setSelected(null)} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} onAddToBoard={addToBoard} onArchive={archive} onDelete={remove} />
       <Toast message={toast} />
@@ -452,5 +609,19 @@ export default function ChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({ flex: { flex: 1 }, timelineLayer: { flex: 1 }, initialLoader: { flex: 1, alignItems: 'center', justifyContent: 'center' }, list: { paddingVertical: spacing.sm }, bottomFade: { position: 'absolute', right: 0, bottom: 0, left: 0 }, olderStatus: { minHeight: 30, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md }, olderError: { fontSize: 12, lineHeight: 18, textAlign: 'center' }, jumpToLatest: { position: 'absolute', right: spacing.lg, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4 }, dateDivider: { fontSize: 12, fontWeight: '600', textAlign: 'center', paddingTop: spacing.md, paddingBottom: spacing.xs }, chitsWrap: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, alignItems: 'flex-start' }, chitsBubble: { maxWidth: '88%', flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: 14 }, chitsPressed: { opacity: 0.58 }, chitsCopy: { flexShrink: 1 }, chitsText: { fontSize: 15, lineHeight: 21 }, chitsTime: { fontSize: 11, marginTop: spacing.xxs }, errorBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, marginBottom: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12 }, errorText: { flex: 1, fontSize: 13, lineHeight: 18 }, editing: { position: 'absolute', right: spacing.md, left: spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 10 }, editingText: { fontSize: 13 }, cancel: { fontSize: 14, fontWeight: '600' }, composerDock: { position: 'absolute', right: 0, bottom: 0, left: 0, paddingHorizontal: spacing.md, paddingTop: spacing.xs }, composer: { alignItems: 'stretch', minHeight: 56, paddingHorizontal: spacing.xs, paddingVertical: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 5 }, composerExpanded: { borderRadius: 20, paddingHorizontal: spacing.sm }, composerActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, composerActionsCompact: { position: 'absolute', top: spacing.xs, right: spacing.xs, left: spacing.xs }, composerActionsExpanded: { marginTop: spacing.xs }, composerActionsRecording: { minHeight: 56 }, input: { minHeight: MIN_COMPOSER_INPUT_HEIGHT, fontSize: 16, lineHeight: 22, paddingVertical: spacing.xs }, inputCompact: { paddingHorizontal: 48 }, inputExpanded: { paddingHorizontal: spacing.xs }, sendButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 }, sendPressed: { opacity: 0.7 },
+const styles = StyleSheet.create({ flex: { flex: 1 }, timelineLayer: { flex: 1 }, initialLoader: { flex: 1, alignItems: 'center', justifyContent: 'center' }, list: { paddingVertical: spacing.sm },
+  // Overlays the (still-mounted) FlatList rather than replacing it in the tree —
+  // unmounting/remounting the list mid-search would drop its layout cache right
+  // when a result tap needs scrollToIndex to work reliably.
+  searchOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
+  searchResultsList: { paddingHorizontal: spacing.md, paddingBottom: spacing.lg },
+  searchResultRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'transparent' },
+  searchResultPressed: { opacity: 0.6 },
+  searchResultIcon: { marginTop: 2 },
+  searchResultCopy: { flex: 1, minWidth: 0 },
+  searchResultKind: { fontSize: 11, fontWeight: '700', letterSpacing: 0.4, marginBottom: 2 },
+  searchResultText: { fontSize: 15, lineHeight: 21 },
+  searchResultMeta: { fontSize: 12, marginTop: 3 },
+  noResults: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
+  noResultsText: { fontSize: 14, fontWeight: '500' }, bottomFade: { position: 'absolute', right: 0, bottom: 0, left: 0 }, olderStatus: { minHeight: 30, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md }, olderError: { fontSize: 12, lineHeight: 18, textAlign: 'center' }, jumpToLatest: { position: 'absolute', right: spacing.lg, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4 }, dateDivider: { fontSize: 12, fontWeight: '600', textAlign: 'center', paddingTop: spacing.md, paddingBottom: spacing.xs }, chitsWrap: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, alignItems: 'flex-start' }, chitsBubble: { maxWidth: '88%', flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: 14 }, chitsPressed: { opacity: 0.58 }, chitsCopy: { flexShrink: 1 }, chitsText: { fontSize: 15, lineHeight: 21 }, chitsTime: { fontSize: 11, marginTop: spacing.xxs }, errorBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, marginBottom: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12 }, errorText: { flex: 1, fontSize: 13, lineHeight: 18 }, editing: { position: 'absolute', right: spacing.md, left: spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 10 }, editingText: { fontSize: 13 }, cancel: { fontSize: 14, fontWeight: '600' }, composerDock: { position: 'absolute', right: 0, bottom: 0, left: 0, paddingHorizontal: spacing.md, paddingTop: spacing.xs }, composer: { alignItems: 'stretch', minHeight: 56, paddingHorizontal: spacing.xs, paddingVertical: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 5 }, composerExpanded: { borderRadius: 20, paddingHorizontal: spacing.sm }, composerActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, composerActionsCompact: { position: 'absolute', top: spacing.xs, right: spacing.xs, left: spacing.xs }, composerActionsExpanded: { marginTop: spacing.xs }, composerActionsRecording: { minHeight: 56 }, input: { minHeight: MIN_COMPOSER_INPUT_HEIGHT, fontSize: 16, lineHeight: 22, paddingVertical: spacing.xs }, inputCompact: { paddingHorizontal: 48 }, inputExpanded: { paddingHorizontal: spacing.xs }, sendButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 }, sendPressed: { opacity: 0.7 },
 });

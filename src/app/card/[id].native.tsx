@@ -350,32 +350,37 @@ export default function CardDetailScreen() {
           <View style={styles.noticeCopy}><Text style={styles.notice}>{notice}</Text></View>
         </View> : null}
 
-        <View style={styles.sectionHeader}>
-          <Text accessibilityRole="header" style={styles.sectionTitle}>CONTENT</Text>
-          {singleThoughtEditable ? <Pressable accessibilityRole="button" accessibilityLabel="Edit content" hitSlop={8} onPress={() => startContentEdit(messages[0])} style={styles.sectionEditButton}><Ionicons accessible={false} name="create-outline" size={16} color={theme.textMuted} /></Pressable>
-            : messages.length > 1 ? <View style={styles.countBadge}><Text style={styles.countText}>{messages.length}</Text></View> : null}
-        </View>
-        <Text style={styles.sectionHint}>Changes here also update the original thought in Chat.</Text>
+        <View style={[styles.contentCard, { backgroundColor: theme.accentSoft, borderColor: theme.accentBorder }]}>
+          <View style={styles.contentCardHeader}>
+            <View style={styles.contentCardTitleRow}>
+              <View style={[styles.contentIconMark, { backgroundColor: theme.surface }]}><Ionicons accessible={false} name="document-text-outline" size={14} color={theme.accentStrong} /></View>
+              <Text accessibilityRole="header" style={[styles.contentSectionTitle, { color: theme.accentStrong }]}>CONTENT</Text>
+            </View>
+            {singleThoughtEditable ? <Pressable accessibilityRole="button" accessibilityLabel="Edit content" hitSlop={8} onPress={() => startContentEdit(messages[0])} style={styles.sectionEditButton}><Ionicons accessible={false} name="create-outline" size={16} color={theme.accentStrong} /></Pressable>
+              : messages.length > 1 ? <View style={[styles.countBadge, { backgroundColor: theme.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.accentBorder }]}><Text style={styles.countText}>{messages.length}</Text></View> : null}
+          </View>
+          <Text style={styles.contentSectionHint}>Changes here also update the original thought in Chat.</Text>
 
-        <View style={styles.thoughtList}>
-          {messages.map((message, index) => <View key={message.id} style={index > 0 && styles.thought}>
-            {messages.length > 1 ? <View style={styles.thoughtHeader}>
-              <Text style={styles.thoughtLabel}>THOUGHT {index + 1}</Text>
-              {message.text && editingMessageId !== message.id ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit thought ${index + 1}`} hitSlop={8} onPress={() => startContentEdit(message)} style={styles.inlineEdit}><Ionicons accessible={false} name="create-outline" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Edit</Text></Pressable> : null}
-            </View> : null}
-            {editingMessageId === message.id ? <View style={styles.editor}>
-              {message.attachments.length ? <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" /></View>)}</View> : null}
-              <TextInput autoFocus accessibilityLabel="Card content" multiline value={contentDraft} onChangeText={setContentDraft} placeholder="Write card content" placeholderTextColor={theme.textMuted} textAlignVertical="top" style={styles.contentInput} />
-              <View style={styles.editActions}>
-                <Pressable accessibilityRole="button" disabled={savingEdit || (!contentDraft.trim() && !message.attachments.length)} onPress={() => void saveContent()} style={[styles.editSave, { backgroundColor: theme.accent }, (savingEdit || (!contentDraft.trim() && !message.attachments.length)) && styles.disabled]}><Text style={[styles.editSaveText, { color: theme.accentText }]}>{savingEdit ? 'Saving…' : 'Save changes'}</Text></Pressable>
-                <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => { setEditingMessageId(null); setContentDraft(''); }} style={styles.editCancel}><Text style={styles.editCancelText}>Cancel</Text></Pressable>
-              </View>
-            </View> : <>
-              <MessageContentRenderer message={message} mode="detail" renderAttachments={() => <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" /></View>)}</View>} />
-              {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={`Add a description to ${messageFallback(message)}`} onPress={() => startContentEdit(message)} style={styles.addDescription}><Ionicons accessible={false} name="add" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Add description</Text></Pressable> : null}
-            </>}
-            {index < messages.length - 1 ? <View style={styles.thoughtDivider} /> : null}
-          </View>)}
+          <View style={styles.thoughtList}>
+            {messages.map((message, index) => <View key={message.id} style={index > 0 && styles.thought}>
+              {messages.length > 1 ? <View style={styles.thoughtHeader}>
+                <Text style={styles.thoughtLabel}>THOUGHT {index + 1}</Text>
+                {message.text && editingMessageId !== message.id ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit thought ${index + 1}`} hitSlop={8} onPress={() => startContentEdit(message)} style={styles.inlineEdit}><Ionicons accessible={false} name="create-outline" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Edit</Text></Pressable> : null}
+              </View> : null}
+              {editingMessageId === message.id ? <View style={styles.editor}>
+                {message.attachments.length ? <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" /></View>)}</View> : null}
+                <TextInput autoFocus accessibilityLabel="Card content" multiline value={contentDraft} onChangeText={setContentDraft} placeholder="Write card content" placeholderTextColor={theme.textMuted} textAlignVertical="top" style={styles.contentInput} />
+                <View style={styles.editActions}>
+                  <Pressable accessibilityRole="button" disabled={savingEdit || (!contentDraft.trim() && !message.attachments.length)} onPress={() => void saveContent()} style={[styles.editSave, { backgroundColor: theme.accent }, (savingEdit || (!contentDraft.trim() && !message.attachments.length)) && styles.disabled]}><Text style={[styles.editSaveText, { color: theme.accentText }]}>{savingEdit ? 'Saving…' : 'Save changes'}</Text></Pressable>
+                  <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => { setEditingMessageId(null); setContentDraft(''); }} style={styles.editCancel}><Text style={styles.editCancelText}>Cancel</Text></Pressable>
+                </View>
+              </View> : <>
+                <MessageContentRenderer message={message} mode="detail" renderAttachments={() => <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" /></View>)}</View>} />
+                {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={`Add a description to ${messageFallback(message)}`} onPress={() => startContentEdit(message)} style={styles.addDescription}><Ionicons accessible={false} name="add" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Add description</Text></Pressable> : null}
+              </>}
+              {index < messages.length - 1 ? <View style={styles.thoughtDivider} /> : null}
+            </View>)}
+          </View>
         </View>
 
         <View style={styles.sectionHeader}><Text accessibilityRole="header" style={styles.sectionTitle}>DETAILS</Text></View>
@@ -517,7 +522,16 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   sectionHeader: { minHeight: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginTop: spacing.xl },
   sectionTitle: { color: tokens.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.9 },
   sectionEditButton: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', marginRight: -spacing.xxs },
-  sectionHint: { color: tokens.textMuted, fontSize: 12, lineHeight: 17, marginTop: spacing.xxs },
+  // Content is the one section that should catch the eye first — a tinted card of
+  // its own (rather than the plain-on-background treatment every other section
+  // uses) with a stronger, iconed label, so it reads as the primary surface on the
+  // screen without going as far as a heavy dashboard widget.
+  contentCard: { marginTop: spacing.md, padding: spacing.md, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 1 },
+  contentCardHeader: { minHeight: 26, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  contentCardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  contentIconMark: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center', borderRadius: 7 },
+  contentSectionTitle: { color: tokens.textPrimary, fontSize: 13, fontWeight: '800', letterSpacing: 0.6 },
+  contentSectionHint: { color: tokens.textMuted, fontSize: 12, lineHeight: 16, marginTop: 3, opacity: 0.85 },
   countBadge: { minWidth: 26, height: 22, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7, borderRadius: 11, backgroundColor: tokens.surfaceElevated },
   countText: { color: tokens.textSecondary, fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
   flexCopy: { flex: 1, minWidth: 0 },

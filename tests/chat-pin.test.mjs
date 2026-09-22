@@ -19,17 +19,17 @@ test('pinning targets the message selected by the action sheet', () => {
   assert.match(repository, /async listPinned\(\)/);
 });
 
-test('pinned thoughts remain visible at the top of Chat and can be reopened', () => {
+test('pinned thoughts stay inline in the Chat header row and can be reopened', () => {
   const header = read('src/components/chat/chat-header.tsx');
   const screen = read('src/app/(tabs)/chat.native.tsx');
 
-  assert.match(header, />PINNED</);
   assert.match(header, /Pinned thought: \$\{pinnedPreview\(message\)\}/);
-  assert.ok(header.indexOf('>PINNED<') < header.indexOf('<View style={styles.row}>'), 'the pinned row belongs above the Chat navigation and title');
-  assert.match(header, /style=\{styles\.overlay\}/);
-  assert.match(header, /styles\.pinnedArea, \{ borderColor: tokens\.borderSubtle, backgroundColor: tokens\.background \}/);
-  assert.match(screen, /<ChatHeader onHeight=\{\(height\) => \{ setHeaderHeight\(height\);/);
-  assert.match(screen, /const openPinned = useCallback\(\(message: Message\) => \{ setFocusedId\(message\.id\);/);
+  assert.match(header, /styles\.pinnedList/);
+  assert.ok(header.indexOf('accessibilityLabel="Search Chat"') < header.indexOf('styles.pinnedList'), 'pinned items sit after the search icon');
+  assert.ok(header.indexOf('styles.pinnedList') < header.indexOf('accessibilityLabel="Close"'), 'pinned items sit before the close icon — search icon, pinned items, and close icon all in one row');
+  assert.match(header, /style=\{\[styles\.overlay, \{ backgroundColor: tokens\.background \}\]\}/);
+  assert.match(screen, /<ChatHeader[\s\S]*?onHeight=\{\(height\) => \{ setHeaderHeight\(height\);/);
+  assert.match(screen, /const openPinned = useCallback\(\(message: Message\) => \{[\s\S]*?setFocusedId\(message\.id\);/);
 });
 
 test('the action sheet backdrop cannot receive taps meant for Pin', () => {

@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ComponentProps,
   type PropsWithChildren,
@@ -11,6 +12,8 @@ import {
 import {
   AccessibilityInfo,
   Animated,
+  Keyboard,
+  LayoutAnimation,
   Modal,
   PanResponder,
   Platform,
@@ -18,17 +21,28 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
+  UIManager,
   View,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { usePathname, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
+import * as Haptics from 'expo-haptics';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
+import { Toast } from '@/components/ui/primitives';
 import { spacing } from '@/constants/theme';
 import { createBoardRepository } from '@/db/repositories';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+// Short, restrained transition — no bounce — reused for both the Pinned header's
+// search/close swap and a row's fade+collapse on unpin.
+const PINNED_TRANSITION = LayoutAnimation.create(180, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity);
 
 type DrawerContextValue = { openDrawer: () => void; closeDrawer: () => void };
 type ContextItem = {
@@ -134,13 +148,112 @@ function DrawerBackdrop({ close, reduceTransparency, darkMode }: { close: () => 
   return <View style={[styles.backdrop, { backgroundColor: tint }]}>{tapTarget}</View>;
 }
 
-function ShortcutSection({ label, items, close }: { label: 'PINNED' | 'RECENT'; items: ContextItem[]; close: () => void }) {
+function ShortcutSection({ label, items, close }: { label: 'RECENT'; items: ContextItem[]; close: () => void }) {
   const { tokens } = useTheme();
   if (!items.length) return null;
   return (
     <View style={styles.section}>
       <Text accessibilityRole="header" style={[styles.sectionLabel, { color: tokens.textMuted }]}>{label}</Text>
-      {items.map((item) => <ContextRow key={`${item.kind}-${item.id}`} item={item} close={close} showKind={label === 'RECENT'} />)}
+      {items.map((item) => <ContextRow key={`${item.kind}-${item.id}`} item={item} close={close} showKind />)}
+    </View>
+  );
+}
+
+function matchesPinnedQuery(item: ContextItem, query: string) {
+  return `${item.title} ${item.context}`.toLowerCase().includes(query.toLowerCase());
+}
+
+function PinnedRow({ item, close, onUnpin }: { item: ContextItem; close: () => void; onUnpin: () => void }) {
+  const router = useRouter();
+  const { tokens } = useTheme();
+  const accessibilityLabel = item.kind === 'board'
+    ? `${item.title}. Board.`
+    : `${item.title}. Card. ${item.accessibilityContext}.`;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={() => {
+        close();
+        if (item.kind === 'board') router.push({ pathname: '/board/[id]', params: { id: item.id } });
+        else router.push({ pathname: '/card/[id]', params: { id: item.id } });
+      }}
+      style={({ pressed }) => [styles.contextRow, styles.pinnedRow, pressed && styles.pressed]}>
+      <View accessible={false} style={[styles.contextIcon, { backgroundColor: item.kind === 'board' ? tokens.accentSoft : tokens.surfaceElevated, borderColor: item.kind === 'board' ? tokens.accentBorder : tokens.borderSubtle }]}>
+        <Ionicons accessible={false} name={item.kind === 'board' ? 'grid-outline' : 'document-text-outline'} size={17} color={item.kind === 'board' ? tokens.accentStrong : tokens.textSecondary} />
+      </View>
+      <View style={styles.contextCopy}>
+        <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.contextTitle, { color: tokens.textPrimary }]}>{item.title}</Text>
+        <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.contextMeta, { color: tokens.textSecondary }]}>{item.context}</Text>
+      </View>
+      {/* Nested Pressable, not the row's own onPress — stopPropagation keeps this
+          from also opening the row underneath it. Neutral color throughout: this
+          unpins, it never deletes anything. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Remove ${item.title} from Pinned`}
+        hitSlop={10}
+        onPress={(event) => { event.stopPropagation(); onUnpin(); }}
+        style={({ pressed }) => [styles.unpinButton, pressed && styles.unpinPressed]}>
+        <Ionicons accessible={false} name="close" size={16} color={tokens.textMuted} />
+      </Pressable>
+    </Pressable>
+  );
+}
+
+function PinnedSection({ items, close, onUnpin }: { items: ContextItem[]; close: () => void; onUnpin: (item: ContextItem) => void }) {
+  const { tokens } = useTheme();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const searchInputRef = useRef<TextInput>(null);
+  const [hadItems, setHadItems] = useState(items.length > 0);
+  // Unpinning the last item drops this section to zero-length rather than
+  // unmounting it (it just renders null below) — reset search state right in that
+  // same render so a later re-pin doesn't resurrect a stale open search field.
+  if ((items.length > 0) !== hadItems) {
+    setHadItems(items.length > 0);
+    if (items.length === 0) { setSearchOpen(false); setQuery(''); }
+  }
+
+  if (!items.length) return null;
+
+  const openSearch = () => { LayoutAnimation.configureNext(PINNED_TRANSITION); setSearchOpen(true); };
+  const closeSearch = () => { LayoutAnimation.configureNext(PINNED_TRANSITION); setSearchOpen(false); setQuery(''); Keyboard.dismiss(); };
+  const trimmed = query.trim();
+  const filtered = trimmed ? items.filter((item) => matchesPinnedQuery(item, trimmed)) : items;
+
+  return (
+    <View style={styles.section}>
+      <View style={styles.pinnedHeader}>
+        {searchOpen ? <>
+          <View style={[styles.pinnedSearchField, { backgroundColor: tokens.surfaceElevated, borderColor: tokens.borderSubtle }]}>
+            <Ionicons accessible={false} name="search-outline" size={15} color={tokens.textMuted} />
+            <TextInput
+              ref={searchInputRef}
+              accessibilityLabel="Search pinned items"
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search pinned items…"
+              placeholderTextColor={tokens.textMuted}
+              selectionColor={tokens.accent}
+              returnKeyType="search"
+              autoFocus
+              style={[styles.pinnedSearchInput, { color: tokens.textPrimary }]}
+            />
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close pinned search" hitSlop={10} onPress={closeSearch} style={styles.pinnedSearchClose}>
+            <Ionicons accessible={false} name="close" size={18} color={tokens.textSecondary} />
+          </Pressable>
+        </> : <>
+          <Text accessibilityRole="header" style={[styles.sectionLabel, styles.pinnedLabel, { color: tokens.textMuted }]}>PINNED</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Search pinned items" hitSlop={10} onPress={openSearch} style={styles.pinnedSearchButton}>
+            <Ionicons accessible={false} name="search-outline" size={17} color={tokens.textMuted} />
+          </Pressable>
+        </>}
+      </View>
+      {trimmed && filtered.length === 0
+        ? <Text style={[styles.pinnedNoResults, { color: tokens.textMuted }]}>No pinned items found.</Text>
+        : filtered.map((item) => <PinnedRow key={`${item.kind}-${item.id}`} item={item} close={close} onUnpin={() => onUnpin(item)} />)}
     </View>
   );
 }
@@ -157,6 +270,7 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   // the Boards header — the drawer must show that title too, not its own hardcoded
   // "Chits" that would drift the moment it's renamed.
   const [appTitle, setAppTitle] = useState('Chits');
+  const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [nextPinned, nextRecent, titleRow] = await Promise.all([
@@ -174,6 +288,18 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
     const frame = requestAnimationFrame(() => { void load(); });
     return () => cancelAnimationFrame(frame);
   }, [isOpen, load]);
+
+  useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 1800); return () => clearTimeout(timer); }, [toast]);
+
+  // Immediately reversible (pin it again elsewhere), so no confirmation — just an
+  // optimistic removal with a subtle toast, rolled back only if the write fails.
+  const unpinItem = useCallback((item: ContextItem) => {
+    LayoutAnimation.configureNext(PINNED_TRANSITION);
+    setPinned((current) => current.filter((entry) => !(entry.kind === item.kind && entry.id === item.id)));
+    void repository.setPinned(item.kind, item.id, false)
+      .then(() => { void Haptics.selectionAsync(); setToast('Removed from Pinned'); })
+      .catch(() => { void load(); });
+  }, [load, repository]);
 
   const hasShortcuts = pinned.length > 0 || recent.length > 0;
   return (
@@ -200,7 +326,7 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
           <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
         </View>
         {hasShortcuts ? <View style={[styles.divider, { backgroundColor: tokens.borderSubtle }]} /> : null}
-        <ShortcutSection label="PINNED" items={pinned} close={close} />
+        <PinnedSection items={pinned} close={close} onUnpin={unpinItem} />
         <ShortcutSection label="RECENT" items={recent.slice(0, 5)} close={close} />
       </ScrollView>
       <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }]}>
@@ -214,9 +340,10 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
           }}
           style={({ pressed }) => [styles.chatButton, { backgroundColor: tokens.accent }, pressed && styles.chatButtonPressed]}>
           <DrawerIcon name="chatbubble-outline" color={tokens.accentText} />
-          <Text style={[styles.chatText, { color: tokens.accentText }]}>Chat</Text>
+          <Text style={[styles.chatText, { color: tokens.accentText }]}>Chat to Note</Text>
         </Pressable>
       </View>
+      <Toast message={toast} />
     </SafeAreaView>
   );
 }
@@ -346,6 +473,20 @@ const styles = StyleSheet.create({
   contextMeta: { fontSize: 12, marginTop: 2 },
   kindBadge: { minHeight: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, borderRadius: 5 },
   kindBadgeText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.45 },
+  // Same 44pt-ish footprint as the drawer's other header actions (headerAction),
+  // just inline with the PINNED label instead of top-right.
+  pinnedHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg },
+  pinnedLabel: { flex: 1, paddingHorizontal: 0, paddingBottom: 0 },
+  pinnedSearchButton: { width: 44, height: 44, marginRight: -spacing.sm, alignItems: 'center', justifyContent: 'center' },
+  pinnedSearchField: { flex: 1, minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, borderRadius: 18, borderWidth: 1 },
+  pinnedSearchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
+  pinnedSearchClose: { width: 44, height: 44, marginRight: -spacing.sm, alignItems: 'center', justifyContent: 'center' },
+  pinnedRow: { paddingRight: spacing.xxs },
+  // Icon stays visually compact (16dp); hitSlop below brings the actual touch
+  // target up to the 44dp minimum without the row looking crowded.
+  unpinButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
+  unpinPressed: { opacity: 0.55 },
+  pinnedNoResults: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, fontSize: 13 },
   footer: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,

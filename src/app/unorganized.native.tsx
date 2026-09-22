@@ -254,26 +254,33 @@ export default function UnorganizedScreen() {
     finally { setWorking(false); setToast(null); }
   };
 
-  const undoOrganize = async (cardIds: string[]) => {
-    setWorking(true);
-    try { for (const cardId of cardIds) await createBoardRepository(database).deleteCard(cardId); await load(); }
-    finally { setWorking(false); setToast(null); }
+  // Redirect straight to the destination board/column once the add is fully
+  // persisted (see PHASE — REDIRECT TO BOARD AFTER ADDING UNORGANIZED ITEM) — the
+  // board screen picks up highlightColumnId/highlightCardId to activate the right
+  // column and briefly highlight the (first, for a batch) newly added card. Back
+  // naturally returns to Unorganized since this is a push, not a replace.
+  const goToDestination = (boardId: string, columnId: string | null, cardIds: string[]) => {
+    const params = new URLSearchParams();
+    if (columnId) params.set('highlightColumnId', columnId);
+    if (cardIds[0]) params.set('highlightCardId', cardIds[0]);
+    const query = params.toString();
+    router.push(`/board/${boardId}${query ? `?${query}` : ''}`);
   };
   const organize = async (board: BoardSummary) => {
     setWorking(true); setError(null);
     try {
-      const cardIds = await createBoardRepository(database).organizeMessages(board.id, selected);
+      const { cardIds, columnId } = await createBoardRepository(database).organizeMessages(board.id, selected);
       await createBoardRepository(database).markOpened('board', board.id);
-      setSheetOpen(false); setSelected([]); await load();
-      showToast(`Added to ${board.name}`, () => void undoOrganize(cardIds));
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Chits could not add those thoughts to this board.'); }
+      setSheetOpen(false); setSelected([]);
+      goToDestination(board.id, columnId, cardIds);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Couldn’t add to board. Try again.'); }
     finally { setWorking(false); }
   };
   const createBoardAndOrganize = async (name: string) => {
     const board = await createBoardRepository(database).create({ name });
-    const cardIds = await createBoardRepository(database).organizeMessages(board.id, selected);
-    setSheetOpen(false); setSelected([]); await load();
-    showToast(`Added to ${board.name}`, () => void undoOrganize(cardIds));
+    const { cardIds, columnId } = await createBoardRepository(database).organizeMessages(board.id, selected);
+    setSheetOpen(false); setSelected([]);
+    goToDestination(board.id, columnId, cardIds);
   };
   const addToExistingCard = async () => {
     if (!addToCard) return;

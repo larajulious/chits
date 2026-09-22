@@ -44,7 +44,7 @@ export function MessageActions({ message, onDismiss, onCopy, onEdit, onPin, onAd
           <View style={styles.group}>
             <ActionRow icon="pencil-outline" label={hasAttachment ? 'Edit description' : 'Edit'} onPress={onEdit} />
             {copyable ? <ActionRow icon="copy-outline" label="Copy chat" onPress={() => onCopy(message)} /> : null}
-            <ActionRow icon="grid-outline" label="Add to board" onPress={onAddToBoard} />
+            <ActionRow icon={message.organization ? 'grid' : 'grid-outline'} label={message.organization ? `Go to ${message.organization.boardName}` : 'Add to board'} onPress={onAddToBoard} />
           </View>
 
           <View style={[styles.group, styles.groupDivider, { borderTopColor: theme.borderSubtle }]}>

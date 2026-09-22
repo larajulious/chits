@@ -136,11 +136,13 @@ const styles = StyleSheet.create({
   noteCard: { alignSelf: 'flex-end', width: '100%', maxWidth: 640, overflow: 'hidden', paddingHorizontal: spacing.md, paddingTop: spacing.md, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.contentCard },
   noteText: { fontSize: 16, lineHeight: 24 },
   compactParagraphs: { gap: spacing.sm },
-  detailContent: { gap: spacing.md },
-  detailParagraphs: { gap: spacing.md },
+  detailContent: { gap: spacing.lg },
+  // Wider than compact's paragraph gap — read as a document with clearly
+  // separated paragraphs, not a chat bubble's tight run of lines.
+  detailParagraphs: { gap: spacing.lg },
   detailText: { fontSize: 17, lineHeight: 27 },
   structuredBody: { gap: spacing.xs },
-  structuredBodyDetail: { gap: spacing.sm },
+  structuredBodyDetail: { gap: spacing.md },
   structuredCopy: { fontSize: 16, lineHeight: 23, fontWeight: '600' },
   structuredCopyDetail: { fontSize: 18, lineHeight: 26, fontWeight: '700' },
   paragraphSpacer: { height: spacing.xxs },

@@ -26,9 +26,9 @@ type Props = {
 const MAX_NOTESPACE_NAME_LENGTH = 40;
 
 // NoteSpace naming lives in Settings, not Chat's header — this is the only place
-// app_settings.chat_title is ever written, mirroring RenameBoardSheet's shape so
-// the two "rename this identity" flows in the app feel consistent even though a
-// NoteSpace and a Board are different concepts.
+// app_settings.chat_title is ever written, mirroring the board-editing sheet's
+// name-field shape so the two "rename this identity" flows in the app feel
+// consistent even though a NoteSpace and a Board are different concepts.
 export function EditNoteSpaceNameSheet({ visible, currentName, onClose, onSave }: Props) {
   const { tokens: theme } = useTheme();
   const inputRef = useRef<TextInput>(null);
