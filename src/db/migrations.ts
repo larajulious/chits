@@ -93,6 +93,40 @@ const migrations: Migration[] = [{
   up: async (database) => {
     await database.execAsync('CREATE INDEX IF NOT EXISTS idx_messages_timeline_cursor ON messages(deleted_at, archived_at, created_at DESC, id DESC); CREATE INDEX IF NOT EXISTS idx_timeline_events_cursor ON timeline_events(created_at DESC, id DESC, event_type);');
   },
+}, {
+  version: 15,
+  up: async (database) => {
+    // Per-column board card queries (progressive column loading/prefetch) filter and
+    // sort by column_id first; idx_cards_board_position leads with board_id, so it
+    // can't serve that access pattern efficiently.
+    await database.execAsync('CREATE INDEX IF NOT EXISTS idx_cards_column_position ON cards(column_id, position);');
+  },
+}, {
+  version: 16,
+  up: async (database) => {
+    // Lightweight, card-scoped follow-up notes — structurally separate from
+    // messages/timeline_events so they never leak into Chat history or Chits
+    // talk-back. Soft-deleted (deleted_at) like messages; hard-deleted only when
+    // the owning card itself is permanently deleted (see deleteCard).
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS card_comments (id TEXT PRIMARY KEY NOT NULL, card_id TEXT NOT NULL, text TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE RESTRICT);
+      CREATE INDEX IF NOT EXISTS idx_card_comments_card ON card_comments(card_id, deleted_at, created_at ASC);
+    `);
+  },
+}, {
+  version: 17,
+  up: async (database) => {
+    // Attachments the user adds directly inside Card Details — supporting material
+    // for the card itself, deliberately separate from `attachments` (which belongs
+    // to chat messages, i.e. a card's linked "source" thoughts). Hard-deleted (no
+    // deleted_at use in practice) since a physical file needs real cleanup, matching
+    // message attachments' own hard-delete semantics rather than card_comments'
+    // soft-delete one.
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS card_attachments (id TEXT PRIMARY KEY NOT NULL, card_id TEXT NOT NULL, type TEXT NOT NULL, local_uri TEXT NOT NULL, original_name TEXT, mime_type TEXT, size INTEGER, width INTEGER, height INTEGER, duration REAL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE RESTRICT);
+      CREATE INDEX IF NOT EXISTS idx_card_attachments_card ON card_attachments(card_id, created_at ASC);
+    `);
+  },
 }];
 
 export async function migrateDatabase(database: SQLiteDatabase) {

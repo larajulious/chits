@@ -25,6 +25,12 @@ type Props = {
   visible: boolean;
   columns: ManagedColumn[];
   currentIndex: number;
+  // Lets a caller (e.g. the board's "Add column" placeholder) open straight to the
+  // add form instead of the default column-management page.
+  initialPage?: Page;
+  // The placeholder's flow has nothing to "manage" afterward — closing beats
+  // dropping the user on a manage page for a column they didn't ask to edit.
+  closeOnAdd?: boolean;
   onClose: () => void;
   onRename: (name: string) => Promise<void>;
   onMove: (direction: -1 | 1) => Promise<void>;
@@ -39,6 +45,8 @@ export function ColumnManagementSheet({
   visible,
   columns,
   currentIndex,
+  initialPage,
+  closeOnAdd = false,
   onClose,
   onRename,
   onMove,
@@ -60,8 +68,8 @@ export function ColumnManagementSheet({
 
   useEffect(() => {
     if (visible && !wasVisible.current) {
-      setPage('manage');
-      setName(currentColumn?.name ?? '');
+      setPage(initialPage ?? 'manage');
+      setName(initialPage === 'add' ? '' : currentColumn?.name ?? '');
       setTouched(false);
       setBusy(false);
       setError(null);
@@ -69,7 +77,7 @@ export function ColumnManagementSheet({
       setDestinationId(null);
     }
     wasVisible.current = visible;
-  }, [currentColumn?.id, currentColumn?.name, visible]);
+  }, [currentColumn?.id, currentColumn?.name, initialPage, visible]);
 
   const close = () => {
     if (!busy) onClose();
@@ -126,9 +134,13 @@ export function ColumnManagementSheet({
     setError(null);
     try {
       await onAdd(trimmedName);
-      setPage('manage');
-      setName(currentColumn?.name ?? '');
-      setTouched(false);
+      if (closeOnAdd) {
+        onClose();
+      } else {
+        setPage('manage');
+        setName(currentColumn?.name ?? '');
+        setTouched(false);
+      }
     } catch {
       setError('Couldn’t add column. Try again.');
     } finally {
@@ -168,7 +180,10 @@ export function ColumnManagementSheet({
     : page === 'add'
       ? 'New column'
       : `Delete “${currentColumn?.name ?? 'column'}”?`;
-  const back = page === 'manage' ? null : openManage;
+  // The add page has nowhere to go back to when it was opened without an existing
+  // column to manage (an empty board's "Add column" placeholder).
+  const canGoBack = page === 'delete' || (page === 'add' && columns.length > 0);
+  const back = canGoBack ? openManage : null;
   const leftDisabled = currentIndex === 0 || busy;
   const rightDisabled = currentIndex === columns.length - 1 || busy;
 

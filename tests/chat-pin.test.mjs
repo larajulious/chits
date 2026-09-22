@@ -7,11 +7,11 @@ const read = (path) => readFileSync(new URL(path, root), 'utf8');
 
 test('pinning targets the message selected by the action sheet', () => {
   const sheet = read('src/components/chat/message-actions.tsx');
-  const screen = read('src/app/(tabs)/index.native.tsx');
+  const screen = read('src/app/(tabs)/chat.native.tsx');
   const repository = read('src/db/repositories.ts');
 
   assert.match(sheet, /onPin: \(message: Message\) => void/);
-  assert.match(sheet, /action\(message\.pinned \? 'Unpin' : 'Pin', \(\) => onPin\(message\)\)/);
+  assert.match(sheet, /label=\{message\.pinned \? 'Unpin' : 'Pin'\} onPress=\{\(\) => onPin\(message\)\}/);
   assert.match(screen, /const togglePin = \(message: Message\) => \{ const pinned = !message\.pinned;/);
   assert.match(screen, /repository\.setPinned\(message\.id, pinned\)/);
   assert.match(screen, /repository\.setPinned\(message\.id, pinned\);[\s\S]*?await refreshPinned\(\)/);
@@ -21,14 +21,14 @@ test('pinning targets the message selected by the action sheet', () => {
 
 test('pinned thoughts remain visible at the top of Chat and can be reopened', () => {
   const header = read('src/components/chat/chat-header.tsx');
-  const screen = read('src/app/(tabs)/index.native.tsx');
+  const screen = read('src/app/(tabs)/chat.native.tsx');
 
   assert.match(header, />PINNED</);
   assert.match(header, /Pinned thought: \$\{pinnedPreview\(message\)\}/);
   assert.ok(header.indexOf('>PINNED<') < header.indexOf('<View style={styles.row}>'), 'the pinned row belongs above the Chat navigation and title');
   assert.match(header, /style=\{styles\.overlay\}/);
   assert.match(header, /styles\.pinnedArea, \{ borderColor: tokens\.borderSubtle, backgroundColor: tokens\.background \}/);
-  assert.match(screen, /<ChatHeader openDrawer=\{openDrawer\} onHeight=\{setHeaderHeight\} pinned=\{pinnedMessages\} onOpenPinned=\{openPinned\} \/>/);
+  assert.match(screen, /<ChatHeader onHeight=\{\(height\) => \{ setHeaderHeight\(height\);/);
   assert.match(screen, /const openPinned = useCallback\(\(message: Message\) => \{ setFocusedId\(message\.id\);/);
 });
 
@@ -36,12 +36,12 @@ test('the action sheet backdrop cannot receive taps meant for Pin', () => {
   const sheet = read('src/components/chat/message-actions.tsx');
 
   assert.match(sheet, /<Pressable accessibilityRole="button" accessibilityLabel="Close thought actions" onPress=\{onDismiss\} style=\{StyleSheet\.absoluteFill\} \/>/);
-  assert.match(sheet, /<View style=\{styles\.sheet\}><BottomSheetSurface>/);
+  assert.match(sheet, /<SafeAreaView edges=\{\['bottom'\]\} style=\{styles\.sheet\}>\s*<BottomSheetSurface>/);
   assert.doesNotMatch(sheet, /sheetTapShield/);
 });
 
 test('removing a pinned thought refreshes the pinned header', () => {
-  const screen = read('src/app/(tabs)/index.native.tsx');
+  const screen = read('src/app/(tabs)/chat.native.tsx');
 
   assert.match(screen, /await repository\.archive\(message\.id\);[\s\S]*?await refreshPinned\(\)/);
   assert.match(screen, /await repository\.deletePermanently\(message\.id\);[\s\S]*?await refreshPinned\(\)/);

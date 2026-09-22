@@ -5,6 +5,7 @@ import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { AppHeader, EmptyState, IconButton, Screen } from '@/components/ui/primitives';
+import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { useTheme } from '@/components/theme-provider';
 import { spacing } from '@/constants/theme';
@@ -22,8 +23,10 @@ export default function ArchiveScreen() {
   const [restoreTarget, setRestoreTarget] = useState<Archived | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+  const showLoader = useChitsLoading(!ready);
 
-  const load = useCallback(async () => setItems(await repo.listArchived()), [repo]);
+  const load = useCallback(async () => { setItems(await repo.listArchived()); setReady(true); }, [repo]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   const dismissRestore = () => {
@@ -56,7 +59,7 @@ export default function ArchiveScreen() {
 
   return <Screen>
     <AppHeader title="Archive" leading={<IconButton label="Open navigation" onPress={openDrawer}><Ionicons accessible={false} name="reorder-two-outline" size={24} color={theme.textPrimary} /></IconButton>} />
-    {items.length ? <ScrollView contentContainerStyle={styles.list}>
+    {!ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : items.length ? <ScrollView contentContainerStyle={styles.list}>
       {items.map((item) => <Pressable
         key={`${item.kind}-${item.id}`}
         accessibilityRole="button"
@@ -98,6 +101,7 @@ export default function ArchiveScreen() {
 
 const styles = StyleSheet.create({
   list: { padding: spacing.md, gap: spacing.xs },
+  loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   item: { padding: spacing.sm, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth },
   itemPressed: { opacity: 0.7 },
   kind: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },

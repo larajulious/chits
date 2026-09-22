@@ -84,7 +84,7 @@ test('mixed chat history uses an exclusive deterministic keyset cursor', () => {
 
 test('timeline migration and native list retain pagination safeguards', () => {
   const migrations = read('src/db/migrations.ts');
-  const screen = read('src/app/(tabs)/index.native.tsx');
+  const screen = read('src/app/(tabs)/chat.native.tsx');
 
   assert.match(migrations, /idx_messages_timeline_cursor[\s\S]+created_at DESC, id DESC/);
   assert.match(migrations, /idx_timeline_events_cursor[\s\S]+created_at DESC, id DESC/);

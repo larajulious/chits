@@ -4,13 +4,43 @@ import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type Board, type Message, t
 const DEFAULT_PAGE_SIZE = 50;
 type MessageRow = { id: string; text: string | null; type: Message['type']; created_at: number; updated_at: number; archived_at: number | null; pinned: number; deleted_at: number | null };
 type AttachmentRow = { id: string; message_id: string; type: MessageType; local_uri: string; original_name: string | null; mime_type: string | null; size: number | null; duration: number | null; width: number | null; height: number | null; created_at: number };
-type EventRow = { id: string; event_type: TimelineEventType; created_at: number; related_message_id: string | null; related_card_id: string | null; related_board_id: string | null; metadata_json: string | null };
+type EventRow = { id: string; event_type: TimelineEventType; created_at: number; related_message_id: string | null; related_card_id: string | null; related_board_id: string | null; metadata_json: string | null; live_board_name: string | null };
 const messageFromRow = (row: MessageRow): Message => ({ id: row.id, text: row.text, type: row.type, createdAt: row.created_at, updatedAt: row.updated_at, archivedAt: row.archived_at, pinned: row.pinned === 1, deletedAt: row.deleted_at, attachments: [] });
 const attachmentFromRow = (row: AttachmentRow): Attachment => ({ id: row.id, messageId: row.message_id, type: row.type, localUri: row.local_uri, originalName: row.original_name, mimeType: row.mime_type, size: row.size, duration: row.duration, width: row.width, height: row.height, createdAt: row.created_at });
-const eventFromRow = (row: EventRow): TimelineEvent => ({ id: row.id, type: row.event_type, createdAt: row.created_at, relatedMessageId: row.related_message_id, relatedCardId: row.related_card_id, relatedBoardId: row.related_board_id, metadata: row.metadata_json ? JSON.parse(row.metadata_json) as Record<string, unknown> : null });
+// A board's name in an event's metadata_json is a creation-time snapshot; a global
+// board-name consistency rule means these Chits activity bubbles must reflect a
+// rename too, not just the Board screen/drawer/etc. — so the live name (joined in
+// by the caller) wins whenever the board still exists, and the snapshot is kept
+// only as a fallback for a board that's since been deleted.
+const eventFromRow = (row: EventRow): TimelineEvent => {
+  const metadata = row.metadata_json ? JSON.parse(row.metadata_json) as Record<string, unknown> : null;
+  const resolvedMetadata = metadata && row.live_board_name != null && typeof metadata.boardName === 'string'
+    ? { ...metadata, boardName: row.live_board_name }
+    : metadata;
+  return { id: row.id, type: row.event_type, createdAt: row.created_at, relatedMessageId: row.related_message_id, relatedCardId: row.related_card_id, relatedBoardId: row.related_board_id, metadata: resolvedMetadata };
+};
 const pageValues = (page: PageOptions) => [page.limit ?? DEFAULT_PAGE_SIZE, page.offset ?? 0] as const;
 const attachmentCardTitle = (message: { text: string | null; type: MessageType | null; originalName: string | null }) => message.text?.trim().slice(0, 120) || (message.type === 'file' ? message.originalName?.trim().slice(0, 120) || 'Attachment' : message.type === 'photo' ? 'Photo' : message.type === 'video' ? 'Video' : message.type === 'audio' ? 'Audio note' : 'Attachment');
 const CARD_TITLE_SQL = `COALESCE(NULLIF(TRIM(c.title), ''), (SELECT COALESCE(NULLIF(TRIM(m.text), ''), CASE WHEN a.type = 'file' THEN COALESCE(NULLIF(TRIM(a.original_name), ''), 'Attachment') WHEN a.type = 'photo' THEN 'Photo' WHEN a.type = 'video' THEN 'Video' WHEN a.type = 'audio' THEN 'Audio note' ELSE 'Attachment' END) FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id LEFT JOIN attachments a ON a.message_id = m.id WHERE cm.card_id = c.id ORDER BY cm.position ASC, a.created_at ASC LIMIT 1), 'Attachment')`;
+// Everything a board card needs to render at stable dimensions — title, preview,
+// counts, and media dimensions/reference — resolved in SQL so no per-card follow-up
+// query is ever needed. Shared by the per-column and whole-board summary queries.
+type CardSummaryRow = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaUri: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null };
+const CARD_SUMMARY_SELECT_SQL = `SELECT c.id, c.column_id AS columnId, ${CARD_TITLE_SQL} AS title, c.position,
+      (SELECT m.text FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id ORDER BY cm.position ASC LIMIT 1) AS preview,
+      (SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id) AS attachmentCount,
+      (SELECT COUNT(*) FROM card_messages cm WHERE cm.card_id = c.id) AS messageCount,
+      ma.id AS mediaId, ma.message_id AS mediaMessageId, ma.type AS mediaType,
+      ma.local_uri AS mediaUri, ma.mime_type AS mediaMimeType, ma.size AS mediaSize,
+      ma.duration AS mediaDuration, ma.width AS mediaWidth, ma.height AS mediaHeight,
+      ma.created_at AS mediaCreatedAt
+      FROM cards c
+      LEFT JOIN attachments ma ON ma.id = (
+        SELECT a.id FROM attachments a
+        INNER JOIN card_messages cm ON cm.message_id = a.message_id
+        WHERE cm.card_id = c.id AND a.type IN ('photo', 'video')
+        ORDER BY cm.position ASC, a.created_at ASC LIMIT 1
+      )`;
 
 function newId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -101,7 +131,7 @@ export function createMessageRepository(database: SQLiteDatabase) {
       const pageRows = hasMore ? rows.slice(0, limit) : rows;
       const messageIds = pageRows.flatMap((row) => row.messageId ? [row.messageId] : []); const eventIds = pageRows.flatMap((row) => row.eventId ? [row.eventId] : []);
       const messages = messageIds.length ? await withAttachments(await database.getAllAsync<MessageRow>(`SELECT * FROM messages WHERE id IN (${messageIds.map(() => '?').join(', ')})`, ...messageIds)) : [];
-      const events = eventIds.length ? await database.getAllAsync<EventRow>(`SELECT * FROM timeline_events WHERE id IN (${eventIds.map(() => '?').join(', ')})`, ...eventIds) : [];
+      const events = eventIds.length ? await database.getAllAsync<EventRow>(`SELECT e.*, b.name AS live_board_name FROM timeline_events e LEFT JOIN boards b ON b.id = e.related_board_id WHERE e.id IN (${eventIds.map(() => '?').join(', ')})`, ...eventIds) : [];
       const messageById = new Map(messages.map((message) => [message.id, message])); const eventById = new Map(events.map((event) => [event.id, eventFromRow(event)])); const timeline: TimelineItem[] = [];
       pageRows.forEach((row) => { if (row.entryKind === 'message' && row.messageId) { const message = messageById.get(row.messageId); if (message) timeline.push({ kind: 'message', message, createdAt: row.createdAt }); } else if (row.entryKind === 'event' && row.eventId) { const event = eventById.get(row.eventId); if (event) timeline.push({ kind: 'event', event, createdAt: row.createdAt }); } });
       const oldest = pageRows.at(-1);
@@ -244,8 +274,9 @@ export function createBoardRepository(database: SQLiteDatabase) {
     },
     async setShowColumnNavigator(boardId: string, show: boolean) { const result = await database.runAsync('UPDATE boards SET show_column_navigator = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL', show ? 1 : 0, Date.now(), boardId); if (result.changes !== 1) throw new Error('That board is no longer available.'); },
     async organizeMessages(boardId: string, messageIds: string[]) {
-      if (!messageIds.length) return 0;
+      if (!messageIds.length) return [];
       const now = Date.now();
+      const createdCardIds: string[] = [];
       await database.withExclusiveTransactionAsync(async (transaction) => {
         const column = await transaction.getFirstAsync<{ id: string; name: string }>('SELECT id, name FROM board_columns WHERE board_id = ? ORDER BY position ASC LIMIT 1', boardId);
         if (!column) throw new Error('This board is not ready to receive thoughts.');
@@ -258,9 +289,33 @@ export function createBoardRepository(database: SQLiteDatabase) {
           const position = await transaction.getFirstAsync<{ position: number }>('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM cards WHERE column_id = ? AND archived_at IS NULL', column.id);
           await transaction.runAsync('INSERT INTO cards (id, board_id, column_id, title, position, archived_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', cardId, boardId, column.id, attachmentCardTitle(message), position?.position ?? 0, null, now, now);
           await transaction.runAsync('INSERT INTO card_messages (card_id, message_id, position) VALUES (?, ?, ?)', cardId, messageId, 0);
+          createdCardIds.push(cardId);
         }
       });
-      return messageIds.length;
+      return createdCardIds;
+    },
+    // Contextual capture: creates a brand-new message AND wraps it into a card in one
+    // step, targeting a specific column directly — unlike organizeMessages (which
+    // always lands in a board's first column and requires an existing message id),
+    // this is for the "+ Add note" action inside a Board/Column, where the
+    // destination is already known. Still the same underlying message/card entities
+    // as every other note, so it shows up in Chat's timeline exactly like any other
+    // thought — no separate "board card" concept, no new chat thread.
+    async createNoteCard(input: { boardId: string; columnId: string; text: string }) {
+      const trimmed = input.text.trim();
+      if (!trimmed) throw new Error('Write something before adding a note.');
+      const now = Date.now();
+      const messageId = newId();
+      const cardId = newId();
+      await database.withExclusiveTransactionAsync(async (transaction) => {
+        const column = await transaction.getFirstAsync<{ id: string }>('SELECT bc.id FROM board_columns bc INNER JOIN boards b ON b.id = bc.board_id WHERE bc.id = ? AND bc.board_id = ? AND b.archived_at IS NULL', input.columnId, input.boardId);
+        if (!column) throw new Error('This column is no longer available.');
+        await transaction.runAsync('INSERT INTO messages (id, text, type, created_at, updated_at, archived_at, pinned, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', messageId, trimmed, 'text', now, now, null, 0, null);
+        const position = await transaction.getFirstAsync<{ position: number }>('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM cards WHERE column_id = ? AND archived_at IS NULL', input.columnId);
+        await transaction.runAsync('INSERT INTO cards (id, board_id, column_id, title, position, archived_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', cardId, input.boardId, input.columnId, trimmed.slice(0, 120), position?.position ?? 0, null, now, now);
+        await transaction.runAsync('INSERT INTO card_messages (card_id, message_id, position) VALUES (?, ?, ?)', cardId, messageId, 0);
+      });
+      return { cardId, messageId };
     },
     async mergeMessages(input: { boardId: string; columnId: string; messageIds: string[]; title?: string | null }) {
       if (input.messageIds.length < 2) throw new Error('Select at least two thoughts to merge.');
@@ -284,23 +339,24 @@ export function createBoardRepository(database: SQLiteDatabase) {
     },
     listCards: (boardId: string) => database.getAllAsync<{ id: string; title: string | null; columnName: string }>(`SELECT c.id, ${CARD_TITLE_SQL} AS title, bc.name AS columnName FROM cards c INNER JOIN board_columns bc ON bc.id = c.column_id WHERE c.board_id = ? AND c.archived_at IS NULL ORDER BY bc.position ASC, c.position ASC`, boardId),
     listColumns: (boardId: string) => database.getAllAsync<{ id: string; name: string; position: number }>('SELECT id, name, position FROM board_columns WHERE board_id = ? ORDER BY position ASC', boardId),
-    listKanbanCards: (boardId: string) => database.getAllAsync<{ id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaUri: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null }>(`SELECT c.id, c.column_id AS columnId, ${CARD_TITLE_SQL} AS title, c.position,
-      (SELECT m.text FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id ORDER BY cm.position ASC LIMIT 1) AS preview,
-      (SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id) AS attachmentCount,
-      (SELECT COUNT(*) FROM card_messages cm WHERE cm.card_id = c.id) AS messageCount,
-      ma.id AS mediaId, ma.message_id AS mediaMessageId, ma.type AS mediaType,
-      ma.local_uri AS mediaUri, ma.mime_type AS mediaMimeType, ma.size AS mediaSize,
-      ma.duration AS mediaDuration, ma.width AS mediaWidth, ma.height AS mediaHeight,
-      ma.created_at AS mediaCreatedAt
-      FROM cards c
-      LEFT JOIN attachments ma ON ma.id = (
-        SELECT a.id FROM attachments a
-        INNER JOIN card_messages cm ON cm.message_id = a.message_id
-        WHERE cm.card_id = c.id AND a.type IN ('photo', 'video')
-        ORDER BY cm.position ASC, a.created_at ASC LIMIT 1
-      )
-      WHERE c.board_id = ? AND c.archived_at IS NULL
-      ORDER BY c.column_id, c.position ASC`, boardId),
+    // Lightweight, card-free summary so the header, navigator, and per-column counts
+    // can render the instant a board's columns are known, without waiting on the
+    // (much heavier) per-card query below.
+    listColumnSummaries: (boardId: string) => database.getAllAsync<{ id: string; cardCount: number }>(
+      `SELECT bc.id, (SELECT COUNT(*) FROM cards c WHERE c.column_id = bc.id AND c.archived_at IS NULL) AS cardCount
+       FROM board_columns bc WHERE bc.board_id = ? ORDER BY bc.position ASC`, boardId),
+    // Scoped to a single column (indexed via idx_cards_column_position(column_id,
+    // position)) and capped, so opening or prefetching a column never pulls in every
+    // card on the board or an unbounded column's full history. Used as the fallback
+    // path for boards too large to preload in full (see listBoardCardSummaries).
+    listCardsByColumn: (columnId: string, limit = 300) => database.getAllAsync<CardSummaryRow>(
+      `${CARD_SUMMARY_SELECT_SQL} WHERE c.column_id = ? AND c.archived_at IS NULL ORDER BY c.position ASC LIMIT ?`, columnId, limit),
+    // The whole-board counterpart: every card on the board in one query (indexed via
+    // idx_cards_board_position(board_id, column_id, position)), grouped by column_id
+    // client-side. Used when the board is small enough to preload in full, so
+    // switching columns afterward is pure UI state with zero further queries.
+    listBoardCardSummaries: (boardId: string, limit: number) => database.getAllAsync<CardSummaryRow>(
+      `${CARD_SUMMARY_SELECT_SQL} WHERE c.board_id = ? AND c.archived_at IS NULL ORDER BY c.column_id ASC, c.position ASC LIMIT ?`, boardId, limit),
     async addColumn(boardId: string, name: string) {
       const normalizedName = name.trim();
       if (!normalizedName) throw new Error('Column name can’t be empty.');
@@ -374,7 +430,7 @@ export function createBoardRepository(database: SQLiteDatabase) {
         await transaction.runAsync('UPDATE boards SET updated_at = ? WHERE id = ?', now, card.board_id);
       });
     },
-    getCardDetail: (cardId: string) => database.getFirstAsync<{ id: string; title: string | null; explicitTitle: string | null; boardId: string; boardName: string; columnId: string; columnName: string; createdAt: number; pinned: number }>(`SELECT c.id, ${CARD_TITLE_SQL} AS title, c.title AS explicitTitle, c.board_id AS boardId, b.name AS boardName, c.column_id AS columnId, bc.name AS columnName, c.created_at AS createdAt, c.pinned FROM cards c INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id WHERE c.id = ? AND c.archived_at IS NULL`, cardId),
+    getCardDetail: (cardId: string) => database.getFirstAsync<{ id: string; title: string | null; explicitTitle: string | null; boardId: string; boardName: string; columnId: string; columnName: string; createdAt: number; pinned: number; attachmentCount: number }>(`SELECT c.id, ${CARD_TITLE_SQL} AS title, c.title AS explicitTitle, c.board_id AS boardId, b.name AS boardName, c.column_id AS columnId, bc.name AS columnName, c.created_at AS createdAt, c.pinned, (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id) AS attachmentCount FROM cards c INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id WHERE c.id = ? AND c.archived_at IS NULL`, cardId),
     async updateCardTitle(cardId: string, title: string | null) {
       const result = await database.runAsync('UPDATE cards SET title = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL', title?.trim() || null, Date.now(), cardId);
       if (result.changes !== 1) throw new Error('That card is no longer available.');
@@ -405,6 +461,69 @@ export function createBoardRepository(database: SQLiteDatabase) {
       }); return added;
     },
     async archiveCard(cardId: string) { const now = Date.now(); const result = await database.runAsync('UPDATE cards SET archived_at = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL', now, now, cardId); if (result.changes !== 1) throw new Error('That card is no longer available.'); },
-    async deleteCard(cardId: string) { await database.withExclusiveTransactionAsync(async (transaction) => { await transaction.runAsync('DELETE FROM card_messages WHERE card_id = ?', cardId); const result = await transaction.runAsync('DELETE FROM cards WHERE id = ?', cardId); if (result.changes !== 1) throw new Error('That card is no longer available.'); }); },
+    // Archiving a card deliberately does not touch card_comments or card_attachments
+    // — both are preserved, matching the same recoverable-hide semantics as the
+    // card itself.
+    // Returns the deleted attachments' local_uris so the caller can unlink the
+    // actual files (this layer only owns the DB; see card-attachment-storage for
+    // the file lifecycle) — mirrors messageRepository.deletePermanently's
+    // removableUris pattern.
+    async deleteCard(cardId: string) {
+      let removableUris: string[] = [];
+      await database.withExclusiveTransactionAsync(async (transaction) => {
+        const attachments = await transaction.getAllAsync<{ local_uri: string }>('SELECT local_uri FROM card_attachments WHERE card_id = ?', cardId);
+        removableUris = attachments.map((row) => row.local_uri);
+        await transaction.runAsync('DELETE FROM card_attachments WHERE card_id = ?', cardId);
+        await transaction.runAsync('DELETE FROM card_comments WHERE card_id = ?', cardId);
+        await transaction.runAsync('DELETE FROM card_messages WHERE card_id = ?', cardId);
+        const result = await transaction.runAsync('DELETE FROM cards WHERE id = ?', cardId);
+        if (result.changes !== 1) throw new Error('That card is no longer available.');
+      });
+      return removableUris;
+    },
+    // Comments are structurally separate from messages/timeline_events by design —
+    // they never appear in Chat history or create Chits talk-back events.
+    listCardComments: (cardId: string) => database.getAllAsync<{ id: string; cardId: string; text: string; createdAt: number; updatedAt: number }>('SELECT id, card_id AS cardId, text, created_at AS createdAt, updated_at AS updatedAt FROM card_comments WHERE card_id = ? AND deleted_at IS NULL ORDER BY created_at ASC', cardId),
+    async addComment(cardId: string, text: string) {
+      const trimmed = text.trim();
+      if (!trimmed) throw new Error('Comment cannot be empty.');
+      const now = Date.now(); const id = newId();
+      await database.runAsync('INSERT INTO card_comments (id, card_id, text, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, NULL)', id, cardId, trimmed, now, now);
+      return { id, cardId, text: trimmed, createdAt: now, updatedAt: now };
+    },
+    async updateComment(commentId: string, text: string) {
+      const trimmed = text.trim();
+      if (!trimmed) throw new Error('Comment cannot be empty.');
+      const now = Date.now();
+      const result = await database.runAsync('UPDATE card_comments SET text = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL', trimmed, now, commentId);
+      if (result.changes !== 1) throw new Error('That comment is no longer available.');
+      return now;
+    },
+    async deleteComment(commentId: string) {
+      const now = Date.now();
+      const result = await database.runAsync('UPDATE card_comments SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL', now, now, commentId);
+      if (result.changes !== 1) throw new Error('That comment is no longer available.');
+    },
+    // Supporting material added directly inside Card Details — never a message,
+    // never a Chits talk-back event, never a copy of a linked thought's own
+    // "source" attachment (that stays in `attachments`, owned by messages). Oldest
+    // first, matching the stable-chronology ordering used everywhere else cards
+    // list their own content (card_messages, card_comments).
+    listCardAttachments: (cardId: string) => database.getAllAsync<{ id: string; cardId: string; type: 'photo' | 'video' | 'file'; localUri: string; originalName: string | null; mimeType: string | null; size: number | null; width: number | null; height: number | null; duration: number | null; createdAt: number; updatedAt: number }>('SELECT id, card_id AS cardId, type, local_uri AS localUri, original_name AS originalName, mime_type AS mimeType, size, width, height, duration, created_at AS createdAt, updated_at AS updatedAt FROM card_attachments WHERE card_id = ? AND deleted_at IS NULL ORDER BY created_at ASC', cardId),
+    async addCardAttachment(cardId: string, details: { type: 'photo' | 'video' | 'file'; localUri: string; originalName: string | null; mimeType: string | null; size: number | null; width: number | null; height: number | null; duration: number | null }) {
+      const now = Date.now(); const id = newId();
+      await database.runAsync('INSERT INTO card_attachments (id, card_id, type, local_uri, original_name, mime_type, size, width, height, duration, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)', id, cardId, details.type, details.localUri, details.originalName, details.mimeType, details.size, details.width, details.height, details.duration, now, now);
+      return { id, cardId, ...details, createdAt: now, updatedAt: now };
+    },
+    // Hard-delete (no deleted_at use) since a physical file needs real cleanup —
+    // returns the local_uri so the caller can remove the file via
+    // card-attachment-storage; this layer only owns the DB record.
+    async deleteCardAttachment(attachmentId: string) {
+      const row = await database.getFirstAsync<{ local_uri: string }>('SELECT local_uri FROM card_attachments WHERE id = ?', attachmentId);
+      if (!row) throw new Error('That attachment is no longer available.');
+      const result = await database.runAsync('DELETE FROM card_attachments WHERE id = ?', attachmentId);
+      if (result.changes !== 1) throw new Error('That attachment is no longer available.');
+      return row.local_uri;
+    },
   };
 }

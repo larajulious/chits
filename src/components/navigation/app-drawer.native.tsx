@@ -42,13 +42,15 @@ type ContextItem = {
 type IconName = ComponentProps<typeof Ionicons>['name'];
 type Destination = {
   label: 'Boards' | 'Archive' | 'Settings';
-  path: '/boards' | '/archive' | '/settings';
+  path: '/' | '/archive' | '/settings';
   icon: IconName;
 };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
+// Boards is the app's landing screen (route "/"); Chat lives at "/chat" and is
+// reached via the persistent bottom Chat action, not a drawer destination.
 const contentDestinations: Destination[] = [
-  { label: 'Boards', path: '/boards', icon: 'grid-outline' },
+  { label: 'Boards', path: '/', icon: 'grid-outline' },
   { label: 'Archive', path: '/archive', icon: 'archive-outline' },
 ];
 const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
@@ -60,8 +62,8 @@ export function useAppDrawer() {
 }
 
 function isDestinationActive(pathname: string, destination: Destination) {
-  if (destination.path !== '/boards') return pathname === destination.path;
-  return pathname === '/boards' || pathname.startsWith('/board/') || pathname.startsWith('/card/') || pathname === '/unorganized';
+  if (destination.path !== '/') return pathname === destination.path;
+  return pathname === '/' || pathname.startsWith('/board/') || pathname.startsWith('/card/') || pathname === '/unorganized';
 }
 
 function DrawerIcon({ name, color }: { name: IconName; color: string }) {
@@ -151,12 +153,21 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   const { tokens } = useTheme();
   const [pinned, setPinned] = useState<ContextItem[]>([]);
   const [recent, setRecent] = useState<ContextItem[]>([]);
+  // Same single source of truth as Chat's own header (app_settings.chat_title) and
+  // the Boards header — the drawer must show that title too, not its own hardcoded
+  // "Chits" that would drift the moment it's renamed.
+  const [appTitle, setAppTitle] = useState('Chits');
 
   const load = useCallback(async () => {
-    const [nextPinned, nextRecent] = await Promise.all([repository.listPinned(), repository.listRecent()]);
+    const [nextPinned, nextRecent, titleRow] = await Promise.all([
+      repository.listPinned(),
+      repository.listRecent(),
+      database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', 'chat_title'),
+    ]);
     setPinned(nextPinned);
     setRecent(nextRecent);
-  }, [repository]);
+    setAppTitle(titleRow?.value.trim() || 'Chits');
+  }, [database, repository]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -168,7 +179,7 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   return (
     <SafeAreaView accessibilityViewIsModal style={[styles.drawer, { backgroundColor: tokens.surface, borderColor: tokens.borderSubtle }]}>
       <View style={styles.top}>
-        <Text accessibilityRole="header" style={[styles.title, { color: tokens.textPrimary }]}>Chits</Text>
+        <Text accessibilityRole="header" style={[styles.title, { color: tokens.textPrimary }]}>{appTitle}</Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Search"
@@ -195,10 +206,11 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
       <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }]}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Chat. Return Home."
+          accessibilityLabel="Open Chat"
+          accessibilityHint="Open Chat to capture a new thought."
           onPress={() => {
             close();
-            router.navigate('/');
+            router.navigate('/chat');
           }}
           style={({ pressed }) => [styles.chatButton, { backgroundColor: tokens.accent }, pressed && styles.chatButtonPressed]}>
           <DrawerIcon name="chatbubble-outline" color={tokens.accentText} />

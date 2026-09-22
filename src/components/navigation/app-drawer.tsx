@@ -11,13 +11,15 @@ type DrawerContextValue = { openDrawer: () => void; closeDrawer: () => void };
 type IconName = ComponentProps<typeof Ionicons>['name'];
 type Destination = {
   label: 'Boards' | 'Archive' | 'Settings';
-  path: '/boards' | '/archive' | '/settings';
+  path: '/' | '/archive' | '/settings';
   icon: IconName;
 };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
+// Boards is the app's landing screen (route "/"); Chat lives at "/chat" and is
+// reached via the persistent bottom Chat action, not a drawer destination.
 const contentDestinations: Destination[] = [
-  { label: 'Boards', path: '/boards', icon: 'grid-outline' },
+  { label: 'Boards', path: '/', icon: 'grid-outline' },
   { label: 'Archive', path: '/archive', icon: 'archive-outline' },
 ];
 const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
@@ -29,8 +31,8 @@ export function useAppDrawer() {
 }
 
 function isDestinationActive(pathname: string, destination: Destination) {
-  if (destination.path !== '/boards') return pathname === destination.path;
-  return pathname === '/boards' || pathname.startsWith('/board/') || pathname.startsWith('/card/') || pathname === '/unorganized';
+  if (destination.path !== '/') return pathname === destination.path;
+  return pathname === '/' || pathname.startsWith('/board/') || pathname.startsWith('/card/') || pathname === '/unorganized';
 }
 
 function NavigationRow({ destination, pathname, close }: { destination: Destination; pathname: string; close: () => void }) {
@@ -86,10 +88,11 @@ function DrawerContent({ close }: { close: () => void }) {
       <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }]}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Chat. Return Home."
+          accessibilityLabel="Open Chat"
+          accessibilityHint="Open Chat to capture a new thought."
           onPress={() => {
             close();
-            router.navigate('/');
+            router.navigate('/chat');
           }}
           style={({ pressed }) => [styles.chatButton, { backgroundColor: tokens.accent }, pressed && styles.chatButtonPressed]}>
           <View accessible={false} style={styles.iconSlot}>

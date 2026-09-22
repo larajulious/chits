@@ -1,5 +1,5 @@
 import { memo, useEffect, useState, type ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
@@ -10,7 +10,7 @@ import { getInfoAsync } from 'expo-file-system/legacy';
 import { radii, spacing } from '@/constants/theme';
 import { useTheme } from '@/components/theme-provider';
 import { MessageContentRenderer, MessageMetadata } from '@/components/chat/message-note-cards';
-import type { Attachment, Message } from '@/db/types';
+import type { Attachment, AttachmentLike, Message } from '@/db/types';
 
 let activeAudio: { token: symbol; pause: () => void } | null = null;
 const availabilityCache = new Map<string, boolean>();
@@ -20,7 +20,7 @@ function formatDuration(duration: number | null) { if (!duration) return '0:00';
 function durationSeconds(duration: number | null) { return duration ? Math.max(1, Math.round(duration / 1000)) : null; }
 function formatSeconds(seconds: number) { return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds) % 60).padStart(2, '0')}`; }
 function formatSize(size: number | null) { if (!size) return null; if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`; return `${(size / (1024 * 1024)).toFixed(1)} MB`; }
-function typeLabel(attachment: Attachment) {
+function typeLabel(attachment: AttachmentLike) {
   if (attachment.type === 'photo') return 'Photo';
   if (attachment.type === 'video') return 'Video';
   if (attachment.type === 'audio') return 'Audio note';
@@ -29,7 +29,7 @@ function typeLabel(attachment: Attachment) {
   if (attachment.mimeType?.includes('pdf')) return 'PDF file';
   return 'File';
 }
-function fileIcon(attachment: Attachment): React.ComponentProps<typeof Ionicons>['name'] {
+function fileIcon(attachment: AttachmentLike): React.ComponentProps<typeof Ionicons>['name'] {
   const value = `${attachment.mimeType ?? ''} ${attachment.originalName ?? ''}`.toLowerCase();
   if (value.includes('zip') || value.includes('archive') || value.includes('.rar')) return 'archive-outline';
   if (value.includes('sheet') || value.includes('excel') || value.includes('.csv') || value.includes('.xls')) return 'grid-outline';
@@ -48,11 +48,11 @@ function useAttachmentAvailable(uri: string) {
   return available;
 }
 
-function PhotoViewer({ attachment, onDismiss }: { attachment: Attachment; onDismiss: () => void }) {
+function PhotoViewer({ attachment, onDismiss }: { attachment: AttachmentLike; onDismiss: () => void }) {
   return <Modal visible transparent animationType="fade" onRequestClose={onDismiss}><View style={styles.viewer}><Image source={attachment.localUri} contentFit="contain" style={styles.fullImage} /><Pressable accessibilityRole="button" accessibilityLabel="Close photo" onPress={onDismiss} style={styles.viewerClose}><Ionicons accessible={false} name="close" size={24} color="#FFFFFF" /></Pressable></View></Modal>;
 }
 
-function VideoViewer({ attachment, onDismiss }: { attachment: Attachment; onDismiss: () => void }) {
+function VideoViewer({ attachment, onDismiss }: { attachment: AttachmentLike; onDismiss: () => void }) {
   const player = useVideoPlayer(attachment.localUri, (videoPlayer) => videoPlayer.play());
   return <Modal visible animationType="fade" onRequestClose={onDismiss}><View style={styles.videoViewer}><VideoView player={player as never} nativeControls fullscreenOptions={{ enable: true }} contentFit="contain" style={styles.video} /><Pressable accessibilityRole="button" accessibilityLabel="Close video" onPress={onDismiss} style={styles.viewerClose}><Ionicons accessible={false} name="close" size={24} color="#FFFFFF" /></Pressable></View></Modal>;
 }
@@ -62,21 +62,26 @@ function mediaAspectRatio(attachment: Pick<Attachment, 'width' | 'height'>) {
   return Math.max(0.72, Math.min(1.9, attachment.width / attachment.height));
 }
 
-function VideoPoster({ attachment, style }: { attachment: Attachment; style?: StyleProp<ViewStyle> }) {
-  const { tokens: theme } = useTheme();
+export function useVideoThumbnail(localUri: string) {
   const [thumbnail, setThumbnail] = useState<VideoThumbnail | null>(null);
   useEffect(() => {
     let active = true;
     try {
-      const player = createVideoPlayer(attachment.localUri);
+      const player = createVideoPlayer(localUri);
       void player.generateThumbnailsAsync(0).then(([frame]) => { if (active && frame) setThumbnail(frame); }).catch(() => undefined).finally(() => player.release());
-    } catch { /* The stable video placeholder remains visible. */ }
+    } catch { /* The caller's own stable placeholder remains visible. */ }
     return () => { active = false; };
-  }, [attachment.localUri]);
+  }, [localUri]);
+  return thumbnail;
+}
+
+export function VideoPoster({ attachment, style }: { attachment: AttachmentLike; style?: StyleProp<ViewStyle> }) {
+  const { tokens: theme } = useTheme();
+  const thumbnail = useVideoThumbnail(attachment.localUri);
   return <View style={[styles.media, style, { backgroundColor: theme.surfaceElevated }]}>{thumbnail ? <Image source={thumbnail} contentFit="cover" style={StyleSheet.absoluteFill} /> : <Ionicons accessible={false} name="videocam-outline" size={36} color={theme.textMuted} />}<View style={styles.videoPlay}><Ionicons accessible={false} name="play" size={23} color="#FFFFFF" /></View><View style={styles.durationBadge}><Text style={styles.durationText}>{formatDuration(attachment.duration)}</Text></View></View>;
 }
 
-function AudioPlayer({ attachment }: { attachment: Attachment }) {
+function AudioPlayer({ attachment }: { attachment: AttachmentLike }) {
   const { tokens: theme } = useTheme();
   const player = useAudioPlayer(attachment.localUri, { updateInterval: 250 });
   const status = useAudioPlayerStatus(player);
@@ -150,35 +155,46 @@ function AudioPlayer({ attachment }: { attachment: Attachment }) {
   </View>;
 }
 
-function Unavailable({ attachment, style }: { attachment: Attachment; style?: StyleProp<ViewStyle> }) {
+function Unavailable({ attachment, style }: { attachment: AttachmentLike; style?: StyleProp<ViewStyle> }) {
   const { tokens: theme } = useTheme();
   const icon = attachment.type === 'photo' ? 'image-outline' : attachment.type === 'video' ? 'videocam-outline' : attachment.type === 'audio' ? 'volume-medium-outline' : fileIcon(attachment);
   const label = attachment.type === 'photo' ? 'Photo unavailable' : attachment.type === 'video' ? 'Video unavailable' : 'Attachment unavailable';
   return <View accessibilityLabel={label} style={[styles.unavailable, style, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name={icon} size={25} color={theme.textMuted} /><Text style={[styles.unavailableText, { color: theme.textSecondary }]}>{label}</Text></View>;
 }
 
-function AttachmentLoading({ attachment, style }: { attachment: Attachment; style?: StyleProp<ViewStyle> }) {
+function AttachmentLoading({ attachment, style }: { attachment: AttachmentLike; style?: StyleProp<ViewStyle> }) {
   const { tokens: theme } = useTheme();
   const icon = attachment.type === 'photo' ? 'image-outline' : attachment.type === 'video' ? 'videocam-outline' : attachment.type === 'audio' ? 'volume-medium-outline' : fileIcon(attachment);
   return <View accessibilityLabel={`${typeLabel(attachment)} loading`} style={[styles.unavailable, style, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name={icon} size={25} color={theme.textMuted} /></View>;
 }
 
-export function AttachmentContent({ attachment, accessibilityLabel, overlay, variant = 'chat' }: { attachment: Attachment; accessibilityLabel?: string; overlay?: ReactNode; variant?: 'chat' | 'board' | 'detail' }) {
+export function AttachmentContent({ attachment, accessibilityLabel, overlay, variant = 'chat', onLongPress }: { attachment: AttachmentLike; accessibilityLabel?: string; overlay?: ReactNode; variant?: 'chat' | 'board' | 'detail'; onLongPress?: () => void }) {
   const { tokens: theme } = useTheme();
+  const { height: screenHeight } = useWindowDimensions();
   const available = useAttachmentAvailable(attachment.localUri);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [openError, setOpenError] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState(false);
   const aspectRatio = mediaAspectRatio(attachment);
-  const mediaStyle = [styles.media, variant === 'board' ? styles.boardMedia : variant === 'detail' ? styles.detailMedia : styles.chatMedia, { aspectRatio }];
+  // Board card thumbnails get a fixed height rather than aspectRatio + min/maxHeight:
+  // that combination only fully resolves once the image view reports its own
+  // measurement, which reads as the thumbnail "growing in" after the card's title
+  // has already settled. A fixed box is correct on the very first layout pass, before
+  // any image data exists — the chat/detail variants keep the aspect-ratio behavior
+  // since they show media at a size meant to preserve its real proportions.
+  // Chat's cap is screen-relative (~60% of viewport height) rather than a flat pixel
+  // value, so a very tall portrait photo never eats multiple screens' worth of chat on
+  // any device; window dimensions are known synchronously, so this can't itself cause
+  // a layout shift the way waiting on the image's own measurement would.
+  const mediaStyle = variant === 'board' ? [styles.media, styles.boardMedia] : variant === 'detail' ? [styles.media, styles.detailMedia, { aspectRatio }] : [styles.media, styles.chatMedia, { aspectRatio, maxHeight: Math.round(screenHeight * 0.6) }];
   if (available === null) return <AttachmentLoading attachment={attachment} style={mediaStyle} />;
   if (available === false || mediaError) return <Unavailable attachment={attachment} style={mediaStyle} />;
-  if (attachment.type === 'photo') return <><View style={[mediaStyle, { backgroundColor: theme.surfaceElevated }]}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? 'Photo. Double tap to view fullscreen.'} accessibilityHint="Opens the photo fullscreen" onPress={() => setViewerOpen(true)} style={StyleSheet.absoluteFill}><Image source={attachment.localUri} contentFit="cover" transition={120} allowDownscaling onError={() => setMediaError(true)} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <PhotoViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
-  if (attachment.type === 'video') return <><View style={mediaStyle}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? `Video${attachment.duration ? `, ${durationSeconds(attachment.duration)} seconds` : ''}. Play video.`} accessibilityHint="Opens the video player" onPress={() => setViewerOpen(true)} style={StyleSheet.absoluteFill}><VideoPoster attachment={attachment} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <VideoViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
+  if (attachment.type === 'photo') return <><View style={[mediaStyle, { backgroundColor: theme.surfaceElevated }]}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? 'Photo. Double tap to view fullscreen.'} accessibilityHint="Opens the photo fullscreen" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><Image source={attachment.localUri} contentFit="cover" transition={120} allowDownscaling onError={() => setMediaError(true)} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <PhotoViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
+  if (attachment.type === 'video') return <><View style={mediaStyle}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? `Video${attachment.duration ? `, ${durationSeconds(attachment.duration)} seconds` : ''}. Play video.`} accessibilityHint="Opens the video player" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><VideoPoster attachment={attachment} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <VideoViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
   if (attachment.type === 'audio') return <AudioPlayer attachment={attachment} />;
   const meta = [typeLabel(attachment).replace(/ file$/, ''), formatSize(attachment.size)].filter(Boolean).join(' · ');
   const open = async () => { setOpenError(null); try { if (!await Sharing.isAvailableAsync()) throw new Error(); await Sharing.shareAsync(attachment.localUri, { mimeType: attachment.mimeType ?? undefined }); } catch { setOpenError('This file could not be opened.'); } };
-  return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${typeLabel(attachment)}, ${attachment.originalName ?? 'document'}${attachment.size ? `, ${formatSize(attachment.size)}` : ''}`} onPress={() => void open()} style={styles.fileTile}><View style={[styles.fileIcon, { backgroundColor: theme.surface }]}><Ionicons accessible={false} name={fileIcon(attachment)} size={24} color={theme.accent} /></View><View style={styles.fileCopy}><Text numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{attachment.originalName ?? 'Document'}</Text><Text style={[styles.attachmentMeta, { color: theme.textMuted }]}>{openError ?? meta}</Text></View><Ionicons accessible={false} name="open-outline" size={18} color={theme.textMuted} /></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${typeLabel(attachment)}, ${attachment.originalName ?? 'document'}${attachment.size ? `, ${formatSize(attachment.size)}` : ''}`} onPress={() => void open()} onLongPress={onLongPress} delayLongPress={350} style={styles.fileTile}><View style={[styles.fileIcon, { backgroundColor: theme.surface }]}><Ionicons accessible={false} name={fileIcon(attachment)} size={24} color={theme.accent} /></View><View style={styles.fileCopy}><Text numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{attachment.originalName ?? 'Document'}</Text><Text style={[styles.attachmentMeta, { color: theme.textMuted }]}>{openError ?? meta}</Text></View><Ionicons accessible={false} name="open-outline" size={18} color={theme.textMuted} /></Pressable>;
 }
 
 function MediaMetadata({ message, video = false, onActions }: { message: Message; video?: boolean; onActions: () => void }) {
@@ -187,6 +203,7 @@ function MediaMetadata({ message, video = false, onActions }: { message: Message
 
 function AttachmentMessage({ message, attachment, focused, onLongPress }: { message: Message; attachment: Attachment; focused: boolean; onLongPress: (message: Message) => void }) {
   const { tokens: theme } = useTheme();
+  const { width: screenWidth } = useWindowDimensions();
   const visual = attachment.type === 'photo' || attachment.type === 'video';
   const seconds = durationSeconds(attachment.duration);
   const accessibilityLabel = attachment.type === 'photo'
@@ -194,7 +211,12 @@ function AttachmentMessage({ message, attachment, focused, onLongPress }: { mess
     : attachment.type === 'video'
       ? `Video${seconds ? `, ${seconds} seconds` : ''}.${message.text ? ` Description: ${message.text}.` : ''} Play video.`
       : undefined;
-  return <Pressable accessible={false} onLongPress={() => onLongPress(message)} delayLongPress={350} style={({ pressed }) => [styles.attachmentMessage, { backgroundColor: theme.surface, borderColor: focused ? theme.accentStrong : theme.borderSubtle }, focused && styles.focused, pressed && styles.pressed]}>
+  // Wider than a short text bubble (this is the message surface, not a card inside
+  // one), but capped well short of the full chat width so it still reads as a
+  // message, not a full-bleed screen element.
+  const chatWidth = screenWidth - spacing.md * 2;
+  const messageMaxWidth = Math.min(520, Math.round(chatWidth * 0.8));
+  return <Pressable accessible={false} onLongPress={() => onLongPress(message)} delayLongPress={350} style={({ pressed }) => [styles.attachmentMessage, { maxWidth: messageMaxWidth, backgroundColor: theme.surface, borderColor: focused ? theme.accentStrong : theme.borderSubtle }, focused && styles.focused, pressed && styles.pressed]}>
     <AttachmentContent attachment={attachment} accessibilityLabel={accessibilityLabel} overlay={visual && !message.text ? <MediaMetadata message={message} video={attachment.type === 'video'} onActions={() => onLongPress(message)} /> : null} />
     {message.text ? <View style={[styles.descriptionSurface, visual && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.borderSubtle }]}><Text accessible={!visual} style={[styles.attachmentDescription, { color: theme.textPrimary }]}>{message.text}</Text><MessageMetadata message={message} inside onActions={() => onLongPress(message)} /></View> : null}
     {!visual && !message.text ? <MessageMetadata message={message} inside onActions={() => onLongPress(message)} /> : null}
@@ -219,7 +241,7 @@ const styles = StyleSheet.create({
   media: { width: '100%', alignItems: 'center', justifyContent: 'center' },
   chatMedia: { minHeight: 170, maxHeight: 340 },
   detailMedia: { minHeight: 220, maxHeight: 520 },
-  boardMedia: { minHeight: 92, maxHeight: 124 },
+  boardMedia: { height: 108 },
   videoPlay: { position: 'absolute', alignSelf: 'center', top: '50%', marginTop: -23, width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 23, backgroundColor: 'rgba(0,0,0,0.62)' },
   durationBadge: { position: 'absolute', right: spacing.xs, bottom: spacing.xs, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.7)' },
   durationText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },

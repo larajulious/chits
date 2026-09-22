@@ -6,10 +6,26 @@ export interface Message {
   organization?: { boardId: string; boardName: string; columnName: string } | null;
 }
 
-export interface Attachment {
-  id: string; messageId: string; type: MessageType; localUri: string; originalName: string | null;
+// The fields every attachment-shaped thing has in common, regardless of what it's
+// attached to — AttachmentContent (message-row.native.tsx) renders off this shape
+// alone, so both a message's Attachment and a card's CardAttachment can share that
+// one rendering/viewer implementation.
+export interface AttachmentLike {
+  id: string; type: MessageType; localUri: string; originalName: string | null;
   mimeType: string | null; size: number | null; duration: number | null; width: number | null;
   height: number | null; createdAt: number;
+}
+
+export interface Attachment extends AttachmentLike { messageId: string; }
+
+// A file the user attached directly inside Card Details — supporting material for
+// the card, not a copy of (or replacement for) the original linked thought's own
+// "source" attachment. Deliberately narrower than MessageType: card attachments are
+// always photo/video/file, never audio or text.
+export interface CardAttachment extends Omit<AttachmentLike, 'type'> {
+  type: 'photo' | 'video' | 'file';
+  cardId: string;
+  updatedAt: number;
 }
 
 export interface Board {
