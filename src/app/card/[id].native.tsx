@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -19,12 +19,25 @@ import { AppHeader, EmptyState, IconButton, Screen, Toast } from '@/components/u
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { radii, spacing, type ThemeTokens } from '@/constants/theme';
 import { tintWithAccent } from '@/constants/board-appearance';
-import { createBoardRepository, createMessageRepository } from '@/db/repositories';
+import { createBoardRepository } from '@/db/repositories';
 import { persistCardAttachment, removeCardAttachmentFile } from '@/services/card-attachment-storage';
 import type { CardAttachment, Message } from '@/db/types';
 
 type Detail = { id: string; title: string | null; explicitTitle: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; pinned: number; attachmentCount: number };
 type Comment = { id: string; cardId: string; text: string; createdAt: number; updatedAt: number };
+
+// The same visible "•••" actions trigger Chat already uses on its own
+// attachments (see MediaMetadata / MessageMetadata in message-row.native.tsx
+// and message-note-cards.native.tsx) — reused here rather than introduced
+// fresh, so card attachments gain a discoverable way into the (already
+// existing) Share/Delete menu without a second, drifted control. `onLongPress`
+// on AttachmentContent already opens the same menu; this is purely about
+// making that entry point visible, matching the established pattern.
+function AttachmentActionsButton({ onPress, style, iconColor }: { onPress: () => void; style: StyleProp<ViewStyle>; iconColor: string }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel="Attachment actions" hitSlop={8} onPress={onPress} style={style}>
+    <Ionicons accessible={false} name="ellipsis-horizontal" size={17} color={iconColor} />
+  </Pressable>;
+}
 const messageFallback = (message: Message) => {
   const attachment = message.attachments[0];
   if (attachment?.type === 'file') return attachment.originalName || 'Attachment';
@@ -38,7 +51,6 @@ export default function CardDetailScreen() {
   const database = useSQLiteContext();
   const { id } = useLocalSearchParams<{ id: string }>();
   const repository = useMemo(() => createBoardRepository(database), [database]);
-  const messageRepository = useMemo(() => createMessageRepository(database), [database]);
   const { tokens: theme } = useTheme();
   const { confirm, actionSheet } = useAppDialog();
   const insets = useSafeAreaInsets();
@@ -48,8 +60,6 @@ export default function CardDetailScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [contentDraft, setContentDraft] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -91,7 +101,6 @@ export default function CardDetailScreen() {
   const startTitleEdit = () => {
     setTitleDraft(detail?.explicitTitle ?? '');
     setTitleEditing(true);
-    setEditingMessageId(null);
     setNotice(null);
   };
 
@@ -111,30 +120,15 @@ export default function CardDetailScreen() {
     }
   };
 
-  const startContentEdit = (message: Message) => {
+  // Opens the dedicated full-screen editor (see PHASE: FULL-SCREEN CONTENT
+  // EDITOR) rather than editing inline — Card Details stays a reading/viewing
+  // surface. The edited message reloads its own content by id, so nothing
+  // beyond its id needs to travel through the route; the focus-triggered
+  // `load()` above picks up the saved change automatically on return.
+  const openContentEditor = (message: Message) => {
     if (!message.text && !message.attachments.length) return;
-    setContentDraft(message.text ?? '');
-    setEditingMessageId(message.id);
-    setTitleEditing(false);
     setNotice(null);
-  };
-
-  const saveContent = async () => {
-    if (!editingMessageId || savingEdit) return;
-    const text = contentDraft.trim();
-    const editingMessage = messages.find((message) => message.id === editingMessageId);
-    if (!text && !editingMessage?.attachments.length) { setNotice('Card content cannot be empty.'); return; }
-    setSavingEdit(true);
-    setNotice(null);
-    try {
-      const updatedAt = await messageRepository.updateText(editingMessageId, text);
-      setMessages((current) => current.map((message) => message.id === editingMessageId ? { ...message, text, updatedAt } : message));
-      setEditingMessageId(null);
-    } catch {
-      setNotice('Chits could not save the card content.');
-    } finally {
-      setSavingEdit(false);
-    }
+    router.push(`/card/edit-content?messageId=${message.id}`);
   };
 
   const sendComment = async () => {
@@ -156,7 +150,7 @@ export default function CardDetailScreen() {
 
   // Editing reuses the same sticky composer input rather than opening a second one
   // inline in the list — only its value/handler swap, so there's ever one input.
-  const startCommentEdit = (comment: Comment) => { setCommentEditDraft(comment.text); setEditingCommentId(comment.id); setTitleEditing(false); setEditingMessageId(null); setNotice(null); requestAnimationFrame(() => commentInputRef.current?.focus()); };
+  const startCommentEdit = (comment: Comment) => { setCommentEditDraft(comment.text); setEditingCommentId(comment.id); setTitleEditing(false); setNotice(null); requestAnimationFrame(() => commentInputRef.current?.focus()); };
   const cancelCommentEdit = () => { setEditingCommentId(null); setCommentEditDraft(''); };
 
   const saveCommentEdit = async () => {
@@ -288,7 +282,7 @@ export default function CardDetailScreen() {
     type: 'destructive',
     icon: 'trash-outline',
     title: 'Delete attachment?',
-    message: 'This attachment will be permanently removed from the card.',
+    message: 'This attachment will be removed from this card.',
     confirmText: 'Delete attachment',
     onConfirm: () => void deleteCardAttachmentNow(attachment),
   });
@@ -342,7 +336,7 @@ export default function CardDetailScreen() {
   const firstMessageTitle = messages[0] ? messages[0].text?.trim().slice(0, 120) || messageFallback(messages[0]) : null;
   const displayTitle = messages.length === 1 && detail.explicitTitle?.trim() === firstMessageTitle ? null : detail.explicitTitle;
 
-  const singleThoughtEditable = messages.length === 1 && Boolean(messages[0]?.text) && editingMessageId !== messages[0]?.id;
+  const singleThoughtEditable = messages.length === 1 && Boolean(messages[0]?.text);
 
   // The Content card takes its color from the card's own board — same source of
   // truth as the board detail screen — rather than the generic theme accent, so
@@ -388,7 +382,7 @@ export default function CardDetailScreen() {
               <View style={[styles.contentIconMark, { backgroundColor: theme.surface }]}><Ionicons accessible={false} name="document-text-outline" size={14} color={contentAccentStrong} /></View>
               <Text accessibilityRole="header" style={[styles.contentSectionTitle, { color: contentAccentStrong }]}>CONTENT</Text>
             </View>
-            {singleThoughtEditable ? <Pressable accessibilityRole="button" accessibilityLabel="Edit content" hitSlop={8} onPress={() => startContentEdit(messages[0])} style={styles.sectionEditButton}><Ionicons accessible={false} name="create-outline" size={16} color={contentAccentStrong} /></Pressable>
+            {singleThoughtEditable ? <Pressable accessibilityRole="button" accessibilityLabel="Edit content" hitSlop={8} onPress={() => openContentEditor(messages[0])} style={styles.sectionEditButton}><Ionicons accessible={false} name="create-outline" size={16} color={contentAccentStrong} /></Pressable>
               : messages.length > 1 ? <View style={[styles.countBadge, { backgroundColor: theme.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: contentAccentBorder }]}><Text style={styles.countText}>{messages.length}</Text></View> : null}
           </View>
           <Text style={styles.contentSectionHint}>Changes here also update the original thought in Chat.</Text>
@@ -397,19 +391,10 @@ export default function CardDetailScreen() {
             {messages.map((message, index) => <View key={message.id} style={index > 0 && styles.thought}>
               {messages.length > 1 ? <View style={styles.thoughtHeader}>
                 <Text style={styles.thoughtLabel}>THOUGHT {index + 1}</Text>
-                {message.text && editingMessageId !== message.id ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit thought ${index + 1}`} hitSlop={8} onPress={() => startContentEdit(message)} style={styles.inlineEdit}><Ionicons accessible={false} name="create-outline" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Edit</Text></Pressable> : null}
+                {message.text ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit thought ${index + 1}`} hitSlop={8} onPress={() => openContentEditor(message)} style={styles.inlineEdit}><Ionicons accessible={false} name="create-outline" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Edit</Text></Pressable> : null}
               </View> : null}
-              {editingMessageId === message.id ? <View style={styles.editor}>
-                {message.attachments.length ? <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} /></View>)}</View> : null}
-                <TextInput autoFocus accessibilityLabel="Card content" multiline value={contentDraft} onChangeText={setContentDraft} placeholder="Write card content" placeholderTextColor={theme.textMuted} textAlignVertical="top" style={[styles.contentInput, { borderColor: contentAccentSolid }]} />
-                <View style={styles.editActions}>
-                  <Pressable accessibilityRole="button" disabled={savingEdit || (!contentDraft.trim() && !message.attachments.length)} onPress={() => void saveContent()} style={[styles.editSave, { backgroundColor: contentAccentSolid }, (savingEdit || (!contentDraft.trim() && !message.attachments.length)) && styles.disabled]}><Text style={[styles.editSaveText, { color: contentAccentOn }]}>{savingEdit ? 'Saving…' : 'Save changes'}</Text></Pressable>
-                  <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => { setEditingMessageId(null); setContentDraft(''); }} style={styles.editCancel}><Text style={styles.editCancelText}>Cancel</Text></Pressable>
-                </View>
-              </View> : <>
-                <MessageContentRenderer message={message} mode="detail" accentColor={detail.boardAccent ?? undefined} renderAttachments={() => <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} /></View>)}</View>} />
-                {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={`Add a description to ${messageFallback(message)}`} onPress={() => startContentEdit(message)} style={styles.addDescription}><Ionicons accessible={false} name="add" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Add description</Text></Pressable> : null}
-              </>}
+              <MessageContentRenderer message={message} mode="detail" accentColor={detail.boardAccent ?? undefined} renderAttachments={() => <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} /></View>)}</View>} />
+              {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={`Add a description to ${messageFallback(message)}`} onPress={() => openContentEditor(message)} style={styles.addDescription}><Ionicons accessible={false} name="add" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Add description</Text></Pressable> : null}
               {index < messages.length - 1 ? <View style={styles.thoughtDivider} /> : null}
             </View>)}
           </View>
@@ -441,10 +426,10 @@ export default function CardDetailScreen() {
           </Pressable>
         </View> : <>
           {cardAttachments.some((attachment) => attachment.type !== 'file') ? <View style={styles.attachmentGrid}>
-            {cardAttachments.filter((attachment) => attachment.type !== 'file').map((attachment) => <View key={attachment.id} style={[styles.cardAttachment, styles.attachmentGridItem]}><AttachmentContent attachment={attachment} variant="board" accentColor={detail.boardAccent ?? undefined} onLongPress={() => openCardAttachmentActions(attachment)} /></View>)}
+            {cardAttachments.filter((attachment) => attachment.type !== 'file').map((attachment) => <View key={attachment.id} style={[styles.cardAttachment, styles.attachmentGridItem]}><AttachmentContent attachment={attachment} variant="board" accentColor={detail.boardAccent ?? undefined} onLongPress={() => openCardAttachmentActions(attachment)} overlay={<AttachmentActionsButton onPress={() => openCardAttachmentActions(attachment)} style={styles.attachmentActionsOverlay} iconColor="#FFFFFF" />} /></View>)}
           </View> : null}
           {cardAttachments.some((attachment) => attachment.type === 'file') ? <View style={[styles.attachmentList, styles.attachmentFileList]}>
-            {cardAttachments.filter((attachment) => attachment.type === 'file').map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} onLongPress={() => openCardAttachmentActions(attachment)} /></View>)}
+            {cardAttachments.filter((attachment) => attachment.type === 'file').map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} onLongPress={() => openCardAttachmentActions(attachment)} overlay={<AttachmentActionsButton onPress={() => openCardAttachmentActions(attachment)} style={styles.attachmentActionsInline} iconColor={theme.textMuted} />} /></View>)}
           </View> : null}
           <Pressable accessibilityRole="button" accessibilityLabel="Add attachment" disabled={attachmentBusy} onPress={openAddAttachment} style={styles.addAttachmentRow}>
             {showAttachmentLoader ? <ChitsLoader size="small" /> : <Ionicons accessible={false} name="add" size={16} color={contentAccentStrong} />}
@@ -540,7 +525,6 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   addTitle: { minHeight: 40, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.xxs },
   editor: { gap: spacing.sm },
   titleInput: { minHeight: 52, borderBottomWidth: 1, borderColor: tokens.accent, color: tokens.textPrimary, fontSize: 24, fontWeight: '700' },
-  contentInput: { minHeight: 140, paddingHorizontal: 0, paddingVertical: spacing.xs, borderBottomWidth: 1, borderColor: tokens.accent, color: tokens.textPrimary, fontSize: 17, lineHeight: 27 },
   editActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   editSave: { minHeight: 42, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: 11 },
   editSaveText: { fontWeight: '700' },
@@ -580,6 +564,11 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   attachmentGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
   attachmentGridItem: { width: '47%' },
   attachmentFileList: { marginTop: spacing.sm },
+  // Matches Chat's own attachment "•••" trigger exactly (see mediaActions in
+  // message-row.native.tsx and `more` in message-note-cards.native.tsx) — an
+  // overlay pill for media thumbnails, a plain inline button for file rows.
+  attachmentActionsOverlay: { position: 'absolute', top: spacing.xs, right: spacing.xs, width: 36, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.58)' },
+  attachmentActionsInline: { width: 36, minHeight: 32, alignItems: 'center', justifyContent: 'center' },
   addAttachmentRow: { alignSelf: 'flex-start', minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.sm },
   addDescription: { alignSelf: 'flex-start', minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 4 },
   thoughtDivider: { height: StyleSheet.hairlineWidth, marginTop: spacing.lg, backgroundColor: tokens.borderSubtle },

@@ -2,6 +2,7 @@ import { useContext, useRef, useState, type ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { BottomTabBarHeightCallbackContext, type BottomTabBarProps } from 'expo-router/tabs';
 import Animated, { Easing, Extrapolation, interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
@@ -13,15 +14,19 @@ const CHAT_BUTTON_SIZE = 58;
 // How far the Chat button pokes above the nav surface's own top edge — the
 // remainder of the button's height sinks down into the surface itself.
 const CHAT_OVERLAP = 22;
+const NAV_SURFACE_HEIGHT = 64;
 
 // The custom bottom-tab-bar for the app's 3 global destinations (Boards, Chat,
 // Archive) — see PHASE: REDESIGN CHITS BOTTOM NAVIGATION and PHASE: REDESIGN CHAT
-// TRANSITION — CONNECTED FLOATING BUTTON. Rendered by the (tabs) group's Tabs
-// navigator in the normal docked-flex tab-bar slot, not as a screen-level
-// overlay — every screen inside the group is automatically sized above it, so no
-// screen needs its own bottom-inset math for this bar. While Chat itself is
-// active, this renders nothing at all (not just hidden — see the early return
-// below) so Chat reclaims that space rather than leaving an empty reserved strip.
+// TRANSITION — CONNECTED FLOATING BUTTON. Absolutely positioned over the active
+// screen (not a normal docked flex tab-bar slot) so the transparent margins
+// around the floating pill genuinely show the screen's own content/background
+// instead of an opaque reserved strip — screens opt into the matching bottom
+// clearance themselves via `useBottomTabBarHeight()` (see index.native.tsx,
+// archive.native.tsx, search.native.tsx). While Chat itself is active, this
+// renders nothing at all
+// (not just hidden — see the early return below) so Chat's own composer can use
+// that space instead of a floating bar sitting over it.
 export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
   const { tokens: theme } = useTheme();
   const reportHeight = useContext(BottomTabBarHeightCallbackContext);
@@ -98,46 +103,65 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
     <Animated.View
       entering={enterRise}
       pointerEvents="box-none"
-      style={[styles.wrap, { paddingBottom: insets.bottom + spacing.xs }]}
+      // The ONE source of truth for how far the nav sits from the device edge
+      // (see PHASE: REDESIGN CHITS BOTTOM NAVIGATION) — nothing else in this tree
+      // adds its own bottom padding/margin on top of it. This pill is a small
+      // floating element, not an edge-to-edge bar, so it doesn't need the
+      // device's full safe-area reservation (insets.bottom alone runs ~34px on
+      // home-indicator phones) below it — that's what produced the oversized
+      // gap. Capping at spacing.xs keeps just enough clearance to stay off the
+      // home indicator on every device, including ones with no inset at all.
+      style={[styles.wrap, { paddingBottom: Math.min(insets.bottom, spacing.xs) || spacing.xs }]}
       onLayout={(event) => reportHeight?.(event.nativeEvent.layout.height)}
     >
-      <Animated.View style={[styles.surface, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, navFadeStyle]}>
-        <NavItem
-          label="Boards"
-          icon="grid-outline"
-          focused={activeName === 'index'}
-          accessibilityLabel={`Boards${activeName === 'index' ? '. Current screen.' : ''}`}
-          onPress={() => go(boardsRoute?.name)}
-        />
-        <View style={styles.centerSlot} pointerEvents="none">
-          <Text numberOfLines={1} style={[styles.centerLabel, { color: theme.textMuted }]}>Chat</Text>
-        </View>
-        <NavItem
-          label="Archive"
-          icon="archive-outline"
-          focused={activeName === 'archive'}
-          accessibilityLabel={`Archive${activeName === 'archive' ? '. Current screen.' : ''}`}
-          onPress={() => go(archiveRoute?.name)}
-        />
-      </Animated.View>
-
-      <Pressable
-        ref={chatButtonRef}
-        accessibilityRole="button"
-        accessibilityLabel="Open Chat"
-        accessibilityHint="Open Chat to capture a new thought."
-        disabled={travelling}
-        // Phase 1 (press): a very quick compression that springs back — done by
-        // release, independent of the open sequence which only starts on tap.
-        onPressIn={() => { pressScale.set(withTiming(0.94, { duration: 60 })); }}
-        onPressOut={() => { pressScale.set(withTiming(1, { duration: 70, easing: Easing.out(Easing.quad) })); }}
-        onPress={openChatBalloon}
-        style={styles.chatButtonHit}
-      >
-        <Animated.View entering={enterButtonSettle} style={[styles.chatButton, { backgroundColor: theme.accent }, pressedStyle]}>
-          <Ionicons accessible={false} name="chatbox" size={23} color="#FFFFFF" />
+      {/* Purely a layout container — caps the nav's width and centers it on
+          wide screens (tablets) without touching the nav's own design. No
+          background/border/shadow of its own, so the screen behind stays
+          visible around and behind the floating pill. */}
+      <View style={styles.navRow}>
+        {/* A soft contact-shadow-like fade directly under the pill, not a second
+            surface — extremely subtle, absolutely positioned so it paints past
+            the wrapper's own (small) bottom padding toward the home indicator
+            without adding any layout height of its own. */}
+        <LinearGradient pointerEvents="none" colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0)']} style={styles.feather} />
+        <Animated.View style={[styles.surface, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, navFadeStyle]}>
+          <NavItem
+            label="Boards"
+            icon="grid-outline"
+            focused={activeName === 'index'}
+            accessibilityLabel={`Boards${activeName === 'index' ? '. Current screen.' : ''}`}
+            onPress={() => go(boardsRoute?.name)}
+          />
+          <View style={styles.centerSlot} pointerEvents="none">
+            <Text numberOfLines={1} style={[styles.centerLabel, { color: theme.textMuted }]}>Chat</Text>
+          </View>
+          <NavItem
+            label="Archive"
+            icon="archive-outline"
+            focused={activeName === 'archive'}
+            accessibilityLabel={`Archive${activeName === 'archive' ? '. Current screen.' : ''}`}
+            onPress={() => go(archiveRoute?.name)}
+          />
         </Animated.View>
-      </Pressable>
+
+        <Pressable
+          ref={chatButtonRef}
+          accessibilityRole="button"
+          accessibilityLabel="Open Chat"
+          accessibilityHint="Open Chat to capture a new thought."
+          disabled={travelling}
+          // Phase 1 (press): a very quick compression that springs back — done by
+          // release, independent of the open sequence which only starts on tap.
+          onPressIn={() => { pressScale.set(withTiming(0.94, { duration: 60 })); }}
+          onPressOut={() => { pressScale.set(withTiming(1, { duration: 70, easing: Easing.out(Easing.quad) })); }}
+          onPress={openChatBalloon}
+          style={styles.chatButtonHit}
+        >
+          <Animated.View entering={enterButtonSettle} style={[styles.chatButton, { backgroundColor: theme.accent }, pressedStyle]}>
+            <Ionicons accessible={false} name="chatbox" size={23} color="#FFFFFF" />
+          </Animated.View>
+        </Pressable>
+      </View>
     </Animated.View>
   );
 }
@@ -179,10 +203,17 @@ function NavItem({ label, icon, focused, accessibilityLabel, onPress }: { label:
   );
 }
 
+// Only the pill (`surface`) is allowed to paint a background — everything
+// around it (`wrap`, `navRow`) is a purely structural, transparent layout
+// container so the screen stays visible behind/around the floating nav.
+const NAV_MAX_WIDTH = 560;
+const NAV_HORIZONTAL_MARGIN = 16;
+
 const styles = StyleSheet.create({
-  wrap: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs },
+  wrap: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent', paddingHorizontal: NAV_HORIZONTAL_MARGIN, paddingTop: spacing.xs },
+  navRow: { width: '100%', maxWidth: NAV_MAX_WIDTH, alignSelf: 'center' },
   surface: {
-    height: 64,
+    height: NAV_SURFACE_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 28,
@@ -193,6 +224,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 8,
   },
+  feather: { position: 'absolute', top: NAV_SURFACE_HEIGHT, left: 0, right: 0, height: 18 },
   item: { flex: 1, height: '100%', alignItems: 'center', justifyContent: 'center', gap: 3 },
   itemPressed: { opacity: 0.55 },
   itemLabel: { fontSize: 11, fontWeight: '500' },

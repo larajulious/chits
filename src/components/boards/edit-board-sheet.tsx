@@ -1,21 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { useTheme } from '@/components/theme-provider';
-import { GlassSurface } from '@/components/ui/glass-surface';
+import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
 import { spacing } from '@/constants/theme';
 import { resolveBoardIcon, type BoardIconName } from '@/constants/board-appearance';
 import { BoardAppearanceFields } from '@/components/boards/board-appearance-fields';
@@ -37,6 +32,7 @@ const MAX_BOARD_NAME_LENGTH = 80;
 export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
   const { tokens: theme } = useTheme();
   const inputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<FormSheetHandle>(null);
   const wasVisible = useRef(false);
   const [name, setName] = useState(board.name);
   const [icon, setIcon] = useState<BoardIconName | null>(board.icon);
@@ -55,6 +51,11 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
       setTouched(false);
       setSaving(false);
       setError(null);
+      // A freshly reopened sheet (or one opened for a different board) must
+      // never inherit the previous scroll position — see PHASE: FIX BOTTOM
+      // SHEET KEYBOARD BEHAVIOR. Not animated: this happens before the sheet is
+      // visible, so there's nothing for the user to see move.
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
     }
     wasVisible.current = visible;
   }, [board, visible]);
@@ -84,101 +85,82 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
   };
 
   return (
-    <Modal
+    <FormSheet
+      ref={scrollRef}
       visible={visible}
-      transparent
-      animationType="slide"
       onRequestClose={close}
-      onShow={() => requestAnimationFrame(() => inputRef.current?.focus())}
+      closeAccessibilityLabel="Cancel editing board"
+      onModalShow={() => requestAnimationFrame(() => inputRef.current?.focus())}
+      contentContainerStyle={styles.content}
     >
-      <KeyboardAvoidingView
-        style={styles.backdrop}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <Pressable accessibilityRole="button" accessibilityLabel="Cancel editing board" style={StyleSheet.absoluteFill} onPress={close} />
-        <SafeAreaView edges={['bottom']} style={[styles.safeArea, { backgroundColor: theme.surface }]}>
-          <GlassSurface style={[styles.sheet, { borderColor: theme.borderSubtle }]}>
-            <ScrollView
-              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.content}
-            >
-              <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
-              <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Edit board</Text>
-              <Text style={[styles.supportingCopy, { color: theme.textSecondary }]}>Update this board’s name and appearance.</Text>
+      <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
+      <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Edit board</Text>
+      <Text style={[styles.supportingCopy, { color: theme.textSecondary }]}>Update this board’s name and appearance.</Text>
 
-              <View accessible accessibilityLabel={`Preview: ${trimmedName || 'Untitled board'}`} style={[styles.preview, { backgroundColor: theme.background, borderColor: theme.borderSubtle }]}>
-                <View style={[styles.previewMark, { backgroundColor: accent ?? theme.accentSoft }]}>
-                  <Ionicons accessible={false} name={resolveBoardIcon(icon)} size={19} color={accent ? '#FFFFFF' : theme.accentStrong} />
-                </View>
-                <Text numberOfLines={1} style={[styles.previewName, { color: theme.textPrimary }]}>{trimmedName || 'Untitled board'}</Text>
-              </View>
+      <View accessible accessibilityLabel={`Preview: ${trimmedName || 'Untitled board'}`} style={[styles.preview, { backgroundColor: theme.background, borderColor: theme.borderSubtle }]}>
+        <View style={[styles.previewMark, { backgroundColor: accent ?? theme.accentSoft }]}>
+          <Ionicons accessible={false} name={resolveBoardIcon(icon)} size={19} color={accent ? '#FFFFFF' : theme.accentStrong} />
+        </View>
+        <Text numberOfLines={1} style={[styles.previewName, { color: theme.textPrimary }]}>{trimmedName || 'Untitled board'}</Text>
+      </View>
 
-              <Text nativeID="board-name-label" style={[styles.label, { color: theme.textSecondary }]}>Board name</Text>
-              <TextInput
-                ref={inputRef}
-                autoFocus
-                accessibilityLabel="Board name"
-                accessibilityLabelledBy="board-name-label"
-                value={name}
-                onChangeText={(value) => {
-                  setName(value);
-                  setTouched(true);
-                  setError(null);
-                }}
-                onSubmitEditing={() => void save()}
-                editable={!saving}
-                maxLength={MAX_BOARD_NAME_LENGTH}
-                returnKeyType="done"
-                selectionColor={theme.accent}
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.background,
-                    borderColor: validation ? theme.danger : theme.borderSubtle,
-                    color: theme.textPrimary,
-                  },
-                ]}
-              />
-              {validation ? <Text accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{validation}</Text> : null}
+      <Text nativeID="board-name-label" style={[styles.label, { color: theme.textSecondary }]}>Board name</Text>
+      <TextInput
+        ref={inputRef}
+        accessibilityLabel="Board name"
+        accessibilityLabelledBy="board-name-label"
+        value={name}
+        onChangeText={(value) => {
+          setName(value);
+          setTouched(true);
+          setError(null);
+        }}
+        onFocus={() => scrollRef.current?.requestVisible(inputRef)}
+        onSubmitEditing={() => void save()}
+        editable={!saving}
+        maxLength={MAX_BOARD_NAME_LENGTH}
+        returnKeyType="done"
+        selectionColor={theme.accent}
+        style={[
+          styles.input,
+          {
+            backgroundColor: theme.background,
+            borderColor: validation ? theme.danger : theme.borderSubtle,
+            color: theme.textPrimary,
+          },
+        ]}
+      />
+      {validation ? <Text accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{validation}</Text> : null}
 
-              <BoardAppearanceFields icon={icon} accent={accent} onIconChange={setIcon} onAccentChange={setAccent} />
+      <BoardAppearanceFields icon={icon} accent={accent} onIconChange={setIcon} onAccentChange={setAccent} />
 
-              {error ? <Text accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</Text> : null}
+      {error ? <Text accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</Text> : null}
 
-              <View style={styles.actions}>
-                <Pressable accessibilityRole="button" disabled={saving} onPress={close} style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
-                  <Text style={[styles.cancelText, { color: theme.textSecondary }]}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Save changes"
-                  accessibilityState={{ disabled: !canSave }}
-                  disabled={!canSave}
-                  onPress={() => void save()}
-                  style={({ pressed }) => [
-                    styles.saveButton,
-                    { backgroundColor: theme.accent },
-                    !canSave && styles.disabled,
-                    pressed && canSave && styles.pressed,
-                  ]}
-                >
-                  {saving ? <ActivityIndicator accessibilityLabel="Saving changes" size="small" color={theme.accentText} /> : <Text style={[styles.saveText, { color: theme.accentText }]}>Save changes</Text>}
-                </Pressable>
-              </View>
-            </ScrollView>
-          </GlassSurface>
-        </SafeAreaView>
-      </KeyboardAvoidingView>
-    </Modal>
+      <View style={styles.actions}>
+        <Pressable accessibilityRole="button" disabled={saving} onPress={close} style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
+          <Text style={[styles.cancelText, { color: theme.textSecondary }]}>Cancel</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Save changes"
+          accessibilityState={{ disabled: !canSave }}
+          disabled={!canSave}
+          onPress={() => void save()}
+          style={({ pressed }) => [
+            styles.saveButton,
+            { backgroundColor: theme.accent },
+            !canSave && styles.disabled,
+            pressed && canSave && styles.pressed,
+          ]}
+        >
+          {saving ? <ActivityIndicator accessibilityLabel="Saving changes" size="small" color={theme.accentText} /> : <Text style={[styles.saveText, { color: theme.accentText }]}>Save changes</Text>}
+        </Pressable>
+      </View>
+    </FormSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,23,0.34)' },
-  safeArea: { width: '100%', flexShrink: 1, maxHeight: '100%', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
-  sheet: { flexShrink: 1, maxHeight: '100%', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth },
   content: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.lg },
   handle: { alignSelf: 'center', width: 36, height: 4, marginBottom: spacing.xs, borderRadius: 2 },
   title: { fontSize: 20, lineHeight: 25, fontWeight: '800' },

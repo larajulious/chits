@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
+import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { AppHeader, EmptyState, IconButton, Screen } from '@/components/ui/primitives';
@@ -19,6 +20,11 @@ export default function ArchiveScreen() {
   const { openDrawer } = useAppDrawer();
   const { tokens: theme } = useTheme();
   const { confirm } = useAppDialog();
+  // The floating bottom nav is absolutely positioned over this screen (see
+  // PHASE: REDESIGN CHITS BOTTOM NAVIGATION) rather than reserving its own flex
+  // space, so this screen's own scroll content has to reserve the matching
+  // clearance itself.
+  const tabBarHeight = useBottomTabBarHeight();
   const repo = useMemo(() => createBoardRepository(database), [database]);
   const messages = useMemo(() => createMessageRepository(database), [database]);
   const [items, setItems] = useState<Archived[]>([]);
@@ -53,7 +59,7 @@ export default function ArchiveScreen() {
   return <Screen edges={['top', 'left', 'right']}>
     <AppHeader title="Archive" leading={<IconButton label="Open navigation" onPress={openDrawer}><Ionicons accessible={false} name="reorder-two-outline" size={24} color={theme.textPrimary} /></IconButton>} />
     {restoreError ? <Text accessibilityRole="alert" style={[styles.errorBanner, { color: theme.danger }]}>{restoreError}</Text> : null}
-    {!ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : items.length ? <ScrollView contentContainerStyle={styles.list}>
+    {!ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : items.length ? <ScrollView contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + spacing.md }]}>
       {items.map((item) => <Pressable
         key={`${item.kind}-${item.id}`}
         accessibilityRole="button"

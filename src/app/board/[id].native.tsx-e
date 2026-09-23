@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { AccessibilityInfo, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type LayoutRectangle, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, type GestureRef } from 'react-native-gesture-handler';
 import Animated, { FadeIn, LinearTransition, measure, runOnJS, useAnimatedRef, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -92,15 +92,14 @@ function AddColumnPlaceholder({ variant, width, marginHorizontal, onPress }: { v
 
 function DragDots() { const { tokens: theme } = useTheme(); return <View accessible={false} style={styles.dotGrid}>{Array.from({ length: 6 }, (_, index) => <View key={index} style={[styles.dot, { backgroundColor: theme.textMuted }]} />)}</View>; }
 
-// RNGH's own (non-exported) GestureRef type models an external-component ref
-// as RefObject<React.ComponentType> — i.e. the component's definition — but a
+// RNGH's own GestureRef type models an external-component ref as
+// RefObject<React.ComponentType>, i.e. the component's definition — but a
 // ScrollView/FlatList ref (as returned by useRef<ScrollView>(null) etc.) is a
 // ref to the mounted INSTANCE, which is what every real caller (and RNGH's own
 // runtime resolution, via findNodeHandle) actually needs. This cast bridges
-// that overly-narrow declaration; the value itself is unchanged, and this is
-// the only place the mismatch is worked around.
-function asGestureRef(ref: RefObject<unknown>): any {
-  return ref;
+// that overly-narrow declaration; the value itself is unchanged.
+function asGestureRef(ref: RefObject<unknown>): GestureRef {
+  return ref as GestureRef;
 }
 
 // Quiet loading placeholder for the active column only — adjacent/prefetching
@@ -142,7 +141,7 @@ function DragHandle({ index, total, translationY, handleRef, columnName, canMove
   // forgiving here, which is why this only surfaced on iOS). This tells iOS the
   // scroll/pager must wait for this candidate to fail (ordinary scroll/swipe) or
   // succeed (long press) before it's allowed to start.
-  const gesture = useMemo(() => Gesture.Pan().activateAfterLongPress(200).failOffsetX([-10, 10]).failOffsetY([-10, 10]).blocksExternalGesture(asGestureRef(scrollRef), asGestureRef(pagerRef)).onStart(() => {
+  const gesture = useMemo(() => Gesture.Pan().activateAfterLongPress(200).failOffsetX([-10, 10]).failOffsetY([-10, 10]).blocksExternalGesture(scrollRef, pagerRef).onStart(() => {
     translationY.set(0);
     runOnJS(onBegin)();
   }).onUpdate((event) => {
@@ -153,22 +152,7 @@ function DragHandle({ index, total, translationY, handleRef, columnName, canMove
   return <GestureDetector gesture={gesture}><Pressable ref={handleRef} collapsable={false} hitSlop={4} accessibilityRole="adjustable" accessibilityLabel={`Drag handle. Reorder card. Card ${index + 1} of ${total} in ${columnName}.`} accessibilityActions={actions} onPress={(event) => event.stopPropagation()} onAccessibilityAction={(event) => { const name = event.nativeEvent.actionName; if (name === 'decrement') onReorder(-1); if (name === 'increment') onReorder(1); if (name === 'movePrevColumn') onMoveColumn(-1); if (name === 'moveNextColumn') onMoveColumn(1); }} style={styles.dragHandle}><DragDots /></Pressable></GestureDetector>;
 }
 
-// Default React.memo comparison, reimplemented — needed because CardSurface's own
-// comparator (below) must fall through to the *same* check it would otherwise get
-// for free, for every prop except `frozen`.
-function shallowEqual(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
-  if (Object.is(a, b)) return true;
-  const keysA = Object.keys(a);
-  if (keysA.length !== Object.keys(b).length) return false;
-  return keysA.every((key) => Object.is(a[key], b[key]));
-}
-
-const CardSurface = memo(function CardSurface({ card, index, total, translationY, dragging = false, interactive = true, highlighted = false, accent, accentTint, accentBorderColor, columnName = '', canMovePrevColumn = false, canMoveNextColumn = false, onBeginDrag, onDragMove, onDragEnd, onDragCancel, onOpenMove, onReorder, onMoveColumn, scrollRef, pagerRef, activeDragCardId }: { card: Card; index: number; total: number; translationY?: SharedValue<number>; dragging?: boolean; interactive?: boolean; highlighted?: boolean; accent?: string; accentTint?: string; accentBorderColor?: string; columnName?: string; canMovePrevColumn?: boolean; canMoveNextColumn?: boolean; onBeginDrag?: () => void; onDragMove?: (dx: number, dy: number, pageX: number, pageY: number) => void; onDragEnd?: () => void; onDragCancel?: () => void; onOpenMove?: () => void; onReorder?: (direction: -1 | 1) => void; onMoveColumn?: (direction: -1 | 1) => void; scrollRef: RefObject<ScrollView | null>; pagerRef: RefObject<FlatList<CarouselItem> | null>; frozen?: boolean; activeDragCardId?: SharedValue<string | null> }) {
-  // Opts out of React Compiler's own auto-memoization — the custom memo()
-  // comparator below (the `frozen` freeze, load-bearing for keeping the live drag
-  // gesture alive) must run exactly as written, not be reinterpreted by the
-  // compiler's own memoization pass.
-  'use no memo';
+const CardSurface = memo(function CardSurface({ card, index, total, translationY, dragging = false, interactive = true, highlighted = false, accent, accentTint, accentBorderColor, columnName = '', canMovePrevColumn = false, canMoveNextColumn = false, onBeginDrag, onDragMove, onDragEnd, onDragCancel, onOpenMove, onReorder, onMoveColumn, scrollRef, pagerRef }: { card: Card; index: number; total: number; translationY?: SharedValue<number>; dragging?: boolean; interactive?: boolean; highlighted?: boolean; accent?: string; accentTint?: string; accentBorderColor?: string; columnName?: string; canMovePrevColumn?: boolean; canMoveNextColumn?: boolean; onBeginDrag?: () => void; onDragMove?: (dx: number, dy: number, pageX: number, pageY: number) => void; onDragEnd?: () => void; onDragCancel?: () => void; onOpenMove?: () => void; onReorder?: (direction: -1 | 1) => void; onMoveColumn?: (direction: -1 | 1) => void; scrollRef: RefObject<ScrollView | null>; pagerRef: RefObject<FlatList<CarouselItem> | null> }) {
   const { tokens: theme } = useTheme();
   // The board's own accent, resolved by the caller — see the equivalent constants
   // in BoardScreen — falling back to the generic theme tokens when not passed
@@ -178,48 +162,22 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
   const resolvedAccentBorder = accentBorderColor ?? theme.accentBorder;
   const handleRef = useAnimatedRef<View>();
   const footerRef = useAnimatedRef<View>();
-  // See the blocksExternalGesture note below — a ref to the card's own outer
-  // Pressable, so the drag gesture can also block ITS tap recognition.
-  const cardRef = useRef<View>(null);
   // Briefly tints the card that was just landed on from the Unorganized "Add to
   // board" redirect — a quick in/hold/out pulse, not a persistent state, so it
   // never needs to be told to turn back off.
   const highlightOpacity = useSharedValue(0);
   useEffect(() => { if (highlighted) highlightOpacity.set(withTiming(1, { duration: 150 }, () => { highlightOpacity.set(withDelay(650, withTiming(0, { duration: 300 }))); })); }, [highlighted, highlightOpacity]);
   const highlightStyle = useAnimatedStyle(() => ({ opacity: highlightOpacity.get() }));
-  // Hides this exact card in place once it becomes the live-dragged one — read
-  // reactively off activeDragCardId on the UI thread, not a React prop, so it
-  // never triggers (and can't be caught up in) a re-render of this component
-  // while frozen. See the freeze comment on the memo comparator below.
-  // Always returns the same set of keys (position/opacity/zIndex), just toggling
-  // their values — returning a DIFFERENT key set per call (e.g. {} when visible)
-  // is a known Reanimated footgun: a key that disappears from one call to the next
-  // isn't reliably reset back to its stylesheet default on the native side, so
-  // opacity: 0 was getting stuck permanently the instant a drag ended, leaving the
-  // card invisible.
-  const dragHiddenStyle = useAnimatedStyle(() => {
-    const hidden = activeDragCardId?.get() === card.id;
-    return { position: hidden ? 'absolute' : 'relative', top: 0, left: 0, right: 0, opacity: hidden ? 0 : 1, zIndex: hidden ? -1 : 0 };
-  });
   const media: Attachment | null = card.mediaId && card.mediaMessageId && card.mediaType && card.mediaUri ? { id: card.mediaId, messageId: card.mediaMessageId, type: card.mediaType, localUri: card.mediaUri, originalName: null, mimeType: card.mediaMimeType, size: card.mediaSize, duration: card.mediaDuration, width: card.mediaWidth, height: card.mediaHeight, createdAt: card.mediaCreatedAt ?? 0 } : null;
   const hasMetadata = Boolean(card.attachmentCount || card.messageCount > 1);
   const accessibleMetadata = [card.messageCount > 1 ? `${card.messageCount} thoughts` : null, card.attachmentCount ? `${card.attachmentCount} attachments` : null].filter(Boolean).join(', ');
+  const draggable = interactive && translationY && onBeginDrag && onDragMove && onDragEnd && onDragCancel && onReorder;
   // Long-press anywhere on the card activates drag, but a touch that begins on the
   // handle (which owns its own faster long-press) or the footer controls (Move /
   // reorder buttons, which must stay independently and immediately tappable) must
   // not also start the card-wide drag gesture.
-  //
-  // The guard below checks each callback individually (not a single combined
-  // `draggable` flag) so TS narrows every one to defined for the rest of this
-  // closure — a bundled boolean can't carry that per-variable information, and
-  // an uncoerced `&&` chain of them would evaluate to whichever callback happens
-  // to sit last (onReorder), whose identity isn't stable across renders (it's
-  // rebuilt whenever a card's `index` prop shifts during a drag) — silently
-  // smuggling that unstable reference into this useMemo's dependencies and
-  // recreating (and RNGH re-attaching) the live Pan gesture on every reorder,
-  // cancelling the in-flight drag.
   const cardGesture = useMemo(() => {
-    if (!interactive || !translationY || !onBeginDrag || !onDragMove || !onDragEnd || !onDragCancel || !onReorder) return undefined;
+    if (!draggable) return undefined;
     // Both a duration AND stillness are required — failOffsetX/Y (not minDistance,
     // which combines ambiguously with activateAfterLongPress and was letting the
     // long-press timer activate drag mid-swipe/mid-scroll) fails this pan candidate
@@ -232,26 +190,11 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
     // independent of failOffsetX/Y above. A longer hold gives real-finger tremor more
     // time to exceed that fixed, tiny cap, which is why 450ms made drag nearly
     // impossible to trigger; keep this duration modest for that reason.
-    // blocksExternalGesture: see the matching note on DragHandle's gesture above
-    // for scrollRef/pagerRef — without it, iOS lets the vertical column
-    // ScrollView (and, more rarely, the horizontal column pager) recognize and
-    // steal the touch while this candidate is still waiting out its long-press
-    // timer, so the drag never activates. cardRef is the same fix applied to
-    // the card's OWN outer Pressable: a plain RN Pressable installs its own
-    // separate native touch responder on the very same view this Pan gesture is
-    // attached to (via the GestureDetector wrapping it below), and without an
-    // explicit relation, iOS can let that responder's tap recognition win the
-    // touch before the long-press timer completes, so the drag is silently
-    // swallowed by "open card details" instead. Touches that land on the
-    // handle/footer already fail this candidate instantly (below), so blocking
-    // the Pressable there resolves again almost immediately — those buttons
-    // stay responsive.
-    // asGestureRef never reads `.current` itself — it only relabels the ref's
-    // type so RNGH's relation resolver (which reads it natively, on demand,
-    // not during this render) will accept it. The react-hooks/refs rule can't
-    // see that from a generic function call.
-    // eslint-disable-next-line react-hooks/refs
-    return Gesture.Pan().activateAfterLongPress(320).failOffsetX([-10, 10]).failOffsetY([-10, 10]).blocksExternalGesture(asGestureRef(scrollRef), asGestureRef(pagerRef), asGestureRef(cardRef))
+    // blocksExternalGesture: see the matching note on DragHandle's gesture above —
+    // without it, iOS lets the vertical column ScrollView (and, more rarely, the
+    // horizontal column pager) recognize and steal the touch while this candidate
+    // is still waiting out its long-press timer, so the drag never activates.
+    return Gesture.Pan().activateAfterLongPress(320).failOffsetX([-10, 10]).failOffsetY([-10, 10]).blocksExternalGesture(scrollRef, pagerRef)
       // measure() reads these refs on the UI thread when a touch lands, not during
       // this render; the react-hooks/refs rule can't see that from a worklet callback.
       // eslint-disable-next-line react-hooks/refs
@@ -272,8 +215,8 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
       .onUpdate((event) => { translationY.set(event.translationY); runOnJS(onDragMove)(event.translationX, event.translationY, event.absoluteX, event.absoluteY); })
       .onEnd(() => { runOnJS(onDragEnd)(); })
       .onFinalize((_, success) => { if (!success) runOnJS(onDragCancel)(); });
-  }, [cardRef, footerRef, handleRef, interactive, onBeginDrag, onDragCancel, onDragEnd, onDragMove, onReorder, pagerRef, scrollRef, translationY]);
-  const cardSurface = <Pressable ref={cardRef} disabled={!interactive} accessibilityRole="button" accessibilityLabel={`Open ${card.title || card.preview || 'untitled thought'}${accessibleMetadata ? `, ${accessibleMetadata}` : ''}`} accessibilityHint="Opens card details" onPress={() => router.push(`/card/${card.id}`)} style={({ pressed }) => [styles.card, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, dragging && styles.cardDragging, pressed && interactive && styles.cardPressed]}>
+  }, [draggable, footerRef, handleRef, onBeginDrag, onDragCancel, onDragEnd, onDragMove, pagerRef, scrollRef, translationY]);
+  const cardSurface = <Pressable disabled={!interactive} accessibilityRole="button" accessibilityLabel={`Open ${card.title || card.preview || 'untitled thought'}${accessibleMetadata ? `, ${accessibleMetadata}` : ''}`} accessibilityHint="Opens card details" onPress={() => router.push(`/card/${card.id}`)} style={({ pressed }) => [styles.card, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, dragging && styles.cardDragging, pressed && interactive && styles.cardPressed]}>
     <Animated.View pointerEvents="none" accessible={false} style={[StyleSheet.absoluteFill, styles.cardHighlight, { backgroundColor: resolvedAccentTint, borderColor: resolvedAccentBorder }, highlightStyle]} />
     {media ? <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.cardMedia, { borderBottomColor: theme.borderSubtle }]}><AttachmentContent attachment={media} variant="board" /></View> : null}
     <View style={styles.cardBody}>
@@ -282,7 +225,7 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
           <Text numberOfLines={2} style={[styles.title, { color: theme.textPrimary }]}>{card.title || card.preview || 'Untitled thought'}</Text>
           {card.preview && card.preview !== card.title ? <Text numberOfLines={2} style={[styles.preview, { color: theme.textSecondary }]}>{card.preview}</Text> : null}
         </View>
-        {interactive && translationY && onBeginDrag && onDragMove && onDragEnd && onDragCancel && onReorder && onMoveColumn ? <DragHandle index={index} total={total} translationY={translationY} handleRef={handleRef} columnName={columnName} canMovePrevColumn={canMovePrevColumn} canMoveNextColumn={canMoveNextColumn} onBegin={onBeginDrag} onMove={onDragMove} onEnd={onDragEnd} onCancel={onDragCancel} onReorder={onReorder} onMoveColumn={onMoveColumn} scrollRef={scrollRef} pagerRef={pagerRef} /> : <View style={styles.dragHandle}><DragDots /></View>}
+        {draggable && onMoveColumn ? <DragHandle index={index} total={total} translationY={translationY} handleRef={handleRef} columnName={columnName} canMovePrevColumn={canMovePrevColumn} canMoveNextColumn={canMoveNextColumn} onBegin={onBeginDrag} onMove={onDragMove} onEnd={onDragEnd} onCancel={onDragCancel} onReorder={onReorder} onMoveColumn={onMoveColumn} scrollRef={scrollRef} pagerRef={pagerRef} /> : <View style={styles.dragHandle}><DragDots /></View>}
       </View>
 
       {hasMetadata ? <View style={styles.meta}>
@@ -301,32 +244,20 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
       </View>
     </View>
   </Pressable>;
-  return <Animated.View style={dragHiddenStyle}>{cardGesture ? <GestureDetector gesture={cardGesture}>{cardSurface}</GestureDetector> : cardSurface}</Animated.View>;
-}, (prev, next) => {
-  // While this card owns the live drag gesture, its render is frozen outright —
-  // proven via instrumentation: re-rendering it during an active touch (for ANY
-  // reason — a reorder-driven index shift, a hidden-state style toggle, even with
-  // every other prop held byte-for-byte identical) reliably tears down and
-  // recreates its native Pan recognizer mid-gesture on this RN/Reanimated/RNGH
-  // combination, cancelling the drag. `frozen` is the one prop allowed to bypass
-  // the freeze, so rendering resumes normally the instant the drag ends.
-  if (next.frozen) return true;
-  return shallowEqual(prev, next);
+  return cardGesture ? <GestureDetector gesture={cardGesture}>{cardSurface}</GestureDetector> : cardSurface;
 });
 
-const BoardCardRow = memo(function BoardCardRow({ card, index, total, translationY, highlighted, accent, accentTint, accentBorderColor, columnName, canMovePrevColumn, canMoveNextColumn, onBeginDrag, onDragMove, onDragEnd, onDragCancel, onOpenMove, onReorder, onMoveColumn, scrollRef, pagerRef, frozen, activeDragCardId }: { card: Card; index: number; total: number; translationY: SharedValue<number>; highlighted?: boolean; accent?: string; accentTint?: string; accentBorderColor?: string; columnName?: string; canMovePrevColumn?: boolean; canMoveNextColumn?: boolean; onBeginDrag: (card: Card, index: number) => void; onDragMove: (dx: number, dy: number, pageX: number, pageY: number) => void; onDragEnd: () => void; onDragCancel: () => void; onOpenMove: (card: Card) => void; onReorder: (card: Card, index: number, direction: -1 | 1) => void; onMoveColumn?: (card: Card, direction: -1 | 1) => void; scrollRef: RefObject<ScrollView | null>; pagerRef: RefObject<FlatList<CarouselItem> | null>; frozen?: boolean; activeDragCardId?: SharedValue<string | null> }) {
-  'use no memo';
+const BoardCardRow = memo(function BoardCardRow({ card, index, total, translationY, highlighted, accent, accentTint, accentBorderColor, columnName, canMovePrevColumn, canMoveNextColumn, onBeginDrag, onDragMove, onDragEnd, onDragCancel, onOpenMove, onReorder, onMoveColumn, scrollRef, pagerRef }: { card: Card; index: number; total: number; translationY: SharedValue<number>; highlighted?: boolean; accent?: string; accentTint?: string; accentBorderColor?: string; columnName?: string; canMovePrevColumn?: boolean; canMoveNextColumn?: boolean; onBeginDrag: (card: Card, index: number) => void; onDragMove: (dx: number, dy: number, pageX: number, pageY: number) => void; onDragEnd: () => void; onDragCancel: () => void; onOpenMove: (card: Card) => void; onReorder: (card: Card, index: number, direction: -1 | 1) => void; onMoveColumn?: (card: Card, direction: -1 | 1) => void; scrollRef: RefObject<ScrollView | null>; pagerRef: RefObject<FlatList<CarouselItem> | null> }) {
   const begin = useCallback(() => onBeginDrag(card, index), [card, index, onBeginDrag]);
   const openMove = useCallback(() => onOpenMove(card), [card, onOpenMove]);
   const moveEarlierOrLater = useCallback((direction: -1 | 1) => onReorder(card, index, direction), [card, index, onReorder]);
   const moveColumn = useCallback((direction: -1 | 1) => onMoveColumn?.(card, direction), [card, onMoveColumn]);
-  return <CardSurface card={card} index={index} total={total} translationY={translationY} highlighted={highlighted} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={columnName} canMovePrevColumn={canMovePrevColumn} canMoveNextColumn={canMoveNextColumn} onBeginDrag={begin} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={onDragCancel} onOpenMove={openMove} onReorder={moveEarlierOrLater} onMoveColumn={onMoveColumn ? moveColumn : undefined} scrollRef={scrollRef} pagerRef={pagerRef} frozen={frozen} activeDragCardId={activeDragCardId} />;
+  return <CardSurface card={card} index={index} total={total} translationY={translationY} highlighted={highlighted} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={columnName} canMovePrevColumn={canMovePrevColumn} canMoveNextColumn={canMoveNextColumn} onBeginDrag={begin} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={onDragCancel} onOpenMove={openMove} onReorder={moveEarlierOrLater} onMoveColumn={onMoveColumn ? moveColumn : undefined} scrollRef={scrollRef} pagerRef={pagerRef} />;
 });
 
 function reorder(items: Card[], from: number, to: number) { const next = [...items]; const [item] = next.splice(from, 1); next.splice(Math.max(0, Math.min(to, next.length)), 0, item); return next.map((card, position) => ({ ...card, position })); }
 
 export default function BoardScreen() {
-  'use no memo';
   const database = useSQLiteContext(); const { id, highlightColumnId, highlightCardId } = useLocalSearchParams<{ id: string; highlightColumnId?: string; highlightCardId?: string }>(); const repository = useMemo(() => createBoardRepository(database), [database]); const { tokens: theme } = useTheme();
   // The ONE source of truth for the column navigator dock's bottom clearance
   // (see below) — Screen must not ALSO reserve its own bottom safe-area inset
@@ -369,13 +300,6 @@ export default function BoardScreen() {
   const boardListRef = useRef<FlatList<CarouselItem>>(null); const scrollRef = useRef<ScrollView>(null); const scrollYRef = useRef(0); const viewportRef = useRef({ top: 0, height: 0 }); const layoutsRef = useRef<Record<string, LayoutRectangle>>({}); const placeholderYRef = useRef(0); const dragRef = useRef<DragState | null>(null); const lastDragPageYRef = useRef(0);
   const edgeDwellRef = useRef<-1 | 1 | null>(null); const edgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gestureTranslationX = useSharedValue(0); const gestureTranslationY = useSharedValue(0); const scrollCompensation = useSharedValue(0); const liftProgress = useSharedValue(0); const edgeGlowLeft = useSharedValue(0); const edgeGlowRight = useSharedValue(0);
-  // Which card is currently the live-dragged one, read by that card's own
-  // CardSurface via useAnimatedStyle to hide itself in place — a UI-thread-only
-  // reactive read, not a React prop, so setting it never re-renders (and can't
-  // tear down) the component whose native gesture is in the middle of that exact
-  // touch. See the freeze comment on CardSurface's memo comparator for why that
-  // matters here specifically.
-  const activeDragCardId = useSharedValue<string | null>(null);
   const animatedDragStyle = useAnimatedStyle(() => ({ transform: [{ translateX: gestureTranslationX.get() }, { translateY: gestureTranslationY.get() + scrollCompensation.get() }, { scale: 1 + liftProgress.get() * 0.022 }] }));
   const edgeGlowLeftStyle = useAnimatedStyle(() => ({ opacity: edgeGlowLeft.get() }));
   const edgeGlowRightStyle = useAnimatedStyle(() => ({ opacity: edgeGlowRight.get() }));
@@ -501,9 +425,9 @@ export default function BoardScreen() {
   // LayoutAnimation.configureNext, which had to be re-armed imperatively before every
   // mutation and couldn't be tuned per-element. Reduced motion gets an instant snap.
   const cardLayoutTransition = useMemo(() => reduceMotion ? undefined : LinearTransition.springify().damping(20).stiffness(220).mass(0.6).overshootClamping(1), [reduceMotion]);
-  const beginDrag = useCallback((card: Card, index: number) => { const column = currentColumnRef.current; const layout = layoutsRef.current[card.id]; if (!layout || dragRef.current || !column) return; const next = { card, sourceColumnId: column.id, destinationColumnId: column.id, fromIndex: index, toIndex: index, height: layout.height, startY: layout.y, overlayTop: 76 + layout.y - scrollYRef.current, startScrollY: scrollYRef.current }; activeDragCardId.set(card.id); gestureTranslationX.set(0); gestureTranslationY.set(0); scrollCompensation.set(0);
+  const beginDrag = useCallback((card: Card, index: number) => { const column = currentColumnRef.current; const layout = layoutsRef.current[card.id]; if (!layout || dragRef.current || !column) return; const next = { card, sourceColumnId: column.id, destinationColumnId: column.id, fromIndex: index, toIndex: index, height: layout.height, startY: layout.y, overlayTop: 76 + layout.y - scrollYRef.current, startScrollY: scrollYRef.current }; gestureTranslationX.set(0); gestureTranslationY.set(0); scrollCompensation.set(0);
     // ~150ms settle, minimal overshoot — communicates "picked up," not "bounced."
-    liftProgress.set(reduceMotion ? 0 : withSpring(1, { damping: 26, stiffness: 380, mass: 0.6 })); dragRef.current = next; setDrag(next); setError(null); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }, [activeDragCardId, gestureTranslationX, gestureTranslationY, liftProgress, reduceMotion, scrollCompensation]);
+    liftProgress.set(reduceMotion ? 0 : withSpring(1, { damping: 26, stiffness: 380, mass: 0.6 })); dragRef.current = next; setDrag(next); setError(null); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }, [gestureTranslationX, gestureTranslationY, liftProgress, reduceMotion, scrollCompensation]);
   // Insertion index is computed from the finger's absolute position against each
   // card's measured layout, not from the drag's start-relative delta: that stays
   // correct even after the board has paged to a different column mid-drag.
@@ -548,7 +472,7 @@ export default function BoardScreen() {
     const side = evaluateEdge(pageX);
     if (!side) { const viewport = viewportRef.current; const edge = 72; let scrollDelta = 0; if (pageY < viewport.top + edge) scrollDelta = -Math.ceil(10 * (1 - Math.max(0, pageY - viewport.top) / edge)); if (pageY > viewport.top + viewport.height - edge) scrollDelta = Math.ceil(10 * (1 - Math.max(0, viewport.top + viewport.height - pageY) / edge)); if (scrollDelta) scrollRef.current?.scrollTo({ y: Math.max(0, scrollYRef.current + scrollDelta), animated: false }); }
     evaluateTarget(pageY); }, [evaluateEdge, evaluateTarget, gestureTranslationX]);
-  const clearDrag = useCallback(() => { dragRef.current = null; setDrag(null); lastDragPageYRef.current = 0; clearEdgeDwell(); activeDragCardId.set(null); gestureTranslationX.set(0); gestureTranslationY.set(0); scrollCompensation.set(0); liftProgress.set(0); }, [activeDragCardId, clearEdgeDwell, gestureTranslationX, gestureTranslationY, liftProgress, scrollCompensation]);
+  const clearDrag = useCallback(() => { dragRef.current = null; setDrag(null); lastDragPageYRef.current = 0; clearEdgeDwell(); gestureTranslationX.set(0); gestureTranslationY.set(0); scrollCompensation.set(0); liftProgress.set(0); }, [clearEdgeDwell, gestureTranslationX, gestureTranslationY, liftProgress, scrollCompensation]);
   const finalizeDrag = useCallback(async (cancelled: boolean, targetIndex: number) => { const active = dragRef.current; if (!active) { clearDrag(); return; } if (cancelled || (active.destinationColumnId === active.sourceColumnId && targetIndex === active.fromIndex)) { clearDrag(); return; } const previousCards = cards; if (active.destinationColumnId !== active.sourceColumnId) {
       const destinationCards = cards.filter((card) => card.columnId === active.destinationColumnId && card.id !== active.card.id).sort((a, b) => a.position - b.position);
       const inserted = [...destinationCards]; inserted.splice(Math.max(0, Math.min(targetIndex, inserted.length)), 0, { ...active.card, columnId: active.destinationColumnId });
@@ -662,30 +586,26 @@ export default function BoardScreen() {
   const buildLaneRows = (column: Column, laneCards: Card[]): ReactNode[] => {
     const isSource = drag?.sourceColumnId === column.id;
     const isDestination = drag?.destinationColumnId === column.id;
-    if (!drag || (!isSource && !isDestination)) { const columnPosition = columns.findIndex((item) => item.id === column.id); return laneCards.map((card, index) => <Animated.View key={`card:${card.id}`} layout={cardLayoutTransition} entering={!reduceMotion && card.id === justAddedCardId ? FadeIn.duration(240) : undefined} onLayout={(event) => { layoutsRef.current[card.id] = event.nativeEvent.layout; }}><BoardCardRow card={card} index={index} total={laneCards.length} translationY={gestureTranslationY} highlighted={card.id === justAddedCardId} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={column.name} canMovePrevColumn={columnPosition > 0} canMoveNextColumn={columnPosition >= 0 && columnPosition < columns.length - 1} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} scrollRef={scrollRef} pagerRef={boardListRef} activeDragCardId={activeDragCardId} /></Animated.View>); }
+    if (!drag || (!isSource && !isDestination)) { const columnPosition = columns.findIndex((item) => item.id === column.id); return laneCards.map((card, index) => <Animated.View key={`card:${card.id}`} layout={cardLayoutTransition} entering={!reduceMotion && card.id === justAddedCardId ? FadeIn.duration(240) : undefined} onLayout={(event) => { layoutsRef.current[card.id] = event.nativeEvent.layout; }}><BoardCardRow card={card} index={index} total={laneCards.length} translationY={gestureTranslationY} highlighted={card.id === justAddedCardId} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={column.name} canMovePrevColumn={columnPosition > 0} canMoveNextColumn={columnPosition >= 0 && columnPosition < columns.length - 1} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} scrollRef={scrollRef} pagerRef={boardListRef} /></Animated.View>); }
     const rows: ReactNode[] = [];
     const displayCards = isSource ? laneCards.filter((card) => card.id !== drag.card.id) : laneCards;
     const placeholderIndex = isDestination ? drag.toIndex : undefined;
     const total = laneCards.length + (isDestination && !isSource ? 1 : 0);
     const placeholder = <Animated.View key={`placeholder:${drag.card.id}`} layout={cardLayoutTransition} onLayout={(event) => { placeholderYRef.current = event.nativeEvent.layout.y; }} style={[styles.placeholder, { height: drag.height, borderColor: accentBorderColor, backgroundColor: accentTint }]} />;
-    // The dragged card's own wrapper below is rendered with the EXACT SAME props
-    // (key, layout, entering, onLayout, no style) as every other card's wrapper in
-    // this loop, and its own index (drag.fromIndex) never changes for the rest of
-    // the gesture — proven via instrumentation that even a single differing prop
-    // (a style change, a moved array position, anything) reliably got this element
-    // torn down and recreated mid-gesture on this RN/Reanimated/RNGH combination,
-    // destroying the native recognizer mid-touch. `frozen` (CardSurface's memo
-    // comparator) and hiding it via activeDragCardId (a shared value CardSurface
-    // reads reactively, not a prop) are what actually keep it out of the reach of
-    // this render entirely — see both of those for the full explanation.
-    for (const card of laneCards) {
-      const isDragged = isSource && card.id === drag.card.id;
-      const trueIndex = laneCards.indexOf(card);
+    for (const card of displayCards) {
+      const trueIndex = laneCards.findIndex((item) => item.id === card.id);
       const filteredIndex = isSource && trueIndex > drag.fromIndex ? trueIndex - 1 : trueIndex;
-      if (!isDragged && isDestination && filteredIndex === placeholderIndex) rows.push(placeholder);
-      rows.push(<Animated.View key={`card:${card.id}`} layout={cardLayoutTransition} entering={!reduceMotion && card.id === justAddedCardId ? FadeIn.duration(240) : undefined} onLayout={(event) => { layoutsRef.current[card.id] = event.nativeEvent.layout; }}><BoardCardRow card={card} index={isDragged ? drag.fromIndex : filteredIndex} total={total} translationY={gestureTranslationY} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={column.name} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} scrollRef={scrollRef} pagerRef={boardListRef} frozen={isDragged} activeDragCardId={activeDragCardId} /></Animated.View>);
+      if (isDestination && filteredIndex === placeholderIndex) rows.push(placeholder);
+      rows.push(<Animated.View key={`card:${card.id}`} layout={cardLayoutTransition} onLayout={(event) => { layoutsRef.current[card.id] = event.nativeEvent.layout; }}><BoardCardRow card={card} index={trueIndex} total={total} translationY={gestureTranslationY} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={column.name} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} scrollRef={scrollRef} pagerRef={boardListRef} /></Animated.View>);
     }
     if (isDestination && placeholderIndex === displayCards.length) rows.push(placeholder);
+    // Must stay the same element TYPE (Animated.View) as the normal-flow card wrapper
+    // above, not a plain View — React only preserves a component instance across a
+    // re-render when both key AND type match. The instant drag activates, this same
+    // key moves from the plain map into this responderKeeper slot; if the type
+    // differed, React would unmount+remount it right then, destroying the native
+    // gesture recognizer mid-stream (drag would lift but never track movement again).
+    if (isSource) rows.push(<Animated.View key={`card:${drag.card.id}`} style={styles.responderKeeper}><BoardCardRow card={drag.card} index={drag.fromIndex} total={total} translationY={gestureTranslationY} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={column.name} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} scrollRef={scrollRef} pagerRef={boardListRef} /></Animated.View>);
     return rows;
   };
   return <Screen edges={['top', 'left', 'right']}><View style={styles.header}>
@@ -769,7 +689,7 @@ export default function BoardScreen() {
           </View>;
         }}
       />
-      {drag ? <Animated.View pointerEvents="none" style={[styles.dragLayer, { top: drag.overlayTop, left: (screenWidth - columnWidth) / 2 + spacing.md, width: columnWidth - spacing.xl }, animatedDragStyle]}><CardSurface card={drag.card} index={drag.fromIndex} total={Math.max(1, currentCards.length)} dragging interactive={false} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} scrollRef={scrollRef} pagerRef={boardListRef} /></Animated.View> : null}
+      {drag ? <Animated.View pointerEvents="none" style={[styles.dragLayer, { top: drag.overlayTop, left: (screenWidth - columnWidth) / 2 + spacing.md, width: columnWidth - spacing.xl }, animatedDragStyle]}><CardSurface card={drag.card} index={drag.fromIndex} total={Math.max(1, currentCards.length)} dragging interactive={false} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} /></Animated.View> : null}
       {drag ? <Animated.View pointerEvents="none" style={[styles.edgeGlow, styles.edgeGlowLeft, { backgroundColor: accentTint }, edgeGlowLeftStyle]} /> : null}
       {drag ? <Animated.View pointerEvents="none" style={[styles.edgeGlow, styles.edgeGlowRight, { backgroundColor: accentTint }, edgeGlowRightStyle]} /> : null}
       {board.showColumnNavigator ? <View onLayout={(event) => setNavigatorDockHeight(Math.ceil(event.nativeEvent.layout.height))} style={[styles.navigatorDock, { paddingBottom: Math.min(insets.bottom, spacing.sm) || spacing.sm }]}><ColumnNavigator columns={columns} cards={cards} columnStatus={columnStatus} columnCounts={columnCounts} columnIndex={columnIndex} reduceMotion={reduceMotion} accent={accent} onSelect={goToColumn} onAddColumn={openAddColumnSheet} /></View> : null}
@@ -822,7 +742,7 @@ const styles = StyleSheet.create({
   // edge so the two can't stack into an oversized gap.
   navigatorDock: { position: 'absolute', right: 0, bottom: 0, left: 0, zIndex: 10, backgroundColor: 'transparent', paddingHorizontal: spacing.md, paddingTop: spacing.lg }, navigatorSurface: { borderRadius: 20, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 4 }, navigator: { height: 44 }, navigatorContent: { position: 'relative', minHeight: 44, paddingHorizontal: spacing.md, alignItems: 'center', gap: spacing.xs }, navigatorIndicator: { position: 'absolute', bottom: 2, left: 0, width: 24, height: 2, borderRadius: 1 }, navigatorItem: { maxWidth: 176, minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.sm }, navigatorItemPressed: { opacity: 0.58 }, navigatorNameFrame: { maxWidth: 152, minHeight: 20, justifyContent: 'center' }, navigatorName: { maxWidth: 152, flexShrink: 1, fontSize: 14, lineHeight: 20 }, navigatorNameMeasure: { opacity: 0, fontWeight: '800' }, navigatorNameVisible: { position: 'absolute', right: 0, left: 0, fontWeight: '500', textAlign: 'center' }, navigatorNameSelected: { fontWeight: '800' }, navigatorPosition: { height: 16, fontSize: 10, lineHeight: 13, fontWeight: '600', textAlign: 'center', letterSpacing: 0.2 }, navigatorAddItem: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 15, borderWidth: 1, borderStyle: 'dashed' },
   addColumnFrame: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.xxs, borderRadius: 26, borderWidth: 1.5, borderStyle: 'dashed', paddingHorizontal: spacing.lg }, addColumnFrameEmpty: { marginHorizontal: spacing.md, marginVertical: spacing.md }, addColumnPressed: { opacity: 0.6 }, addColumnIcon: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 26, borderWidth: 1.5, borderStyle: 'dashed', marginBottom: spacing.xs }, addColumnTitle: { fontSize: 17, fontWeight: '700' }, addColumnCopy: { fontSize: 13, lineHeight: 18, textAlign: 'center', maxWidth: 200 },
-  card: { overflow: 'hidden', borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 }, cardHighlight: { zIndex: 1, borderRadius: 22, borderWidth: 2 }, cardMedia: { width: '100%', borderBottomWidth: StyleSheet.hairlineWidth }, cardBody: { padding: 20, gap: spacing.md }, cardPressed: { opacity: 0.78 }, cardDragging: { zIndex: 30, elevation: 12, shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 14, shadowOffset: { width: 0, height: 7 } }, cardTop: { minHeight: 48, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs }, cardOpen: { flex: 1, minWidth: 0, justifyContent: 'center' }, title: { fontSize: 20, fontWeight: '800', lineHeight: 26 }, dragHandle: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginTop: -spacing.xs, marginRight: -spacing.xs }, dotGrid: { width: 14, height: 20, flexDirection: 'row', flexWrap: 'wrap', alignContent: 'center', justifyContent: 'space-between', gap: 3 }, dot: { width: 4, height: 4, borderRadius: 2 }, preview: { marginTop: spacing.xs, fontSize: 15, lineHeight: 22 }, meta: { minHeight: 20, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm }, metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 }, metaText: { fontSize: 11, lineHeight: 15, fontWeight: '600' }, cardDivider: { height: StyleSheet.hairlineWidth }, cardControls: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }, move: { minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: spacing.sm, borderRadius: 12 }, moveText: { fontSize: 13, fontWeight: '700' }, reorderGroup: { height: 40, flexDirection: 'row', alignItems: 'center', overflow: 'hidden', borderRadius: 12 }, reorderButton: { width: 42, height: 40, alignItems: 'center', justifyContent: 'center' }, reorderDivider: { width: StyleSheet.hairlineWidth, height: 20 }, reorderButtonDisabled: { opacity: 0.26 }, reorderButtonPressed: { opacity: 0.55 }, controlPressed: { opacity: 0.62 }, placeholder: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 22 }, dragLayer: { position: 'absolute', zIndex: 50, elevation: 14 }, edgeGlow: { position: 'absolute', top: 0, bottom: 0, width: 28, zIndex: 40 }, edgeGlowLeft: { left: 0, borderTopRightRadius: 26, borderBottomRightRadius: 26 }, edgeGlowRight: { right: 0, borderTopLeftRadius: 26, borderBottomLeftRadius: 26 },
+  card: { overflow: 'hidden', borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 }, cardHighlight: { zIndex: 1, borderRadius: 22, borderWidth: 2 }, cardMedia: { width: '100%', borderBottomWidth: StyleSheet.hairlineWidth }, cardBody: { padding: 20, gap: spacing.md }, cardPressed: { opacity: 0.78 }, cardDragging: { zIndex: 30, elevation: 12, shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 14, shadowOffset: { width: 0, height: 7 } }, cardTop: { minHeight: 48, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs }, cardOpen: { flex: 1, minWidth: 0, justifyContent: 'center' }, title: { fontSize: 20, fontWeight: '800', lineHeight: 26 }, dragHandle: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginTop: -spacing.xs, marginRight: -spacing.xs }, dotGrid: { width: 14, height: 20, flexDirection: 'row', flexWrap: 'wrap', alignContent: 'center', justifyContent: 'space-between', gap: 3 }, dot: { width: 4, height: 4, borderRadius: 2 }, preview: { marginTop: spacing.xs, fontSize: 15, lineHeight: 22 }, meta: { minHeight: 20, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm }, metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 }, metaText: { fontSize: 11, lineHeight: 15, fontWeight: '600' }, cardDivider: { height: StyleSheet.hairlineWidth }, cardControls: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }, move: { minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: spacing.sm, borderRadius: 12 }, moveText: { fontSize: 13, fontWeight: '700' }, reorderGroup: { height: 40, flexDirection: 'row', alignItems: 'center', overflow: 'hidden', borderRadius: 12 }, reorderButton: { width: 42, height: 40, alignItems: 'center', justifyContent: 'center' }, reorderDivider: { width: StyleSheet.hairlineWidth, height: 20 }, reorderButtonDisabled: { opacity: 0.26 }, reorderButtonPressed: { opacity: 0.55 }, controlPressed: { opacity: 0.62 }, placeholder: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 22 }, responderKeeper: { position: 'absolute', top: 0, right: 0, left: 0, opacity: 0, zIndex: -1 }, dragLayer: { position: 'absolute', zIndex: 50, elevation: 14 }, edgeGlow: { position: 'absolute', top: 0, bottom: 0, width: 28, zIndex: 40 }, edgeGlowLeft: { left: 0, borderTopRightRadius: 26, borderBottomRightRadius: 26 }, edgeGlowRight: { right: 0, borderTopLeftRadius: 26, borderBottomLeftRadius: 26 },
   add: { position: 'absolute', left: '50%', marginLeft: -30, width: 60, height: 60, alignItems: 'center', justifyContent: 'center', borderRadius: 30, zIndex: 20, elevation: 8, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } }, addPressed: { opacity: 0.76, transform: [{ scale: 0.96 }] },
   retryButton: { alignSelf: 'center', minHeight: 44, paddingHorizontal: spacing.lg, alignItems: 'center', justifyContent: 'center', borderRadius: 12 }, retryButtonText: { fontWeight: '700', fontSize: 15 }, error: { color: '#fff', textAlign: 'center', padding: spacing.sm }, backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,23,0.3)' }, modal: { padding: spacing.lg, borderTopLeftRadius: 22, borderTopRightRadius: 22, gap: spacing.sm }, modalTitle: { fontSize: 20, fontWeight: '700' }, modalCopy: { marginBottom: spacing.sm }, option: { minHeight: 50, flexDirection: 'row', alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth }, optionText: { fontSize: 16, flex: 1 }, optionArrow: { fontSize: 25 },
   toastWrap: { position: 'absolute', right: 0, bottom: 96, left: 0, alignItems: 'center' }, toast: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 }, toastText: { fontSize: 14, fontWeight: '600' },

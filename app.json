@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/images/app_icon.png",
-      "bundleIdentifier": "com.larajulious.Chits"
+      "bundleIdentifier": "com.larajulious.chitsapp",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -21,7 +24,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "package": "com.larajulious.Chits"
+      "package": "com.larajulious.chitsapp"
     },
     "web": {
       "output": "static",
@@ -63,6 +66,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "304ddcfb-f959-4355-a163-5d6315e68c13"
+      }
     }
   }
 }

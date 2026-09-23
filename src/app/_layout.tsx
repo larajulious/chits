@@ -22,6 +22,7 @@ function ThemedApp() {
           <Stack.Screen name="unorganized" />
           <Stack.Screen name="board/[id]" />
           <Stack.Screen name="card/[id]" />
+          <Stack.Screen name="card/edit-content" />
         </Stack>
       </AppDrawerProvider>
     </AppDialogProvider>

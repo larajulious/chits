@@ -1,21 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
-import { GlassSurface } from '@/components/ui/glass-surface';
+import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
 import { spacing } from '@/constants/theme';
 
 export type ManagedColumn = { id: string; name: string; position: number };
@@ -63,8 +58,28 @@ export function ColumnManagementSheet({
   const [deleteCardCount, setDeleteCardCount] = useState<number | null>(null);
   const [destinationId, setDestinationId] = useState<string | null>(null);
   const wasVisible = useRef(false);
+  const nameInputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<FormSheetHandle>(null);
+  // Bumped (never read directly) whenever an in-session page switch should
+  // focus the name field — see the effect below. A ref read has to happen in
+  // an effect, not in a function reachable from render output like `back`
+  // (below), so page-switch handlers just request a focus via this counter
+  // instead of touching the ref themselves.
+  const [focusRequest, setFocusRequest] = useState(0);
   const currentColumn = columns[currentIndex];
   const destinations = useMemo(() => columns.filter((column) => column.id !== currentColumn?.id), [columns, currentColumn?.id]);
+
+  // The single trigger that focuses the name field — see the matching note in
+  // form-sheet.tsx. Both the "manage" and "add" pages share one TextInput ref
+  // (only one of them is ever mounted at a time), so this covers every place
+  // that field can become the active one: the sheet opening (via FormSheet's
+  // onModalShow below), and switching pages within an already-open sheet (via
+  // the focusRequest effect below).
+  const focusNameInput = () => requestAnimationFrame(() => nameInputRef.current?.focus());
+
+  useEffect(() => {
+    if (focusRequest > 0) focusNameInput();
+  }, [focusRequest]);
 
   useEffect(() => {
     if (visible && !wasVisible.current) {
@@ -75,6 +90,10 @@ export function ColumnManagementSheet({
       setError(null);
       setDeleteCardCount(null);
       setDestinationId(null);
+      // See the matching note on the edit-board-sheet reset effect — a
+      // reopened sheet must start scrolled to the top, not wherever it was
+      // left last time.
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
     }
     wasVisible.current = visible;
   }, [currentColumn?.id, currentColumn?.name, initialPage, visible]);
@@ -87,12 +106,14 @@ export function ColumnManagementSheet({
     setTouched(false);
     setError(null);
     setPage('manage');
+    setFocusRequest((request) => request + 1);
   };
   const openAdd = () => {
     setName('');
     setTouched(false);
     setError(null);
     setPage('add');
+    setFocusRequest((request) => request + 1);
   };
   const openDelete = async () => {
     if (!currentColumn || columns.length <= 1) return;
@@ -187,49 +208,48 @@ export function ColumnManagementSheet({
   const leftDisabled = currentIndex === 0 || busy;
   const rightDisabled = currentIndex === columns.length - 1 || busy;
 
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
-      <KeyboardAvoidingView
-        style={styles.backdrop}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
-      >
-        <Pressable accessibilityRole="button" accessibilityLabel="Close column settings" style={StyleSheet.absoluteFill} onPress={close} />
-        <SafeAreaView edges={['bottom']} style={[styles.safeArea, { backgroundColor: theme.surface }]}>
-          <GlassSurface style={[styles.sheet, { borderColor: theme.borderSubtle }]}>
-            <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
-            <View style={styles.header}>
-              <View style={styles.headerSide}>
-                {back ? (
-                  <Pressable accessibilityRole="button" accessibilityLabel="Go back" disabled={busy} onPress={back} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-                    <Ionicons accessible={false} name="chevron-back" size={22} color={theme.textPrimary} />
-                  </Pressable>
-                ) : null}
-              </View>
-              <Text accessibilityRole="header" numberOfLines={1} style={[styles.title, { color: theme.textPrimary }]}>{pageTitle}</Text>
-              <View style={[styles.headerSide, styles.headerSideRight]}>
-                <Pressable accessibilityRole="button" accessibilityLabel="Close" disabled={busy} onPress={close} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-                  <Ionicons accessible={false} name="close-outline" size={22} color={theme.textSecondary} />
-                </Pressable>
-              </View>
-            </View>
+  const header = (
+    <>
+      <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
+      <View style={styles.header}>
+        <View style={styles.headerSide}>
+          {back ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Go back" disabled={busy} onPress={back} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+              <Ionicons accessible={false} name="chevron-back" size={22} color={theme.textPrimary} />
+            </Pressable>
+          ) : null}
+        </View>
+        <Text accessibilityRole="header" numberOfLines={1} style={[styles.title, { color: theme.textPrimary }]}>{pageTitle}</Text>
+        <View style={[styles.headerSide, styles.headerSideRight]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close" disabled={busy} onPress={close} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+            <Ionicons accessible={false} name="close-outline" size={22} color={theme.textSecondary} />
+          </Pressable>
+        </View>
+      </View>
+    </>
+  );
 
-            <ScrollView
-              automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
-              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-              keyboardShouldPersistTaps="handled"
-              style={styles.scroll}
-              contentContainerStyle={styles.content}
-            >
-              {page === 'manage' && currentColumn ? (
+  return (
+    <FormSheet
+      ref={scrollRef}
+      visible={visible}
+      onRequestClose={close}
+      closeAccessibilityLabel="Close column settings"
+      onModalShow={focusNameInput}
+      maxHeightPercent={86}
+      header={header}
+      contentContainerStyle={styles.content}
+    >
+      {page === 'manage' && currentColumn ? (
                 <>
                   <Text nativeID="column-name-label" style={[styles.fieldLabel, { color: theme.textSecondary }]}>Column name</Text>
                   <TextInput
-                    autoFocus
+                    ref={nameInputRef}
                     accessibilityLabelledBy="column-name-label"
                     accessibilityLabel="Column name"
                     value={name}
                     onChangeText={(value) => { setName(value); setTouched(true); setError(null); }}
+                    onFocus={() => scrollRef.current?.requestVisible(nameInputRef)}
                     onSubmitEditing={() => void saveName()}
                     maxLength={MAX_COLUMN_NAME_LENGTH}
                     returnKeyType="done"
@@ -300,11 +320,12 @@ export function ColumnManagementSheet({
                   <Text style={[styles.context, { color: theme.textSecondary }]}>New columns are added to the end.</Text>
                   <Text nativeID="new-column-name-label" style={[styles.fieldLabel, { color: theme.textSecondary }]}>Column name</Text>
                   <TextInput
-                    autoFocus
+                    ref={nameInputRef}
                     accessibilityLabelledBy="new-column-name-label"
                     accessibilityLabel="New column name"
                     value={name}
                     onChangeText={(value) => { setName(value); setTouched(true); setError(null); }}
+                    onFocus={() => scrollRef.current?.requestVisible(nameInputRef)}
                     onSubmitEditing={() => void addColumn()}
                     maxLength={MAX_COLUMN_NAME_LENGTH}
                     returnKeyType="done"
@@ -376,26 +397,18 @@ export function ColumnManagementSheet({
                 </>
               ) : null}
 
-              {error ? <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
-            </ScrollView>
-          </GlassSurface>
-        </SafeAreaView>
-      </KeyboardAvoidingView>
-    </Modal>
+      {error ? <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
+    </FormSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,23,0.34)' },
-  safeArea: { width: '100%', maxHeight: '86%', flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
-  sheet: { flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth },
   handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginTop: spacing.xs },
   header: { minHeight: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.sm },
   headerSide: { width: 44, alignItems: 'flex-start' },
   headerSideRight: { alignItems: 'flex-end' },
   iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   title: { flex: 1, fontSize: 19, fontWeight: '700', textAlign: 'center' },
-  scroll: { flexShrink: 1 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
   context: { fontSize: 13, lineHeight: 18, marginBottom: spacing.md },
   sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.7, marginTop: spacing.sm, marginBottom: spacing.xs },

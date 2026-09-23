@@ -1,11 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
+import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,12 +11,11 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { useTheme } from '@/components/theme-provider';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
-import { GlassSurface } from '@/components/ui/glass-surface';
+import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
 import { AppHeader, IconButton, Screen } from '@/components/ui/primitives';
 import { BoardAppearanceFields } from '@/components/boards/board-appearance-fields';
 import { resolveBoardIcon, type BoardIconName } from '@/constants/board-appearance';
@@ -38,6 +35,13 @@ export default function BoardsScreen() {
   const messageRepository = useMemo(() => createMessageRepository(database), [database]);
   const { openDrawer } = useAppDrawer();
   const { tokens: theme } = useTheme();
+  // The floating bottom nav is absolutely positioned over this screen (see
+  // PHASE: REDESIGN CHITS BOTTOM NAVIGATION) rather than reserving its own flex
+  // space, so this screen's own scroll content has to reserve the matching
+  // clearance itself — the one place that number comes from.
+  const tabBarHeight = useBottomTabBarHeight();
+  const nameInputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<FormSheetHandle>(null);
   const [boards, setBoards] = useState<BoardSummary[]>([]);
   const [unorganizedCount, setUnorganizedCount] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
@@ -76,6 +80,10 @@ export default function BoardsScreen() {
     setAccent(null);
     setError(null);
     setCreateOpen(true);
+    // See PHASE: FIX BOTTOM SHEET KEYBOARD BEHAVIOR — a freshly opened sheet
+    // must never inherit a scroll position left over from the last time it
+    // was open.
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
   };
 
   const closeCreate = () => {
@@ -124,7 +132,7 @@ export default function BoardsScreen() {
       />
 
       {!ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : (
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.md }]}>
         <Text style={[styles.intro, { color: theme.textSecondary }]}>
           Keep related thoughts together and easy to find.
         </Text>
@@ -203,80 +211,68 @@ export default function BoardsScreen() {
       </ScrollView>
       )}
 
-      <Modal visible={createOpen} transparent animationType="slide" onRequestClose={closeCreate}>
-        <KeyboardAvoidingView
-          style={styles.modalBackdrop}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <Pressable accessibilityLabel="Close new board" accessibilityRole="button" style={StyleSheet.absoluteFill} onPress={closeCreate} />
-          <SafeAreaView
-            edges={['bottom']}
-            accessibilityViewIsModal
-            style={[styles.sheetSafeArea, { backgroundColor: theme.surface }]}
+      <FormSheet
+        ref={scrollRef}
+        visible={createOpen}
+        onRequestClose={closeCreate}
+        closeAccessibilityLabel="Close new board"
+        accessibilityViewIsModal
+        onModalShow={() => requestAnimationFrame(() => nameInputRef.current?.focus())}
+        contentContainerStyle={styles.sheetContent}
+      >
+        <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
+        <Text accessibilityRole="header" style={[styles.sheetTitle, { color: theme.textPrimary }]}>New board</Text>
+        <Text style={[styles.sheetIntro, { color: theme.textSecondary }]}>Give this collection a clear, memorable name.</Text>
+
+        <Text style={[styles.label, { color: theme.textSecondary }]}>Board name</Text>
+        <TextInput
+          ref={nameInputRef}
+          accessibilityLabel="Board name"
+          value={name}
+          onChangeText={(value) => {
+            setName(value);
+            setError(null);
+          }}
+          onFocus={() => scrollRef.current?.requestVisible(nameInputRef)}
+          placeholder="e.g. Tasks"
+          placeholderTextColor={theme.textMuted}
+          maxLength={80}
+          style={[styles.nameInput, { borderColor: theme.borderSubtle, color: theme.textPrimary, backgroundColor: theme.background }]}
+          returnKeyType="done"
+          onSubmitEditing={() => void createBoard()}
+        />
+
+        <Text style={[styles.optionalLabel, { color: theme.textMuted }]}>OPTIONAL PERSONALIZATION</Text>
+        <BoardAppearanceFields icon={icon} accent={accent} onIconChange={setIcon} onAccentChange={setAccent} />
+
+        {error ? <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
+
+        <View style={styles.actions}>
+          <Pressable accessibilityRole="button" onPress={closeCreate} disabled={saving} style={styles.secondary}>
+            <Text style={[styles.secondaryText, { color: theme.textSecondary }]}>Cancel</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !isNameValid || saving }}
+            onPress={() => void createBoard()}
+            disabled={!isNameValid || saving}
+            style={({ pressed }) => [
+              styles.primary,
+              { backgroundColor: theme.accent },
+              (!isNameValid || saving) && styles.disabled,
+              pressed && isNameValid && styles.pressed,
+            ]}
           >
-            <GlassSurface style={[styles.sheet, { borderColor: theme.borderSubtle }]}>
-              <ScrollView
-                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.sheetContent}
-              >
-                <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
-                <Text accessibilityRole="header" style={[styles.sheetTitle, { color: theme.textPrimary }]}>New board</Text>
-                <Text style={[styles.sheetIntro, { color: theme.textSecondary }]}>Give this collection a clear, memorable name.</Text>
-
-                <Text style={[styles.label, { color: theme.textSecondary }]}>Board name</Text>
-                <TextInput
-                  autoFocus
-                  accessibilityLabel="Board name"
-                  value={name}
-                  onChangeText={(value) => {
-                    setName(value);
-                    setError(null);
-                  }}
-                  placeholder="e.g. Tasks"
-                  placeholderTextColor={theme.textMuted}
-                  maxLength={80}
-                  style={[styles.nameInput, { borderColor: theme.borderSubtle, color: theme.textPrimary, backgroundColor: theme.background }]}
-                  returnKeyType="done"
-                  onSubmitEditing={() => void createBoard()}
-                />
-
-                <Text style={[styles.optionalLabel, { color: theme.textMuted }]}>OPTIONAL PERSONALIZATION</Text>
-                <BoardAppearanceFields icon={icon} accent={accent} onIconChange={setIcon} onAccentChange={setAccent} />
-
-                {error ? <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
-
-                <View style={styles.actions}>
-                  <Pressable accessibilityRole="button" onPress={closeCreate} disabled={saving} style={styles.secondary}>
-                    <Text style={[styles.secondaryText, { color: theme.textSecondary }]}>Cancel</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: !isNameValid || saving }}
-                    onPress={() => void createBoard()}
-                    disabled={!isNameValid || saving}
-                    style={({ pressed }) => [
-                      styles.primary,
-                      { backgroundColor: theme.accent },
-                      (!isNameValid || saving) && styles.disabled,
-                      pressed && isNameValid && styles.pressed,
-                    ]}
-                  >
-                    <Text style={[styles.primaryText, { color: theme.accentText }]}>{saving ? 'Creating…' : 'Create board'}</Text>
-                  </Pressable>
-                </View>
-              </ScrollView>
-            </GlassSurface>
-          </SafeAreaView>
-        </KeyboardAvoidingView>
-      </Modal>
+            <Text style={[styles.primaryText, { color: theme.accentText }]}>{saving ? 'Creating…' : 'Create board'}</Text>
+          </Pressable>
+        </View>
+      </FormSheet>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: spacing.md, paddingBottom: spacing.xl, flexGrow: 1 },
+  content: { padding: spacing.md, flexGrow: 1 },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   intro: { fontSize: 14, lineHeight: 20, marginBottom: spacing.md },
   unorganized: { minHeight: 76, flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: spacing.sm, borderWidth: StyleSheet.hairlineWidth, borderRadius: 18 },
@@ -297,9 +293,6 @@ const styles = StyleSheet.create({
   emptyCreateButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.lg, borderRadius: 12 },
   emptyCreateText: { fontWeight: '700', fontSize: 15 },
   pressed: { opacity: 0.58 },
-  modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,23,0.34)' },
-  sheetSafeArea: { flexShrink: 1, maxHeight: '100%', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
-  sheet: { flexShrink: 1, maxHeight: '100%', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth },
   sheetContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.md, gap: spacing.xs },
   handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginBottom: spacing.xs },
   sheetTitle: { fontSize: 22, fontWeight: '700' },
