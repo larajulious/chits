@@ -81,28 +81,38 @@ export function VideoPoster({ attachment, style }: { attachment: AttachmentLike;
   return <View style={[styles.media, style, { backgroundColor: theme.surfaceElevated }]}>{thumbnail ? <Image source={thumbnail} contentFit="cover" style={StyleSheet.absoluteFill} /> : <Ionicons accessible={false} name="videocam-outline" size={36} color={theme.textMuted} />}<View style={styles.videoPlay}><Ionicons accessible={false} name="play" size={23} color="#FFFFFF" /></View><View style={styles.durationBadge}><Text style={styles.durationText}>{formatDuration(attachment.duration)}</Text></View></View>;
 }
 
+const WAVEFORM_BAR_COUNT = 34;
+
+// No real amplitude data exists for recorded notes — this derives a stable,
+// attachment-specific bar pattern (not re-randomized per render/replay) so the
+// waveform reads as a genuine per-note shape rather than a generic pulse.
+function waveformBars(seed: string) {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  const bars: number[] = [];
+  for (let index = 0; index < WAVEFORM_BAR_COUNT; index += 1) {
+    hash = (hash * 1103515245 + 12345) >>> 0;
+    bars.push(4 + (hash % 1000) / 1000 * 14);
+  }
+  return bars;
+}
+
 function AudioPlayer({ attachment }: { attachment: AttachmentLike }) {
   const { tokens: theme } = useTheme();
   const player = useAudioPlayer(attachment.localUri, { updateInterval: 250 });
   const status = useAudioPlayerStatus(player);
   const [playerToken] = useState(() => Symbol('audio-player'));
+  const bars = useState(() => waveformBars(attachment.id))[0];
   const metadataDuration = (attachment.duration ?? 0) / 1000;
   const duration = status.duration || metadataDuration;
   const currentTime = Math.max(0, Math.min(status.currentTime, duration || status.currentTime));
   const progress = duration ? Math.min(1, currentTime / duration) : 0;
   const unavailable = Boolean(status.error);
+  const loading = !unavailable && (!status.isLoaded || status.isBuffering);
   const disabled = !status.isLoaded || unavailable;
-  const stateLabel = unavailable
-    ? 'Unavailable'
-    : !status.isLoaded || status.isBuffering
-      ? 'Loading'
-      : status.playing
-        ? 'Playing'
-        : status.didJustFinish
-          ? 'Finished'
-          : 'Ready';
   const progressMax = Math.max(1, Math.round(duration));
   const progressNow = Math.min(progressMax, Math.round(currentTime));
+  const playedBars = Math.round(progress * WAVEFORM_BAR_COUNT);
   useEffect(() => () => { if (activeAudio?.token === playerToken) activeAudio = null; }, [playerToken]);
   const toggle = () => {
     if (status.playing) { player.pause(); if (activeAudio?.token === playerToken) activeAudio = null; return; }
@@ -127,30 +137,27 @@ function AudioPlayer({ attachment }: { attachment: AttachmentLike }) {
     >
       <Ionicons
         accessible={false}
-        name={unavailable ? 'alert-circle-outline' : status.isBuffering ? 'ellipsis-horizontal' : status.playing ? 'pause' : 'play'}
+        name={unavailable ? 'alert-circle-outline' : loading ? 'ellipsis-horizontal' : status.playing ? 'pause' : 'play'}
         size={20}
         color={disabled ? theme.textMuted : theme.accentText}
-        style={!status.playing && !status.isBuffering && !unavailable ? styles.playIcon : undefined}
+        style={!status.playing && !loading && !unavailable ? styles.playIcon : undefined}
       />
     </Pressable>
     <View style={styles.audioBody}>
       <View style={styles.audioHeading}>
         <Text style={[styles.audioTitle, { color: theme.textPrimary }]}>Audio note</Text>
-        <Text style={[styles.audioState, { color: unavailable ? theme.textMuted : theme.accentStrong }]}>{stateLabel}</Text>
+        <Text style={[styles.audioState, { color: unavailable ? theme.textMuted : theme.accentStrong }]}>{unavailable ? 'Unavailable' : loading ? 'Loading' : formatSeconds(duration)}</Text>
       </View>
       <View
         accessible
         accessibilityRole="progressbar"
         accessibilityLabel="Audio progress"
         accessibilityValue={{ min: 0, max: progressMax, now: progressNow, text: `${formatSeconds(currentTime)} of ${formatSeconds(duration)}` }}
-        style={[styles.track, { backgroundColor: theme.borderSubtle }]}
+        style={styles.waveform}
       >
-        <View style={[styles.trackFill, { width: `${progress * 100}%`, backgroundColor: theme.accent }]} />
+        {bars.map((height, index) => <View key={index} style={[styles.waveformBar, { height, backgroundColor: index < playedBars ? theme.accent : theme.borderSubtle }]} />)}
       </View>
-      <View style={styles.audioTimes}>
-        <Text style={[styles.audioTime, { color: theme.textMuted }]}>{formatSeconds(currentTime)}</Text>
-        <Text style={[styles.audioTime, { color: theme.textMuted }]}>{formatSeconds(duration)}</Text>
-      </View>
+      <Text style={[styles.audioTime, { color: theme.textMuted }]}>{formatSeconds(currentTime)}</Text>
     </View>
   </View>;
 }
@@ -168,7 +175,7 @@ function AttachmentLoading({ attachment, style }: { attachment: AttachmentLike; 
   return <View accessibilityLabel={`${typeLabel(attachment)} loading`} style={[styles.unavailable, style, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name={icon} size={25} color={theme.textMuted} /></View>;
 }
 
-export function AttachmentContent({ attachment, accessibilityLabel, overlay, variant = 'chat', accentColor, onLongPress }: { attachment: AttachmentLike; accessibilityLabel?: string; overlay?: ReactNode; variant?: 'chat' | 'board' | 'detail'; accentColor?: string; onLongPress?: () => void }) {
+export function AttachmentContent({ attachment, accessibilityLabel, overlay, variant = 'chat', accentColor, onLongPress }: { attachment: AttachmentLike; accessibilityLabel?: string; overlay?: ReactNode; variant?: 'chat' | 'board' | 'detail' | 'thumbnail' | 'grid'; accentColor?: string; onLongPress?: () => void }) {
   const { tokens: theme } = useTheme();
   const { height: screenHeight } = useWindowDimensions();
   const available = useAttachmentAvailable(attachment.localUri);
@@ -186,7 +193,10 @@ export function AttachmentContent({ attachment, accessibilityLabel, overlay, var
   // value, so a very tall portrait photo never eats multiple screens' worth of chat on
   // any device; window dimensions are known synchronously, so this can't itself cause
   // a layout shift the way waiting on the image's own measurement would.
-  const mediaStyle = variant === 'board' ? [styles.media, styles.boardMedia] : variant === 'detail' ? [styles.media, styles.detailMedia, { aspectRatio }] : [styles.media, styles.chatMedia, { aspectRatio, maxHeight: Math.round(screenHeight * 0.6) }];
+  // 'thumbnail': a small fixed square (e.g. the Cards tab's compact right-side
+  // preview) — same fixed-box reasoning as 'board' above, just sized for a
+  // corner thumbnail rather than a full-width card top.
+  const mediaStyle = variant === 'board' ? [styles.media, styles.boardMedia] : variant === 'thumbnail' ? [styles.media, styles.thumbnailMedia] : variant === 'grid' ? [styles.media, styles.gridMedia] : variant === 'detail' ? [styles.media, styles.detailMedia, { aspectRatio }] : [styles.media, styles.chatMedia, { aspectRatio, maxHeight: Math.round(screenHeight * 0.6) }];
   if (available === null) return <AttachmentLoading attachment={attachment} style={mediaStyle} />;
   if (available === false || mediaError) return <Unavailable attachment={attachment} style={mediaStyle} />;
   if (attachment.type === 'photo') return <><View style={[mediaStyle, { backgroundColor: theme.surfaceElevated }]}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? 'Photo. Double tap to view fullscreen.'} accessibilityHint="Opens the photo fullscreen" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><Image source={attachment.localUri} contentFit="cover" transition={120} allowDownscaling onError={() => setMediaError(true)} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <PhotoViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
@@ -218,8 +228,8 @@ function AttachmentMessage({ message, attachment, focused, onLongPress }: { mess
   const messageMaxWidth = Math.min(520, Math.round(chatWidth * 0.8));
   return <Pressable accessible={false} onLongPress={() => onLongPress(message)} delayLongPress={350} style={({ pressed }) => [styles.attachmentMessage, { maxWidth: messageMaxWidth, backgroundColor: theme.surface, borderColor: focused ? theme.accentStrong : theme.borderSubtle }, focused && styles.focused, pressed && styles.pressed]}>
     <AttachmentContent attachment={attachment} accessibilityLabel={accessibilityLabel} overlay={visual && !message.text ? <MediaMetadata message={message} video={attachment.type === 'video'} onActions={() => onLongPress(message)} /> : null} />
-    {message.text ? <View style={[styles.descriptionSurface, visual && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.borderSubtle }]}><Text accessible={!visual} style={[styles.attachmentDescription, { color: theme.textPrimary }]}>{message.text}</Text><MessageMetadata message={message} inside onActions={() => onLongPress(message)} /></View> : null}
-    {!visual && !message.text ? <MessageMetadata message={message} inside onActions={() => onLongPress(message)} /> : null}
+    {message.text ? <View style={[styles.descriptionSurface, visual && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.borderSubtle }]}><Text accessible={!visual} style={[styles.attachmentDescription, { color: theme.textPrimary }]}>{message.text}</Text><MessageMetadata message={message} inside splitPills={attachment.type === 'audio'} onActions={() => onLongPress(message)} /></View> : null}
+    {!visual && !message.text ? <MessageMetadata message={message} inside splitPills={attachment.type === 'audio'} onActions={() => onLongPress(message)} /> : null}
   </Pressable>;
 }
 
@@ -242,6 +252,11 @@ const styles = StyleSheet.create({
   chatMedia: { minHeight: 170, maxHeight: 340 },
   detailMedia: { minHeight: 220, maxHeight: 520 },
   boardMedia: { height: 108 },
+  thumbnailMedia: { width: 68, height: 68, borderRadius: 10, overflow: 'hidden' },
+  // Fills its parent's own explicit size (the Attachments library grid gives
+  // each cell a computed square footprint) rather than a fixed pixel box —
+  // same fixed-box-not-aspectRatio reasoning as 'board'/'thumbnail' above.
+  gridMedia: { width: '100%', height: '100%', borderRadius: radii.compactCard, overflow: 'hidden' },
   videoPlay: { position: 'absolute', alignSelf: 'center', top: '50%', marginTop: -23, width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 23, backgroundColor: 'rgba(0,0,0,0.62)' },
   durationBadge: { position: 'absolute', right: spacing.xs, bottom: spacing.xs, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.7)' },
   durationText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
@@ -255,9 +270,8 @@ const styles = StyleSheet.create({
   audioHeading: { minHeight: 19, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.xs },
   audioTitle: { flexShrink: 1, fontSize: 14, lineHeight: 18, fontWeight: '700' },
   audioState: { fontSize: 11, lineHeight: 15, fontWeight: '700' },
-  track: { height: 5, overflow: 'hidden', borderRadius: 3 },
-  trackFill: { height: 5, borderRadius: 3 },
-  audioTimes: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  waveform: { height: 20, flexDirection: 'row', alignItems: 'center', gap: 2 },
+  waveformBar: { flex: 1, minWidth: 2, borderRadius: 1 },
   audioTime: { fontSize: 11, lineHeight: 14, fontVariant: ['tabular-nums'] },
   fileTile: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingTop: spacing.sm },
   fileIcon: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 11 },

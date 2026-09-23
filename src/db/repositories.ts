@@ -1,5 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type Board, type Message, type MessageType, type PageOptions, type TimelineEvent, type TimelineEventType, type TimelineItem, type TimelinePage, type TimelinePageOptions } from './types';
+import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type AttachmentFilterType, type AttachmentPage, type AttachmentPageOptions, type AttachmentSummary, type Board, type Message, type MessageType, type PageOptions, type TimelineEvent, type TimelineEventType, type TimelineItem, type TimelinePage, type TimelinePageOptions } from './types';
 
 const DEFAULT_PAGE_SIZE = 50;
 type MessageRow = { id: string; text: string | null; type: Message['type']; created_at: number; updated_at: number; archived_at: number | null; pinned: number; deleted_at: number | null };
@@ -42,6 +42,79 @@ const CARD_SUMMARY_SELECT_SQL = `SELECT c.id, c.column_id AS columnId, ${CARD_TI
         ORDER BY cm.position ASC, a.created_at ASC LIMIT 1
       )`;
 
+// The global Attachments library (see PHASE: GLOBAL ATTACHMENTS SCREEN): every
+// attachment across the whole app, from BOTH sources that own attachments —
+// a Chat message's own `attachments` (optionally organized into a card, via
+// card_messages) and a card's directly-attached `card_attachments` — unioned
+// into one flat, board/column/card-aware row shape so the screen never has to
+// query per-card or know which table an item actually lives in. Mirrors the
+// same "exclude archived/deleted" and "organized vs. not" rules used by
+// listUnorganizedSummaries/listAllCardSummaries above: a message whose card or
+// board has since been archived reverts to being treated as unorganized here
+// too, for the same reason it does everywhere else in the app.
+const ATTACHMENT_UNION_SQL = `
+  SELECT a.id AS id, 'message' AS source, a.type AS type, a.local_uri AS localUri, a.original_name AS originalName,
+    a.mime_type AS mimeType, a.size AS size, a.duration AS duration, a.width AS width, a.height AS height,
+    a.created_at AS createdAt, a.message_id AS messageId, m.text AS messageText,
+    c.id AS cardId, CASE WHEN c.id IS NOT NULL THEN (${CARD_TITLE_SQL}) ELSE NULL END AS cardTitle,
+    b.id AS boardId, b.name AS boardName, bc.id AS columnId, bc.name AS columnName
+  FROM attachments a
+  INNER JOIN messages m ON m.id = a.message_id
+  LEFT JOIN card_messages cm ON cm.message_id = a.message_id
+  LEFT JOIN cards c ON c.id = cm.card_id AND c.archived_at IS NULL
+  LEFT JOIN boards b ON b.id = c.board_id AND b.archived_at IS NULL
+  LEFT JOIN board_columns bc ON bc.id = c.column_id
+  WHERE m.deleted_at IS NULL AND m.archived_at IS NULL
+  UNION ALL
+  SELECT ca.id AS id, 'card' AS source, ca.type AS type, ca.local_uri AS localUri, ca.original_name AS originalName,
+    ca.mime_type AS mimeType, ca.size AS size, ca.duration AS duration, ca.width AS width, ca.height AS height,
+    ca.created_at AS createdAt, NULL AS messageId, NULL AS messageText,
+    c.id AS cardId, (${CARD_TITLE_SQL}) AS cardTitle,
+    b.id AS boardId, b.name AS boardName, bc.id AS columnId, bc.name AS columnName
+  FROM card_attachments ca
+  INNER JOIN cards c ON c.id = ca.card_id AND c.archived_at IS NULL
+  INNER JOIN boards b ON b.id = c.board_id AND b.archived_at IS NULL
+  INNER JOIN board_columns bc ON bc.id = c.column_id
+  WHERE ca.deleted_at IS NULL
+`;
+type AttachmentUnionRow = { id: string; source: 'message' | 'card'; type: MessageType; localUri: string; originalName: string | null; mimeType: string | null; size: number | null; duration: number | null; width: number | null; height: number | null; createdAt: number; messageId: string | null; messageText: string | null; cardId: string | null; cardTitle: string | null; boardId: string | null; boardName: string | null; columnId: string | null; columnName: string | null };
+const attachmentSummaryFromRow = (row: AttachmentUnionRow): AttachmentSummary => ({ id: row.id, source: row.source, type: row.type, localUri: row.localUri, originalName: row.originalName, mimeType: row.mimeType, size: row.size, duration: row.duration, width: row.width, height: row.height, createdAt: row.createdAt, messageId: row.messageId, cardId: row.cardId, cardTitle: row.cardTitle, boardId: row.boardId, boardName: row.boardName, columnId: row.columnId, columnName: row.columnName });
+function attachmentWhereClause(options: { type?: AttachmentFilterType; searchTerm?: string }) {
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+  if (options.type) { conditions.push('type = ?'); params.push(options.type); }
+  const term = options.searchTerm?.trim();
+  if (term) {
+    const like = `%${term.replace(/[%_]/g, '\\$&')}%`;
+    conditions.push(`(originalName LIKE ? ESCAPE '\\' OR cardTitle LIKE ? ESCAPE '\\' OR boardName LIKE ? ESCAPE '\\' OR columnName LIKE ? ESCAPE '\\' OR messageText LIKE ? ESCAPE '\\')`);
+    params.push(like, like, like, like, like);
+  }
+  return { where: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', params };
+}
+
+export function createAttachmentRepository(database: SQLiteDatabase) {
+  return {
+    async list(options: AttachmentPageOptions = {}): Promise<AttachmentPage> {
+      const limit = options.limit ?? 24;
+      const offset = options.offset ?? 0;
+      const { where, params } = attachmentWhereClause(options);
+      const rows = await database.getAllAsync<AttachmentUnionRow>(`
+        SELECT * FROM (${ATTACHMENT_UNION_SQL}) ${where}
+        ORDER BY createdAt DESC, id DESC
+        LIMIT ? OFFSET ?
+      `, ...params, limit + 1, offset);
+      const hasMore = rows.length > limit;
+      const items = (hasMore ? rows.slice(0, limit) : rows).map(attachmentSummaryFromRow);
+      return { items, hasMore };
+    },
+    async count(options: { type?: AttachmentFilterType; searchTerm?: string } = {}): Promise<number> {
+      const { where, params } = attachmentWhereClause(options);
+      const result = await database.getFirstAsync<{ count: number }>(`SELECT COUNT(*) AS count FROM (${ATTACHMENT_UNION_SQL}) ${where}`, ...params);
+      return result?.count ?? 0;
+    },
+  };
+}
+
 function newId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -56,7 +129,7 @@ export function createMessageRepository(database: SQLiteDatabase) {
     if (!messages.length) return messages;
     const ids = messages.map(({ id }) => id);
     const attachmentRows = await database.getAllAsync<AttachmentRow>(`SELECT * FROM attachments WHERE message_id IN (${ids.map(() => '?').join(', ')}) ORDER BY created_at ASC`, ...ids);
-    const organizationRows = await database.getAllAsync<{ messageId: string; boardId: string; boardName: string; columnName: string }>(`SELECT cm.message_id AS messageId, c.board_id AS boardId, b.name AS boardName, bc.name AS columnName FROM card_messages cm INNER JOIN cards c ON c.id = cm.card_id INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id WHERE cm.message_id IN (${ids.map(() => '?').join(', ')}) AND c.archived_at IS NULL AND b.archived_at IS NULL ORDER BY c.created_at ASC`, ...ids);
+    const organizationRows = await database.getAllAsync<{ messageId: string; boardId: string; boardName: string; columnId: string; columnName: string }>(`SELECT cm.message_id AS messageId, c.board_id AS boardId, b.name AS boardName, bc.id AS columnId, bc.name AS columnName FROM card_messages cm INNER JOIN cards c ON c.id = cm.card_id INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id WHERE cm.message_id IN (${ids.map(() => '?').join(', ')}) AND c.archived_at IS NULL AND b.archived_at IS NULL ORDER BY c.created_at ASC`, ...ids);
     const grouped = new Map<string, Attachment[]>();
     const organizationByMessage = new Map<string, (typeof organizationRows)[number]>();
     for (const organization of organizationRows) if (!organizationByMessage.has(organization.messageId)) organizationByMessage.set(organization.messageId, organization);
@@ -217,6 +290,39 @@ export function createMessageRepository(database: SQLiteDatabase) {
       const rows = await database.getAllAsync<MessageRow>(`SELECT m.* FROM messages m WHERE m.deleted_at IS NULL AND m.archived_at IS NULL AND NOT EXISTS (SELECT 1 FROM card_messages cm INNER JOIN cards c ON c.id = cm.card_id INNER JOIN boards b ON b.id = c.board_id WHERE cm.message_id = m.id AND c.archived_at IS NULL AND b.archived_at IS NULL) ORDER BY m.created_at DESC LIMIT ? OFFSET ?`, limit, offset);
       return withAttachments(rows);
     },
+    // Every thought that hasn't been organized into any board/card yet, in the
+    // same lightweight summary shape (counts, not full attachment rows) as
+    // createBoardRepository().listAllCardSummaries — together the two make up
+    // the full contents of the global Cards view (Boards | Cards switcher),
+    // which shows cards AND unorganized thoughts side by side, pinned or not.
+    listUnorganizedSummaries: (options: { searchTerm?: string } = {}) => {
+      const term = options.searchTerm?.trim();
+      const like = term ? `%${term.replace(/[%_]/g, '\\$&')}%` : null;
+      // previewMediaType/thumbnailUri/mediaDuration all resolve the SAME
+      // photo > video > audio priority pick (see the media_candidates CTE in
+      // listAllCardSummaries below) — there's only ever one source (this
+      // message's own attachments) for an unorganized thought, so a plain
+      // correlated subquery is enough; no card/card_attachments to union in
+      // yet since it isn't organized into a card at all.
+      const MEDIA_PRIORITY = `CASE a.type WHEN 'photo' THEN 1 WHEN 'video' THEN 2 WHEN 'audio' THEN 3 ELSE 9 END`;
+      return database.getAllAsync<{ id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailUri: string | null; mediaDuration: number | null; mediaCount: number }>(`
+        SELECT m.id, m.text, m.type, m.created_at AS createdAt, m.updated_at AS updatedAt, m.pinned,
+          (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id AND a.type = 'photo') AS photoCount,
+          (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id AND a.type = 'video') AS videoCount,
+          (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id AND a.type = 'file') AS fileCount,
+          (SELECT a.type FROM attachments a WHERE a.message_id = m.id ORDER BY a.created_at ASC LIMIT 1) AS firstAttachmentType,
+          (SELECT a.original_name FROM attachments a WHERE a.message_id = m.id ORDER BY a.created_at ASC LIMIT 1) AS firstAttachmentName,
+          (SELECT a.type FROM attachments a WHERE a.message_id = m.id AND a.type IN ('photo', 'video', 'audio') ORDER BY ${MEDIA_PRIORITY} ASC, a.created_at ASC LIMIT 1) AS previewMediaType,
+          (SELECT a.local_uri FROM attachments a WHERE a.message_id = m.id AND a.type IN ('photo', 'video', 'audio') ORDER BY ${MEDIA_PRIORITY} ASC, a.created_at ASC LIMIT 1) AS thumbnailUri,
+          (SELECT a.duration FROM attachments a WHERE a.message_id = m.id AND a.type IN ('photo', 'video', 'audio') ORDER BY ${MEDIA_PRIORITY} ASC, a.created_at ASC LIMIT 1) AS mediaDuration,
+          (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id AND a.type IN ('photo', 'video', 'audio')) AS mediaCount
+        FROM messages m
+        WHERE m.deleted_at IS NULL AND m.archived_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM card_messages cm INNER JOIN cards c ON c.id = cm.card_id INNER JOIN boards b ON b.id = c.board_id WHERE cm.message_id = m.id AND c.archived_at IS NULL AND b.archived_at IS NULL)
+          ${like ? `AND (m.text LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM attachments a WHERE a.message_id = m.id AND a.original_name LIKE ? ESCAPE '\\'))` : ''}
+        ORDER BY m.updated_at DESC
+      `, ...(like ? [like, like] : []));
+    },
     async countUnorganized() {
       const result = await database.getFirstAsync<{ count: number }>(`SELECT COUNT(*) AS count FROM messages m WHERE m.deleted_at IS NULL AND m.archived_at IS NULL AND NOT EXISTS (SELECT 1 FROM card_messages cm INNER JOIN cards c ON c.id = cm.card_id INNER JOIN boards b ON b.id = c.board_id WHERE cm.message_id = m.id AND c.archived_at IS NULL AND b.archived_at IS NULL)`);
       return result?.count ?? 0;
@@ -225,6 +331,23 @@ export function createMessageRepository(database: SQLiteDatabase) {
 }
 
 export function createBoardRepository(database: SQLiteDatabase) {
+  // See the comment on `deleteCard`/`detachCard` below — both user-facing
+  // actions ("Delete card" and "Move back to Unorganized") reduce to this
+  // exact same transaction, since card_messages is only the join between a
+  // card and its source Chat messages, never the messages themselves.
+  const removeCardOrganization = async (cardId: string) => {
+    let removableUris: string[] = [];
+    await database.withExclusiveTransactionAsync(async (transaction) => {
+      const attachments = await transaction.getAllAsync<{ local_uri: string }>('SELECT local_uri FROM card_attachments WHERE card_id = ?', cardId);
+      removableUris = attachments.map((row) => row.local_uri);
+      await transaction.runAsync('DELETE FROM card_attachments WHERE card_id = ?', cardId);
+      await transaction.runAsync('DELETE FROM card_comments WHERE card_id = ?', cardId);
+      await transaction.runAsync('DELETE FROM card_messages WHERE card_id = ?', cardId);
+      const result = await transaction.runAsync('DELETE FROM cards WHERE id = ?', cardId);
+      if (result.changes !== 1) throw new Error('That card is no longer available.');
+    });
+    return removableUris;
+  };
   return {
     listActive: () => database.getAllAsync<Board & { columnCount: number; cardCount: number }>(`
       SELECT b.id, b.name, b.icon, b.accent,
@@ -299,13 +422,19 @@ export function createBoardRepository(database: SQLiteDatabase) {
     // Returns the destination column alongside the created card ids so callers can
     // redirect straight to where the thoughts landed (see PHASE — REDIRECT TO BOARD
     // AFTER ADDING UNORGANIZED ITEM) without a second query to look the column back up.
-    async organizeMessages(boardId: string, messageIds: string[]): Promise<{ cardIds: string[]; columnId: string | null }> {
+    // `columnId`, when passed, is the column the caller already chose (see PHASE —
+    // CONTEXT-AWARE ADD TO BOARD); omitting it keeps the old behavior of landing in
+    // the board's first column, used only by the create-new-board shortcut where a
+    // fresh board has exactly one (its default) column anyway.
+    async organizeMessages(boardId: string, messageIds: string[], columnId?: string): Promise<{ cardIds: string[]; columnId: string | null }> {
       if (!messageIds.length) return { cardIds: [], columnId: null };
       const now = Date.now();
       const createdCardIds: string[] = [];
       let destinationColumnId: string | null = null;
       await database.withExclusiveTransactionAsync(async (transaction) => {
-        const column = await transaction.getFirstAsync<{ id: string; name: string }>('SELECT id, name FROM board_columns WHERE board_id = ? ORDER BY position ASC LIMIT 1', boardId);
+        const column = columnId
+          ? await transaction.getFirstAsync<{ id: string; name: string }>('SELECT id, name FROM board_columns WHERE id = ? AND board_id = ?', columnId, boardId)
+          : await transaction.getFirstAsync<{ id: string; name: string }>('SELECT id, name FROM board_columns WHERE board_id = ? ORDER BY position ASC LIMIT 1', boardId);
         if (!column) throw new Error('This board is not ready to receive thoughts.');
         const board = await transaction.getFirstAsync<{ id: string }>('SELECT id FROM boards WHERE id = ? AND archived_at IS NULL', boardId);
         if (!board) throw new Error('This board is no longer available.');
@@ -385,6 +514,70 @@ export function createBoardRepository(database: SQLiteDatabase) {
     // switching columns afterward is pure UI state with zero further queries.
     listBoardCardSummaries: (boardId: string, limit: number) => database.getAllAsync<CardSummaryRow>(
       `${CARD_SUMMARY_SELECT_SQL} WHERE c.board_id = ? AND c.archived_at IS NULL ORDER BY c.column_id ASC, c.position ASC LIMIT ?`, boardId, limit),
+    // The global Cards view (Boards | Cards switcher): every active card across
+    // every active board, flattened with its board/column context so the list
+    // needs no per-row follow-up query. Attachment counts are split by type
+    // (photo/video/file) and combine both a card's linked-message attachments
+    // and its own card_attachments, since both are things the user actually
+    // attached and expects to see reflected in the compact indicators. Most
+    // recently updated first — pinned cards are filtered out client-side into
+    // their own "Pinned" section rather than queried separately, since they're
+    // a subset of this same ordered result.
+    // A card counts as pinned if EITHER the card itself was pinned directly OR
+    // any thought organized into it is pinned in Chat — a pin made in Chat
+    // should surface in the Pinned section here too, not just a pin made on
+    // the card. See the matching rule for still-unorganized thoughts in
+    // createMessageRepository().listUnorganizedSummaries above, which uses the
+    // message's own pinned flag directly since there's no card yet to carry a
+    // separate pin state.
+    // Resolves each card's single primary media preview (see PHASE: MEDIA
+    // THUMBNAILS IN BOARDS > CARDS TAB) by priority photo > video > audio,
+    // across BOTH a card's linked-message attachments and its own directly-
+    // attached card_attachments — the two possible sources getCardPreviewMedia
+    // needs to consider are unioned here once, in SQL, so the UI layer never
+    // has to know or care which one a given card's preview came from.
+    // ROW_NUMBER()/COUNT() OVER are ordinary SQLite window functions (present
+    // since 3.25, long since bundled by expo-sqlite) — no extra per-card query
+    // needed to pick "the" winning candidate or count the rest.
+    listAllCardSummaries: (options: { searchTerm?: string } = {}) => {
+      const term = options.searchTerm?.trim();
+      const like = term ? `%${term.replace(/[%_]/g, '\\$&')}%` : null;
+      return database.getAllAsync<{ id: string; title: string; preview: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; updatedAt: number; pinned: number; photoCount: number; videoCount: number; fileCount: number; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailUri: string | null; mediaDuration: number | null; mediaCount: number | null }>(`
+        WITH card_media AS (
+          SELECT cm.card_id AS cardId, a.type AS mediaType, a.local_uri AS uri, a.duration AS duration, a.created_at AS createdAt,
+            CASE a.type WHEN 'photo' THEN 1 WHEN 'video' THEN 2 WHEN 'audio' THEN 3 ELSE 9 END AS priority
+          FROM card_messages cm INNER JOIN attachments a ON a.message_id = cm.message_id
+          WHERE a.type IN ('photo', 'video', 'audio')
+          UNION ALL
+          SELECT ca.card_id AS cardId, ca.type AS mediaType, ca.local_uri AS uri, ca.duration AS duration, ca.created_at AS createdAt,
+            CASE ca.type WHEN 'photo' THEN 1 WHEN 'video' THEN 2 ELSE 9 END AS priority
+          FROM card_attachments ca
+          WHERE ca.type IN ('photo', 'video')
+        ),
+        card_media_ranked AS (
+          SELECT *, ROW_NUMBER() OVER (PARTITION BY cardId ORDER BY priority ASC, createdAt ASC) AS rn,
+            COUNT(*) OVER (PARTITION BY cardId) AS mediaCount
+          FROM card_media
+        )
+        SELECT c.id, ${CARD_TITLE_SQL} AS title,
+          (SELECT m.text FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id ORDER BY cm.position ASC LIMIT 1) AS preview,
+          c.board_id AS boardId, b.name AS boardName, b.accent AS boardAccent,
+          c.column_id AS columnId, bc.name AS columnName,
+          c.created_at AS createdAt, c.updated_at AS updatedAt,
+          (c.pinned = 1 OR EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id AND m.pinned = 1)) AS pinned,
+          ((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id AND a.type = 'photo') + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.type = 'photo')) AS photoCount,
+          ((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id AND a.type = 'video') + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.type = 'video')) AS videoCount,
+          ((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id AND a.type = 'file') + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.type = 'file')) AS fileCount,
+          cmr.mediaType AS previewMediaType, cmr.uri AS thumbnailUri, cmr.duration AS mediaDuration, cmr.mediaCount AS mediaCount
+        FROM cards c
+        INNER JOIN boards b ON b.id = c.board_id
+        INNER JOIN board_columns bc ON bc.id = c.column_id
+        LEFT JOIN card_media_ranked cmr ON cmr.cardId = c.id AND cmr.rn = 1
+        WHERE c.archived_at IS NULL AND b.archived_at IS NULL
+        ${like ? `AND (${CARD_TITLE_SQL} LIKE ? ESCAPE '\\' OR b.name LIKE ? ESCAPE '\\' OR bc.name LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id AND m.text LIKE ? ESCAPE '\\'))` : ''}
+        ORDER BY c.updated_at DESC
+      `, ...(like ? [like, like, like, like] : []));
+    },
     async addColumn(boardId: string, name: string) {
       const normalizedName = name.trim();
       if (!normalizedName) throw new Error('Column name can’t be empty.');
@@ -492,23 +685,37 @@ export function createBoardRepository(database: SQLiteDatabase) {
     // Archiving a card deliberately does not touch card_comments or card_attachments
     // — both are preserved, matching the same recoverable-hide semantics as the
     // card itself.
-    // Returns the deleted attachments' local_uris so the caller can unlink the
-    // actual files (this layer only owns the DB; see card-attachment-storage for
-    // the file lifecycle) — mirrors messageRepository.deletePermanently's
-    // removableUris pattern.
-    async deleteCard(cardId: string) {
-      let removableUris: string[] = [];
-      await database.withExclusiveTransactionAsync(async (transaction) => {
-        const attachments = await transaction.getAllAsync<{ local_uri: string }>('SELECT local_uri FROM card_attachments WHERE card_id = ?', cardId);
-        removableUris = attachments.map((row) => row.local_uri);
-        await transaction.runAsync('DELETE FROM card_attachments WHERE card_id = ?', cardId);
-        await transaction.runAsync('DELETE FROM card_comments WHERE card_id = ?', cardId);
-        await transaction.runAsync('DELETE FROM card_messages WHERE card_id = ?', cardId);
-        const result = await transaction.runAsync('DELETE FROM cards WHERE id = ?', cardId);
-        if (result.changes !== 1) throw new Error('That card is no longer available.');
-      });
-      return removableUris;
-    },
+    // Returns the removed card_attachments' local_uris so the caller can unlink
+    // the actual files (this layer only owns the DB; see card-attachment-storage
+    // for the file lifecycle) — mirrors messageRepository.deletePermanently's
+    // removableUris pattern. Shared by deleteCard AND detachCard below: card_messages
+    // rows are only the JOIN between a card and its source Chat messages, never
+    // the messages themselves, so removing a card — whether the user frames that
+    // as "Delete card" or "Move back to Unorganized" — is the exact same
+    // transaction either way. Deliberately aliased rather than duplicated so the
+    // two user-facing actions can never silently drift apart.
+    deleteCard: removeCardOrganization,
+    // "Move back to Unorganized" (see PHASE: DETACH CARD FROM BOARD / RETURN TO
+    // UNORGANIZED) — removes the card as an organizational object while leaving
+    // its linked Chat message(s) completely untouched (pinned state, text,
+    // attachments, created date all preserved, since nothing in the messages
+    // table is ever written). Once card_messages rows are gone, those messages
+    // immediately qualify for messageRepository.listUnorganized()/
+    // countUnorganized() again with zero further work — Unorganized is derived
+    // from the absence of an active card relationship, never a stored flag.
+    detachCard: removeCardOrganization,
+    // Lightweight counts for the "Move back to Unorganized" confirmation copy —
+    // how many source Chits are linked, and how much card-only data
+    // (comments/attachments) would be discarded — without loading any of that
+    // data in full. For callers that don't already have a card's messages/
+    // comments/attachments in memory (the Cards tab); Card Details already has
+    // them loaded and reads its own state directly instead of calling this.
+    getCardDetachPreview: (cardId: string) => database.getFirstAsync<{ messageCount: number; commentCount: number; attachmentCount: number }>(`
+      SELECT
+        (SELECT COUNT(*) FROM card_messages WHERE card_id = ?) AS messageCount,
+        (SELECT COUNT(*) FROM card_comments WHERE card_id = ? AND deleted_at IS NULL) AS commentCount,
+        (SELECT COUNT(*) FROM card_attachments WHERE card_id = ?) AS attachmentCount
+    `, cardId, cardId, cardId),
     // Comments are structurally separate from messages/timeline_events by design —
     // they never appear in Chat history or create Chits talk-back events.
     listCardComments: (cardId: string) => database.getAllAsync<{ id: string; cardId: string; text: string; createdAt: number; updatedAt: number }>('SELECT id, card_id AS cardId, text, created_at AS createdAt, updated_at AS updatedAt FROM card_comments WHERE card_id = ? AND deleted_at IS NULL ORDER BY created_at ASC', cardId),

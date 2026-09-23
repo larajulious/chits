@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -59,35 +59,53 @@ const thumbStyles = StyleSheet.create({
   thumbPlay: { position: 'absolute', width: 18, height: 18, borderRadius: 9, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
 });
 
-function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCard, busy, onClose, onPick, onCreateAndAdd }: {
+type ColumnOption = { id: string; name: string };
+
+// `lockedBoard` set (triggered from inside a board, e.g. Board Details) skips board
+// selection entirely and opens straight into "Choose a column" for that board — see
+// PHASE — CONTEXT-AWARE ADD TO BOARD. `lockedBoard` unset (triggered from
+// Unorganized/search/other global actions, where no board is already in scope)
+// preserves the original board-first flow, just with a column step appended before
+// the item actually lands, so both paths end the same way through `onPickColumn`.
+function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCard, busy, lockedBoard, selectedBoard, columns, columnsLoading, onClose, onSelectBoard, onBackToBoards, onPickColumn, onCreateAndAdd, onCreateColumn }: {
   visible: boolean;
   boards: BoardSummary[];
   recentBoardIds: string[];
   selectedCount: number;
   forCard: boolean;
   busy: boolean;
+  lockedBoard: BoardSummary | null;
+  selectedBoard: BoardSummary | null;
+  columns: ColumnOption[] | null;
+  columnsLoading: boolean;
   onClose: () => void;
-  onPick: (board: BoardSummary) => void;
+  onSelectBoard: (board: BoardSummary) => void;
+  onBackToBoards: () => void;
+  onPickColumn: (columnId: string) => void;
   onCreateAndAdd: (name: string) => Promise<void>;
+  onCreateColumn: (name: string) => Promise<void>;
 }) {
   const { tokens: theme } = useTheme();
-  const [mode, setMode] = useState<'list' | 'create'>('list');
+  const [mode, setMode] = useState<'board' | 'board-create' | 'column' | 'column-create'>(lockedBoard ? 'column' : 'board');
   const [search, setSearch] = useState('');
   const [createName, setCreateName] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [columnName, setColumnName] = useState('');
+  const [columnError, setColumnError] = useState<string | null>(null);
+  const [creatingColumn, setCreatingColumn] = useState(false);
   const [prevVisible, setPrevVisible] = useState(visible);
   if (visible !== prevVisible) {
     setPrevVisible(visible);
-    if (visible) { setMode('list'); setSearch(''); setCreateName(''); setCreateError(null); }
+    if (visible) { setMode(lockedBoard ? 'column' : 'board'); setSearch(''); setCreateName(''); setCreateError(null); setColumnName(''); setColumnError(null); }
   }
 
-  const close = () => { if (!busy && !creating) onClose(); };
+  const close = () => { if (!busy && !creating && !creatingColumn) onClose(); };
   const query = search.trim();
   const filtered = query ? boards.filter((board) => board.name.toLowerCase().includes(query.toLowerCase())) : boards;
   const recentBoards = query ? [] : recentBoardIds.map((id) => boards.find((board) => board.id === id)).filter((board): board is BoardSummary => Boolean(board));
 
-  const beginCreate = (prefill: string) => { setCreateName(prefill); setCreateError(null); setMode('create'); };
+  const beginCreate = (prefill: string) => { setCreateName(prefill); setCreateError(null); setMode('board-create'); };
   const submitCreate = async () => {
     const trimmed = createName.trim();
     if (!trimmed || creating) return;
@@ -97,15 +115,27 @@ function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCa
     finally { setCreating(false); }
   };
 
+  const pickBoard = (board: BoardSummary) => { setMode('column'); onSelectBoard(board); };
+  const backToBoards = () => { setMode('board'); onBackToBoards(); };
+  const beginCreateColumn = () => { setColumnName(''); setColumnError(null); setMode('column-create'); };
+  const submitCreateColumn = async () => {
+    const trimmed = columnName.trim();
+    if (!trimmed || creatingColumn) return;
+    setCreatingColumn(true); setColumnError(null);
+    try { await onCreateColumn(trimmed); setMode('column'); }
+    catch (cause) { setColumnError(cause instanceof Error ? cause.message : 'Chits could not create that column.'); }
+    finally { setCreatingColumn(false); }
+  };
+
   return <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
     <KeyboardAvoidingView style={sheetStyles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <Pressable accessibilityRole="button" accessibilityLabel="Close" style={StyleSheet.absoluteFill} onPress={close} />
       <SafeAreaView edges={['bottom']} accessibilityViewIsModal style={[sheetStyles.sheetSafeArea, { backgroundColor: theme.surface }]}>
         <GlassSurface style={[sheetStyles.sheet, { borderColor: theme.borderSubtle }]}>
           <View style={[sheetStyles.handle, { backgroundColor: theme.borderSubtle }]} />
-          {mode === 'create' ? <>
+          {mode === 'board-create' ? <>
             <View style={sheetStyles.headerRow}>
-              <IconButton label="Back" onPress={() => setMode('list')}><Text style={[sheetStyles.backIcon, { color: theme.textPrimary }]}>‹</Text></IconButton>
+              <IconButton label="Back" onPress={() => setMode('board')}><Text style={[sheetStyles.backIcon, { color: theme.textPrimary }]}>‹</Text></IconButton>
               <Text accessibilityRole="header" style={[sheetStyles.title, { color: theme.textPrimary }]}>New board</Text>
               <View style={sheetStyles.headerSpacer} />
             </View>
@@ -117,6 +147,44 @@ function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCa
                 <Text style={[sheetStyles.primaryButtonText, { color: theme.accentText }]}>{creating ? 'Creating…' : `Create and add ${pluralize(selectedCount, 'note')}`}</Text>
               </Pressable>
             </View>
+          </> : mode === 'column' || mode === 'column-create' ? <>
+            <View style={sheetStyles.headerRow}>
+              {lockedBoard ? null : <IconButton label="Back" onPress={mode === 'column-create' ? () => setMode('column') : backToBoards}><Text style={[sheetStyles.backIcon, { color: theme.textPrimary }]}>‹</Text></IconButton>}
+              <View style={sheetStyles.headerCopy}>
+                <Text accessibilityRole="header" style={[sheetStyles.title, { color: theme.textPrimary }]}>{mode === 'column-create' ? 'New column' : 'Choose a column'}</Text>
+                <Text style={[sheetStyles.subtitle, { color: theme.textSecondary }]}>{mode === 'column-create' ? `Add a column to ${selectedBoard?.name ?? 'this board'}.` : `${selectedBoard?.name ?? 'This board'} · choose where to place the selected note${selectedCount === 1 ? '' : 's'}.`}</Text>
+              </View>
+              <IconButton label="Close" onPress={close}><Ionicons accessible={false} name="close" size={22} color={theme.textPrimary} /></IconButton>
+            </View>
+
+            {mode === 'column-create' ? (
+              <View style={sheetStyles.createBody}>
+                <Text style={[sheetStyles.label, { color: theme.textSecondary }]}>Column name</Text>
+                <TextInput autoFocus value={columnName} onChangeText={(value) => { setColumnName(value); setColumnError(null); }} placeholder="e.g. To do" placeholderTextColor={theme.textMuted} maxLength={60} returnKeyType="done" onSubmitEditing={() => void submitCreateColumn()} style={[sheetStyles.nameInput, { borderColor: theme.borderSubtle, color: theme.textPrimary, backgroundColor: theme.background }]} />
+                {columnError ? <Text accessibilityRole="alert" style={[sheetStyles.error, { color: theme.danger }]}>{columnError}</Text> : null}
+                <Pressable accessibilityRole="button" disabled={!columnName.trim() || creatingColumn} onPress={() => void submitCreateColumn()} style={[sheetStyles.primaryButton, { backgroundColor: theme.accent }, (!columnName.trim() || creatingColumn) && sheetStyles.disabled]}>
+                  <Text style={[sheetStyles.primaryButtonText, { color: theme.accentText }]}>{creatingColumn ? 'Creating…' : 'Create column'}</Text>
+                </Pressable>
+              </View>
+            ) : columnsLoading ? (
+              <View style={sheetStyles.emptyWrap}><ActivityIndicator color={theme.accent} /></View>
+            ) : !columns || columns.length === 0 ? (
+              <View style={sheetStyles.emptyWrap}>
+                <View style={[sheetStyles.emptyMark, { backgroundColor: theme.accentSoft }]}><Ionicons accessible={false} name="albums-outline" size={28} color={theme.accentStrong} /></View>
+                <Text style={[sheetStyles.emptyTitle, { color: theme.textPrimary }]}>No columns yet</Text>
+                <Text style={[sheetStyles.emptyDescription, { color: theme.textSecondary }]}>{selectedBoard?.name ?? 'This board'} doesn’t have a column yet.</Text>
+                <Pressable accessibilityRole="button" onPress={beginCreateColumn} style={[sheetStyles.primaryButton, sheetStyles.emptyPrimary, { backgroundColor: theme.accent }]}>
+                  <Text style={[sheetStyles.primaryButtonText, { color: theme.accentText }]}>Create column</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" onPress={close} style={sheetStyles.emptyCancel}>
+                  <Text style={[sheetStyles.secondaryText, { color: theme.textSecondary }]}>Cancel</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={sheetStyles.listContent}>
+                {columns.map((column) => <ColumnRow key={column.id} name={column.name} disabled={busy} onPress={() => onPickColumn(column.id)} />)}
+              </ScrollView>
+            )}
           </> : <>
             <View style={sheetStyles.headerRow}>
               <View style={sheetStyles.headerCopy}>
@@ -162,10 +230,10 @@ function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCa
                   <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={sheetStyles.listContent}>
                     {recentBoards.length > 0 ? <>
                       <Text style={[sheetStyles.sectionLabel, { color: theme.textMuted }]}>RECENT</Text>
-                      {recentBoards.map((board) => <BoardRow key={`recent-${board.id}`} board={board} disabled={busy} onPress={() => onPick(board)} />)}
+                      {recentBoards.map((board) => <BoardRow key={`recent-${board.id}`} board={board} disabled={busy} onPress={() => pickBoard(board)} />)}
                       <Text style={[sheetStyles.sectionLabel, { color: theme.textMuted }]}>ALL BOARDS</Text>
                     </> : null}
-                    {filtered.map((board) => <BoardRow key={board.id} board={board} disabled={busy} onPress={() => onPick(board)} />)}
+                    {filtered.map((board) => <BoardRow key={board.id} board={board} disabled={busy} onPress={() => pickBoard(board)} />)}
                   </ScrollView>
                 )}
               </View>
@@ -189,16 +257,35 @@ function BoardRow({ board, disabled, onPress }: { board: BoardSummary; disabled:
   </Pressable>;
 }
 
+function ColumnRow({ name, disabled, onPress }: { name: string; disabled: boolean; onPress: () => void }) {
+  const { tokens: theme } = useTheme();
+  return <Pressable accessibilityRole="button" accessibilityLabel={name} disabled={disabled} onPress={onPress} style={({ pressed }) => [sheetStyles.boardRow, { borderBottomColor: theme.borderSubtle }, pressed && sheetStyles.pressed]}>
+    <View style={[sheetStyles.boardMark, { backgroundColor: theme.accentSoft }]}><Ionicons accessible={false} name="albums-outline" size={17} color={theme.accentStrong} /></View>
+    <View style={sheetStyles.boardCopy}>
+      <Text numberOfLines={1} style={[sheetStyles.boardName, { color: theme.textPrimary }]}>{name}</Text>
+    </View>
+    <Ionicons accessible={false} name="chevron-forward" size={18} color={theme.textMuted} />
+  </Pressable>;
+}
+
 export default function UnorganizedScreen() {
   const database = useSQLiteContext();
   const { tokens: theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const { addToCard, messageId } = useLocalSearchParams<{ addToCard?: string; messageId?: string }>();
+  const { addToCard, messageId, boardId } = useLocalSearchParams<{ addToCard?: string; messageId?: string; boardId?: string }>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [boards, setBoards] = useState<BoardSummary[]>([]);
   const [recentBoardIds, setRecentBoardIds] = useState<string[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // The board this "Add to board" pass targets: pinned to the triggering board when
+  // `boardId` arrives (e.g. from Board Details, which already has board context and
+  // should skip straight to column selection), otherwise set once the user picks a
+  // board from the generic list — see PHASE — CONTEXT-AWARE ADD TO BOARD.
+  const contextBoard = boardId ? boards.find((board) => board.id === boardId) ?? null : null;
+  const [sheetBoard, setSheetBoard] = useState<BoardSummary | null>(null);
+  const [sheetColumns, setSheetColumns] = useState<ColumnOption[] | null>(null);
+  const [sheetColumnsLoading, setSheetColumnsLoading] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeBoard, setMergeBoard] = useState<Board | null>(null);
   const [mergeColumns, setMergeColumns] = useState<{ id: string; name: string }[]>([]);
@@ -266,15 +353,35 @@ export default function UnorganizedScreen() {
     const query = params.toString();
     router.push(`/board/${boardId}${query ? `?${query}` : ''}`);
   };
-  const organize = async (board: BoardSummary) => {
+  // Loads the columns for whichever board is now in play for the sheet — either the
+  // locked context board (opened immediately) or a board the user just picked from
+  // the generic list — so the sheet can move on to "Choose a column" either way.
+  const loadColumnsFor = useCallback(async (board: BoardSummary) => {
+    setSheetBoard(board); setSheetColumns(null); setSheetColumnsLoading(true);
+    try { setSheetColumns(await createBoardRepository(database).listColumns(board.id)); }
+    finally { setSheetColumnsLoading(false); }
+  }, [database]);
+  const openAddToBoardSheet = () => {
+    if (contextBoard) void loadColumnsFor(contextBoard);
+    else { setSheetBoard(null); setSheetColumns(null); }
+    setSheetOpen(true);
+  };
+  const onBackToBoards = () => { setSheetBoard(null); setSheetColumns(null); };
+  const onPickColumn = async (columnId: string) => {
+    if (!sheetBoard) return;
     setWorking(true); setError(null);
     try {
-      const { cardIds, columnId } = await createBoardRepository(database).organizeMessages(board.id, selected);
-      await createBoardRepository(database).markOpened('board', board.id);
+      const { cardIds } = await createBoardRepository(database).organizeMessages(sheetBoard.id, selected, columnId);
+      await createBoardRepository(database).markOpened('board', sheetBoard.id);
       setSheetOpen(false); setSelected([]);
-      goToDestination(board.id, columnId, cardIds);
+      goToDestination(sheetBoard.id, columnId, cardIds);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Couldn’t add to board. Try again.'); }
     finally { setWorking(false); }
+  };
+  const onCreateColumn = async (name: string) => {
+    if (!sheetBoard) return;
+    await createBoardRepository(database).addColumn(sheetBoard.id, name);
+    await loadColumnsFor(sheetBoard);
   };
   const createBoardAndOrganize = async (name: string) => {
     const board = await createBoardRepository(database).create({ name });
@@ -334,7 +441,7 @@ export default function UnorganizedScreen() {
           <View style={styles.actionButtons}>
             {!addToCard ? <Pressable disabled={selected.length < 2 || working} accessibilityRole="button" onPress={() => { setMergeBoard(null); setMergeColumnId(null); setMergeTitle(''); setMergeOpen(true); }} style={styles.textAction}><Text style={[styles.mergeText, (selected.length < 2 || working) && styles.disabledText]}>Merge</Text></Pressable> : null}
             <Pressable disabled={working} onPress={() => void archive()} style={styles.textAction}><Text style={[styles.archiveText, working && styles.disabledText]}>Archive</Text></Pressable>
-            <Pressable disabled={working} onPress={() => { if (addToCard) void addToExistingCard(); else setSheetOpen(true); }} style={[styles.primaryPill, working && styles.disabled]}>
+            <Pressable disabled={working} onPress={() => { if (addToCard) void addToExistingCard(); else openAddToBoardSheet(); }} style={[styles.primaryPill, working && styles.disabled]}>
               <Text style={styles.primaryPillText}>{addToCard ? 'Add to card' : 'Add to board'}</Text>
             </Pressable>
           </View>
@@ -356,9 +463,16 @@ export default function UnorganizedScreen() {
       selectedCount={selected.length}
       forCard={Boolean(addToCard)}
       busy={working}
+      lockedBoard={contextBoard}
+      selectedBoard={sheetBoard}
+      columns={sheetColumns}
+      columnsLoading={sheetColumnsLoading}
       onClose={() => setSheetOpen(false)}
-      onPick={(board) => void organize(board)}
+      onSelectBoard={(board) => void loadColumnsFor(board)}
+      onBackToBoards={onBackToBoards}
+      onPickColumn={(columnId) => void onPickColumn(columnId)}
       onCreateAndAdd={createBoardAndOrganize}
+      onCreateColumn={onCreateColumn}
     />
 
     <Modal visible={mergeOpen} transparent animationType="slide" onRequestClose={() => !working && setMergeOpen(false)}><View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => !working && setMergeOpen(false)} /><View style={styles.modal}><Text style={styles.modalTitle}>Merge {selected.length} related thoughts</Text>{!mergeBoard ? <><Text style={styles.modalCopy}>Choose a board.</Text>{boards.map((board) => <Pressable key={board.id} onPress={() => void chooseMergeBoard(board)} style={styles.board}><View style={[styles.boardDot, { backgroundColor: board.accent ?? theme.accent }]} /><Text style={styles.boardName}>{board.name}</Text><Text style={styles.arrow}>›</Text></Pressable>)}</> : <><Text style={styles.modalCopy}>{mergeBoard.name} · choose a column and an optional title.</Text><View style={styles.columnChoices}>{mergeColumns.map((column) => <Pressable key={column.id} onPress={() => setMergeColumnId(column.id)} style={[styles.columnChoice, mergeColumnId === column.id && styles.columnChoiceSelected]}><Text style={styles.columnChoiceText}>{column.name}</Text></Pressable>)}</View><TextInput value={mergeTitle} onChangeText={setMergeTitle} placeholder="Title (optional)" placeholderTextColor={theme.textMuted} style={styles.titleInput} /><Pressable disabled={!mergeColumnId || working} onPress={() => void merge()} style={[styles.createButton, (!mergeColumnId || working) && styles.disabled]}><Text style={styles.addText}>{working ? 'Merging…' : 'Create merged card'}</Text></Pressable></>}</View></View></Modal>

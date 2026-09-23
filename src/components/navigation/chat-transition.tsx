@@ -8,7 +8,7 @@ import Animated, { Easing, Extrapolation, interpolate, runOnJS, useAnimatedStyle
 import { useTheme } from '@/components/theme-provider';
 
 export type ChatOrigin = { x: number; y: number; size: number };
-type PreviousTabPath = '/' | '/archive';
+type PreviousTabPath = '/' | '/attachments';
 
 const OPEN_DURATION = 320;
 // Slightly faster than opening — this isn't a perfect reverse of the open
@@ -40,6 +40,12 @@ const BUTTON_FADE_RANGE: [number, number, number] = [0, 0.55, 0.85];
 type ChatTransitionContextValue = {
   progress: SharedValue<number>;
   reduceMotion: boolean;
+  // Exposed so Chat itself can tell a real balloon-driven open (where `progress`
+  // is already animating 0 -> 1 and must be left alone) apart from any other way
+  // of arriving at Chat — a plain `router.push('/chat')` from elsewhere (e.g.
+  // Card Details' "Open in Chat") never touches `progress` at all, which
+  // otherwise leaves the whole screen at its reveal animation's rest opacity: 0.
+  opening: boolean;
   openChat: (origin: ChatOrigin, fromPath: PreviousTabPath) => void;
   closeChat: () => void;
 };
@@ -129,7 +135,7 @@ export function ChatTransitionProvider({ children }: PropsWithChildren) {
     return { opacity, transform: [{ translateX }, { translateY }, { scale }] };
   });
 
-  const value = useMemo<ChatTransitionContextValue>(() => ({ progress, reduceMotion, openChat, closeChat }), [progress, reduceMotion, openChat, closeChat]);
+  const value = useMemo<ChatTransitionContextValue>(() => ({ progress, reduceMotion, opening, openChat, closeChat }), [progress, reduceMotion, opening, openChat, closeChat]);
 
   return (
     <ChatTransitionContext.Provider value={value}>

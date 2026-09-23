@@ -22,6 +22,11 @@ type Props = {
   onSelected: (draft: AttachmentDraft) => void;
   onError: (message: string) => void;
   onRecordingChange?: (recording: boolean) => void;
+  // Lets the composer know the attachment sheet itself is open — a real,
+  // in-progress attachment workflow that must keep the composer expanded even
+  // if the sheet's own Modal happens to blur the TextInput underneath it (see
+  // PHASE: FIX INCONSISTENT CHAT COMPOSER EXPANSION). Mirrors onRecordingChange.
+  onOpenChange?: (open: boolean) => void;
 };
 
 export type AttachmentPickerHandle = { startAudio: () => void };
@@ -31,7 +36,7 @@ function formatRecordingTime(durationMillis: number) {
   return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
 }
 
-export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(function AttachmentPicker({ disabled = false, onSelected, onError, onRecordingChange }, ref) {
+export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(function AttachmentPicker({ disabled = false, onSelected, onError, onRecordingChange, onOpenChange }, ref) {
   const { tokens: theme } = useTheme();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder, 250);
@@ -118,6 +123,8 @@ export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(functi
   useImperativeHandle(ref, () => ({ startAudio: () => void startRecording() }), [startRecording]);
   useEffect(() => { onRecordingChange?.(recorderState.isRecording); }, [onRecordingChange, recorderState.isRecording]);
   useEffect(() => () => onRecordingChange?.(false), [onRecordingChange]);
+  useEffect(() => { onOpenChange?.(open); }, [onOpenChange, open]);
+  useEffect(() => () => onOpenChange?.(false), [onOpenChange]);
 
   if (recorderState.isRecording) return <View style={styles.recording}>
     <Pressable accessibilityRole="button" accessibilityLabel="Cancel recording" onPress={() => void cancelRecording()} style={({ pressed }) => [styles.recordingAction, { backgroundColor: theme.surfaceElevated }, pressed && styles.actionPressed]}><Ionicons accessible={false} name="close" size={21} color={theme.textSecondary} /></Pressable>

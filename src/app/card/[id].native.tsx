@@ -18,7 +18,6 @@ import { useTheme } from '@/components/theme-provider';
 import { AppHeader, EmptyState, IconButton, Screen, Toast } from '@/components/ui/primitives';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { radii, spacing, type ThemeTokens } from '@/constants/theme';
-import { tintWithAccent } from '@/constants/board-appearance';
 import { createBoardRepository } from '@/db/repositories';
 import { persistCardAttachment, removeCardAttachmentFile } from '@/services/card-attachment-storage';
 import type { CardAttachment, Message } from '@/db/types';
@@ -301,6 +300,38 @@ export default function CardDetailScreen() {
     return isSameDay(timestamp, renderedAt) ? `Today · ${time}` : `${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(timestamp)} · ${time}`;
   };
 
+  // Non-destructive: the original Chat message(s) already exist independently
+  // of the card and are never touched by this — see repository.detachCard,
+  // which is the same DB operation as deleteCard minus the "destructive"
+  // framing, since card_messages is only the join relationship, never the
+  // messages themselves. Confirmation is skipped for the trivial case (one
+  // source message, nothing card-only to lose) per PHASE: DETACH CARD FROM
+  // BOARD / RETURN TO UNORGANIZED — anything beyond that (a merged card, or
+  // card-only comments/attachments) is spelled out before it happens.
+  const moveBackToUnorganized = () => {
+    const extras: string[] = [];
+    if (comments.length) extras.push(`${comments.length} comment${comments.length === 1 ? '' : 's'}`);
+    if (cardAttachments.length) extras.push(`${cardAttachments.length} attachment${cardAttachments.length === 1 ? '' : 's'}`);
+    const messageParts: string[] = [];
+    if (messages.length > 1) messageParts.push(`${messages.length} Chits will be returned to Unorganized.`);
+    if (extras.length) messageParts.push(`This card has additional details that belong to the card. Moving it back will remove:\n${extras.map((extra) => `• ${extra}`).join('\n')}`);
+    const run = async () => {
+      const removableUris = await repository.detachCard(id);
+      await Promise.all(removableUris.map((uri) => removeCardAttachmentFile(uri)));
+      router.back();
+    };
+    if (!messageParts.length) { void run(); return; }
+    confirm({
+      type: 'default',
+      icon: 'arrow-undo-outline',
+      title: 'Move this card back to Unorganized?',
+      message: messageParts.join('\n\n'),
+      confirmText: 'Move',
+      accentColor: detail?.boardAccent ?? null,
+      onConfirm: run,
+    });
+  };
+
   const archive = () => confirm({
     type: 'default',
     icon: 'archive-outline',
@@ -338,11 +369,13 @@ export default function CardDetailScreen() {
 
   const singleThoughtEditable = messages.length === 1 && Boolean(messages[0]?.text);
 
-  // The Content card takes its color from the card's own board — same source of
-  // truth as the board detail screen — rather than the generic theme accent, so
-  // it stays visually tied to where the card lives.
-  const contentAccentTint = detail.boardAccent ? tintWithAccent(theme.background, detail.boardAccent, 0.08) : theme.accentSoft;
-  const contentAccentBorder = detail.boardAccent ?? theme.accentBorder;
+  // The content's thin left accent line takes its color from the card's own
+  // board — same source of truth as the board detail screen — rather than the
+  // generic theme accent, so it stays visually tied to where the card lives.
+  // Falls back to the same neutral border used when a board has no accent set
+  // (not a colored one), matching the Cards list's own "no color = neutral"
+  // convention rather than inventing a second fallback rule.
+  const contentAccentLine = detail.boardAccent ?? theme.borderSubtle;
   const contentAccentStrong = detail.boardAccent ?? theme.accentStrong;
   // For solid fills (Save buttons) and the focused-input underline — the full
   // accent rather than the softer "strong" variant, matching what these already
@@ -376,28 +409,22 @@ export default function CardDetailScreen() {
           <View style={styles.noticeCopy}><Text style={styles.notice}>{notice}</Text></View>
         </View> : null}
 
-        <View style={[styles.contentCard, { backgroundColor: contentAccentTint, borderColor: contentAccentBorder }]}>
-          <View style={styles.contentCardHeader}>
-            <View style={styles.contentCardTitleRow}>
-              <View style={[styles.contentIconMark, { backgroundColor: theme.surface }]}><Ionicons accessible={false} name="document-text-outline" size={14} color={contentAccentStrong} /></View>
-              <Text accessibilityRole="header" style={[styles.contentSectionTitle, { color: contentAccentStrong }]}>CONTENT</Text>
-            </View>
-            {singleThoughtEditable ? <Pressable accessibilityRole="button" accessibilityLabel="Edit content" hitSlop={8} onPress={() => openContentEditor(messages[0])} style={styles.sectionEditButton}><Ionicons accessible={false} name="create-outline" size={16} color={contentAccentStrong} /></Pressable>
-              : messages.length > 1 ? <View style={[styles.countBadge, { backgroundColor: theme.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: contentAccentBorder }]}><Text style={styles.countText}>{messages.length}</Text></View> : null}
-          </View>
-          <Text style={styles.contentSectionHint}>Changes here also update the original thought in Chat.</Text>
+        <View style={[styles.sectionHeader, styles.contentSectionHeader]}>
+          <Text accessibilityRole="header" style={styles.sectionTitle}>CONTENT</Text>
+          {singleThoughtEditable ? <Pressable accessibilityRole="button" accessibilityLabel="Edit content" hitSlop={8} onPress={() => openContentEditor(messages[0])}><Text style={styles.inlineEditText}>Edit</Text></Pressable>
+            : messages.length > 1 ? <View style={styles.countBadge}><Text style={styles.countText}>{messages.length}</Text></View> : null}
+        </View>
 
-          <View style={styles.thoughtList}>
-            {messages.map((message, index) => <View key={message.id} style={index > 0 && styles.thought}>
-              {messages.length > 1 ? <View style={styles.thoughtHeader}>
-                <Text style={styles.thoughtLabel}>THOUGHT {index + 1}</Text>
-                {message.text ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit thought ${index + 1}`} hitSlop={8} onPress={() => openContentEditor(message)} style={styles.inlineEdit}><Ionicons accessible={false} name="create-outline" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Edit</Text></Pressable> : null}
-              </View> : null}
-              <MessageContentRenderer message={message} mode="detail" accentColor={detail.boardAccent ?? undefined} renderAttachments={() => <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} /></View>)}</View>} />
-              {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={`Add a description to ${messageFallback(message)}`} onPress={() => openContentEditor(message)} style={styles.addDescription}><Ionicons accessible={false} name="add" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Add description</Text></Pressable> : null}
-              {index < messages.length - 1 ? <View style={styles.thoughtDivider} /> : null}
-            </View>)}
-          </View>
+        <View style={[styles.contentBody, { borderLeftColor: contentAccentLine }]}>
+          {messages.map((message, index) => <View key={message.id} style={index > 0 && styles.thought}>
+            {messages.length > 1 ? <View style={styles.thoughtHeader}>
+              <Text style={styles.thoughtLabel}>THOUGHT {index + 1}</Text>
+              {message.text ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit thought ${index + 1}`} hitSlop={8} onPress={() => openContentEditor(message)} style={styles.inlineEdit}><Ionicons accessible={false} name="create-outline" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Edit</Text></Pressable> : null}
+            </View> : null}
+            <MessageContentRenderer message={message} mode="detail" accentColor={detail.boardAccent ?? undefined} renderAttachments={() => <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} /></View>)}</View>} />
+            {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={`Add a description to ${messageFallback(message)}`} onPress={() => openContentEditor(message)} style={styles.addDescription}><Ionicons accessible={false} name="add" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Add description</Text></Pressable> : null}
+            {index < messages.length - 1 ? <View style={styles.contentThoughtDivider} /> : null}
+          </View>)}
         </View>
 
         <View style={styles.sectionHeader}><Text accessibilityRole="header" style={styles.sectionTitle}>DETAILS</Text></View>
@@ -466,6 +493,11 @@ export default function CardDetailScreen() {
 
         <View style={styles.sectionHeader}><Text accessibilityRole="header" style={styles.sectionTitle}>CARD ACTIONS</Text></View>
         <View style={styles.cardActions}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Move back to Unorganized" accessibilityHint="Remove this card from its board and return its linked Chit to Unorganized." onPress={moveBackToUnorganized} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
+            <Ionicons accessible={false} name="arrow-undo-outline" size={18} color={theme.textSecondary} />
+            <View style={styles.flexCopy}><Text style={styles.actionTitle}>Move back to Unorganized</Text><Text style={styles.actionCopy}>Keeps your original Chits — just removes this card.</Text></View>
+          </Pressable>
+          <View style={styles.actionDivider} />
           <Pressable accessibilityRole="button" onPress={archive} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
             <Ionicons accessible={false} name="archive-outline" size={18} color={theme.textSecondary} />
             <View style={styles.flexCopy}><Text style={styles.actionTitle}>Archive card</Text><Text style={styles.actionCopy}>Hide it while keeping it recoverable.</Text></View>
@@ -518,9 +550,13 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   cardLoader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.lg },
   hero: { paddingTop: spacing.xs },
-  titleRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm, alignSelf: 'stretch' },
+  // 'center', not 'flex-start': flex-start pinned the edit button to the top of
+  // the row, which read fine for a one-line title but left the button floating
+  // above (rather than centered against) the whole block once a title wrapped
+  // to two lines.
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, alignSelf: 'stretch' },
   title: { flex: 1, color: tokens.textPrimary, fontSize: 30, lineHeight: 37, fontWeight: '800' },
-  titleEditButton: { width: 32, height: 32, marginTop: 2, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: tokens.surfaceElevated },
+  titleEditButton: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: tokens.surfaceElevated },
   editHint: { color: tokens.accent, fontSize: 12, fontWeight: '700' },
   addTitle: { minHeight: 40, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.xxs },
   editor: { gap: spacing.sm },
@@ -537,24 +573,27 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   // gap between a heading and its own content (they read as one unit).
   sectionHeader: { minHeight: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginTop: spacing.xl },
   sectionTitle: { color: tokens.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.9 },
-  sectionEditButton: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', marginRight: -spacing.xxs },
-  // Content is the one section that should catch the eye first — a tinted card of
-  // its own (rather than the plain-on-background treatment every other section
-  // uses) with a stronger, iconed label, so it reads as the primary surface on the
-  // screen without going as far as a heavy dashboard widget.
-  contentCard: { marginTop: spacing.md, padding: spacing.md, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 1 },
-  contentCardHeader: { minHeight: 26, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-  contentCardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  contentIconMark: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center', borderRadius: 7 },
-  contentSectionTitle: { color: tokens.textPrimary, fontSize: 13, fontWeight: '800', letterSpacing: 0.6 },
-  contentSectionHint: { color: tokens.textMuted, fontSize: 12, lineHeight: 16, marginTop: 3, opacity: 0.85 },
+  // Content follows directly under the title/hero, not a fresh "new section"
+  // the way Details/Attachments/Comments/Card Actions do further down — a
+  // tighter marginTop than the shared sectionHeader keeps it feeling like the
+  // continuation of what the user is already reading rather than a jump.
+  contentSectionHeader: { marginTop: spacing.md },
+  // The note itself sits directly on the screen background — no tinted fill,
+  // no border box — so it reads as the document being read, not a form field.
+  // The thin left rule (see contentAccentLine) is the only accent, carried
+  // over from the old tinted card's board-color idea but pared down to just
+  // that one subtle line.
+  contentBody: { marginTop: spacing.sm, paddingLeft: spacing.sm, borderLeftWidth: 2 },
   countBadge: { minWidth: 26, height: 22, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7, borderRadius: 11, backgroundColor: tokens.surfaceElevated },
   countText: { color: tokens.textSecondary, fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
   flexCopy: { flex: 1, minWidth: 0 },
-  thoughtList: { gap: 0, marginTop: spacing.sm },
-  thought: { paddingTop: spacing.sm },
-  thoughtHeader: { minHeight: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
+  thought: { paddingTop: spacing.xs },
+  thoughtHeader: { minHeight: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
   thoughtLabel: { color: tokens.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
+  // Tighter than the shared `thoughtDivider` (which also separates comment rows
+  // below and needs its more generous spacing there) — scoped to just the CONTENT
+  // card's own between-thought dividers.
+  contentThoughtDivider: { height: StyleSheet.hairlineWidth, marginTop: spacing.sm, backgroundColor: tokens.borderSubtle },
   inlineEdit: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing.xs },
   inlineEditText: { color: tokens.accent, fontSize: 12, fontWeight: '700' },
   attachmentList: { gap: spacing.sm },

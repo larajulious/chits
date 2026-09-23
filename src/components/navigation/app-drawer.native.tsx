@@ -54,17 +54,17 @@ type ContextItem = {
   accessibilityContext: string | null;
 };
 type IconName = ComponentProps<typeof Ionicons>['name'];
-type Destination = {
-  label: 'Settings';
-  path: '/settings';
-  icon: IconName;
-};
+type Destination = { label: string; path: '/' | '/archive' | '/settings'; icon: IconName };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
-// Boards, Chat, and Archive are all globally reachable from the bottom navigation
-// now (see PHASE: REDESIGN CHITS BOTTOM NAVIGATION) — the drawer only carries
-// Settings plus secondary utilities (search, pinned, recent) that don't belong
-// in that 3-item bar.
+// Boards, Chat, and Attachments are the 3 items in the bottom navigation (see
+// PHASE: REDESIGN CHITS BOTTOM NAVIGATION); Archive moved here into the side
+// drawer alongside Settings (see PHASE: GLOBAL ATTACHMENTS SCREEN) — Boards is
+// listed again here too since the drawer is reachable from every screen, not
+// just Boards itself. Search stays its own top-corner action rather than a
+// third list row, matching its existing placement.
+const boardsDestination: Destination = { label: 'Boards', path: '/', icon: 'grid-outline' };
+const archiveDestination: Destination = { label: 'Archive', path: '/archive', icon: 'archive-outline' };
 const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
 
 export function useAppDrawer() {
@@ -316,6 +316,8 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
         </Pressable>
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
+        <NavigationRow destination={boardsDestination} pathname={pathname} close={close} />
+        <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
         <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
         {hasShortcuts ? <View style={[styles.divider, { backgroundColor: tokens.borderSubtle }]} /> : null}
         <PinnedSection items={pinned} close={close} onUnpin={unpinItem} />

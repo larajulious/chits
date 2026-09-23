@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, BackHandler, FlatList, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, BackHandler, FlatList, Keyboard, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 
 import { AttachmentDraftPreview } from '@/components/chat/attachment-draft-preview';
@@ -20,7 +20,7 @@ import { CONTENT_RANGE, COMPOSER_RANGE, useChatTransition } from '@/components/n
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { EmptyState, Screen, Toast } from '@/components/ui/primitives';
-import { spacing } from '@/constants/theme';
+import { radii, spacing } from '@/constants/theme';
 import { createMessageRepository } from '@/db/repositories';
 import type { Message, TimelineCursor, TimelineEvent, TimelineItem } from '@/db/types';
 
@@ -57,15 +57,57 @@ function mergeTimeline(current: TimelineItem[], additions: TimelineItem[]) {
   return merged;
 }
 
+// The focus-triggered refresh (see useFocusEffect below) re-fetches the recent page
+// on every return to Chat — e.g. after organizing a message into a board from
+// Unorganized, which changes that message's `organization` without touching its
+// `updatedAt` (it's a join computed at query time, not a message-row edit), so the
+// stale copy already in `feed` never otherwise gets replaced. `mergeTimeline` itself
+// already handles "same key → take the fresh one" correctly for its other, deliberate
+// single-item callers; this wrapper is only for the bulk background refresh, where we
+// also want to leave genuinely-unchanged items at their existing object reference
+// (MessageRow is memoized) so a plain refocus with nothing new doesn't re-render every
+// visible row — only the ones whose data actually changed.
+function refreshTimeline(current: TimelineItem[], latest: TimelineItem[]) {
+  const latestByKey = new Map(latest.map((item) => [timelineKey(item), item]));
+  const seenKeys = new Set<string>();
+  let changed = false;
+  const kept = current.map((item) => {
+    const key = timelineKey(item);
+    const incoming = latestByKey.get(key);
+    if (!incoming) return item;
+    seenKeys.add(key);
+    if (JSON.stringify(incoming) === JSON.stringify(item)) return item;
+    changed = true;
+    return incoming;
+  });
+  const added = latest.filter((item) => !seenKeys.has(timelineKey(item)));
+  if (added.length) changed = true;
+  return { items: changed ? mergeTimeline(kept, added) : current, changed, hasNewItem: added.length > 0 };
+}
+
 function eventCopy(event: TimelineEvent) {
   const metadata = event.metadata ?? {};
   const boardName = typeof metadata.boardName === 'string' ? metadata.boardName : null;
   const columnName = typeof metadata.columnName === 'string' ? metadata.columnName : null;
-  if (event.type === 'column_created') return { icon: 'list-outline' as const, text: columnName ? `Column created · ${columnName}${boardName ? `\nin ${boardName}` : ''}` : 'Column created' };
-  return { icon: 'folder-outline' as const, text: boardName ? `Board created · ${boardName}` : 'Board created' };
+  if (event.type === 'column_created') return { icon: 'list-outline' as const, title: 'Column created', detail: columnName ? `${columnName}${boardName ? ` in ${boardName}` : ''}` : null };
+  return { icon: 'folder-outline' as const, title: 'Board created', detail: boardName };
 }
 
-function ChitsRow({ event, onPress }: { event: TimelineEvent; onPress: () => void }) { const { tokens: theme } = useTheme(); const copy = eventCopy(event); return <View style={styles.chitsWrap}><Pressable accessibilityRole="button" accessibilityLabel={`Chits: ${copy.text.replace(/\n/g, '. ')}. ${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(event.createdAt)}`} onPress={onPress} style={({ pressed }) => [styles.chitsBubble, { backgroundColor: theme.surfaceElevated }, pressed && styles.chitsPressed]}><Ionicons accessible={false} name={copy.icon} size={16} color={theme.textSecondary} /><View style={styles.chitsCopy}><Text style={[styles.chitsText, { color: theme.textSecondary }]}>{copy.text}</Text><Text style={[styles.chitsTime, { color: theme.textMuted }]}>{new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(event.createdAt)}</Text></View></Pressable></View>; }
+function ChitsRow({ event, onPress }: { event: TimelineEvent; onPress: () => void }) {
+  const { tokens: theme } = useTheme();
+  const copy = eventCopy(event);
+  const time = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(event.createdAt);
+  return <View style={styles.chitsWrap}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Chits: ${copy.title}${copy.detail ? `. ${copy.detail}` : ''}. ${time}`} onPress={onPress} style={({ pressed }) => [styles.chitsBubble, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.chitsPressed]}>
+      <View style={[styles.chitsIcon, { backgroundColor: theme.accentSoft }]}><Ionicons accessible={false} name={copy.icon} size={15} color={theme.accentStrong} /></View>
+      <View style={styles.chitsCopy}>
+        <Text style={[styles.chitsTitle, { color: theme.textPrimary }]}>{copy.title}</Text>
+        {copy.detail ? <Text numberOfLines={1} style={[styles.chitsDetail, { color: theme.textSecondary }]}>{copy.detail}</Text> : null}
+      </View>
+      <Text style={[styles.chitsTime, { color: theme.textMuted }]}>{time}</Text>
+    </Pressable>
+  </View>;
+}
 
 function searchResultPreview(message: Message) {
   if (message.text?.trim()) return message.text.trim();
@@ -94,7 +136,7 @@ function SearchResultRow({ item, onPress }: { item: TimelineItem; onPress: () =>
   const { tokens: theme } = useTheme();
   if (item.kind === 'event') {
     const copy = eventCopy(item.event);
-    const flatText = copy.text.replace(/\n/g, ' ');
+    const flatText = copy.detail ? `${copy.title} · ${copy.detail}` : copy.title;
     return <Pressable accessibilityRole="button" accessibilityLabel={`Chits: ${flatText}. ${searchResultDateLabel(item.event.createdAt)}`} onPress={onPress} style={({ pressed }) => [styles.searchResultRow, pressed && styles.searchResultPressed]}>
       <Ionicons accessible={false} name={copy.icon} size={15} color={theme.textMuted} style={styles.searchResultIcon} />
       <View style={styles.searchResultCopy}>
@@ -125,7 +167,42 @@ function dateLabel(timestamp: number) {
   const difference = (dayStart(Date.now()) - dayStart(timestamp)) / 86_400_000;
   if (difference === 0) return 'Today';
   if (difference === 1) return 'Yesterday';
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(timestamp);
+  return new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(timestamp);
+}
+
+function DateSeparator({ label }: { label: string }) {
+  const { tokens: theme } = useTheme();
+  return <View style={styles.dateSeparator}>
+    <View style={[styles.dateSeparatorLine, { backgroundColor: theme.borderSubtle }]} />
+    <View style={[styles.dateSeparatorPill, { backgroundColor: theme.surfaceElevated }]}><Text style={[styles.dateSeparatorText, { color: theme.textSecondary }]}>{label}</Text></View>
+    <View style={[styles.dateSeparatorLine, { backgroundColor: theme.borderSubtle }]} />
+  </View>;
+}
+
+function quickFilterIcon(message: Message): React.ComponentProps<typeof Ionicons>['name'] {
+  const attachment = message.attachments[0];
+  if (attachment?.type === 'audio') return 'mic-outline';
+  if (attachment?.type === 'photo' || attachment?.type === 'video') return 'image-outline';
+  return 'bulb-outline';
+}
+
+function quickFilterPreview(message: Message) {
+  if (message.text?.trim()) return message.text.trim();
+  const attachment = message.attachments[0];
+  return attachment ? `${attachment.type[0].toUpperCase()}${attachment.type.slice(1)} attachment` : 'Untitled thought';
+}
+
+// Pinned thoughts double as Chat's "quick access" chip row — Chits has no
+// separate saved-filter feature, so this reuses the existing pin/onOpenPinned
+// mechanism rather than inventing a new one.
+function QuickFilterRow({ pinned, onSelect }: { pinned: Message[]; onSelect: (message: Message) => void }) {
+  const { tokens: theme } = useTheme();
+  return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickFilterScroller} contentContainerStyle={styles.quickFilterList}>
+    {pinned.map((message) => <Pressable key={message.id} accessibilityRole="button" accessibilityLabel={`Pinned: ${quickFilterPreview(message)}`} onPress={() => onSelect(message)} style={({ pressed }) => [styles.quickFilterChip, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.chitsPressed]}>
+      <Ionicons accessible={false} name={quickFilterIcon(message)} size={14} color={theme.accentStrong} />
+      <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.quickFilterText, { color: theme.textPrimary }]}>{quickFilterPreview(message)}</Text>
+    </Pressable>)}
+  </ScrollView>;
 }
 
 export default function ChatScreen() {
@@ -142,7 +219,7 @@ export default function ChatScreen() {
   // the traveling Chat-button clone dissolves into it. Driven by `progress`
   // rather than a mount effect, since Chat is a persistent tab that only mounts
   // once ever — a mount effect would only ever play this once.
-  const { progress, closeChat } = useChatTransition();
+  const { progress, closeChat, opening } = useChatTransition();
   const contentRevealStyle = useAnimatedStyle(() => {
     const t = interpolate(progress.get(), CONTENT_RANGE, [0, 1], Extrapolation.CLAMP);
     return { opacity: t, transform: [{ translateY: (1 - t) * 8 }] };
@@ -196,8 +273,20 @@ export default function ChatScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  // The TextInput's own real focus state — set by onFocus/onBlur ONLY (see
+  // PHASE: FIX INCONSISTENT CHAT COMPOSER EXPANSION). This is the primary
+  // signal composerExpanded below is built from; keyboard show/hide events are
+  // used only for composer positioning (paddingBottom, auto-scroll), never to
+  // directly flip this — they're delayed/inconsistent across iOS and Android
+  // and fighting them for the same state is what caused the composer to
+  // sometimes expand and sometimes not.
   const [composerFocused, setComposerFocused] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  // Whether the "+" attachment bottom sheet is actually open — a real
+  // in-progress attachment workflow, distinct from `attachmentDraft` (which
+  // only exists once something has been picked). Keeps the composer expanded
+  // while the sheet is up even if its Modal happens to blur the TextInput.
+  const [attachmentPickerOpen, setAttachmentPickerOpen] = useState(false);
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const [inputMaxed, setInputMaxed] = useState(false);
   const [composerHeight, setComposerHeight] = useState(64);
@@ -208,6 +297,17 @@ export default function ChatScreen() {
   const [searching, setSearching] = useState(false);
   // Debounced (see handleSearchChange) so this never flashes for an instant query.
   const showSearchLoader = useChitsLoading(searching, { delay: 150, minDuration: 200 });
+
+  // Configures the NEXT native layout pass (whatever state update follows
+  // this call) to animate rather than snap instantly — used at every place
+  // that can flip composerExpanded, so compact<->expanded is always a smooth
+  // ~190ms ease, never a hard cut. A plain ease (no spring/bounce), matching
+  // the rest of Chits' understated motion language. Safe to call even when
+  // the following update turns out not to change layout — it just configures
+  // an animation that then has nothing to animate.
+  const animateComposerTransition = useCallback(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.create(190, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity));
+  }, []);
 
   const refreshPinned = useCallback(async () => {
     const pinned = await repository.listPinned();
@@ -237,6 +337,19 @@ export default function ChatScreen() {
 
   useEffect(() => { feedRef.current = feed; }, [feed]);
 
+  // Chat's header/content/composer opacity is driven entirely by `progress` (see
+  // the entrance-reveal comment above) — correct for the bottom-nav balloon
+  // transition, which always ends with `progress` at 1, but any OTHER way of
+  // landing here (e.g. Card Details' "Open in Chat" doing a plain router.push)
+  // never touches `progress` at all. Left at its default 0, the whole screen
+  // renders fully transparent — a blank/white screen, not a crash. Snap it to 1
+  // instantly whenever Chat gains focus outside of an in-flight balloon open
+  // (which is already animating `progress` toward 1 itself and must be left
+  // alone) and it isn't already fully open.
+  useFocusEffect(useCallback(() => {
+    if (!opening && progress.get() < 1) progress.set(1);
+  }, [opening, progress]));
+
   useFocusEffect(useCallback(() => {
     if (!loadedOnce.current) return;
     let active = true;
@@ -244,11 +357,9 @@ export default function ChatScreen() {
       if (!active) return;
       setPinnedMessages(pinned);
       const latest = [...page.items].reverse();
-      const loadedKeys = new Set(feedRef.current.map(timelineKey));
-      if (!latest.some((item) => !loadedKeys.has(timelineKey(item)))) return;
-      if (nearBottom.current) pendingScrollToLatest.current = true;
-      else setShowJumpToLatest(true);
-      setFeed((current) => mergeTimeline(current, latest));
+      const { items, changed, hasNewItem } = refreshTimeline(feedRef.current, latest);
+      if (hasNewItem) { if (nearBottom.current) pendingScrollToLatest.current = true; else setShowJumpToLatest(true); }
+      if (changed) setFeed(items);
     }).catch(() => undefined);
     return () => { active = false; };
   }, [repository]));
@@ -259,6 +370,13 @@ export default function ChatScreen() {
     return () => subscription.remove();
   }, []);
 
+  // Keyboard events drive ONLY composer positioning (paddingBottom below,
+  // auto-scroll-to-end) — never composerExpanded directly. The hide listener
+  // still clears composerFocused too, but purely as a redundant safety net
+  // that always AGREES with (never fights) the TextInput's own onBlur: if
+  // onBlur already fired, this is a no-op; if a platform quirk ever drops the
+  // blur event, this still gets the composer back to the correct collapsed
+  // state instead of leaving it stuck expanded with no real focus.
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
@@ -266,9 +384,13 @@ export default function ChatScreen() {
       setKeyboardVisible(true);
       if (nearBottom.current) requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: false }));
     });
-    const hideSubscription = Keyboard.addListener(hideEvent, () => { setKeyboardVisible(false); setComposerFocused(false); });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      setKeyboardVisible(false);
+      animateComposerTransition();
+      setComposerFocused(false);
+    });
     return () => { showSubscription.remove(); hideSubscription.remove(); };
-  }, []);
+  }, [animateComposerTransition]);
 
   // Chat is now reached via a push from Boards rather than staying permanently
   // mounted, so an in-progress draft would otherwise be lost every time the user
@@ -423,7 +545,16 @@ export default function ChatScreen() {
     searchTimer.current = setTimeout(() => { void runSearch(trimmed); }, 250);
   }, [runSearch]);
 
-  const openSearch = useCallback(() => setSearchOpen(true), []);
+  // Opening search unmounts the composer dock entirely (see the `!searchOpen`
+  // guard around it below) — its TextInput is about to disappear, so any
+  // focus it currently holds is about to become stale (remounting later does
+  // NOT restore native focus). Normalizing composerFocused to false here means
+  // the composer correctly reappears expanded only when a real reason still
+  // applies (draft text, a staged attachment, or an in-progress edit) — never
+  // "expanded-looking but not actually focused" just because it happened to be
+  // focused before search opened. See PHASE: FIX INCONSISTENT CHAT COMPOSER
+  // EXPANSION, "SEARCH MODE".
+  const openSearch = useCallback(() => { setComposerFocused(false); setSearchOpen(true); }, []);
   const closeSearch = useCallback(() => {
     setSearchOpen(false);
     setSearchQuery('');
@@ -487,44 +618,54 @@ export default function ChatScreen() {
       if (editing) {
         const updatedAt = await repository.updateText(editing.id, text);
         setFeed((current) => current.map((item) => item.kind === 'message' && item.message.id === editing.id ? { ...item, message: { ...item.message, text, updatedAt } } : item));
+        animateComposerTransition();
         setEditing(null);
       } else if (attachmentDraft) {
         const staged = attachmentDraft;
         const message = await repository.createAttachmentMessage(staged.attachment, text || null);
         setFeed((current) => mergeTimeline(current, [{ kind: 'message', message, createdAt: message.createdAt }]));
-        if (attachmentDraftRef.current === staged) { attachmentDraftRef.current = null; setAttachmentDraft(null); }
+        if (attachmentDraftRef.current === staged) { attachmentDraftRef.current = null; animateComposerTransition(); setAttachmentDraft(null); }
         if (nearBottom.current) pendingScrollToLatest.current = true;
       } else {
         const message = await repository.createText(text);
         setFeed((current) => mergeTimeline(current, [{ kind: 'message', message, createdAt: message.createdAt }]));
         if (nearBottom.current) pendingScrollToLatest.current = true;
       }
+      // Deliberately NOT touching composerFocused here — sending must not
+      // collapse the composer while the user is still focused/typing (see
+      // PHASE: FIX INCONSISTENT CHAT COMPOSER EXPANSION, "SEND"). Clearing the
+      // draft only collapses the composer if nothing else (focus, another
+      // draft, editing) is keeping it expanded, via the single composerExpanded
+      // derivation below — not via any explicit collapse call here.
       setDraft('');
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch { setError(editing ? 'Your edit was not saved. Please try again.' : 'Your thought was not saved. Please try again.'); } finally { setIsSaving(false); }
-  }, [attachmentDraft, draft, editing, isSaving, repository]);
+  }, [animateComposerTransition, attachmentDraft, draft, editing, isSaving, repository]);
 
   const attachmentSelected = useCallback((next: AttachmentDraft) => {
     attachmentDraftRef.current = next;
+    animateComposerTransition();
     setAttachmentDraft(next);
     setComposerFocused(true);
     setError(null);
     requestAnimationFrame(() => inputRef.current?.focus());
-  }, []);
+  }, [animateComposerTransition]);
 
   const removeAttachmentDraft = useCallback(() => {
     const pending = attachmentDraftRef.current;
     attachmentDraftRef.current = null;
+    animateComposerTransition();
     setAttachmentDraft(null);
     if (pending) void pending.remove().catch(() => setError('The temporary attachment could not be removed.'));
-  }, []);
+  }, [animateComposerTransition]);
 
   const runAction = useCallback(async (action: (message: Message) => Promise<void>, message: Message) => {
     setSelected(null); setError(null);
     try { await action(message); } catch { setError('That change could not be saved. Please try again.'); }
   }, []);
 
-  const beginEdit = () => { if (!selected) return; if (attachmentDraft) { setSelected(null); setError('Send or remove the attachment draft before editing another thought.'); return; } setDraft(selected.text ?? ''); setEditing(selected); setSelected(null); setComposerFocused(true); requestAnimationFrame(() => inputRef.current?.focus()); };
+  const beginEdit = () => { if (!selected) return; if (attachmentDraft) { setSelected(null); setError('Send or remove the attachment draft before editing another thought.'); return; } animateComposerTransition(); setDraft(selected.text ?? ''); setEditing(selected); setSelected(null); setComposerFocused(true); requestAnimationFrame(() => inputRef.current?.focus()); };
+  const cancelEditing = useCallback(() => { animateComposerTransition(); setEditing(null); setDraft(''); }, [animateComposerTransition]);
   const copyChat = (message: Message) => {
     const text = getCopyableMessageText(message);
     setSelected(null);
@@ -535,8 +676,9 @@ export default function ChatScreen() {
   const archive = () => { if (!selected) return; const message = selected; void runAction(async () => { await repository.archive(message.id); setFeed((current) => current.filter((item) => item.kind !== 'message' || item.message.id !== message.id)); await refreshPinned(); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }, message); };
   // Already organized: jump straight to where it lives instead of routing back
   // through "add to board" (which would just re-organize the same thought).
-  const addToBoard = () => { if (!selected) return; const message = selected; setSelected(null); if (message.organization) { router.push(`/board/${message.organization.boardId}`); return; } router.push(`/unorganized?messageId=${message.id}`); };
+  const addToBoard = () => { if (!selected) return; const message = selected; setSelected(null); if (message.organization) { router.push(`/board/${message.organization.boardId}?highlightColumnId=${message.organization.columnId}`); return; } router.push(`/unorganized?messageId=${message.id}`); };
   const openPinned = useCallback((message: Message) => { setFocusedId(message.id); setFeed((current) => mergeTimeline(current, [{ kind: 'message', message, createdAt: message.createdAt }])); }, []);
+  const openSettings = useCallback(() => router.push('/settings'), [router]);
   const remove = () => {
     if (!selected) return;
     const message = selected;
@@ -555,10 +697,19 @@ export default function ChatScreen() {
     });
   };
   const openEvent = useCallback((event: TimelineEvent) => { if (event.relatedBoardId) router.push(`/board/${event.relatedBoardId}`); }, [router]);
-  const renderFeedItem = useCallback(({ item, index }: { item: FeedItem; index: number }) => <View>{(index === 0 || dayStart(feed[index - 1].createdAt) !== dayStart(item.createdAt)) && <Text style={[styles.dateDivider, { color: theme.textMuted }]}>{dateLabel(item.createdAt)}</Text>}{item.kind === 'message' ? <MessageRow message={item.message} focused={item.message.id === focusedId} onLongPress={setSelected} /> : <ChitsRow event={item.event} onPress={() => openEvent(item.event)} />}</View>, [feed, focusedId, openEvent, theme.textMuted]);
+  const renderFeedItem = useCallback(({ item, index }: { item: FeedItem; index: number }) => <View>{(index === 0 || dayStart(feed[index - 1].createdAt) !== dayStart(item.createdAt)) && <DateSeparator label={dateLabel(item.createdAt)} />}{item.kind === 'message' ? <MessageRow message={item.message} focused={item.message.id === focusedId} onLongPress={setSelected} /> : <ChitsRow event={item.event} onPress={() => openEvent(item.event)} />}</View>, [feed, focusedId, openEvent]);
   const hasDraft = Boolean(draft.trim());
   const canSend = hasDraft || Boolean(attachmentDraft) || Boolean(editing?.attachments.length);
-  const composerExpanded = composerFocused || Boolean(attachmentDraft) || Boolean(editing) || isRecordingAudio;
+  // ONE source of truth for compact vs. expanded (see PHASE: FIX INCONSISTENT
+  // CHAT COMPOSER EXPANSION) — any of these signals alone is enough to keep
+  // the composer expanded; collapsing back to compact requires ALL of them to
+  // be false. `composerFocused` is driven purely by the TextInput's own
+  // onFocus/onBlur below, not by keyboard events. `hasDraft` covers State C
+  // (typed text that hasn't been sent yet) so the composer never hides a
+  // draft just because focus moved elsewhere temporarily; `attachmentPickerOpen`
+  // covers the moment the "+" sheet itself is open, before anything has
+  // actually been picked.
+  const composerExpanded = composerFocused || attachmentPickerOpen || Boolean(attachmentDraft) || Boolean(editing) || isRecordingAudio || hasDraft;
   // Content size is only consulted to decide whether the (already auto-growing,
   // min/max-height-bound) input needs internal scrolling — it never drives the
   // input's own height. Feeding a live content measurement back into an explicit
@@ -576,16 +727,27 @@ export default function ChatScreen() {
     });
   }, []);
   const focusComposer = useCallback(() => {
+    animateComposerTransition();
     setComposerFocused(true);
     if (nearBottom.current) requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: false }));
-  }, []);
+  }, [animateComposerTransition]);
+  // The TextInput's own blur — the primary way composerFocused turns back off
+  // (see composerExpanded above). Draft text/attachment/editing/recording each
+  // independently keep the composer expanded regardless of this, so blurring
+  // to open the attachment sheet, or the keyboard being interactively dismissed
+  // mid-draft, never hides in-progress content.
+  const blurComposer = useCallback(() => {
+    animateComposerTransition();
+    setComposerFocused(false);
+  }, [animateComposerTransition]);
   const recordingChanged = useCallback((recording: boolean) => {
+    animateComposerTransition();
     setIsRecordingAudio(recording);
     if (!recording) return;
     inputRef.current?.blur();
     Keyboard.dismiss();
     setComposerFocused(false);
-  }, []);
+  }, [animateComposerTransition]);
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -638,27 +800,29 @@ export default function ChatScreen() {
         </View> : null}
         {!searchOpen ? <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.background}00`, `${theme.background}10`, `${theme.background}80`, `${theme.background}EF`, theme.background]} locations={[0, 0.2, 0.5, 0.8, 1]} style={[styles.bottomFade, { height: Math.min(composerHeight, MIN_COMPOSER_INPUT_HEIGHT + spacing.sm) }]} /> : null}
         {!searchOpen && showJumpToLatest ? <Pressable accessibilityRole="button" accessibilityLabel="Jump to latest message" onPress={jumpToLatest} style={({ pressed }) => [styles.jumpToLatest, { bottom: composerHeight + (editing ? 52 : spacing.md), backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, pressed && styles.sendPressed]}><Ionicons accessible={false} name="arrow-down" size={20} color={theme.textPrimary} /></Pressable> : null}
-        {!searchOpen && editing && <View style={[styles.editing, { bottom: composerHeight + spacing.xs, backgroundColor: theme.surfaceElevated }]}><Text style={[styles.editingText, { color: theme.textSecondary }]}>{editing.attachments.length ? 'Editing description' : 'Editing thought'}</Text><Pressable accessibilityRole="button" onPress={() => { setEditing(null); setDraft(''); }}><Text style={[styles.cancel, { color: theme.accent }]}>Cancel</Text></Pressable></View>}
+        {!searchOpen && editing && <View style={[styles.editing, { bottom: composerHeight + spacing.xs, backgroundColor: theme.surfaceElevated }]}><Text style={[styles.editingText, { color: theme.textSecondary }]}>{editing.attachments.length ? 'Editing description' : 'Editing thought'}</Text><Pressable accessibilityRole="button" onPress={cancelEditing}><Text style={[styles.cancel, { color: theme.accent }]}>Cancel</Text></Pressable></View>}
         {!searchOpen ? <Animated.View onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setComposerHeight((current) => (current === next ? current : next)); composerMeasuredRef.current = true; maybePerformInitialScroll(); }} style={[styles.composerDock, { paddingBottom: keyboardVisible ? spacing.xs : spacing.sm }, composerRevealStyle]}>
           {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { backgroundColor: theme.surfaceElevated, borderColor: theme.danger }]}><Ionicons accessible={false} name="alert-circle-outline" size={18} color={theme.danger} /><Text style={[styles.errorText, { color: theme.danger }]}>{error}</Text></View> : null}
           <GlassSurface style={[styles.composer, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, composerExpanded && styles.composerExpanded, composerFocused && { borderColor: theme.accentBorder }]}>
             {!isRecordingAudio && attachmentDraft ? <AttachmentDraftPreview draft={attachmentDraft} compact={composerFocused} onRemove={removeAttachmentDraft} /> : null}
-            {!isRecordingAudio ? <TextInput ref={inputRef} accessibilityLabel={attachmentDraft || editing?.attachments.length ? 'Attachment description' : 'Message note'} value={draft} onChangeText={setDraft} onFocus={focusComposer} onContentSizeChange={({ nativeEvent }) => handleContentSizeChange(nativeEvent.contentSize.height)} placeholder={attachmentDraft || editing?.attachments.length ? 'Add a description...' : editing ? 'Edit thought...' : 'Message note...'} placeholderTextColor={theme.textMuted} selectionColor={theme.accent} cursorColor={theme.accent} multiline maxLength={10000} scrollEnabled={!composerFocused || inputMaxed} style={[styles.input, composerExpanded ? styles.inputExpanded : styles.inputCompact, composerExpanded ? styles.inputAutoGrow : styles.inputFixed, { color: theme.textPrimary }]} textAlignVertical={composerExpanded ? 'top' : 'center'} /> : null}
-            <View pointerEvents={composerExpanded ? 'auto' : 'box-none'} style={[styles.composerActions, isRecordingAudio ? styles.composerActionsRecording : composerExpanded ? styles.composerActionsExpanded : styles.composerActionsCompact]}><AttachmentPicker ref={attachmentPickerRef} disabled={Boolean(attachmentDraft) || Boolean(editing) || isSaving} onSelected={attachmentSelected} onError={setError} onRecordingChange={recordingChanged} />{!isRecordingAudio ? <Pressable accessibilityRole="button" accessibilityLabel={canSend ? 'Send message' : 'Record audio'} accessibilityState={{ disabled: isSaving }} disabled={isSaving} onPress={() => { if (canSend) void send(); else attachmentPickerRef.current?.startAudio(); }} style={({ pressed }) => [styles.sendButton, { backgroundColor: isSaving ? theme.surfaceElevated : theme.accent }, pressed && styles.sendPressed]}><Ionicons accessible={false} name={canSend ? 'arrow-up' : 'mic-outline'} size={20} color={theme.accentText} /></Pressable> : null}</View>
+            {!isRecordingAudio ? <TextInput ref={inputRef} accessibilityLabel={attachmentDraft || editing?.attachments.length ? 'Attachment description' : 'Message note'} value={draft} onChangeText={setDraft} onFocus={focusComposer} onBlur={blurComposer} onContentSizeChange={({ nativeEvent }) => handleContentSizeChange(nativeEvent.contentSize.height)} placeholder={attachmentDraft || editing?.attachments.length ? 'Add a description...' : editing ? 'Edit thought...' : 'Message note...'} placeholderTextColor={theme.textMuted} selectionColor={theme.accent} cursorColor={theme.accent} multiline maxLength={10000} scrollEnabled={!composerFocused || inputMaxed} style={[styles.input, composerExpanded ? styles.inputExpanded : styles.inputCompact, composerExpanded ? styles.inputAutoGrow : styles.inputFixed, { color: theme.textPrimary }]} textAlignVertical={composerExpanded ? 'top' : 'center'} /> : null}
+            <View pointerEvents={composerExpanded ? 'auto' : 'box-none'} style={[styles.composerActions, isRecordingAudio ? styles.composerActionsRecording : composerExpanded ? styles.composerActionsExpanded : styles.composerActionsCompact]}><AttachmentPicker ref={attachmentPickerRef} disabled={Boolean(attachmentDraft) || Boolean(editing) || isSaving} onSelected={attachmentSelected} onError={setError} onRecordingChange={recordingChanged} onOpenChange={setAttachmentPickerOpen} />{!isRecordingAudio ? <Pressable accessibilityRole="button" accessibilityLabel={canSend ? 'Send message' : 'Record audio'} accessibilityState={{ disabled: isSaving }} disabled={isSaving} onPress={() => { if (canSend) void send(); else attachmentPickerRef.current?.startAudio(); }} style={({ pressed }) => [styles.sendButton, { backgroundColor: isSaving ? theme.surfaceElevated : theme.accent }, pressed && styles.sendPressed]}><Ionicons accessible={false} name={canSend ? 'arrow-up' : 'mic-outline'} size={20} color={theme.accentText} /></Pressable> : null}</View>
           </GlassSurface>
         </Animated.View> : null}
-        <Animated.View style={[styles.headerWrap, contentRevealStyle]}>
-          <ChatHeader
-            ref={searchInputRef}
-            onHeight={(height) => { setHeaderHeight(height); headerMeasuredRef.current = true; maybePerformInitialScroll(); }}
-            pinned={pinnedMessages}
-            onOpenPinned={openPinned}
-            searchOpen={searchOpen}
-            searchQuery={searchQuery}
-            onOpenSearch={openSearch}
-            onCloseSearch={closeSearch}
-            onSearchChange={handleSearchChange}
-          />
+        <Animated.View style={[styles.headerWrap, contentRevealStyle]} pointerEvents="box-none">
+          <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.background}F2`, `${theme.background}B3`, `${theme.background}00`]} locations={[0, 0.65, 1]} style={[styles.headerFade, { height: headerHeight + spacing.xl }]} />
+          <View style={styles.headerBlock} onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setHeaderHeight((current) => (current === next ? current : next)); headerMeasuredRef.current = true; maybePerformInitialScroll(); }}>
+            <ChatHeader
+              ref={searchInputRef}
+              searchOpen={searchOpen}
+              searchQuery={searchQuery}
+              onOpenSearch={openSearch}
+              onCloseSearch={closeSearch}
+              onSearchChange={handleSearchChange}
+              onOpenSettings={openSettings}
+            />
+            {!searchOpen && pinnedMessages.length > 0 ? <QuickFilterRow pinned={pinnedMessages} onSelect={openPinned} /> : null}
+          </View>
         </Animated.View>
         </View>
       <MessageActions message={selected} onDismiss={() => setSelected(null)} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} onAddToBoard={addToBoard} onArchive={archive} onDelete={remove} />
@@ -682,5 +846,51 @@ const styles = StyleSheet.create({ flex: { flex: 1 }, timelineLayer: { flex: 1 }
   searchResultText: { fontSize: 15, lineHeight: 21 },
   searchResultMeta: { fontSize: 12, marginTop: 3 },
   noResults: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
-  noResultsText: { fontSize: 14, fontWeight: '500' }, bottomFade: { position: 'absolute', right: 0, bottom: 0, left: 0 }, olderStatus: { minHeight: 30, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md }, olderError: { fontSize: 12, lineHeight: 18, textAlign: 'center' }, jumpToLatest: { position: 'absolute', right: spacing.lg, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4 }, dateDivider: { fontSize: 12, fontWeight: '600', textAlign: 'center', paddingTop: spacing.md, paddingBottom: spacing.xs }, chitsWrap: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, alignItems: 'flex-start' }, chitsBubble: { maxWidth: '88%', flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: 14 }, chitsPressed: { opacity: 0.58 }, chitsCopy: { flexShrink: 1 }, chitsText: { fontSize: 15, lineHeight: 21 }, chitsTime: { fontSize: 11, marginTop: spacing.xxs }, errorBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, marginBottom: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12 }, errorText: { flex: 1, fontSize: 13, lineHeight: 18 }, editing: { position: 'absolute', right: spacing.md, left: spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 10 }, editingText: { fontSize: 13 }, cancel: { fontSize: 14, fontWeight: '600' }, composerDock: { position: 'absolute', right: 0, bottom: 0, left: 0, paddingHorizontal: spacing.md, paddingTop: spacing.xs }, composer: { alignItems: 'stretch', minHeight: 56, paddingHorizontal: spacing.xs, paddingVertical: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 5 }, composerExpanded: { borderRadius: 20, paddingHorizontal: spacing.sm }, composerActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, composerActionsCompact: { position: 'absolute', top: spacing.xs, right: spacing.xs, left: spacing.xs }, composerActionsExpanded: { marginTop: spacing.xs }, composerActionsRecording: { minHeight: 56 }, input: { fontSize: 16, lineHeight: 22, paddingVertical: spacing.xs }, inputCompact: { paddingHorizontal: 48 }, inputExpanded: { paddingHorizontal: spacing.xs }, inputFixed: { height: MIN_COMPOSER_INPUT_HEIGHT }, inputAutoGrow: { minHeight: MIN_COMPOSER_INPUT_HEIGHT, maxHeight: MAX_COMPOSER_INPUT_HEIGHT }, sendButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 }, sendPressed: { opacity: 0.7 },
+  noResultsText: { fontSize: 14, fontWeight: '500' },
+  bottomFade: { position: 'absolute', right: 0, bottom: 0, left: 0 },
+  olderStatus: { minHeight: 30, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md },
+  olderError: { fontSize: 12, lineHeight: 18, textAlign: 'center' },
+  jumpToLatest: { position: 'absolute', right: spacing.lg, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4 },
+  headerBlock: { backgroundColor: 'transparent', zIndex: 10 },
+  // Purely decorative protection behind the now-transparent header controls —
+  // derives from the current theme's background so it recolors with the
+  // selected app theme, and extends a bit past the header's own measured
+  // height so it dissolves into the conversation rather than cutting off flush
+  // with the last control.
+  headerFade: { position: 'absolute', top: 0, left: 0, right: 0 },
+  dateSeparator: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.sm },
+  dateSeparatorLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  dateSeparatorPill: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radii.pill },
+  dateSeparatorText: { fontSize: 12, fontWeight: '600' },
+  quickFilterScroller: { flexGrow: 0 },
+  quickFilterList: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, paddingTop: spacing.xxs, paddingBottom: spacing.sm },
+  quickFilterChip: { maxWidth: 220, height: 34, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.pill },
+  quickFilterText: { flexShrink: 1, fontSize: 13, fontWeight: '500' },
+  chitsWrap: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, alignItems: 'flex-start' },
+  chitsBubble: { maxWidth: '88%', flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.compactCard },
+  chitsPressed: { opacity: 0.58 },
+  chitsIcon: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
+  chitsCopy: { flexShrink: 1 },
+  chitsTitle: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  chitsDetail: { fontSize: 13, lineHeight: 18, marginTop: 1 },
+  chitsTime: { fontSize: 11, marginLeft: spacing.xs },
+  errorBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, marginBottom: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12 },
+  errorText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  editing: { position: 'absolute', right: spacing.md, left: spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 10 },
+  editingText: { fontSize: 13 },
+  cancel: { fontSize: 14, fontWeight: '600' },
+  composerDock: { position: 'absolute', right: 0, bottom: 0, left: 0, paddingHorizontal: spacing.md, paddingTop: spacing.xs },
+  composer: { alignItems: 'stretch', minHeight: 56, paddingHorizontal: spacing.xs, paddingVertical: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
+  composerExpanded: { borderRadius: 20, paddingHorizontal: spacing.sm },
+  composerActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  composerActionsCompact: { position: 'absolute', top: spacing.xs, right: spacing.xs, left: spacing.xs },
+  composerActionsExpanded: { marginTop: spacing.xs },
+  composerActionsRecording: { minHeight: 56 },
+  input: { fontSize: 16, lineHeight: 22, paddingVertical: spacing.xs },
+  inputCompact: { paddingHorizontal: 48 },
+  inputExpanded: { paddingHorizontal: spacing.xs },
+  inputFixed: { height: MIN_COMPOSER_INPUT_HEIGHT },
+  inputAutoGrow: { minHeight: MIN_COMPOSER_INPUT_HEIGHT, maxHeight: MAX_COMPOSER_INPUT_HEIGHT },
+  sendButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
+  sendPressed: { opacity: 0.7 },
 });

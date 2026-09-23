@@ -9,15 +9,15 @@ import { spacing } from '@/constants/theme';
 
 type DrawerContextValue = { openDrawer: () => void; closeDrawer: () => void };
 type IconName = ComponentProps<typeof Ionicons>['name'];
-type Destination = {
-  label: 'Settings';
-  path: '/settings';
-  icon: IconName;
-};
+type Destination = { label: string; path: '/' | '/archive' | '/settings'; icon: IconName };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
-// Boards, Chat, and Archive are all globally reachable from the bottom navigation
-// now — the drawer only carries Settings plus secondary utilities.
+// Boards, Chat, and Attachments are the 3 items in the bottom navigation; Archive
+// moved here into the side drawer alongside Settings (see PHASE: GLOBAL
+// ATTACHMENTS SCREEN) — Boards is listed again here too since the drawer is
+// reachable from every screen, not just Boards itself.
+const boardsDestination: Destination = { label: 'Boards', path: '/', icon: 'grid-outline' };
+const archiveDestination: Destination = { label: 'Archive', path: '/archive', icon: 'archive-outline' };
 const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
 
 export function useAppDrawer() {
@@ -73,6 +73,8 @@ function DrawerContent({ close }: { close: () => void }) {
         </Pressable>
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
+        <NavigationRow destination={boardsDestination} pathname={pathname} close={close} />
+        <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
         <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
       </ScrollView>
     </SafeAreaView>

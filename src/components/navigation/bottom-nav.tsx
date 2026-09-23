@@ -17,13 +17,16 @@ const CHAT_OVERLAP = 22;
 const NAV_SURFACE_HEIGHT = 64;
 
 // The custom bottom-tab-bar for the app's 3 global destinations (Boards, Chat,
-// Archive) — see PHASE: REDESIGN CHITS BOTTOM NAVIGATION and PHASE: REDESIGN CHAT
-// TRANSITION — CONNECTED FLOATING BUTTON. Absolutely positioned over the active
-// screen (not a normal docked flex tab-bar slot) so the transparent margins
-// around the floating pill genuinely show the screen's own content/background
-// instead of an opaque reserved strip — screens opt into the matching bottom
-// clearance themselves via `useBottomTabBarHeight()` (see index.native.tsx,
-// archive.native.tsx, search.native.tsx). While Chat itself is active, this
+// Attachments) — see PHASE: REDESIGN CHITS BOTTOM NAVIGATION and PHASE: REDESIGN
+// CHAT TRANSITION — CONNECTED FLOATING BUTTON. Archive moved to the side drawer
+// (see PHASE: GLOBAL ATTACHMENTS SCREEN) but stays mounted in this same tabs
+// group, just without its own NavItem here. Absolutely positioned over the
+// active screen (not a normal docked flex tab-bar slot) so the transparent
+// margins around the floating pill genuinely show the screen's own content/
+// background instead of an opaque reserved strip — screens opt into the
+// matching bottom clearance themselves via `useBottomTabBarHeight()` (see
+// index.native.tsx, attachments.native.tsx, search.native.tsx). While Chat
+// itself is active, this
 // renders nothing at all
 // (not just hidden — see the early return below) so Chat's own composer can use
 // that space instead of a floating bar sitting over it.
@@ -43,7 +46,7 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
   const [travelling, setTravelling] = useState(false);
 
   const boardsRoute = state.routes.find((route) => route.name === 'index');
-  const archiveRoute = state.routes.find((route) => route.name === 'archive');
+  const attachmentsRoute = state.routes.find((route) => route.name === 'attachments');
   const activeName = state.routes[state.index]?.name;
 
   // "Adjusting state when a prop changes" via setState-during-render (React's own
@@ -81,7 +84,7 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
     void Haptics.selectionAsync();
     setTravelling(true);
     chatButtonRef.current?.measureInWindow((x, y, width, height) => {
-      openChat({ x: x + width / 2, y: y + height / 2, size: Math.max(width, height) }, activeName === 'archive' ? '/archive' : '/');
+      openChat({ x: x + width / 2, y: y + height / 2, size: Math.max(width, height) }, activeName === 'attachments' ? '/attachments' : '/');
     });
   };
 
@@ -136,11 +139,11 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
             <Text numberOfLines={1} style={[styles.centerLabel, { color: theme.textMuted }]}>Chat</Text>
           </View>
           <NavItem
-            label="Archive"
-            icon="archive-outline"
-            focused={activeName === 'archive'}
-            accessibilityLabel={`Archive${activeName === 'archive' ? '. Current screen.' : ''}`}
-            onPress={() => go(archiveRoute?.name)}
+            label="Attachments"
+            icon="attach-outline"
+            focused={activeName === 'attachments'}
+            accessibilityLabel={`Attachments${activeName === 'attachments' ? '. Current screen.' : ''}`}
+            onPress={() => go(attachmentsRoute?.name)}
           />
         </Animated.View>
 

@@ -18,10 +18,22 @@ function messageLabel(message: Message) {
   return `You: ${message.text ?? 'Empty thought'}. ${formatTime(message.createdAt)}${message.updatedAt !== message.createdAt ? '. Edited' : ''}. Long press for actions.`;
 }
 
-export function MessageMetadata({ message, inside = false, onActions }: { message: Message; inside?: boolean; onActions: () => void }) {
+export function MessageMetadata({ message, inside = false, onActions, splitPills = false }: { message: Message; inside?: boolean; onActions: () => void; splitPills?: boolean }) {
   const { tokens } = useTheme();
   return <View style={[styles.metadata, inside && styles.metadataInside]}>
-    {message.organization ? <View accessibilityLabel={`Organized in ${message.organization.boardName}, ${message.organization.columnName}`} style={[styles.boardChip, { backgroundColor: tokens.accentSoft }]}><Text numberOfLines={1} style={[styles.boardChipText, { color: tokens.accentStrong }]}>{message.organization.boardName} · {message.organization.columnName}</Text></View> : null}
+    {message.organization ? (splitPills ? <>
+      <View accessibilityLabel={`Board: ${message.organization.boardName}`} style={[styles.pill, { backgroundColor: tokens.accentSoft }]}>
+        <Ionicons accessible={false} name="folder-outline" size={11} color={tokens.accentStrong} />
+        <Text numberOfLines={1} style={[styles.pillText, { color: tokens.accentStrong }]}>{message.organization.boardName}</Text>
+      </View>
+      <View accessibilityLabel={`Column: ${message.organization.columnName}`} style={[styles.pill, { backgroundColor: tokens.accentSoft }]}>
+        <Ionicons accessible={false} name="calendar-outline" size={11} color={tokens.accentStrong} />
+        <Text numberOfLines={1} style={[styles.pillText, { color: tokens.accentStrong }]}>{message.organization.columnName}</Text>
+      </View>
+    </> : <View accessibilityLabel={`Organized in ${message.organization.boardName}, ${message.organization.columnName}`} style={[styles.boardChip, { backgroundColor: tokens.accentSoft }]}>
+      <Ionicons accessible={false} name="folder-outline" size={10} color={tokens.accentStrong} />
+      <Text numberOfLines={1} style={[styles.boardChipText, { color: tokens.accentStrong }]}>{message.organization.boardName} · {message.organization.columnName}</Text>
+    </View>) : null}
     <Text style={[styles.time, { color: tokens.textMuted }]}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? ' · edited' : ''}</Text>
     {message.pinned ? <Ionicons accessibilityLabel="Pinned" name="pin-outline" size={13} color={tokens.textMuted} /> : null}
     <Pressable accessibilityRole="button" accessibilityLabel="Thought actions" hitSlop={8} onPress={onActions} style={styles.more}>
@@ -105,7 +117,7 @@ function StructuredContent({ text, mode, accentColor }: { text: string; mode: Co
       return <View key={line.key} style={[styles.itemRow, mode === 'detail' && styles.itemRowDetail]}>
         {line.checked === null
           ? <View style={[styles.bullet, mode === 'detail' && styles.bulletDetail, { backgroundColor: bulletColor }]} />
-          : <View style={[styles.checkbox, mode === 'detail' && styles.checkboxDetail, { borderColor: line.checked ? bulletColor : tokens.borderSubtle, backgroundColor: line.checked ? bulletColor : 'transparent' }]}>{line.checked ? <Ionicons accessible={false} name="checkmark" size={mode === 'detail' ? 14 : 12} color={checkedIconColor} /> : null}</View>}
+          : <View style={[styles.checkbox, mode === 'detail' && styles.checkboxDetail, { borderColor: line.checked ? bulletColor : tokens.borderSubtle, backgroundColor: line.checked ? bulletColor : 'transparent' }]}>{line.checked ? <Ionicons accessible={false} name="checkmark" size={12} color={checkedIconColor} /> : null}</View>}
         <TextWithLinks text={line.text} style={[mode === 'detail' ? styles.itemTextDetail : styles.itemText, { color: tokens.textPrimary }]} />
       </View>;
     })}
@@ -138,29 +150,45 @@ const styles = StyleSheet.create({
   noteCard: { alignSelf: 'flex-end', width: '100%', maxWidth: 640, overflow: 'hidden', paddingHorizontal: spacing.md, paddingTop: spacing.md, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.contentCard },
   noteText: { fontSize: 16, lineHeight: 24 },
   compactParagraphs: { gap: spacing.sm },
-  detailContent: { gap: spacing.lg },
-  // Wider than compact's paragraph gap — read as a document with clearly
-  // separated paragraphs, not a chat bubble's tight run of lines.
-  detailParagraphs: { gap: spacing.lg },
-  detailText: { fontSize: 17, lineHeight: 27 },
+  detailContent: { gap: spacing.sm },
+  // Tighter than it used to be, but still visibly more than a bullet-to-bullet
+  // gap — paragraphs read as a document, just a compact one now (see PHASE:
+  // COMPACT CARD DETAILS CONTENT TYPOGRAPHY).
+  detailParagraphs: { gap: spacing.sm },
+  detailText: { fontSize: 16, lineHeight: 22 },
   structuredBody: { gap: spacing.xs },
-  structuredBodyDetail: { gap: spacing.md },
+  // Was spacing.md (16): with itemRowDetail's own minHeight removed below, that
+  // extra gap was compounding with natural line-height to make list items read
+  // as far apart as separate paragraphs. spacing.xs keeps items visually
+  // distinct without the note dominating the screen.
+  structuredBodyDetail: { gap: spacing.xs },
   structuredCopy: { fontSize: 16, lineHeight: 23, fontWeight: '600' },
-  structuredCopyDetail: { fontSize: 18, lineHeight: 26, fontWeight: '700' },
+  structuredCopyDetail: { fontSize: 16, lineHeight: 22, fontWeight: '700' },
   paragraphSpacer: { height: spacing.xxs },
-  paragraphSpacerDetail: { height: spacing.xs },
+  paragraphSpacerDetail: { height: spacing.xxs },
   itemRow: { minHeight: 28, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  itemRowDetail: { minHeight: 36, gap: spacing.sm },
+  // No minHeight here (unlike compact's, which sizes a tappable chat-bubble row):
+  // detail rows are static text, so their height should come from the text
+  // itself, not an enforced touch-target minimum — that alone was the biggest
+  // single contributor to oversized bullet spacing. Gap is the bullet-to-text
+  // indentation now that bulletDetail below no longer adds its own marginRight.
+  itemRowDetail: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   itemText: { flex: 1, minWidth: 0, fontSize: 16, lineHeight: 23 },
-  itemTextDetail: { flex: 1, minWidth: 0, fontSize: 17, lineHeight: 26 },
+  itemTextDetail: { flex: 1, minWidth: 0, fontSize: 16, lineHeight: 22 },
   bullet: { width: 6, height: 6, marginTop: 8, marginLeft: 5, marginRight: 5, borderRadius: 3 },
-  bulletDetail: { width: 7, height: 7, marginTop: 9 },
+  // Smaller dot, and marginRight zeroed out so itemRowDetail's `gap` above is the
+  // ONLY space between the dot and its text (avoids double-spacing the two). The
+  // marginTop centers the dot on the first line's midpoint for the new 16/22
+  // font/line-height (22 - 6) / 2 = 8.
+  bulletDetail: { width: 6, height: 6, marginTop: 8, marginRight: 0 },
   checkbox: { width: 18, height: 18, marginTop: 2, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 5 },
-  checkboxDetail: { width: 22, height: 22, marginTop: 2, borderRadius: 6 },
+  checkboxDetail: { width: 18, height: 18, marginTop: 2, borderRadius: 5 },
   metadata: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.xxs, marginTop: spacing.xxs },
   metadataInside: { alignSelf: 'flex-end', minHeight: 40, marginTop: spacing.xs },
-  boardChip: { maxWidth: 190, minHeight: 24, justifyContent: 'center', paddingHorizontal: spacing.xs, borderRadius: radii.pill },
+  boardChip: { maxWidth: 190, minHeight: 24, flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: spacing.xs, borderRadius: radii.pill },
   boardChipText: { flexShrink: 1, fontSize: 11, lineHeight: 15, fontWeight: '700' },
+  pill: { maxWidth: 140, minHeight: 24, flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: spacing.xs, borderRadius: radii.pill },
+  pillText: { flexShrink: 1, fontSize: 11, lineHeight: 15, fontWeight: '700' },
   time: { fontSize: 11, lineHeight: 15 },
   more: { width: 36, minHeight: 32, alignItems: 'center', justifyContent: 'center' },
 });
