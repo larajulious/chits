@@ -7,7 +7,7 @@ import { useTheme } from '@/components/theme-provider';
 import { radii, spacing } from '@/constants/theme';
 import type { Message } from '@/db/types';
 
-type NoteProps = { message: Message; focused: boolean; onActions: () => void };
+type NoteProps = { message: Message; focused: boolean; onActions: () => void; onHideAgain?: () => void };
 type ContentMode = 'compact' | 'detail';
 
 function formatTime(timestamp: number) {
@@ -18,7 +18,7 @@ function messageLabel(message: Message) {
   return `You: ${message.text ?? 'Empty thought'}. ${formatTime(message.createdAt)}${message.updatedAt !== message.createdAt ? '. Edited' : ''}. Long press for actions.`;
 }
 
-export function MessageMetadata({ message, inside = false, onActions, splitPills = false }: { message: Message; inside?: boolean; onActions: () => void; splitPills?: boolean }) {
+export function MessageMetadata({ message, inside = false, onActions, onHideAgain, splitPills = false }: { message: Message; inside?: boolean; onActions: () => void; onHideAgain?: () => void; splitPills?: boolean }) {
   const { tokens } = useTheme();
   return <View style={[styles.metadata, inside && styles.metadataInside]}>
     {message.organization ? (splitPills ? <>
@@ -36,13 +36,14 @@ export function MessageMetadata({ message, inside = false, onActions, splitPills
     </View>) : null}
     <Text style={[styles.time, { color: tokens.textMuted }]}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? ' · edited' : ''}</Text>
     {message.pinned ? <Ionicons accessibilityLabel="Pinned" name="pin-outline" size={13} color={tokens.textMuted} /> : null}
+    {onHideAgain ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" hitSlop={8} onPress={onHideAgain} style={({ pressed }) => [styles.privacyAction, pressed && styles.pressed]}><Ionicons accessible={false} name="eye-off-outline" size={16} color={tokens.textMuted} /></Pressable> : null}
     <Pressable accessibilityRole="button" accessibilityLabel="Thought actions" hitSlop={8} onPress={onActions} style={styles.more}>
       <Ionicons accessible={false} name="ellipsis-horizontal" size={17} color={tokens.textMuted} />
     </Pressable>
   </View>;
 }
 
-export function QuickThoughtBubble({ message, focused, onActions }: NoteProps) {
+export function QuickThoughtBubble({ message, focused, onActions, onHideAgain }: NoteProps) {
   const { tokens, themeKey } = useTheme();
   return <>
     <Pressable
@@ -59,11 +60,11 @@ export function QuickThoughtBubble({ message, focused, onActions }: NoteProps) {
     >
       <PlainTextContent text={message.text ?? ''} mode="compact" color={themeKey === 'light' ? tokens.textPrimary : tokens.accentText} />
     </Pressable>
-    <MessageMetadata message={message} onActions={onActions} />
+    <MessageMetadata message={message} onActions={onActions} onHideAgain={onHideAgain} />
   </>;
 }
 
-export function NoteCard({ message, focused, onActions }: NoteProps) {
+export function NoteCard({ message, focused, onActions, onHideAgain }: NoteProps) {
   const { tokens } = useTheme();
   return <Pressable
     accessibilityRole="button"
@@ -73,11 +74,11 @@ export function NoteCard({ message, focused, onActions }: NoteProps) {
     style={({ pressed }) => [styles.noteCard, { backgroundColor: tokens.surface, borderColor: focused ? tokens.accentStrong : tokens.borderSubtle }, focused && styles.focused, pressed && styles.pressed]}
   >
     <PlainTextContent text={message.text ?? ''} mode="compact" color={tokens.textPrimary} />
-    <MessageMetadata message={message} inside onActions={onActions} />
+    <MessageMetadata message={message} inside onActions={onActions} onHideAgain={onHideAgain} />
   </Pressable>;
 }
 
-export function StructuredNoteCard({ message, focused, onActions }: NoteProps) {
+export function StructuredNoteCard({ message, focused, onActions, onHideAgain }: NoteProps) {
   const { tokens } = useTheme();
   return <Pressable
     accessibilityRole="button"
@@ -87,7 +88,7 @@ export function StructuredNoteCard({ message, focused, onActions }: NoteProps) {
     style={({ pressed }) => [styles.noteCard, { backgroundColor: tokens.surface, borderColor: focused ? tokens.accentStrong : tokens.borderSubtle }, focused && styles.focused, pressed && styles.pressed]}
   >
     <StructuredContent text={message.text ?? ''} mode="compact" />
-    <MessageMetadata message={message} inside onActions={onActions} />
+    <MessageMetadata message={message} inside onActions={onActions} onHideAgain={onHideAgain} />
   </Pressable>;
 }
 
@@ -124,15 +125,15 @@ function StructuredContent({ text, mode, accentColor }: { text: string; mode: Co
   </View>;
 }
 
-export function MessageContentRenderer({ message, mode, focused = false, accentColor, onActions, renderAttachments }: { message: Message; mode: ContentMode; focused?: boolean; accentColor?: string; onActions?: () => void; renderAttachments?: () => ReactNode }) {
+export function MessageContentRenderer({ message, mode, focused = false, accentColor, onActions, onHideAgain, renderAttachments }: { message: Message; mode: ContentMode; focused?: boolean; accentColor?: string; onActions?: () => void; onHideAgain?: () => void; renderAttachments?: () => ReactNode }) {
   const { tokens } = useTheme();
   const presentation = classifyMessage(message);
   const actions = onActions ?? (() => undefined);
   if (mode === 'compact') {
     if (presentation === 'attachment') return <>{renderAttachments?.()}</>;
-    if (presentation === 'structured-note') return <StructuredNoteCard message={message} focused={focused} onActions={actions} />;
-    if (presentation === 'note') return <NoteCard message={message} focused={focused} onActions={actions} />;
-    return <QuickThoughtBubble message={message} focused={focused} onActions={actions} />;
+    if (presentation === 'structured-note') return <StructuredNoteCard message={message} focused={focused} onActions={actions} onHideAgain={onHideAgain} />;
+    if (presentation === 'note') return <NoteCard message={message} focused={focused} onActions={actions} onHideAgain={onHideAgain} />;
+    return <QuickThoughtBubble message={message} focused={focused} onActions={actions} onHideAgain={onHideAgain} />;
   }
   const textPresentation = classifyText(message.text);
   return <View style={styles.detailContent}>
@@ -190,5 +191,6 @@ const styles = StyleSheet.create({
   pill: { maxWidth: 140, minHeight: 24, flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: spacing.xs, borderRadius: radii.pill },
   pillText: { flexShrink: 1, fontSize: 11, lineHeight: 15, fontWeight: '700' },
   time: { fontSize: 11, lineHeight: 15 },
+  privacyAction: { width: 30, minHeight: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 15 },
   more: { width: 36, minHeight: 32, alignItems: 'center', justifyContent: 'center' },
 });

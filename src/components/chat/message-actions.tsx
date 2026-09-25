@@ -16,7 +16,21 @@ export function getCopyableMessageText(message: Message): string | null {
   return text || null;
 }
 
-type Props = { message: Message | null; onDismiss: () => void; onCopy: (message: Message) => void; onEdit: () => void; onPin: (message: Message) => void; onAddToBoard: () => void; onArchive: () => void; onDelete: () => void };
+type Props = {
+  message: Message | null;
+  temporarilyRevealed: boolean;
+  onDismiss: () => void;
+  onCopy: (message: Message) => void;
+  onEdit: () => void;
+  onPin: (message: Message) => void;
+  onAddToBoard: () => void;
+  onReveal: (message: Message) => void;
+  onHideAgain: (message: Message) => void;
+  onHideContent: (message: Message) => void;
+  onShowContent: (message: Message) => void;
+  onArchive: () => void;
+  onDelete: () => void;
+};
 
 function ActionRow({ icon, label, onPress, destructive = false }: { icon: ComponentProps<typeof Ionicons>['name']; label: string; onPress: () => void; destructive?: boolean }) {
   const { tokens: theme } = useTheme();
@@ -27,11 +41,12 @@ function ActionRow({ icon, label, onPress, destructive = false }: { icon: Compon
   </Pressable>;
 }
 
-export function MessageActions({ message, onDismiss, onCopy, onEdit, onPin, onAddToBoard, onArchive, onDelete }: Props) {
+export function MessageActions({ message, temporarilyRevealed, onDismiss, onCopy, onEdit, onPin, onAddToBoard, onReveal, onHideAgain, onHideContent, onShowContent, onArchive, onDelete }: Props) {
   const { tokens: theme } = useTheme();
   if (!message) return null;
   const hasAttachment = message.attachments.length > 0;
-  const preview = message.text || (hasAttachment ? `${message.attachments[0].type === 'audio' ? 'Audio note' : message.attachments[0].type[0].toUpperCase() + message.attachments[0].type.slice(1)} attachment` : 'Thought');
+  const covered = message.isHiddenContent && !temporarilyRevealed;
+  const preview = covered ? 'Hidden Chit' : message.text || (hasAttachment ? `${message.attachments[0].type === 'audio' ? 'Audio note' : message.attachments[0].type[0].toUpperCase() + message.attachments[0].type.slice(1)} attachment` : 'Thought');
   const copyable = getCopyableMessageText(message);
   return <Modal transparent animationType="slide" visible onRequestClose={onDismiss}>
     <View style={styles.backdrop}>
@@ -42,13 +57,18 @@ export function MessageActions({ message, onDismiss, onCopy, onEdit, onPin, onAd
           <Text numberOfLines={2} ellipsizeMode="tail" style={[styles.preview, { color: theme.textSecondary }]}>{preview}</Text>
 
           <View style={styles.group}>
-            <ActionRow icon="pencil-outline" label={hasAttachment ? 'Edit description' : 'Edit'} onPress={onEdit} />
-            {copyable ? <ActionRow icon="copy-outline" label="Copy chat" onPress={() => onCopy(message)} /> : null}
-            <ActionRow icon={message.organization ? 'grid' : 'grid-outline'} label={message.organization ? `Go to ${message.organization.boardName}` : 'Add to board'} onPress={onAddToBoard} />
+            {covered ? <ActionRow icon="eye-outline" label="Reveal" onPress={() => onReveal(message)} /> : null}
+            {!covered && copyable ? <ActionRow icon="copy-outline" label="Copy chat" onPress={() => onCopy(message)} /> : null}
+            {!covered ? <ActionRow icon="pencil-outline" label={hasAttachment ? 'Edit description' : 'Edit'} onPress={onEdit} /> : null}
+            <ActionRow icon={message.organization ? 'grid' : 'grid-outline'} label={message.organization ? `Go to ${message.organization.boardName}` : 'Add to Board'} onPress={onAddToBoard} />
           </View>
 
           <View style={[styles.group, styles.groupDivider, { borderTopColor: theme.borderSubtle }]}>
-            <ActionRow icon={message.pinned ? 'pin' : 'pin-outline'} label={message.pinned ? 'Unpin' : 'Pin'} onPress={() => onPin(message)} />
+            {!covered ? <ActionRow icon={message.pinned ? 'pin' : 'pin-outline'} label={message.pinned ? 'Unpin' : 'Pin'} onPress={() => onPin(message)} /> : null}
+            {message.isHiddenContent && temporarilyRevealed ? <ActionRow icon="eye-off-outline" label="Hide again" onPress={() => onHideAgain(message)} /> : null}
+            {message.isHiddenContent
+              ? <ActionRow icon="eye-outline" label="Show content" onPress={() => onShowContent(message)} />
+              : <ActionRow icon="eye-off-outline" label="Hide content" onPress={() => onHideContent(message)} />}
             <ActionRow icon="archive-outline" label="Archive" onPress={onArchive} />
           </View>
 

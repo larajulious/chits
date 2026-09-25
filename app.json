@@ -10,6 +10,7 @@
     "ios": {
       "icon": "./assets/images/app_icon.png",
       "bundleIdentifier": "com.larajulious.chitsapp",
+      "buildNumber": "4",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -61,7 +62,15 @@
       "expo-video",
       "expo-asset",
       "expo-sharing",
-      "react-native-zip-archive"
+      "react-native-zip-archive",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

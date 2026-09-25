@@ -127,6 +127,13 @@ const migrations: Migration[] = [{
       CREATE INDEX IF NOT EXISTS idx_card_attachments_card ON card_attachments(card_id, created_at ASC);
     `);
   },
+}, {
+  version: 18,
+  up: async (database) => {
+    // Presentation-only privacy. The original message and attachment files stay
+    // untouched; existing rows inherit the uncovered state.
+    await database.execAsync('ALTER TABLE messages ADD COLUMN is_hidden_content INTEGER NOT NULL DEFAULT 0;');
+  },
 }];
 
 export async function migrateDatabase(database: SQLiteDatabase) {

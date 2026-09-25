@@ -30,7 +30,7 @@ import { removeCardAttachmentFile } from '@/services/card-attachment-storage';
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 type ViewMode = 'boards' | 'cards';
 type CardSection = { title: string; data: CardListItem[] };
-type UnorganizedSummaryRow = { id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailUri: string | null; mediaDuration: number | null; mediaCount: number };
+type UnorganizedSummaryRow = { id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; isHiddenContent: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailUri: string | null; mediaDuration: number | null; mediaCount: number };
 const VIEW_MODE_SETTING_KEY = 'boards_view_mode';
 
 function pluralize(count: number, singular: string) {
@@ -38,6 +38,7 @@ function pluralize(count: number, singular: string) {
 }
 
 function unorganizedDisplayTitle(row: UnorganizedSummaryRow): string {
+  if (row.isHiddenContent === 1) return 'Hidden Chit';
   const text = row.text?.trim();
   if (text) return text.slice(0, 120);
   if (row.firstAttachmentType === 'file') return row.firstAttachmentName?.trim() || 'Attachment';
@@ -53,14 +54,15 @@ function unorganizedDisplayTitle(row: UnorganizedSummaryRow): string {
 // Chat is invisible there just because it hasn't been filed into a board.
 function unorganizedToCardListItem(row: UnorganizedSummaryRow): CardListItem {
   const title = unorganizedDisplayTitle(row);
-  const trimmedText = row.text?.trim();
+  const hidden = row.isHiddenContent === 1;
+  const trimmedText = hidden ? null : row.text?.trim();
   const preview = trimmedText && trimmedText !== title ? trimmedText : null;
   return {
     id: row.id, kind: 'thought', title, preview,
     boardId: null, boardName: null, boardAccent: null, columnId: null, columnName: null,
     createdAt: row.createdAt, updatedAt: row.updatedAt, pinned: row.pinned === 1,
     photoCount: row.photoCount, videoCount: row.videoCount, fileCount: row.fileCount,
-    previewMediaType: row.previewMediaType, thumbnailUri: row.thumbnailUri, mediaDuration: row.mediaDuration, mediaCount: row.mediaCount,
+    previewMediaType: hidden ? null : row.previewMediaType, thumbnailUri: hidden ? null : row.thumbnailUri, mediaDuration: hidden ? null : row.mediaDuration, mediaCount: hidden ? 0 : row.mediaCount,
   };
 }
 

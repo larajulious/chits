@@ -2,7 +2,7 @@ export type MessageType = 'text' | 'photo' | 'video' | 'audio' | 'file';
 
 export interface Message {
   id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number;
-  archivedAt: number | null; pinned: boolean; deletedAt: number | null; attachments: Attachment[];
+  archivedAt: number | null; pinned: boolean; isHiddenContent: boolean; deletedAt: number | null; attachments: Attachment[];
   organization?: { boardId: string; boardName: string; columnId: string; columnName: string } | null;
 }
 

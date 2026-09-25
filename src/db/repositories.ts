@@ -2,10 +2,10 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type AttachmentFilterType, type AttachmentPage, type AttachmentPageOptions, type AttachmentSummary, type Board, type Message, type MessageType, type PageOptions, type TimelineEvent, type TimelineEventType, type TimelineItem, type TimelinePage, type TimelinePageOptions } from './types';
 
 const DEFAULT_PAGE_SIZE = 50;
-type MessageRow = { id: string; text: string | null; type: Message['type']; created_at: number; updated_at: number; archived_at: number | null; pinned: number; deleted_at: number | null };
+type MessageRow = { id: string; text: string | null; type: Message['type']; created_at: number; updated_at: number; archived_at: number | null; pinned: number; is_hidden_content: number; deleted_at: number | null };
 type AttachmentRow = { id: string; message_id: string; type: MessageType; local_uri: string; original_name: string | null; mime_type: string | null; size: number | null; duration: number | null; width: number | null; height: number | null; created_at: number };
 type EventRow = { id: string; event_type: TimelineEventType; created_at: number; related_message_id: string | null; related_card_id: string | null; related_board_id: string | null; metadata_json: string | null; live_board_name: string | null };
-const messageFromRow = (row: MessageRow): Message => ({ id: row.id, text: row.text, type: row.type, createdAt: row.created_at, updatedAt: row.updated_at, archivedAt: row.archived_at, pinned: row.pinned === 1, deletedAt: row.deleted_at, attachments: [] });
+const messageFromRow = (row: MessageRow): Message => ({ id: row.id, text: row.text, type: row.type, createdAt: row.created_at, updatedAt: row.updated_at, archivedAt: row.archived_at, pinned: row.pinned === 1, isHiddenContent: row.is_hidden_content === 1, deletedAt: row.deleted_at, attachments: [] });
 const attachmentFromRow = (row: AttachmentRow): Attachment => ({ id: row.id, messageId: row.message_id, type: row.type, localUri: row.local_uri, originalName: row.original_name, mimeType: row.mime_type, size: row.size, duration: row.duration, width: row.width, height: row.height, createdAt: row.created_at });
 // A board's name in an event's metadata_json is a creation-time snapshot; a global
 // board-name consistency rule means these Chits activity bubbles must reflect a
@@ -146,11 +146,11 @@ export function createMessageRepository(database: SQLiteDatabase) {
         await transaction.runAsync('INSERT INTO messages (id, text, type, created_at, updated_at, archived_at, pinned, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', messageId, description, input.type, now, now, null, 0, null);
         await transaction.runAsync('INSERT INTO attachments (id, message_id, type, local_uri, original_name, mime_type, size, duration, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', attachment.id, messageId, attachment.type, attachment.localUri, attachment.originalName, attachment.mimeType, attachment.size, attachment.duration, attachment.width, attachment.height, now);
       });
-      return { id: messageId, text: description, type: input.type, createdAt: now, updatedAt: now, archivedAt: null, pinned: false, deletedAt: null, attachments: [attachment] };
+      return { id: messageId, text: description, type: input.type, createdAt: now, updatedAt: now, archivedAt: null, pinned: false, isHiddenContent: false, deletedAt: null, attachments: [attachment] };
     },
     async createText(text: string): Promise<Message> {
       const now = Date.now();
-      const message: Message = { id: newId(), text, type: 'text', createdAt: now, updatedAt: now, archivedAt: null, pinned: false, deletedAt: null, attachments: [] };
+      const message: Message = { id: newId(), text, type: 'text', createdAt: now, updatedAt: now, archivedAt: null, pinned: false, isHiddenContent: false, deletedAt: null, attachments: [] };
       await database.runAsync('INSERT INTO messages (id, text, type, created_at, updated_at, archived_at, pinned, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', message.id, message.text, message.type, message.createdAt, message.updatedAt, null, 0, null);
       return message;
     },
@@ -245,6 +245,12 @@ export function createMessageRepository(database: SQLiteDatabase) {
       const result = await database.runAsync('UPDATE messages SET pinned = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL AND archived_at IS NULL', pinned ? 1 : 0, Date.now(), id);
       if (result.changes !== 1) throw new Error('That thought is no longer available.');
     },
+    async setHiddenContent(id: string, hidden: boolean) {
+      // Privacy presentation state must not reorder the timeline or pinned lists,
+      // so changing it deliberately leaves updated_at untouched.
+      const result = await database.runAsync('UPDATE messages SET is_hidden_content = ? WHERE id = ? AND deleted_at IS NULL', hidden ? 1 : 0, id);
+      if (result.changes !== 1) throw new Error('That thought is no longer available.');
+    },
     async archive(id: string) {
       await database.withExclusiveTransactionAsync(async (transaction) => {
         const now = Date.now(); const result = await transaction.runAsync('UPDATE messages SET archived_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL AND archived_at IS NULL', now, now, id);
@@ -305,8 +311,8 @@ export function createMessageRepository(database: SQLiteDatabase) {
       // correlated subquery is enough; no card/card_attachments to union in
       // yet since it isn't organized into a card at all.
       const MEDIA_PRIORITY = `CASE a.type WHEN 'photo' THEN 1 WHEN 'video' THEN 2 WHEN 'audio' THEN 3 ELSE 9 END`;
-      return database.getAllAsync<{ id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailUri: string | null; mediaDuration: number | null; mediaCount: number }>(`
-        SELECT m.id, m.text, m.type, m.created_at AS createdAt, m.updated_at AS updatedAt, m.pinned,
+      return database.getAllAsync<{ id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; isHiddenContent: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailUri: string | null; mediaDuration: number | null; mediaCount: number }>(`
+        SELECT m.id, m.text, m.type, m.created_at AS createdAt, m.updated_at AS updatedAt, m.pinned, m.is_hidden_content AS isHiddenContent,
           (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id AND a.type = 'photo') AS photoCount,
           (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id AND a.type = 'video') AS videoCount,
           (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id AND a.type = 'file') AS fileCount,
@@ -397,8 +403,8 @@ export function createBoardRepository(database: SQLiteDatabase) {
     async archiveBoard(id: string) { const result = await database.runAsync('UPDATE boards SET archived_at = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL', Date.now(), Date.now(), id); if (result.changes !== 1) throw new Error('That board is no longer available.'); },
     async restoreBoard(id: string) { const result = await database.runAsync('UPDATE boards SET archived_at = NULL, updated_at = ? WHERE id = ?', Date.now(), id); if (result.changes !== 1) throw new Error('That board is no longer available.'); },
     async restoreCard(id: string) { const result = await database.runAsync('UPDATE cards SET archived_at = NULL, updated_at = ? WHERE id = ?', Date.now(), id); if (result.changes !== 1) throw new Error('That card is no longer available.'); },
-    listArchived: () => database.getAllAsync<{ id: string; title: string; kind: 'message' | 'card' | 'board'; archivedAt: number }>(`SELECT id, COALESCE(text, 'Attachment') AS title, 'message' AS kind, archived_at AS archivedAt FROM messages WHERE archived_at IS NOT NULL UNION ALL SELECT id, COALESCE(title, 'Related thoughts') AS title, 'card' AS kind, archived_at AS archivedAt FROM cards WHERE archived_at IS NOT NULL UNION ALL SELECT id, name AS title, 'board' AS kind, archived_at AS archivedAt FROM boards WHERE archived_at IS NOT NULL ORDER BY archivedAt DESC`),
-    search: (term: string, includeArchived = false) => { const like = `%${term.replace(/[%_]/g, '\\$&')}%`; return database.getAllAsync<{ id: string; title: string; context: string; kind: 'message' | 'card' | 'board' | 'file' }>(`SELECT id, text AS title, 'Chat' AS context, 'message' AS kind FROM messages WHERE text LIKE ? ESCAPE '\\' ${includeArchived ? '' : 'AND archived_at IS NULL AND deleted_at IS NULL'} UNION ALL SELECT c.id, COALESCE(c.title, 'Related thoughts') AS title, b.name AS context, 'card' AS kind FROM cards c INNER JOIN boards b ON b.id = c.board_id WHERE c.title LIKE ? ESCAPE '\\' ${includeArchived ? '' : 'AND c.archived_at IS NULL AND b.archived_at IS NULL'} UNION ALL SELECT b.id, b.name AS title, 'Board' AS context, 'board' AS kind FROM boards b WHERE b.name LIKE ? ESCAPE '\\' ${includeArchived ? '' : 'AND b.archived_at IS NULL'} UNION ALL SELECT a.message_id AS id, COALESCE(a.original_name, 'Attachment') AS title, 'File' AS context, 'file' AS kind FROM attachments a WHERE a.original_name LIKE ? ESCAPE '\\' ORDER BY title COLLATE NOCASE LIMIT 100`, like, like, like, like); },
+    listArchived: () => database.getAllAsync<{ id: string; title: string; kind: 'message' | 'card' | 'board'; archivedAt: number }>(`SELECT id, CASE WHEN is_hidden_content = 1 THEN 'Hidden Chit' ELSE COALESCE(text, 'Attachment') END AS title, 'message' AS kind, archived_at AS archivedAt FROM messages WHERE archived_at IS NOT NULL UNION ALL SELECT id, COALESCE(title, 'Related thoughts') AS title, 'card' AS kind, archived_at AS archivedAt FROM cards WHERE archived_at IS NOT NULL UNION ALL SELECT id, name AS title, 'board' AS kind, archived_at AS archivedAt FROM boards WHERE archived_at IS NOT NULL ORDER BY archivedAt DESC`),
+    search: (term: string, includeArchived = false) => { const like = `%${term.replace(/[%_]/g, '\\$&')}%`; return database.getAllAsync<{ id: string; title: string; context: string; kind: 'message' | 'card' | 'board' | 'file' }>(`SELECT id, CASE WHEN is_hidden_content = 1 THEN 'Hidden Chit' ELSE text END AS title, 'Chat' AS context, 'message' AS kind FROM messages WHERE text LIKE ? ESCAPE '\\' ${includeArchived ? '' : 'AND archived_at IS NULL AND deleted_at IS NULL'} UNION ALL SELECT c.id, COALESCE(c.title, 'Related thoughts') AS title, b.name AS context, 'card' AS kind FROM cards c INNER JOIN boards b ON b.id = c.board_id WHERE c.title LIKE ? ESCAPE '\\' ${includeArchived ? '' : 'AND c.archived_at IS NULL AND b.archived_at IS NULL'} UNION ALL SELECT b.id, b.name AS title, 'Board' AS context, 'board' AS kind FROM boards b WHERE b.name LIKE ? ESCAPE '\\' ${includeArchived ? '' : 'AND b.archived_at IS NULL'} UNION ALL SELECT a.message_id AS id, CASE WHEN m.is_hidden_content = 1 THEN 'Hidden Chit' ELSE COALESCE(a.original_name, 'Attachment') END AS title, CASE WHEN m.is_hidden_content = 1 THEN 'Chat' ELSE 'File' END AS context, 'file' AS kind FROM attachments a INNER JOIN messages m ON m.id = a.message_id WHERE a.original_name LIKE ? ESCAPE '\\' ORDER BY title COLLATE NOCASE LIMIT 100`, like, like, like, like); },
     getById: (id: string) => database.getFirstAsync<Board>('SELECT id, name, icon, accent, created_at AS createdAt, updated_at AS updatedAt, archived_at AS archivedAt, show_column_navigator = 1 AS showColumnNavigator FROM boards WHERE id = ? AND archived_at IS NULL', id),
     async create(input: { name: string; icon?: string | null; accent?: string | null }) {
       const now = Date.now(); const board: Board = { id: newId(), name: input.name, icon: input.icon ?? null, accent: input.accent ?? null, createdAt: now, updatedAt: now, archivedAt: null, showColumnNavigator: true };

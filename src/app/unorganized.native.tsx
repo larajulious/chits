@@ -25,6 +25,7 @@ function boardIconName(icon: string | null): IoniconName { return icon && BOARD_
 function pluralize(count: number, singular: string) { return `${count} ${count === 1 ? singular : `${singular}s`}`; }
 
 function preview(message: Message) {
+  if (message.isHiddenContent) return 'Hidden Chit';
   if (message.text?.trim()) return message.text;
   const attachment = message.attachments[0];
   if (attachment?.type === 'file') return attachment.originalName?.trim() || 'Attachment';
@@ -46,6 +47,7 @@ function VideoThumb({ attachment }: { attachment: Attachment }) {
 
 function Thumbnail({ message }: { message: Message }) {
   const { tokens: theme } = useTheme();
+  if (message.isHiddenContent) return <View accessibilityLabel="Hidden content" style={[thumbStyles.thumb, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name="eye-off-outline" size={20} color={theme.textMuted} /></View>;
   const attachment = message.attachments[0];
   if (!attachment) return null;
   if (attachment.type === 'photo') return <Image source={attachment.localUri} contentFit="cover" style={thumbStyles.thumb} />;

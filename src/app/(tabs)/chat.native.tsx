@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, BackHandler, FlatList, Keyboard, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, AppState, BackHandler, FlatList, Keyboard, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 
 import { AttachmentDraftPreview } from '@/components/chat/attachment-draft-preview';
@@ -110,6 +110,7 @@ function ChitsRow({ event, onPress }: { event: TimelineEvent; onPress: () => voi
 }
 
 function searchResultPreview(message: Message) {
+  if (message.isHiddenContent) return 'Hidden Chit';
   if (message.text?.trim()) return message.text.trim();
   const attachment = message.attachments[0];
   if (!attachment) return 'Thought';
@@ -120,6 +121,7 @@ function searchResultPreview(message: Message) {
 }
 
 function searchResultKind(message: Message): string | null {
+  if (message.isHiddenContent) return null;
   const attachment = message.attachments[0];
   if (!attachment || !message.text?.trim()) return null;
   if (attachment.type === 'photo') return 'Photo';
@@ -148,7 +150,7 @@ function SearchResultRow({ item, onPress }: { item: TimelineItem; onPress: () =>
   const message = item.message;
   const kind = searchResultKind(message);
   const preview = searchResultPreview(message);
-  const accessibleKind = kind ? `${kind}. ` : !message.text?.trim() && message.attachments[0] ? `${searchResultPreview(message)}. ` : '';
+  const accessibleKind = kind ? `${kind}. ` : !message.isHiddenContent && !message.text?.trim() && message.attachments[0] ? `${searchResultPreview(message)}. ` : '';
   return <Pressable accessibilityRole="button" accessibilityLabel={`${accessibleKind}${preview}. ${searchResultDateLabel(message.createdAt)}`} onPress={onPress} style={({ pressed }) => [styles.searchResultRow, pressed && styles.searchResultPressed]}>
     <View style={styles.searchResultCopy}>
       {kind ? <Text style={[styles.searchResultKind, { color: theme.accent }]}>{kind}</Text> : null}
@@ -180,6 +182,7 @@ function DateSeparator({ label }: { label: string }) {
 }
 
 function quickFilterIcon(message: Message): React.ComponentProps<typeof Ionicons>['name'] {
+  if (message.isHiddenContent) return 'eye-off-outline';
   const attachment = message.attachments[0];
   if (attachment?.type === 'audio') return 'mic-outline';
   if (attachment?.type === 'photo' || attachment?.type === 'video') return 'image-outline';
@@ -187,6 +190,7 @@ function quickFilterIcon(message: Message): React.ComponentProps<typeof Ionicons
 }
 
 function quickFilterPreview(message: Message) {
+  if (message.isHiddenContent) return 'Hidden Chit';
   if (message.text?.trim()) return message.text.trim();
   const attachment = message.attachments[0];
   return attachment ? `${attachment.type[0].toUpperCase()}${attachment.type.slice(1)} attachment` : 'Untitled thought';
@@ -268,6 +272,7 @@ export default function ChatScreen() {
   const [attachmentDraft, setAttachmentDraft] = useState<AttachmentDraft | null>(null);
   const [editing, setEditing] = useState<Message | null>(null);
   const [selected, setSelected] = useState<Message | null>(null);
+  const [temporarilyRevealedIds, setTemporarilyRevealedIds] = useState<Set<string>>(() => new Set());
   const [toast, setToast] = useState<string | null>(null);
   const [pinnedMessages, setPinnedMessages] = useState<Message[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -348,7 +353,15 @@ export default function ChatScreen() {
   // alone) and it isn't already fully open.
   useFocusEffect(useCallback(() => {
     if (!opening && progress.get() < 1) progress.set(1);
+    return () => setTemporarilyRevealedIds(new Set());
   }, [opening, progress]));
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') setTemporarilyRevealedIds(new Set());
+    });
+    return () => subscription.remove();
+  }, []);
 
   useFocusEffect(useCallback(() => {
     if (!loadedOnce.current) return;
@@ -664,9 +677,54 @@ export default function ChatScreen() {
     try { await action(message); } catch { setError('That change could not be saved. Please try again.'); }
   }, []);
 
-  const beginEdit = () => { if (!selected) return; if (attachmentDraft) { setSelected(null); setError('Send or remove the attachment draft before editing another thought.'); return; } animateComposerTransition(); setDraft(selected.text ?? ''); setEditing(selected); setSelected(null); setComposerFocused(true); requestAnimationFrame(() => inputRef.current?.focus()); };
+  const updateMessagePrivacy = useCallback((id: string, isHiddenContent: boolean) => {
+    const update = (message: Message) => message.id === id ? { ...message, isHiddenContent } : message;
+    setFeed((current) => current.map((item) => item.kind === 'message' && item.message.id === id ? { ...item, message: update(item.message) } : item));
+    setPinnedMessages((current) => current.map(update));
+    setSearchResults((current) => current.map((item) => item.kind === 'message' && item.message.id === id ? { ...item, message: update(item.message) } : item));
+    setSelected((current) => current?.id === id ? update(current) : current);
+  }, []);
+
+  const animatePrivacyTransition = useCallback(() => {
+    if (!reduceMotion.current) LayoutAnimation.configureNext(LayoutAnimation.create(190, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity));
+  }, []);
+
+  const revealContent = useCallback((message: Message) => {
+    animatePrivacyTransition();
+    setTemporarilyRevealedIds((current) => new Set(current).add(message.id));
+    setSelected(null);
+  }, [animatePrivacyTransition]);
+
+  const hideAgain = useCallback((message: Message) => {
+    animatePrivacyTransition();
+    setTemporarilyRevealedIds((current) => { const next = new Set(current); next.delete(message.id); return next; });
+    setSelected(null);
+  }, [animatePrivacyTransition]);
+
+  const hideContent = useCallback((message: Message) => {
+    void runAction(async () => {
+      await repository.setHiddenContent(message.id, true);
+      animatePrivacyTransition();
+      updateMessagePrivacy(message.id, true);
+      setTemporarilyRevealedIds((current) => { const next = new Set(current); next.delete(message.id); return next; });
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }, message);
+  }, [animatePrivacyTransition, repository, runAction, updateMessagePrivacy]);
+
+  const showContent = useCallback((message: Message) => {
+    void runAction(async () => {
+      await repository.setHiddenContent(message.id, false);
+      animatePrivacyTransition();
+      updateMessagePrivacy(message.id, false);
+      setTemporarilyRevealedIds((current) => { const next = new Set(current); next.delete(message.id); return next; });
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }, message);
+  }, [animatePrivacyTransition, repository, runAction, updateMessagePrivacy]);
+
+  const beginEdit = () => { if (!selected || (selected.isHiddenContent && !temporarilyRevealedIds.has(selected.id))) return; if (attachmentDraft) { setSelected(null); setError('Send or remove the attachment draft before editing another thought.'); return; } animateComposerTransition(); setDraft(selected.text ?? ''); setEditing(selected); setSelected(null); setComposerFocused(true); requestAnimationFrame(() => inputRef.current?.focus()); };
   const cancelEditing = useCallback(() => { animateComposerTransition(); setEditing(null); setDraft(''); }, [animateComposerTransition]);
   const copyChat = (message: Message) => {
+    if (message.isHiddenContent && !temporarilyRevealedIds.has(message.id)) return;
     const text = getCopyableMessageText(message);
     setSelected(null);
     if (!text) return;
@@ -697,7 +755,7 @@ export default function ChatScreen() {
     });
   };
   const openEvent = useCallback((event: TimelineEvent) => { if (event.relatedBoardId) router.push(`/board/${event.relatedBoardId}`); }, [router]);
-  const renderFeedItem = useCallback(({ item, index }: { item: FeedItem; index: number }) => <View>{(index === 0 || dayStart(feed[index - 1].createdAt) !== dayStart(item.createdAt)) && <DateSeparator label={dateLabel(item.createdAt)} />}{item.kind === 'message' ? <MessageRow message={item.message} focused={item.message.id === focusedId} onLongPress={setSelected} /> : <ChitsRow event={item.event} onPress={() => openEvent(item.event)} />}</View>, [feed, focusedId, openEvent]);
+  const renderFeedItem = useCallback(({ item, index }: { item: FeedItem; index: number }) => <View>{(index === 0 || dayStart(feed[index - 1].createdAt) !== dayStart(item.createdAt)) && <DateSeparator label={dateLabel(item.createdAt)} />}{item.kind === 'message' ? <MessageRow message={item.message} focused={item.message.id === focusedId} temporarilyRevealed={temporarilyRevealedIds.has(item.message.id)} onReveal={revealContent} onHideAgain={hideAgain} onLongPress={setSelected} /> : <ChitsRow event={item.event} onPress={() => openEvent(item.event)} />}</View>, [feed, focusedId, hideAgain, openEvent, revealContent, temporarilyRevealedIds]);
   const hasDraft = Boolean(draft.trim());
   const canSend = hasDraft || Boolean(attachmentDraft) || Boolean(editing?.attachments.length);
   // ONE source of truth for compact vs. expanded (see PHASE: FIX INCONSISTENT
@@ -825,7 +883,7 @@ export default function ChatScreen() {
           </View>
         </Animated.View>
         </View>
-      <MessageActions message={selected} onDismiss={() => setSelected(null)} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} onAddToBoard={addToBoard} onArchive={archive} onDelete={remove} />
+      <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => setSelected(null)} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} onAddToBoard={addToBoard} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
       <Toast message={toast} />
       </Screen>
     </KeyboardAvoidingView>
