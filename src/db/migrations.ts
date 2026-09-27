@@ -1,5 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { normalizeStoredAttachmentPath } from '@/services/attachment-path';
+
 type Migration = { version: number; up: (database: SQLiteDatabase) => Promise<void> };
 
 export const RETIRED_SCHEDULING_DATA_MIGRATION = "DROP TABLE IF EXISTS reminders; DELETE FROM app_settings WHERE key = 'reminder_default_minutes';";
@@ -133,6 +135,35 @@ const migrations: Migration[] = [{
     // Presentation-only privacy. The original message and attachment files stay
     // untouched; existing rows inherit the uncovered state.
     await database.execAsync('ALTER TABLE messages ADD COLUMN is_hidden_content INTEGER NOT NULL DEFAULT 0;');
+  },
+}, {
+  version: 19,
+  up: async (database) => {
+    // Absolute iOS sandbox locations are not durable identifiers: the container
+    // prefix can change after an update/restore. Normalize first, then rebuild
+    // both tables so the obsolete local_uri column cannot receive absolute paths
+    // again. No files are moved or deleted by this migration.
+    await database.execAsync('ALTER TABLE attachments ADD COLUMN storage_path TEXT; ALTER TABLE card_attachments ADD COLUMN storage_path TEXT;');
+    for (const table of ['attachments', 'card_attachments'] as const) {
+      const rows = await database.getAllAsync<{ id: string; local_uri: string | null }>(`SELECT id, local_uri FROM ${table}`);
+      for (const row of rows) {
+        const storagePath = normalizeStoredAttachmentPath(row.local_uri) ?? '';
+        await database.runAsync(`UPDATE ${table} SET storage_path = ? WHERE id = ?`, storagePath, row.id);
+      }
+    }
+    await database.execAsync(`
+      CREATE TABLE attachments_relative (id TEXT PRIMARY KEY NOT NULL, message_id TEXT NOT NULL, type TEXT NOT NULL, storage_path TEXT NOT NULL, original_name TEXT, mime_type TEXT, size INTEGER, duration INTEGER, width INTEGER, height INTEGER, created_at INTEGER NOT NULL, FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE RESTRICT);
+      INSERT INTO attachments_relative (id, message_id, type, storage_path, original_name, mime_type, size, duration, width, height, created_at) SELECT id, message_id, type, storage_path, original_name, mime_type, size, duration, width, height, created_at FROM attachments;
+      DROP TABLE attachments;
+      ALTER TABLE attachments_relative RENAME TO attachments;
+      CREATE INDEX idx_attachments_message_id ON attachments(message_id);
+
+      CREATE TABLE card_attachments_relative (id TEXT PRIMARY KEY NOT NULL, card_id TEXT NOT NULL, type TEXT NOT NULL, storage_path TEXT NOT NULL, original_name TEXT, mime_type TEXT, size INTEGER, width INTEGER, height INTEGER, duration REAL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE RESTRICT);
+      INSERT INTO card_attachments_relative (id, card_id, type, storage_path, original_name, mime_type, size, width, height, duration, created_at, updated_at, deleted_at) SELECT id, card_id, type, storage_path, original_name, mime_type, size, width, height, duration, created_at, updated_at, deleted_at FROM card_attachments;
+      DROP TABLE card_attachments;
+      ALTER TABLE card_attachments_relative RENAME TO card_attachments;
+      CREATE INDEX idx_card_attachments_card ON card_attachments(card_id, created_at ASC);
+    `);
   },
 }];
 

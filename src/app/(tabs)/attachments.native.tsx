@@ -14,7 +14,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { AttachmentContent } from '@/components/chat/message-row';
 import { AppHeader, EmptyState, IconButton, PrimaryButton, Screen } from '@/components/ui/primitives';
@@ -44,7 +44,7 @@ function pluralize(count: number, singular: string) {
 }
 
 function toAttachmentLike(item: AttachmentSummary): AttachmentLike {
-  return { id: item.id, type: item.type, localUri: item.localUri, originalName: item.originalName, mimeType: item.mimeType, size: item.size, duration: item.duration, width: item.width, height: item.height, createdAt: item.createdAt };
+  return { id: item.id, type: item.type, storagePath: item.storagePath, originalName: item.originalName, mimeType: item.mimeType, size: item.size, duration: item.duration, width: item.width, height: item.height, createdAt: item.createdAt };
 }
 
 function formatDurationSeconds(durationMs: number) {
@@ -144,20 +144,22 @@ function AttachmentDetailModal({ item, onClose, onViewCard }: { item: Attachment
   const { tokens: theme } = useTheme();
   const contextLine = item.boardName ? `${item.boardName} • ${item.columnName}` : 'Unorganized';
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={[styles.detailScreen, { backgroundColor: theme.background }]}>
-        <AppHeader
-          title={item.cardTitle ?? (item.type === 'photo' ? 'Photo' : item.type === 'video' ? 'Video' : item.type === 'audio' ? 'Audio note' : 'File')}
-          leading={<IconButton label="Close" onPress={onClose}><Ionicons accessible={false} name="close" size={24} color={theme.textPrimary} /></IconButton>}
-        />
-        <ScrollView contentContainerStyle={styles.detailContent}>
-          <Text style={[styles.detailContext, { color: theme.textMuted }]}>{contextLine}</Text>
-          <View style={styles.detailMediaWrap}>
-            <AttachmentContent attachment={toAttachmentLike(item)} variant="detail" />
-          </View>
-          {item.cardId ? <PrimaryButton label="View card" onPress={() => onViewCard(item.cardId!)} /> : null}
-        </ScrollView>
-      </SafeAreaView>
+    <Modal visible animationType="slide" presentationStyle="fullScreen" statusBarTranslucent={false} navigationBarTranslucent={false} onRequestClose={onClose}>
+      <SafeAreaProvider>
+        <SafeAreaView edges={['top', 'right', 'bottom', 'left']} style={[styles.detailScreen, { backgroundColor: theme.background }]}>
+          <AppHeader
+            title={item.cardTitle ?? (item.type === 'photo' ? 'Photo' : item.type === 'video' ? 'Video' : item.type === 'audio' ? 'Audio note' : 'File')}
+            leading={<IconButton label="Close" onPress={onClose}><Ionicons accessible={false} name="close" size={24} color={theme.textPrimary} /></IconButton>}
+          />
+          <ScrollView contentContainerStyle={styles.detailContent}>
+            <Text style={[styles.detailContext, { color: theme.textMuted }]}>{contextLine}</Text>
+            <View style={styles.detailMediaWrap}>
+              <AttachmentContent attachment={toAttachmentLike(item)} variant="detail" />
+            </View>
+            {item.cardId ? <PrimaryButton label="View card" onPress={() => onViewCard(item.cardId!)} /> : null}
+          </ScrollView>
+        </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

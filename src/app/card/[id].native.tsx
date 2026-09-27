@@ -20,6 +20,7 @@ import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { radii, spacing, type ThemeTokens } from '@/constants/theme';
 import { createBoardRepository } from '@/db/repositories';
 import { persistCardAttachment, removeCardAttachmentFile } from '@/services/card-attachment-storage';
+import { resolveAttachmentUri } from '@/services/attachment-storage';
 import type { CardAttachment, Message } from '@/db/types';
 
 type Detail = { id: string; title: string | null; explicitTitle: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; pinned: number; attachmentCount: number };
@@ -259,7 +260,9 @@ export default function CardDetailScreen() {
   const shareCardAttachment = async (attachment: CardAttachment) => {
     try {
       if (!await Sharing.isAvailableAsync()) throw new Error();
-      await Sharing.shareAsync(attachment.localUri, { mimeType: attachment.mimeType ?? undefined });
+      const uri = resolveAttachmentUri(attachment.storagePath);
+      if (!uri) throw new Error();
+      await Sharing.shareAsync(uri, { mimeType: attachment.mimeType ?? undefined });
     } catch {
       setNotice('This attachment could not be shared.');
     }
@@ -270,7 +273,7 @@ export default function CardDetailScreen() {
     setCardAttachments((current) => current.filter((item) => item.id !== attachment.id));
     try {
       await repository.deleteCardAttachment(attachment.id);
-      await removeCardAttachmentFile(attachment.localUri);
+      await removeCardAttachmentFile(attachment.storagePath);
     } catch {
       setCardAttachments(previous);
       setNotice('Chits could not delete that attachment.');

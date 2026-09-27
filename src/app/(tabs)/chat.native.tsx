@@ -1,6 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
-import { deleteAsync } from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -23,6 +22,7 @@ import { EmptyState, Screen, Toast } from '@/components/ui/primitives';
 import { radii, spacing } from '@/constants/theme';
 import { createMessageRepository } from '@/db/repositories';
 import type { Message, TimelineCursor, TimelineEvent, TimelineItem } from '@/db/types';
+import { deleteAttachment } from '@/services/attachment-storage';
 
 const PAGE_SIZE = 50;
 const MIN_COMPOSER_INPUT_HEIGHT = 40;
@@ -750,7 +750,7 @@ export default function ChatScreen() {
         const removableUris = await repository.deletePermanently(message.id);
         setFeed((current) => current.filter((item) => item.kind !== 'message' || item.message.id !== message.id));
         await refreshPinned();
-        await Promise.all(removableUris.map((uri) => deleteAsync(uri, { idempotent: true }).catch(() => undefined)));
+        await Promise.all(removableUris.map((storagePath) => deleteAttachment(storagePath)));
       }, message),
     });
   };

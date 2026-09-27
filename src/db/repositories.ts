@@ -3,10 +3,10 @@ import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type AttachmentFilterType, 
 
 const DEFAULT_PAGE_SIZE = 50;
 type MessageRow = { id: string; text: string | null; type: Message['type']; created_at: number; updated_at: number; archived_at: number | null; pinned: number; is_hidden_content: number; deleted_at: number | null };
-type AttachmentRow = { id: string; message_id: string; type: MessageType; local_uri: string; original_name: string | null; mime_type: string | null; size: number | null; duration: number | null; width: number | null; height: number | null; created_at: number };
+type AttachmentRow = { id: string; message_id: string; type: MessageType; storage_path: string; original_name: string | null; mime_type: string | null; size: number | null; duration: number | null; width: number | null; height: number | null; created_at: number };
 type EventRow = { id: string; event_type: TimelineEventType; created_at: number; related_message_id: string | null; related_card_id: string | null; related_board_id: string | null; metadata_json: string | null; live_board_name: string | null };
 const messageFromRow = (row: MessageRow): Message => ({ id: row.id, text: row.text, type: row.type, createdAt: row.created_at, updatedAt: row.updated_at, archivedAt: row.archived_at, pinned: row.pinned === 1, isHiddenContent: row.is_hidden_content === 1, deletedAt: row.deleted_at, attachments: [] });
-const attachmentFromRow = (row: AttachmentRow): Attachment => ({ id: row.id, messageId: row.message_id, type: row.type, localUri: row.local_uri, originalName: row.original_name, mimeType: row.mime_type, size: row.size, duration: row.duration, width: row.width, height: row.height, createdAt: row.created_at });
+const attachmentFromRow = (row: AttachmentRow): Attachment => ({ id: row.id, messageId: row.message_id, type: row.type, storagePath: row.storage_path, originalName: row.original_name, mimeType: row.mime_type, size: row.size, duration: row.duration, width: row.width, height: row.height, createdAt: row.created_at });
 // A board's name in an event's metadata_json is a creation-time snapshot; a global
 // board-name consistency rule means these Chits activity bubbles must reflect a
 // rename too, not just the Board screen/drawer/etc. — so the live name (joined in
@@ -25,13 +25,13 @@ const CARD_TITLE_SQL = `COALESCE(NULLIF(TRIM(c.title), ''), (SELECT COALESCE(NUL
 // Everything a board card needs to render at stable dimensions — title, preview,
 // counts, and media dimensions/reference — resolved in SQL so no per-card follow-up
 // query is ever needed. Shared by the per-column and whole-board summary queries.
-type CardSummaryRow = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaUri: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null };
+type CardSummaryRow = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaPath: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null };
 const CARD_SUMMARY_SELECT_SQL = `SELECT c.id, c.column_id AS columnId, ${CARD_TITLE_SQL} AS title, c.position,
       (SELECT m.text FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id ORDER BY cm.position ASC LIMIT 1) AS preview,
       (SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id) AS attachmentCount,
       (SELECT COUNT(*) FROM card_messages cm WHERE cm.card_id = c.id) AS messageCount,
       ma.id AS mediaId, ma.message_id AS mediaMessageId, ma.type AS mediaType,
-      ma.local_uri AS mediaUri, ma.mime_type AS mediaMimeType, ma.size AS mediaSize,
+      ma.storage_path AS mediaPath, ma.mime_type AS mediaMimeType, ma.size AS mediaSize,
       ma.duration AS mediaDuration, ma.width AS mediaWidth, ma.height AS mediaHeight,
       ma.created_at AS mediaCreatedAt
       FROM cards c
@@ -53,7 +53,7 @@ const CARD_SUMMARY_SELECT_SQL = `SELECT c.id, c.column_id AS columnId, ${CARD_TI
 // board has since been archived reverts to being treated as unorganized here
 // too, for the same reason it does everywhere else in the app.
 const ATTACHMENT_UNION_SQL = `
-  SELECT a.id AS id, 'message' AS source, a.type AS type, a.local_uri AS localUri, a.original_name AS originalName,
+  SELECT a.id AS id, 'message' AS source, a.type AS type, a.storage_path AS storagePath, a.original_name AS originalName,
     a.mime_type AS mimeType, a.size AS size, a.duration AS duration, a.width AS width, a.height AS height,
     a.created_at AS createdAt, a.message_id AS messageId, m.text AS messageText,
     c.id AS cardId, CASE WHEN c.id IS NOT NULL THEN (${CARD_TITLE_SQL}) ELSE NULL END AS cardTitle,
@@ -66,7 +66,7 @@ const ATTACHMENT_UNION_SQL = `
   LEFT JOIN board_columns bc ON bc.id = c.column_id
   WHERE m.deleted_at IS NULL AND m.archived_at IS NULL
   UNION ALL
-  SELECT ca.id AS id, 'card' AS source, ca.type AS type, ca.local_uri AS localUri, ca.original_name AS originalName,
+  SELECT ca.id AS id, 'card' AS source, ca.type AS type, ca.storage_path AS storagePath, ca.original_name AS originalName,
     ca.mime_type AS mimeType, ca.size AS size, ca.duration AS duration, ca.width AS width, ca.height AS height,
     ca.created_at AS createdAt, NULL AS messageId, NULL AS messageText,
     c.id AS cardId, (${CARD_TITLE_SQL}) AS cardTitle,
@@ -77,8 +77,8 @@ const ATTACHMENT_UNION_SQL = `
   INNER JOIN board_columns bc ON bc.id = c.column_id
   WHERE ca.deleted_at IS NULL
 `;
-type AttachmentUnionRow = { id: string; source: 'message' | 'card'; type: MessageType; localUri: string; originalName: string | null; mimeType: string | null; size: number | null; duration: number | null; width: number | null; height: number | null; createdAt: number; messageId: string | null; messageText: string | null; cardId: string | null; cardTitle: string | null; boardId: string | null; boardName: string | null; columnId: string | null; columnName: string | null };
-const attachmentSummaryFromRow = (row: AttachmentUnionRow): AttachmentSummary => ({ id: row.id, source: row.source, type: row.type, localUri: row.localUri, originalName: row.originalName, mimeType: row.mimeType, size: row.size, duration: row.duration, width: row.width, height: row.height, createdAt: row.createdAt, messageId: row.messageId, cardId: row.cardId, cardTitle: row.cardTitle, boardId: row.boardId, boardName: row.boardName, columnId: row.columnId, columnName: row.columnName });
+type AttachmentUnionRow = { id: string; source: 'message' | 'card'; type: MessageType; storagePath: string; originalName: string | null; mimeType: string | null; size: number | null; duration: number | null; width: number | null; height: number | null; createdAt: number; messageId: string | null; messageText: string | null; cardId: string | null; cardTitle: string | null; boardId: string | null; boardName: string | null; columnId: string | null; columnName: string | null };
+const attachmentSummaryFromRow = (row: AttachmentUnionRow): AttachmentSummary => ({ id: row.id, source: row.source, type: row.type, storagePath: row.storagePath, originalName: row.originalName, mimeType: row.mimeType, size: row.size, duration: row.duration, width: row.width, height: row.height, createdAt: row.createdAt, messageId: row.messageId, cardId: row.cardId, cardTitle: row.cardTitle, boardId: row.boardId, boardName: row.boardName, columnId: row.columnId, columnName: row.columnName });
 function attachmentWhereClause(options: { type?: AttachmentFilterType; searchTerm?: string }) {
   const conditions: string[] = [];
   const params: (string | number)[] = [];
@@ -144,7 +144,7 @@ export function createMessageRepository(database: SQLiteDatabase) {
       const description = text?.trim() || null;
       await database.withExclusiveTransactionAsync(async (transaction) => {
         await transaction.runAsync('INSERT INTO messages (id, text, type, created_at, updated_at, archived_at, pinned, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', messageId, description, input.type, now, now, null, 0, null);
-        await transaction.runAsync('INSERT INTO attachments (id, message_id, type, local_uri, original_name, mime_type, size, duration, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', attachment.id, messageId, attachment.type, attachment.localUri, attachment.originalName, attachment.mimeType, attachment.size, attachment.duration, attachment.width, attachment.height, now);
+        await transaction.runAsync('INSERT INTO attachments (id, message_id, type, storage_path, original_name, mime_type, size, duration, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', attachment.id, messageId, attachment.type, attachment.storagePath, attachment.originalName, attachment.mimeType, attachment.size, attachment.duration, attachment.width, attachment.height, now);
       });
       return { id: messageId, text: description, type: input.type, createdAt: now, updatedAt: now, archivedAt: null, pinned: false, isHiddenContent: false, deletedAt: null, attachments: [attachment] };
     },
@@ -279,10 +279,10 @@ export function createMessageRepository(database: SQLiteDatabase) {
       await database.withExclusiveTransactionAsync(async (transaction) => {
         const message = await transaction.getFirstAsync<{ id: string }>('SELECT id FROM messages WHERE id = ?', id);
         if (!message) throw new Error('That thought is no longer available.');
-        const attachments = await transaction.getAllAsync<{ localUri: string }>('SELECT local_uri AS localUri FROM attachments WHERE message_id = ?', id);
+        const attachments = await transaction.getAllAsync<{ storagePath: string }>('SELECT storage_path AS storagePath FROM attachments WHERE message_id = ?', id);
         for (const attachment of attachments) {
-          const shared = await transaction.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM attachments WHERE local_uri = ? AND message_id != ?', attachment.localUri, id);
-          if (!(shared?.count ?? 0)) removableUris.push(attachment.localUri);
+          const shared = await transaction.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM attachments WHERE storage_path = ? AND message_id != ?', attachment.storagePath, id);
+          if (!(shared?.count ?? 0)) removableUris.push(attachment.storagePath);
         }
         await transaction.runAsync('DELETE FROM card_messages WHERE message_id = ?', id);
         await transaction.runAsync('DELETE FROM attachments WHERE message_id = ?', id);
@@ -304,14 +304,14 @@ export function createMessageRepository(database: SQLiteDatabase) {
     listUnorganizedSummaries: (options: { searchTerm?: string } = {}) => {
       const term = options.searchTerm?.trim();
       const like = term ? `%${term.replace(/[%_]/g, '\\$&')}%` : null;
-      // previewMediaType/thumbnailUri/mediaDuration all resolve the SAME
+      // previewMediaType/thumbnailPath/mediaDuration all resolve the SAME
       // photo > video > audio priority pick (see the media_candidates CTE in
       // listAllCardSummaries below) — there's only ever one source (this
       // message's own attachments) for an unorganized thought, so a plain
       // correlated subquery is enough; no card/card_attachments to union in
       // yet since it isn't organized into a card at all.
       const MEDIA_PRIORITY = `CASE a.type WHEN 'photo' THEN 1 WHEN 'video' THEN 2 WHEN 'audio' THEN 3 ELSE 9 END`;
-      return database.getAllAsync<{ id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; isHiddenContent: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailUri: string | null; mediaDuration: number | null; mediaCount: number }>(`
+      return database.getAllAsync<{ id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; isHiddenContent: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number }>(`
         SELECT m.id, m.text, m.type, m.created_at AS createdAt, m.updated_at AS updatedAt, m.pinned, m.is_hidden_content AS isHiddenContent,
           (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id AND a.type = 'photo') AS photoCount,
           (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id AND a.type = 'video') AS videoCount,
@@ -319,7 +319,7 @@ export function createMessageRepository(database: SQLiteDatabase) {
           (SELECT a.type FROM attachments a WHERE a.message_id = m.id ORDER BY a.created_at ASC LIMIT 1) AS firstAttachmentType,
           (SELECT a.original_name FROM attachments a WHERE a.message_id = m.id ORDER BY a.created_at ASC LIMIT 1) AS firstAttachmentName,
           (SELECT a.type FROM attachments a WHERE a.message_id = m.id AND a.type IN ('photo', 'video', 'audio') ORDER BY ${MEDIA_PRIORITY} ASC, a.created_at ASC LIMIT 1) AS previewMediaType,
-          (SELECT a.local_uri FROM attachments a WHERE a.message_id = m.id AND a.type IN ('photo', 'video', 'audio') ORDER BY ${MEDIA_PRIORITY} ASC, a.created_at ASC LIMIT 1) AS thumbnailUri,
+          (SELECT a.storage_path FROM attachments a WHERE a.message_id = m.id AND a.type IN ('photo', 'video', 'audio') ORDER BY ${MEDIA_PRIORITY} ASC, a.created_at ASC LIMIT 1) AS thumbnailPath,
           (SELECT a.duration FROM attachments a WHERE a.message_id = m.id AND a.type IN ('photo', 'video', 'audio') ORDER BY ${MEDIA_PRIORITY} ASC, a.created_at ASC LIMIT 1) AS mediaDuration,
           (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id AND a.type IN ('photo', 'video', 'audio')) AS mediaCount
         FROM messages m
@@ -344,8 +344,8 @@ export function createBoardRepository(database: SQLiteDatabase) {
   const removeCardOrganization = async (cardId: string) => {
     let removableUris: string[] = [];
     await database.withExclusiveTransactionAsync(async (transaction) => {
-      const attachments = await transaction.getAllAsync<{ local_uri: string }>('SELECT local_uri FROM card_attachments WHERE card_id = ?', cardId);
-      removableUris = attachments.map((row) => row.local_uri);
+      const attachments = await transaction.getAllAsync<{ storage_path: string }>('SELECT storage_path FROM card_attachments WHERE card_id = ?', cardId);
+      removableUris = attachments.map((row) => row.storage_path);
       await transaction.runAsync('DELETE FROM card_attachments WHERE card_id = ?', cardId);
       await transaction.runAsync('DELETE FROM card_comments WHERE card_id = ?', cardId);
       await transaction.runAsync('DELETE FROM card_messages WHERE card_id = ?', cardId);
@@ -548,14 +548,14 @@ export function createBoardRepository(database: SQLiteDatabase) {
     listAllCardSummaries: (options: { searchTerm?: string } = {}) => {
       const term = options.searchTerm?.trim();
       const like = term ? `%${term.replace(/[%_]/g, '\\$&')}%` : null;
-      return database.getAllAsync<{ id: string; title: string; preview: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; updatedAt: number; pinned: number; photoCount: number; videoCount: number; fileCount: number; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailUri: string | null; mediaDuration: number | null; mediaCount: number | null }>(`
+      return database.getAllAsync<{ id: string; title: string; preview: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; updatedAt: number; pinned: number; photoCount: number; videoCount: number; fileCount: number; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number | null }>(`
         WITH card_media AS (
-          SELECT cm.card_id AS cardId, a.type AS mediaType, a.local_uri AS uri, a.duration AS duration, a.created_at AS createdAt,
+          SELECT cm.card_id AS cardId, a.type AS mediaType, a.storage_path AS path, a.duration AS duration, a.created_at AS createdAt,
             CASE a.type WHEN 'photo' THEN 1 WHEN 'video' THEN 2 WHEN 'audio' THEN 3 ELSE 9 END AS priority
           FROM card_messages cm INNER JOIN attachments a ON a.message_id = cm.message_id
           WHERE a.type IN ('photo', 'video', 'audio')
           UNION ALL
-          SELECT ca.card_id AS cardId, ca.type AS mediaType, ca.local_uri AS uri, ca.duration AS duration, ca.created_at AS createdAt,
+          SELECT ca.card_id AS cardId, ca.type AS mediaType, ca.storage_path AS path, ca.duration AS duration, ca.created_at AS createdAt,
             CASE ca.type WHEN 'photo' THEN 1 WHEN 'video' THEN 2 ELSE 9 END AS priority
           FROM card_attachments ca
           WHERE ca.type IN ('photo', 'video')
@@ -574,7 +574,7 @@ export function createBoardRepository(database: SQLiteDatabase) {
           ((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id AND a.type = 'photo') + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.type = 'photo')) AS photoCount,
           ((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id AND a.type = 'video') + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.type = 'video')) AS videoCount,
           ((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id AND a.type = 'file') + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.type = 'file')) AS fileCount,
-          cmr.mediaType AS previewMediaType, cmr.uri AS thumbnailUri, cmr.duration AS mediaDuration, cmr.mediaCount AS mediaCount
+          cmr.mediaType AS previewMediaType, cmr.path AS thumbnailPath, cmr.duration AS mediaDuration, cmr.mediaCount AS mediaCount
         FROM cards c
         INNER JOIN boards b ON b.id = c.board_id
         INNER JOIN board_columns bc ON bc.id = c.column_id
@@ -691,7 +691,7 @@ export function createBoardRepository(database: SQLiteDatabase) {
     // Archiving a card deliberately does not touch card_comments or card_attachments
     // — both are preserved, matching the same recoverable-hide semantics as the
     // card itself.
-    // Returns the removed card_attachments' local_uris so the caller can unlink
+    // Returns the removed card_attachments' storage paths so the caller can unlink
     // the actual files (this layer only owns the DB; see card-attachment-storage
     // for the file lifecycle) — mirrors messageRepository.deletePermanently's
     // removableUris pattern. Shared by deleteCard AND detachCard below: card_messages
@@ -750,21 +750,21 @@ export function createBoardRepository(database: SQLiteDatabase) {
     // "source" attachment (that stays in `attachments`, owned by messages). Oldest
     // first, matching the stable-chronology ordering used everywhere else cards
     // list their own content (card_messages, card_comments).
-    listCardAttachments: (cardId: string) => database.getAllAsync<{ id: string; cardId: string; type: 'photo' | 'video' | 'file'; localUri: string; originalName: string | null; mimeType: string | null; size: number | null; width: number | null; height: number | null; duration: number | null; createdAt: number; updatedAt: number }>('SELECT id, card_id AS cardId, type, local_uri AS localUri, original_name AS originalName, mime_type AS mimeType, size, width, height, duration, created_at AS createdAt, updated_at AS updatedAt FROM card_attachments WHERE card_id = ? AND deleted_at IS NULL ORDER BY created_at ASC', cardId),
-    async addCardAttachment(cardId: string, details: { type: 'photo' | 'video' | 'file'; localUri: string; originalName: string | null; mimeType: string | null; size: number | null; width: number | null; height: number | null; duration: number | null }) {
+    listCardAttachments: (cardId: string) => database.getAllAsync<{ id: string; cardId: string; type: 'photo' | 'video' | 'file'; storagePath: string; originalName: string | null; mimeType: string | null; size: number | null; width: number | null; height: number | null; duration: number | null; createdAt: number; updatedAt: number }>('SELECT id, card_id AS cardId, type, storage_path AS storagePath, original_name AS originalName, mime_type AS mimeType, size, width, height, duration, created_at AS createdAt, updated_at AS updatedAt FROM card_attachments WHERE card_id = ? AND deleted_at IS NULL ORDER BY created_at ASC', cardId),
+    async addCardAttachment(cardId: string, details: { type: 'photo' | 'video' | 'file'; storagePath: string; originalName: string | null; mimeType: string | null; size: number | null; width: number | null; height: number | null; duration: number | null }) {
       const now = Date.now(); const id = newId();
-      await database.runAsync('INSERT INTO card_attachments (id, card_id, type, local_uri, original_name, mime_type, size, width, height, duration, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)', id, cardId, details.type, details.localUri, details.originalName, details.mimeType, details.size, details.width, details.height, details.duration, now, now);
+      await database.runAsync('INSERT INTO card_attachments (id, card_id, type, storage_path, original_name, mime_type, size, width, height, duration, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)', id, cardId, details.type, details.storagePath, details.originalName, details.mimeType, details.size, details.width, details.height, details.duration, now, now);
       return { id, cardId, ...details, createdAt: now, updatedAt: now };
     },
     // Hard-delete (no deleted_at use) since a physical file needs real cleanup —
-    // returns the local_uri so the caller can remove the file via
+    // returns the storage_path so the caller can remove the file via
     // card-attachment-storage; this layer only owns the DB record.
     async deleteCardAttachment(attachmentId: string) {
-      const row = await database.getFirstAsync<{ local_uri: string }>('SELECT local_uri FROM card_attachments WHERE id = ?', attachmentId);
+      const row = await database.getFirstAsync<{ storage_path: string }>('SELECT storage_path FROM card_attachments WHERE id = ?', attachmentId);
       if (!row) throw new Error('That attachment is no longer available.');
       const result = await database.runAsync('DELETE FROM card_attachments WHERE id = ?', attachmentId);
       if (result.changes !== 1) throw new Error('That attachment is no longer available.');
-      return row.local_uri;
+      return row.storage_path;
     },
   };
 }

@@ -11,7 +11,7 @@ export interface Message {
 // alone, so both a message's Attachment and a card's CardAttachment can share that
 // one rendering/viewer implementation.
 export interface AttachmentLike {
-  id: string; type: MessageType; localUri: string; originalName: string | null;
+  id: string; type: MessageType; storagePath: string; originalName: string | null;
   mimeType: string | null; size: number | null; duration: number | null; width: number | null;
   height: number | null; createdAt: number;
 }
@@ -56,7 +56,7 @@ export interface CardListItem {
   // photo/video/audio items considered, so the UI can show a "+N" overflow
   // indicator for everything beyond the one shown.
   previewMediaType: 'photo' | 'video' | 'audio' | null;
-  thumbnailUri: string | null;
+  thumbnailPath: string | null;
   mediaDuration: number | null;
   mediaCount: number;
 }
@@ -70,7 +70,7 @@ export interface CardListItem {
 // the attachment's source message hasn't been organized into any card yet.
 export type AttachmentFilterType = 'photo' | 'video' | 'audio' | 'file';
 export interface AttachmentSummary {
-  id: string; source: 'message' | 'card'; type: MessageType; localUri: string;
+  id: string; source: 'message' | 'card'; type: MessageType; storagePath: string;
   originalName: string | null; mimeType: string | null; size: number | null;
   duration: number | null; width: number | null; height: number | null; createdAt: number;
   messageId: string | null; cardId: string | null; cardTitle: string | null;

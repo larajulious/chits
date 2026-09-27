@@ -27,9 +27,9 @@ function formatDurationSeconds(durationMs: number) {
 // AttachmentLike shape AttachmentContent already knows how to render, so the
 // UI never has to know or care where the media came from.
 function getCardPreviewMedia(item: CardListItem): AttachmentLike | null {
-  if (!item.previewMediaType || !item.thumbnailUri) return null;
+  if (!item.previewMediaType || !item.thumbnailPath) return null;
   return {
-    id: item.id, type: item.previewMediaType, localUri: item.thumbnailUri,
+    id: item.id, type: item.previewMediaType, storagePath: item.thumbnailPath,
     originalName: null, mimeType: null, size: null, duration: item.mediaDuration,
     width: null, height: null, createdAt: item.updatedAt,
   };

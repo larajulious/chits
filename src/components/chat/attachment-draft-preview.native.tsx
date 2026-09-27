@@ -8,6 +8,7 @@ import { createVideoPlayer, type VideoThumbnail } from 'expo-video';
 import type { AttachmentDraft } from '@/components/chat/attachment-picker';
 import { useTheme } from '@/components/theme-provider';
 import { spacing } from '@/constants/theme';
+import { resolveAttachmentUri } from '@/services/attachment-storage';
 
 function formatDuration(duration: number | null) {
   if (!duration) return '0:00';
@@ -66,12 +67,13 @@ function AudioDraft({ uri, duration }: { uri: string; duration: number | null })
 export function AttachmentDraftPreview({ draft, compact, onRemove }: { draft: AttachmentDraft; compact: boolean; onRemove: () => void }) {
   const { tokens } = useTheme();
   const { attachment } = draft;
+  const uri = resolveAttachmentUri(attachment.storagePath) ?? '';
   const size = formatSize(attachment.size);
   const aspectRatio = attachment.width && attachment.height ? Math.max(0.72, Math.min(1.9, attachment.width / attachment.height)) : 4 / 3;
   return <View accessibilityLabel={`${attachment.type} attachment ready to send`} style={[styles.container, compact && styles.containerCompact, { backgroundColor: tokens.accentSoft, borderColor: tokens.accentBorder }]}> 
-    {attachment.type === 'photo' ? <PhotoPreview uri={attachment.localUri} aspectRatio={aspectRatio} compact={compact} /> : null}
-    {attachment.type === 'video' ? <VideoPoster uri={attachment.localUri} duration={attachment.duration} aspectRatio={aspectRatio} compact={compact} /> : null}
-    {attachment.type === 'audio' ? <AudioDraft uri={attachment.localUri} duration={attachment.duration} /> : null}
+    {attachment.type === 'photo' ? <PhotoPreview uri={uri} aspectRatio={aspectRatio} compact={compact} /> : null}
+    {attachment.type === 'video' ? <VideoPoster uri={uri} duration={attachment.duration} aspectRatio={aspectRatio} compact={compact} /> : null}
+    {attachment.type === 'audio' ? <AudioDraft uri={uri} duration={attachment.duration} /> : null}
     {attachment.type === 'file' ? <View style={styles.file}><View style={[styles.fileIcon, { backgroundColor: tokens.surface }]}><Ionicons accessible={false} name="document-outline" size={22} color={tokens.accent} /></View><View style={styles.fileCopy}><Text numberOfLines={2} style={[styles.fileName, { color: tokens.textPrimary }]}>{attachment.originalName ?? 'Document'}</Text><Text style={[styles.meta, { color: tokens.textMuted }]}>{[readableType(attachment.mimeType, attachment.originalName), size].filter(Boolean).join(' · ')}</Text></View></View> : null}
     <Pressable accessibilityRole="button" accessibilityLabel="Remove attachment" hitSlop={6} onPress={onRemove} style={[styles.remove, { backgroundColor: tokens.surface }]}><Ionicons accessible={false} name="close" size={17} color={tokens.textPrimary} /></Pressable>
   </View>;

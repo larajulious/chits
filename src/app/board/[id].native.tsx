@@ -25,7 +25,7 @@ type Column = { id: string; name: string; position: number };
 // `columns` for the carousel's FlatList `data`, but never stored, given an id, or
 // touched by any business logic (column counts, drag targets, navigator position).
 type CarouselItem = { kind: 'column'; column: Column } | { kind: 'add' };
-type Card = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaUri: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null };
+type Card = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaPath: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null };
 type DragState = { card: Card; sourceColumnId: string; destinationColumnId: string; fromIndex: number; toIndex: number; height: number; startY: number; overlayTop: number; startScrollY: number };
 const EDGE_ZONE = 52;
 const EDGE_DWELL_MS = 450;
@@ -201,7 +201,7 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
     const hidden = activeDragCardId?.get() === card.id;
     return { position: hidden ? 'absolute' : 'relative', top: 0, left: 0, right: 0, opacity: hidden ? 0 : 1, zIndex: hidden ? -1 : 0 };
   });
-  const media: Attachment | null = card.mediaId && card.mediaMessageId && card.mediaType && card.mediaUri ? { id: card.mediaId, messageId: card.mediaMessageId, type: card.mediaType, localUri: card.mediaUri, originalName: null, mimeType: card.mediaMimeType, size: card.mediaSize, duration: card.mediaDuration, width: card.mediaWidth, height: card.mediaHeight, createdAt: card.mediaCreatedAt ?? 0 } : null;
+  const media: Attachment | null = card.mediaId && card.mediaMessageId && card.mediaType && card.mediaPath ? { id: card.mediaId, messageId: card.mediaMessageId, type: card.mediaType, storagePath: card.mediaPath, originalName: null, mimeType: card.mediaMimeType, size: card.mediaSize, duration: card.mediaDuration, width: card.mediaWidth, height: card.mediaHeight, createdAt: card.mediaCreatedAt ?? 0 } : null;
   const hasMetadata = Boolean(card.attachmentCount || card.messageCount > 1);
   const accessibleMetadata = [card.messageCount > 1 ? `${card.messageCount} thoughts` : null, card.attachmentCount ? `${card.attachmentCount} attachments` : null].filter(Boolean).join(', ');
   // Long-press anywhere on the card activates drag, but a touch that begins on the
@@ -627,7 +627,7 @@ export default function BoardScreen() {
     const targetColumn = addNoteColumn;
     const position = cards.filter((card) => card.columnId === targetColumn.id).length;
     const { cardId } = await repository.createNoteCard({ boardId: id, columnId: targetColumn.id, text });
-    const newCard: Card = { id: cardId, columnId: targetColumn.id, title: text.trim().slice(0, 120) || null, position, preview: text.trim(), attachmentCount: 0, messageCount: 1, mediaId: null, mediaMessageId: null, mediaType: null, mediaUri: null, mediaMimeType: null, mediaSize: null, mediaDuration: null, mediaWidth: null, mediaHeight: null, mediaCreatedAt: null };
+    const newCard: Card = { id: cardId, columnId: targetColumn.id, title: text.trim().slice(0, 120) || null, position, preview: text.trim(), attachmentCount: 0, messageCount: 1, mediaId: null, mediaMessageId: null, mediaType: null, mediaPath: null, mediaMimeType: null, mediaSize: null, mediaDuration: null, mediaWidth: null, mediaHeight: null, mediaCreatedAt: null };
     setCards((current) => [...current, newCard]);
     setColumnCounts((current) => ({ ...current, [targetColumn.id]: (current[targetColumn.id] ?? 0) + 1 }));
     setJustAddedCardId(cardId);

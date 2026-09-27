@@ -15,6 +15,7 @@ import { useVideoThumbnail } from '@/components/chat/message-row';
 import { spacing, type ThemeTokens } from '@/constants/theme';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
 import type { Attachment, Board, Message } from '@/db/types';
+import { resolveAttachmentUri } from '@/services/attachment-storage';
 
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -41,7 +42,7 @@ function formatDateTime(timestamp: number) {
 
 function VideoThumb({ attachment }: { attachment: Attachment }) {
   const { tokens: theme } = useTheme();
-  const thumbnail = useVideoThumbnail(attachment.localUri);
+  const thumbnail = useVideoThumbnail(attachment.storagePath);
   return <View style={[thumbStyles.thumb, { backgroundColor: theme.surfaceElevated }]}>{thumbnail ? <Image source={thumbnail} contentFit="cover" style={StyleSheet.absoluteFill} /> : <Ionicons accessible={false} name="videocam-outline" size={20} color={theme.textMuted} />}<View style={thumbStyles.thumbPlay}><Ionicons accessible={false} name="play" size={11} color="#FFFFFF" /></View></View>;
 }
 
@@ -50,7 +51,7 @@ function Thumbnail({ message }: { message: Message }) {
   if (message.isHiddenContent) return <View accessibilityLabel="Hidden content" style={[thumbStyles.thumb, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name="eye-off-outline" size={20} color={theme.textMuted} /></View>;
   const attachment = message.attachments[0];
   if (!attachment) return null;
-  if (attachment.type === 'photo') return <Image source={attachment.localUri} contentFit="cover" style={thumbStyles.thumb} />;
+  if (attachment.type === 'photo') return <Image source={resolveAttachmentUri(attachment.storagePath) ?? ''} contentFit="cover" style={thumbStyles.thumb} />;
   if (attachment.type === 'video') return <VideoThumb attachment={attachment} />;
   const iconName: IoniconName = attachment.type === 'audio' ? 'mic-outline' : 'document-outline';
   return <View style={[thumbStyles.thumb, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name={iconName} size={20} color={theme.textMuted} /></View>;

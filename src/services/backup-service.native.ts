@@ -3,6 +3,7 @@ import { openDatabaseAsync, backupDatabaseAsync, type SQLiteDatabase } from 'exp
 import { zip, unzip } from 'react-native-zip-archive';
 
 import { migrateDatabase } from '@/db/migrations';
+import { normalizeStoredAttachmentPath } from '@/services/attachment-path';
 
 const BACKUP_VERSION = 1;
 const ATTACHMENTS_DIR_NAME = 'chits-attachments';
@@ -14,17 +15,6 @@ export type BackupValidation =
   | { valid: false; reason: string };
 
 const INVALID_REASON = 'This file doesn’t appear to be a valid Chits backup.';
-
-// A stored local_uri's path below `chits-attachments/` — for a flat message
-// attachment that's just the filename, but for a card attachment (nested under
-// `chits-attachments/cards/{cardId}/`) it preserves that subfolder too, so
-// restoring rebuilds the same directory structure rather than flattening it.
-function relativeToAttachmentsRoot(localUri: string): string | null {
-  const marker = `${ATTACHMENTS_DIR_NAME}/`;
-  const index = localUri.indexOf(marker);
-  if (index < 0) return null;
-  return localUri.slice(index + marker.length);
-}
 
 function timestampSlug(date: Date) {
   const pad = (value: number) => String(value).padStart(2, '0');
@@ -168,29 +158,17 @@ export async function restoreBackup(extractedDir: string): Promise<void> {
     await FileSystem.makeDirectoryAsync(attachmentsTarget, { intermediates: true });
   }
 
-  // Bring a backup made by an older Chits version up to the current schema, then
-  // point every attachment at THIS device's current document directory — a
-  // backup's stored absolute paths are not guaranteed to still resolve (this
-  // matters most across devices/reinstalls, but rewriting is cheap and always
-  // correct even in the common same-device case).
+  // Bring older backups up to the current schema. Paths stay relative; runtime
+  // consumers resolve them against this installation's Documents directory.
   const restored = await openDatabaseAsync(DB_FILENAME, undefined, sqliteDir);
   try {
     await migrateDatabase(restored);
-    const rows = await restored.getAllAsync<{ id: string; local_uri: string }>('SELECT id, local_uri FROM attachments');
-    for (const row of rows) {
-      const relative = relativeToAttachmentsRoot(row.local_uri);
-      if (!relative) continue;
-      const nextUri = `${attachmentsTarget}${relative}`;
-      if (nextUri !== row.local_uri) await restored.runAsync('UPDATE attachments SET local_uri = ? WHERE id = ?', nextUri, row.id);
-    }
-    // Card attachments live in a nested subfolder of the same attachments root —
-    // rewritten the same way so a restore on a new device/reinstall still resolves.
-    const cardAttachmentRows = await restored.getAllAsync<{ id: string; local_uri: string }>('SELECT id, local_uri FROM card_attachments');
-    for (const row of cardAttachmentRows) {
-      const relative = relativeToAttachmentsRoot(row.local_uri);
-      if (!relative) continue;
-      const nextUri = `${attachmentsTarget}${relative}`;
-      if (nextUri !== row.local_uri) await restored.runAsync('UPDATE card_attachments SET local_uri = ? WHERE id = ?', nextUri, row.id);
+    for (const table of ['attachments', 'card_attachments'] as const) {
+      const rows = await restored.getAllAsync<{ id: string; storage_path: string | null }>(`SELECT id, storage_path FROM ${table}`);
+      for (const row of rows) {
+        const storagePath = normalizeStoredAttachmentPath(row.storage_path) ?? '';
+        await restored.runAsync(`UPDATE ${table} SET storage_path = ? WHERE id = ?`, storagePath, row.id);
+      }
     }
   } finally {
     await restored.closeAsync();

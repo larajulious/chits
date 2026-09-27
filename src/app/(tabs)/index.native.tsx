@@ -30,7 +30,7 @@ import { removeCardAttachmentFile } from '@/services/card-attachment-storage';
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 type ViewMode = 'boards' | 'cards';
 type CardSection = { title: string; data: CardListItem[] };
-type UnorganizedSummaryRow = { id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; isHiddenContent: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailUri: string | null; mediaDuration: number | null; mediaCount: number };
+type UnorganizedSummaryRow = { id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; isHiddenContent: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number };
 const VIEW_MODE_SETTING_KEY = 'boards_view_mode';
 
 function pluralize(count: number, singular: string) {
@@ -62,7 +62,7 @@ function unorganizedToCardListItem(row: UnorganizedSummaryRow): CardListItem {
     boardId: null, boardName: null, boardAccent: null, columnId: null, columnName: null,
     createdAt: row.createdAt, updatedAt: row.updatedAt, pinned: row.pinned === 1,
     photoCount: row.photoCount, videoCount: row.videoCount, fileCount: row.fileCount,
-    previewMediaType: hidden ? null : row.previewMediaType, thumbnailUri: hidden ? null : row.thumbnailUri, mediaDuration: hidden ? null : row.mediaDuration, mediaCount: hidden ? 0 : row.mediaCount,
+    previewMediaType: hidden ? null : row.previewMediaType, thumbnailPath: hidden ? null : row.thumbnailPath, mediaDuration: hidden ? null : row.mediaDuration, mediaCount: hidden ? 0 : row.mediaCount,
   };
 }
 
