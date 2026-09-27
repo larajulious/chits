@@ -8,7 +8,6 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import * as Sharing from 'expo-sharing';
 
 import { AttachmentContent } from '@/components/chat/message-row';
 import { MessageContentRenderer } from '@/components/chat/message-note-cards';
@@ -20,7 +19,8 @@ import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { radii, spacing, type ThemeTokens } from '@/constants/theme';
 import { createBoardRepository } from '@/db/repositories';
 import { persistCardAttachment, removeCardAttachmentFile } from '@/services/card-attachment-storage';
-import { resolveAttachmentUri } from '@/services/attachment-storage';
+import { exportActionLabel, shareAttachment } from '@/services/attachment-export';
+import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
 import type { CardAttachment, Message } from '@/db/types';
 
 type Detail = { id: string; title: string | null; explicitTitle: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; pinned: number; attachmentCount: number };
@@ -72,6 +72,10 @@ export default function CardDetailScreen() {
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const showAttachmentLoader = useChitsLoading(attachmentBusy);
   const [toast, setToast] = useState<string | null>(null);
+  const download = useAttachmentExport();
+  // Session-only peek at hidden content, mirroring Chat's temporary reveal — the
+  // stored hidden flag only changes through the Hide/Show content action.
+  const [temporarilyRevealed, setTemporarilyRevealed] = useState(false);
   // Computed once at mount, not on every render — a direct Date.now() call inside
   // render is flagged as impure, and "Today" doesn't need to tick live anyway.
   const [renderedAt] = useState(() => Date.now());
@@ -258,14 +262,7 @@ export default function CardDetailScreen() {
   };
 
   const shareCardAttachment = async (attachment: CardAttachment) => {
-    try {
-      if (!await Sharing.isAvailableAsync()) throw new Error();
-      const uri = resolveAttachmentUri(attachment.storagePath);
-      if (!uri) throw new Error();
-      await Sharing.shareAsync(uri, { mimeType: attachment.mimeType ?? undefined });
-    } catch {
-      setNotice('This attachment could not be shared.');
-    }
+    if (!await shareAttachment(attachment)) setNotice('This attachment could not be shared.');
   };
 
   const deleteCardAttachmentNow = async (attachment: CardAttachment) => {
@@ -293,6 +290,7 @@ export default function CardDetailScreen() {
     title: attachment.type === 'file' ? (attachment.originalName ?? 'File') : attachment.type === 'photo' ? 'Photo' : 'Video',
     options: [
       { label: 'Share', icon: 'share-outline', onPress: () => void shareCardAttachment(attachment) },
+      { label: exportActionLabel(attachment), icon: 'download-outline', disabled: download.busy, onPress: () => void download.exportAttachment(attachment) },
       { label: 'Delete', icon: 'trash-outline', destructive: true, onPress: () => confirmDeleteCardAttachment(attachment) },
     ],
   });
@@ -335,6 +333,19 @@ export default function CardDetailScreen() {
     });
   };
 
+  const setContentHidden = async (hidden: boolean) => {
+    setNotice(null);
+    try {
+      await repository.setCardHiddenContent(id, hidden);
+      setMessages((current) => current.map((message) => ({ ...message, isHiddenContent: hidden })));
+      setTemporarilyRevealed(false);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setToast(hidden ? 'Content hidden' : 'Content visible');
+    } catch {
+      setNotice('Chits could not change this card’s visibility.');
+    }
+  };
+
   const archive = () => confirm({
     type: 'default',
     icon: 'archive-outline',
@@ -370,7 +381,11 @@ export default function CardDetailScreen() {
   const firstMessageTitle = messages[0] ? messages[0].text?.trim().slice(0, 120) || messageFallback(messages[0]) : null;
   const displayTitle = messages.length === 1 && detail.explicitTitle?.trim() === firstMessageTitle ? null : detail.explicitTitle;
 
-  const singleThoughtEditable = messages.length === 1 && Boolean(messages[0]?.text);
+  // A card is hidden when any of its thoughts is hidden in Chat — the same rule
+  // the board uses — and stays covered here until revealed for this visit.
+  const contentHidden = messages.some((message) => message.isHiddenContent);
+  const covered = contentHidden && !temporarilyRevealed;
+  const singleThoughtEditable = !covered && messages.length === 1 && Boolean(messages[0]?.text);
 
   // The content's thin left accent line takes its color from the card's own
   // board — same source of truth as the board detail screen — rather than the
@@ -395,7 +410,7 @@ export default function CardDetailScreen() {
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView ref={scrollRef} style={styles.flex} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          {titleEditing ? <View style={styles.editor}>
+          {covered ? <View style={styles.titleRow}><Text style={[styles.title, styles.hiddenTitle]}>Hidden Chit</Text></View> : titleEditing ? <View style={styles.editor}>
             <TextInput autoFocus accessibilityLabel="Card title" value={titleDraft} onChangeText={setTitleDraft} placeholder="Card title" placeholderTextColor={theme.textMuted} maxLength={120} returnKeyType="done" onSubmitEditing={() => void saveTitle()} style={[styles.titleInput, { borderColor: contentAccentSolid }]} />
             <View style={styles.editActions}>
               <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => void saveTitle()} style={[styles.editSave, { backgroundColor: contentAccentSolid }, savingEdit && styles.disabled]}><Text style={[styles.editSaveText, { color: contentAccentOn }]}>{savingEdit ? 'Saving…' : 'Save title'}</Text></Pressable>
@@ -414,12 +429,19 @@ export default function CardDetailScreen() {
 
         <View style={[styles.sectionHeader, styles.contentSectionHeader]}>
           <Text accessibilityRole="header" style={styles.sectionTitle}>CONTENT</Text>
-          {singleThoughtEditable ? <Pressable accessibilityRole="button" accessibilityLabel="Edit content" hitSlop={8} onPress={() => openContentEditor(messages[0])}><Text style={styles.inlineEditText}>Edit</Text></Pressable>
-            : messages.length > 1 ? <View style={styles.countBadge}><Text style={styles.countText}>{messages.length}</Text></View> : null}
+          <View style={styles.contentHeaderActions}>
+            {contentHidden && !covered ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" hitSlop={8} onPress={() => setTemporarilyRevealed(false)} style={styles.inlineEdit}><Ionicons accessible={false} name="eye-off-outline" size={16} color={theme.textMuted} /><Text style={[styles.inlineEditText, { color: theme.textMuted }]}>Hide again</Text></Pressable> : null}
+            {singleThoughtEditable ? <Pressable accessibilityRole="button" accessibilityLabel="Edit content" hitSlop={8} onPress={() => openContentEditor(messages[0])}><Text style={styles.inlineEditText}>Edit</Text></Pressable>
+              : messages.length > 1 ? <View style={styles.countBadge}><Text style={styles.countText}>{messages.length}</Text></View> : null}
+          </View>
         </View>
 
         <View style={[styles.contentBody, { borderLeftColor: contentAccentLine }]}>
-          {messages.map((message, index) => <View key={message.id} style={index > 0 && styles.thought}>
+          {covered ? <Pressable accessibilityRole="button" accessibilityLabel="Hidden content. Double tap to reveal." onPress={() => setTemporarilyRevealed(true)} style={({ pressed }) => [styles.hiddenCover, pressed && styles.pressed]}>
+            <Ionicons accessible={false} name="eye-off-outline" size={24} color={theme.textMuted} />
+            <Text style={styles.hiddenCoverTitle}>Content hidden</Text>
+            <Text style={styles.hiddenCoverCopy}>Tap to reveal</Text>
+          </Pressable> : messages.map((message, index) => <View key={message.id} style={index > 0 && styles.thought}>
             {messages.length > 1 ? <View style={styles.thoughtHeader}>
               <Text style={styles.thoughtLabel}>THOUGHT {index + 1}</Text>
               {message.text ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit thought ${index + 1}`} hitSlop={8} onPress={() => openContentEditor(message)} style={styles.inlineEdit}><Ionicons accessible={false} name="create-outline" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Edit</Text></Pressable> : null}
@@ -496,6 +518,11 @@ export default function CardDetailScreen() {
 
         <View style={styles.sectionHeader}><Text accessibilityRole="header" style={styles.sectionTitle}>CARD ACTIONS</Text></View>
         <View style={styles.cardActions}>
+          <Pressable accessibilityRole="button" onPress={() => void setContentHidden(!contentHidden)} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
+            <Ionicons accessible={false} name={contentHidden ? 'eye-outline' : 'eye-off-outline'} size={18} color={theme.textSecondary} />
+            <View style={styles.flexCopy}><Text style={styles.actionTitle}>{contentHidden ? 'Show content' : 'Hide content'}</Text><Text style={styles.actionCopy}>{contentHidden ? 'Make this card and its Chits visible again.' : 'Cover this card on the board and its Chits in Chat.'}</Text></View>
+          </Pressable>
+          <View style={styles.actionDivider} />
           <Pressable accessibilityRole="button" accessibilityLabel="Move back to Unorganized" accessibilityHint="Remove this card from its board and return its linked Chit to Unorganized." onPress={moveBackToUnorganized} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
             <Ionicons accessible={false} name="arrow-undo-outline" size={18} color={theme.textSecondary} />
             <View style={styles.flexCopy}><Text style={styles.actionTitle}>Move back to Unorganized</Text><Text style={styles.actionCopy}>Keeps your original Chits — just removes this card.</Text></View>
@@ -543,7 +570,7 @@ export default function CardDetailScreen() {
       </View>
     </KeyboardAvoidingView>
     <AddCardAttachmentSheet visible={addAttachmentOpen} onClose={() => setAddAttachmentOpen(false)} onPick={(kind) => void pickCardAttachment(kind)} />
-    <Toast message={toast} />
+    <Toast message={toast ?? download.status} />
   </Screen>;
 }
 
@@ -587,6 +614,11 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   // over from the old tinted card's board-color idea but pared down to just
   // that one subtle line.
   contentBody: { marginTop: spacing.sm, paddingLeft: spacing.sm, borderLeftWidth: 2 },
+  contentHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  hiddenTitle: { color: tokens.textMuted },
+  hiddenCover: { minHeight: 132, alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: radii.contentCard, backgroundColor: tokens.surfaceElevated },
+  hiddenCoverTitle: { marginTop: spacing.xxs, color: tokens.textSecondary, fontSize: 15, fontWeight: '700' },
+  hiddenCoverCopy: { color: tokens.textMuted, fontSize: 13 },
   countBadge: { minWidth: 26, height: 22, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7, borderRadius: 11, backgroundColor: tokens.surfaceElevated },
   countText: { color: tokens.textSecondary, fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
   flexCopy: { flex: 1, minWidth: 0 },

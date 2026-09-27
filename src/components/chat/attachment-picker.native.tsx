@@ -1,21 +1,17 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useState, type ComponentProps } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import * as DocumentPicker from 'expo-document-picker';
-import * as ImagePicker from 'expo-image-picker';
-import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
+import { getRecordingPermissionsAsync, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
 import { deleteAsync } from 'expo-file-system/legacy';
 
 import { BottomSheetSurface } from '@/components/ui/primitives';
 import { useTheme } from '@/components/theme-provider';
 import { spacing } from '@/constants/theme';
-import type { Attachment, MessageType } from '@/db/types';
-import { persistAttachment } from '@/services/attachment-storage';
+import type { MessageType } from '@/db/types';
+import { pickAndStageFile, pickAndStageMedia, stageAttachment, type AttachmentDraft } from '@/services/attachment-import';
+import { dismissKeyboardAsync } from '@/services/keyboard';
 
-export type AttachmentDraft = {
-  attachment: Omit<Attachment, 'id' | 'messageId' | 'createdAt'>;
-  remove: () => Promise<void>;
-};
+export type { AttachmentDraft } from '@/services/attachment-import';
 
 type Props = {
   disabled?: boolean;
@@ -43,53 +39,37 @@ export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(functi
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const stage = async (sourceUri: string, type: MessageType, metadata: { originalName: string | null; mimeType: string | null; size: number | null; duration: number | null; width: number | null; height: number | null }) => {
+  // Picking/staging is shared with the Add note sheet (services/attachment-import).
+  // As before, cancelling a picker leaves the attachment sheet open; choosing
+  // something (or an error) closes it.
+  const run = async (task: () => Promise<AttachmentDraft | null>) => {
     setSaving(true);
     try {
-      const persisted = await persistAttachment(sourceUri, { type, ...metadata });
-      onSelected(persisted);
+      const draft = await task();
+      if (!draft) return;
+      onSelected(draft);
+      setOpen(false);
     } catch (error) {
-      console.warn('[attachment-import]', { type, operation: 'stage', error: error instanceof Error ? error.message : 'Unknown error', scheme: sourceUri.split(':', 1)[0] });
       onError(error instanceof Error ? error.message : 'The attachment could not be prepared.');
+      setOpen(false);
     } finally {
       setSaving(false);
-      setOpen(false);
     }
   };
-
-  const pickMedia = async (type: 'photo' | 'video') => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) { onError('Photo library access is needed to attach that item.'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync(type === 'photo' ? {
-      mediaTypes: ['images'],
-      quality: 0.82,
-      preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
-    } : {
-      mediaTypes: ['videos'],
-      preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
-      shouldDownloadFromNetwork: true,
-      videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720,
-      videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
-    });
-    if (result.canceled) return;
-    const asset = result.assets?.[0];
-    if (!asset?.uri) { onError('That media item could not be read. Please try another one.'); return; }
-    await stage(asset.uri, type, { originalName: asset.fileName ?? null, mimeType: asset.mimeType ?? null, size: asset.fileSize ?? null, duration: asset.duration ?? null, width: asset.width || null, height: asset.height || null });
-  };
-
-  const pickFile = async () => {
-    const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
-    if (result.canceled) return;
-    const asset = result.assets?.[0];
-    if (!asset?.uri) { onError('That file could not be read. Please try another one.'); return; }
-    await stage(asset.uri, 'file', { originalName: asset.name, mimeType: asset.mimeType ?? null, size: asset.size ?? null, duration: null, width: null, height: null });
-  };
+  const stage = (sourceUri: string, type: MessageType, metadata: Parameters<typeof stageAttachment>[2]) => run(() => stageAttachment(sourceUri, type, metadata));
+  const pickMedia = (type: 'photo' | 'video') => run(() => pickAndStageMedia(type));
+  const pickFile = () => run(pickAndStageFile);
 
   const startRecording = useCallback(async () => {
     if (disabled || saving || recorderState.isRecording) return;
     try {
-      const permission = await requestRecordingPermissionsAsync();
-      if (!permission.granted) { onError('Microphone access is needed to record audio.'); return; }
+      // Close the keyboard *before* any permission prompt can appear (see
+      // dismissKeyboardAsync) and only ask when access isn't already granted.
+      await dismissKeyboardAsync();
+      const current = await getRecordingPermissionsAsync();
+      const permission = current.granted ? current : await requestRecordingPermissionsAsync();
+      // After repeated refusals Android stops showing the prompt (canAskAgain false), so point to Settings.
+      if (!permission.granted) { onError(permission.canAskAgain ? 'Microphone access is needed to record audio.' : 'Microphone access is turned off for Chits. Turn it on in Settings › Apps › Chits › Permissions.'); return; }
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, interruptionMode: 'doNotMix', shouldPlayInBackground: false, shouldRouteThroughEarpiece: false });
       await recorder.prepareToRecordAsync();
       recorder.record();

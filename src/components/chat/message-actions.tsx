@@ -7,6 +7,7 @@ import { BottomSheetSurface } from '@/components/ui/primitives';
 import { useTheme } from '@/components/theme-provider';
 import { spacing } from '@/constants/theme';
 import type { Message } from '@/db/types';
+import { exportActionLabel } from '@/services/attachment-export';
 
 // Centralizes what "Copy chat" is allowed to put on the clipboard: only the
 // human-authored text of the message, never a file URI, ID, or other internal
@@ -24,6 +25,7 @@ type Props = {
   onEdit: () => void;
   onPin: (message: Message) => void;
   onAddToBoard: () => void;
+  onDownload: (message: Message) => void;
   onReveal: (message: Message) => void;
   onHideAgain: (message: Message) => void;
   onHideContent: (message: Message) => void;
@@ -41,7 +43,7 @@ function ActionRow({ icon, label, onPress, destructive = false }: { icon: Compon
   </Pressable>;
 }
 
-export function MessageActions({ message, temporarilyRevealed, onDismiss, onCopy, onEdit, onPin, onAddToBoard, onReveal, onHideAgain, onHideContent, onShowContent, onArchive, onDelete }: Props) {
+export function MessageActions({ message, temporarilyRevealed, onDismiss, onCopy, onEdit, onPin, onAddToBoard, onDownload, onReveal, onHideAgain, onHideContent, onShowContent, onArchive, onDelete }: Props) {
   const { tokens: theme } = useTheme();
   if (!message) return null;
   const hasAttachment = message.attachments.length > 0;
@@ -60,6 +62,7 @@ export function MessageActions({ message, temporarilyRevealed, onDismiss, onCopy
             {covered ? <ActionRow icon="eye-outline" label="Reveal" onPress={() => onReveal(message)} /> : null}
             {!covered && copyable ? <ActionRow icon="copy-outline" label="Copy chat" onPress={() => onCopy(message)} /> : null}
             {!covered ? <ActionRow icon="pencil-outline" label={hasAttachment ? 'Edit description' : 'Edit'} onPress={onEdit} /> : null}
+            {!covered && hasAttachment ? <ActionRow icon="download-outline" label={exportActionLabel(message.attachments[0])} onPress={() => onDownload(message)} /> : null}
             <ActionRow icon={message.organization ? 'grid' : 'grid-outline'} label={message.organization ? `Go to ${message.organization.boardName}` : 'Add to Board'} onPress={onAddToBoard} />
           </View>
 

@@ -1,9 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  LayoutAnimation,
   Pressable,
   ScrollView,
   SectionList,
@@ -11,6 +13,8 @@ import {
   Text,
   TextInput,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 
 import { useAppDrawer } from '@/components/navigation/app-drawer';
@@ -19,6 +23,8 @@ import { useTheme } from '@/components/theme-provider';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
 import { AppHeader, EmptyState, IconButton, Screen, Toast } from '@/components/ui/primitives';
+import { AddNoteSheet, type NoteSubmission } from '@/components/boards/add-note-sheet';
+import { groupByMonth } from '@/services/card-grouping';
 import { BoardAppearanceFields } from '@/components/boards/board-appearance-fields';
 import { CardListRow } from '@/components/boards/card-list-row.native';
 import { resolveBoardIcon, type BoardIconName } from '@/constants/board-appearance';
@@ -29,9 +35,23 @@ import { removeCardAttachmentFile } from '@/services/card-attachment-storage';
 
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 type ViewMode = 'boards' | 'cards';
-type CardSection = { title: string; data: CardListItem[] };
+
+// Cards search bar auto-hide: always visible within this distance of the top,
+// and toggles only after this much scrolling in one direction.
+const SEARCH_ALWAYS_VISIBLE_OFFSET = 24;
+const SEARCH_TOGGLE_TRAVEL = 28;
+// Height of the soft fade at the bottom of the sticky month headers.
+const SECTION_HEADER_FADE = 18;
+// Notes render as a two-column grid, so each list row is a pair of notes
+// (virtualized per row); `count` keeps the header honest about notes, not rows.
+type CardSection = { key: string; title: string; month?: string; year?: string; pinned?: boolean; count: number; data: CardListItem[][] };
+
+function pairs<T>(items: T[]): T[][] {
+  const rows: T[][] = [];
+  for (let index = 0; index < items.length; index += 2) rows.push(items.slice(index, index + 2));
+  return rows;
+}
 type UnorganizedSummaryRow = { id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; isHiddenContent: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number };
-const VIEW_MODE_SETTING_KEY = 'boards_view_mode';
 
 function pluralize(count: number, singular: string) {
   return `${count} ${count === 1 ? singular : `${singular}s`}`;
@@ -60,7 +80,7 @@ function unorganizedToCardListItem(row: UnorganizedSummaryRow): CardListItem {
   return {
     id: row.id, kind: 'thought', title, preview,
     boardId: null, boardName: null, boardAccent: null, columnId: null, columnName: null,
-    createdAt: row.createdAt, updatedAt: row.updatedAt, pinned: row.pinned === 1,
+    createdAt: row.createdAt, updatedAt: row.updatedAt, pinned: row.pinned === 1, hidden,
     photoCount: row.photoCount, videoCount: row.videoCount, fileCount: row.fileCount,
     previewMediaType: hidden ? null : row.previewMediaType, thumbnailPath: hidden ? null : row.thumbnailPath, mediaDuration: hidden ? null : row.mediaDuration, mediaCount: hidden ? 0 : row.mediaCount,
   };
@@ -106,7 +126,7 @@ function ViewSwitch({ mode, onChange }: { mode: ViewMode; onChange: (next: ViewM
   const { tokens: theme } = useTheme();
   return (
     <View style={[styles.switchTrack, { backgroundColor: theme.surfaceElevated }]}>
-      {(['boards', 'cards'] as const).map((option) => {
+      {(['cards', 'boards'] as const).map((option) => {
         const selected = option === mode;
         return (
           <Pressable
@@ -157,10 +177,9 @@ export default function BoardsScreen() {
   const showLoader = useChitsLoading(!ready);
   const isNameValid = Boolean(name.trim());
 
-  // Which of Boards | Cards the user last looked at — persisted the same way
-  // every other small UI preference in Chits is (a raw app_settings row; see
-  // chat_title above), so it survives leaving and returning to this screen.
-  const [viewMode, setViewMode] = useState<ViewMode>('boards');
+  // Boards | Cards. The screen always opens on Cards; switching is session-local.
+  const [viewMode, setViewMode] = useState<ViewMode>('cards');
+  const [addNoteOpen, setAddNoteOpen] = useState(false);
   const [cards, setCards] = useState<CardListItem[]>([]);
   // Chat thoughts not yet organized into any board/card — the Cards view
   // shows these alongside real cards (pinned ones in Pinned, the rest in All
@@ -177,17 +196,49 @@ export default function BoardsScreen() {
 
   useEffect(() => { if (!cardToast) return; const timer = setTimeout(() => setCardToast(null), 1800); return () => clearTimeout(timer); }, [cardToast]);
 
+  // The Cards search bar tucks away while scrolling into the list (more room
+  // for notes) and comes back on any scroll back up, like a browser's address
+  // bar. It always shows at the top, and never hides while being used (focused
+  // or holding a query). The collapse is one native LayoutAnimation per toggle,
+  // not a per-frame resize of the list.
+  const [searchHidden, setSearchHidden] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchHiddenRef = useRef(false);
+  const searchInUseRef = useRef(false);
+  useEffect(() => { searchInUseRef.current = searchFocused || Boolean(cardSearch); }, [searchFocused, cardSearch]);
+  const scrollState = useRef({ lastY: 0, travel: 0, ignoreUntil: 0 });
+  const setSearchVisibility = useCallback((hidden: boolean) => {
+    if (hidden === searchHiddenRef.current || (hidden && searchInUseRef.current)) return;
+    searchHiddenRef.current = hidden;
+    // Collapsing/expanding resizes the list, which can nudge its offset near the
+    // end; ignore scroll events briefly so that nudge can't toggle it back.
+    scrollState.current.ignoreUntil = Date.now() + 260;
+    scrollState.current.travel = 0;
+    LayoutAnimation.configureNext(LayoutAnimation.create(180, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity));
+    setSearchHidden(hidden);
+  }, []);
+  const handleCardScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = event.nativeEvent.contentOffset.y;
+    const state = scrollState.current;
+    const delta = y - state.lastY;
+    state.lastY = y;
+    if (y <= SEARCH_ALWAYS_VISIBLE_OFFSET) { setSearchVisibility(false); return; }
+    if (Date.now() < state.ignoreUntil) return;
+    // Require a little travel in one direction so tiny jitters don't toggle it.
+    state.travel = Math.sign(delta) === Math.sign(state.travel) ? state.travel + delta : delta;
+    if (state.travel > SEARCH_TOGGLE_TRAVEL) setSearchVisibility(true);
+    else if (state.travel < -SEARCH_TOGGLE_TRAVEL) setSearchVisibility(false);
+  }, [setSearchVisibility]);
+
   const load = useCallback(async () => {
-    const [nextBoards, nextCount, titleRow, viewModeRow] = await Promise.all([
+    const [nextBoards, nextCount, titleRow] = await Promise.all([
       boardRepository.listActive(),
       messageRepository.countUnorganized(),
       database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', 'chat_title'),
-      database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', VIEW_MODE_SETTING_KEY),
     ]);
     setBoards(nextBoards);
     setUnorganizedCount(nextCount);
     setAppTitle(titleRow?.value.trim() || 'Chits');
-    if (viewModeRow?.value === 'cards' || viewModeRow?.value === 'boards') setViewMode(viewModeRow.value);
     setReady(true);
   }, [boardRepository, database, messageRepository]);
 
@@ -196,7 +247,10 @@ export default function BoardsScreen() {
       boardRepository.listAllCardSummaries({ searchTerm }),
       messageRepository.listUnorganizedSummaries({ searchTerm }),
     ]);
-    setCards(cardRows.map((row) => ({ ...row, kind: 'card' as const, pinned: row.pinned === 1, mediaCount: row.mediaCount ?? 0 })));
+    // A card whose thought is hidden in Chat is covered here too, the same as on its board.
+    setCards(cardRows.map(({ isHidden, ...row }) => isHidden === 1
+      ? { ...row, kind: 'card' as const, title: 'Hidden Chit', preview: null, pinned: row.pinned === 1, hidden: true, previewMediaType: null, thumbnailPath: null, mediaDuration: null, mediaCount: 0 }
+      : { ...row, kind: 'card' as const, pinned: row.pinned === 1, hidden: false, mediaCount: row.mediaCount ?? 0 }));
     setUnorganizedThoughts(thoughtRows.map(unorganizedToCardListItem));
   }, [boardRepository, messageRepository]);
 
@@ -209,9 +263,16 @@ export default function BoardsScreen() {
   }, [load, loadCards]));
 
   const changeViewMode = (next: ViewMode) => {
-    if (next === viewMode) return;
-    setViewMode(next);
-    void database.runAsync('INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)', VIEW_MODE_SETTING_KEY, next, Date.now());
+    if (next !== viewMode) setViewMode(next);
+  };
+
+  // A note added from the Cards header isn't tied to a board yet, so it's
+  // created like a Chat thought and shows up under Unorganized.
+  const addNote = async ({ text, attachment }: NoteSubmission) => {
+    if (attachment) await messageRepository.createAttachmentMessage(attachment, text || null);
+    else await messageRepository.createText(text);
+    await Promise.all([load(), loadCards(cardSearch)]);
+    setCardToast('Note added');
   };
 
   const queueCardSearch = useCallback((value: string) => {
@@ -247,9 +308,13 @@ export default function BoardsScreen() {
       : cards.filter((card) => card.boardId === cardFilter);
     const pinned = all.filter((item) => item.pinned).sort((a, b) => b.updatedAt - a.updatedAt);
     const rest = all.filter((item) => !item.pinned).sort((a, b) => b.updatedAt - a.updatedAt);
+    // Pinned stays on top; everything else is grouped by month, newest first.
+    const months = groupByMonth(rest);
     return [
-      ...(pinned.length ? [{ title: 'Pinned', data: pinned }] : []),
-      { title: 'All cards', data: rest },
+      ...(pinned.length ? [{ key: 'pinned', title: 'Pinned', pinned: true, count: pinned.length, data: pairs(pinned) }] : []),
+      ...(months.length
+        ? months.map((month) => ({ key: month.key, title: month.title, month: month.month, year: month.year, count: month.items.length, data: pairs(month.items) }))
+        : [{ key: 'all', title: 'All cards', count: 0, data: [] }]),
     ];
   }, [cards, unorganizedThoughts, cardFilter]);
 
@@ -402,7 +467,11 @@ export default function BoardsScreen() {
           <IconButton label="Create board" onPress={openCreate}>
             <Ionicons accessible={false} name="add" size={26} color={theme.textPrimary} />
           </IconButton>
-        ) : undefined}
+        ) : (
+          <IconButton label="Add note" onPress={() => setAddNoteOpen(true)}>
+            <Ionicons accessible={false} name="add" size={26} color={theme.textPrimary} />
+          </IconButton>
+        )}
       />
 
       {!ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : (
@@ -416,15 +485,24 @@ export default function BoardsScreen() {
             <EmptyState title="No cards yet" description="Notes you organize into your boards will appear here." />
           ) : (
             <>
-              <View style={[styles.searchBar, { borderColor: theme.borderSubtle, backgroundColor: theme.surface }]}>
-                <Ionicons accessible={false} name="search" size={16} color={theme.textMuted} />
-                <TextInput
-                  value={cardSearch}
-                  onChangeText={(value) => { setCardSearch(value); queueCardSearch(value); }}
-                  placeholder="Search cards"
-                  placeholderTextColor={theme.textMuted}
-                  style={[styles.searchInput, { color: theme.textPrimary }]}
-                />
+              <View
+                pointerEvents={searchHidden ? 'none' : 'auto'}
+                accessibilityElementsHidden={searchHidden}
+                importantForAccessibility={searchHidden ? 'no-hide-descendants' : 'auto'}
+                style={searchHidden ? styles.searchCollapsed : undefined}
+              >
+                <View style={[styles.searchBar, { borderColor: theme.borderSubtle, backgroundColor: theme.surface }]}>
+                  <Ionicons accessible={false} name="search" size={16} color={theme.textMuted} />
+                  <TextInput
+                    value={cardSearch}
+                    onChangeText={(value) => { setCardSearch(value); queueCardSearch(value); }}
+                    onFocus={() => { setSearchFocused(true); setSearchVisibility(false); }}
+                    onBlur={() => setSearchFocused(false)}
+                    placeholder="Search cards"
+                    placeholderTextColor={theme.textMuted}
+                    style={[styles.searchInput, { color: theme.textPrimary }]}
+                  />
+                </View>
               </View>
               <CardFilterChips chips={cardFilterChips} filter={cardFilter} onChange={setCardFilter} />
               {cardSections.every((section) => section.data.length === 0) ? (
@@ -433,30 +511,54 @@ export default function BoardsScreen() {
                 <SectionList
                   style={styles.cardList}
                   sections={cardSections}
-                  keyExtractor={(item) => item.id}
-                  renderItem={({ item }) => (
-                    <CardListRow
-                      item={item}
-                      onPress={() => router.push(item.kind === 'thought' ? `/chat?messageId=${item.id}` : `/card/${item.id}`)}
-                      onMore={() => openCardActions(item)}
-                    />
+                  keyExtractor={(row) => row.map((item) => item.id).join('|')}
+                  renderItem={({ item: row }) => (
+                    <View style={styles.noteRow}>
+                      {row.map((item) => (
+                        <CardListRow
+                          key={item.id}
+                          item={item}
+                          onPress={() => router.push(item.kind === 'thought' ? `/chat?messageId=${item.id}` : `/card/${item.id}`)}
+                          onMore={() => openCardActions(item)}
+                        />
+                      ))}
+                      {row.length === 1 ? <View style={styles.noteSpacer} /> : null}
+                    </View>
                   )}
-                  renderSectionHeader={({ section }) => {
-                    const isFirst = section === cardSections[0];
-                    return (
-                      <View style={[styles.sectionHeaderRow, !isFirst && styles.sectionHeaderRowSpaced, { backgroundColor: theme.background }]}>
-                        <Text accessibilityRole="header" style={[styles.cardSectionTitle, { color: theme.textSecondary }]}>
-                          {section.title} <Text style={[styles.cardSectionCount, { color: theme.textMuted }]}>· {section.data.length}</Text>
+                  // Month headers stick while scrolling so it's always clear which
+                  // month you're looking at. The header is opaque and spans the
+                  // full width (negative margin over the list's side padding) so
+                  // notes pass cleanly underneath it.
+                  renderSectionHeader={({ section }) => (
+                    <View accessibilityRole="header" accessibilityLabel={`${section.title}, ${section.count} ${section.count === 1 ? 'note' : 'notes'}`} style={styles.sectionHeaderRow}>
+                      {/* Solid behind the title, then a soft fade in the header's own
+                          bottom padding: notes dissolve under a stuck header instead of
+                          meeting a hard edge, and an unstuck header fades only empty space. */}
+                      <View pointerEvents="none" style={[styles.sectionHeaderSolid, { backgroundColor: theme.background }]} />
+                      <LinearGradient pointerEvents="none" colors={[theme.background, `${theme.background}00`]} style={styles.sectionHeaderFade} />
+                      <View style={styles.sectionHeaderTitle}>
+                        {section.pinned ? <Ionicons accessible={false} name="pin" size={17} color={theme.textPrimary} /> : null}
+                        <Text numberOfLines={1} style={[styles.cardSectionMonth, { color: theme.textPrimary }]}>
+                          {section.month ?? section.title}
+                          {section.year ? <Text style={[styles.cardSectionYear, { color: theme.textMuted }]}>{`  ${section.year}`}</Text> : null}
                         </Text>
                       </View>
-                    );
-                  }}
-                  stickySectionHeadersEnabled={false}
+                      <View style={[styles.cardSectionCountPill, { backgroundColor: theme.surfaceElevated }]}>
+                        <Text style={[styles.cardSectionCount, { color: theme.textSecondary }]}>{section.count} {section.count === 1 ? 'note' : 'notes'}</Text>
+                      </View>
+                    </View>
+                  )}
+                  renderSectionFooter={() => <View style={styles.sectionGap} />}
+                  stickySectionHeadersEnabled
+                  onScroll={handleCardScroll}
+                  scrollEventThrottle={16}
                   contentContainerStyle={[styles.cardListContent, { paddingBottom: tabBarHeight + spacing.md }]}
                   initialNumToRender={12}
                   maxToRenderPerBatch={12}
                   windowSize={7}
-                  removeClippedSubviews
+                  // No removeClippedSubviews: combined with sticky section headers it
+                  // blanks the list on Android (React Native bug). windowSize and
+                  // maxToRenderPerBatch already bound how much is mounted.
                 />
               )}
             </>
@@ -600,6 +702,7 @@ export default function BoardsScreen() {
         </View>
       </FormSheet>
       <Toast message={cardToast} />
+      <AddNoteSheet visible={addNoteOpen} onClose={() => setAddNoteOpen(false)} onSubmit={addNote} />
     </Screen>
   );
 }
@@ -619,26 +722,36 @@ const styles = StyleSheet.create({
   // the visually dominant element on this screen; the cards are.
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.xxs, height: 44, marginHorizontal: spacing.md, marginTop: 16, paddingHorizontal: spacing.sm, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth },
   searchInput: { flex: 1, height: '100%', fontSize: 15, padding: 0 },
+  searchCollapsed: { height: 0, opacity: 0, overflow: 'hidden' },
   cardList: { flex: 1 },
+  // Two equal columns; notes in a row stretch to the taller one so the grid stays tidy.
+  noteRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12, marginBottom: 12 },
+  noteSpacer: { flexGrow: 1, flexShrink: 1, flexBasis: 0 },
   cardListContent: { paddingHorizontal: spacing.md, paddingTop: 0, flexGrow: 1 },
-  // Sentence-case, medium-weight section label with its count folded straight
-  // into the same line ("Pinned · 2") rather than pinned to the far right
-  // edge as a separate element — one cohesive heading instead of two
-  // disconnected pieces. `sectionHeaderRow` alone covers the FIRST section
-  // (its top gap already comes from chipScroll's marginBottom, below);
-  // `sectionHeaderRowSpaced` adds the larger "end of Pinned → All cards" gap
-  // for every section after the first.
-  sectionHeaderRow: { paddingBottom: 10 },
-  sectionHeaderRowSpaced: { paddingTop: 24 },
-  cardSectionTitle: { fontSize: 14, fontWeight: '600' },
-  cardSectionCount: { fontSize: 13, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  // Section headers (Pinned, then one per month) are real, sticky headings:
+  // a large bold month with a lighter year, and the note count as a pill.
+  // Spacing between sections comes from `sectionGap` (the section footer),
+  // not header padding, so a stuck header stays compact.
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginHorizontal: -spacing.md, paddingHorizontal: spacing.md, paddingTop: spacing.xs, paddingBottom: SECTION_HEADER_FADE },
+  // Overlaps the fade by 1pt so pixel rounding can't leave a hairline seam between them.
+  sectionHeaderSolid: { position: 'absolute', top: 0, right: 0, bottom: SECTION_HEADER_FADE - 1, left: 0 },
+  sectionHeaderFade: { position: 'absolute', right: 0, bottom: 0, left: 0, height: SECTION_HEADER_FADE },
+  sectionHeaderTitle: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  cardSectionMonth: { flexShrink: 1, fontSize: 22, lineHeight: 28, fontWeight: '800', letterSpacing: -0.3 },
+  cardSectionYear: { fontSize: 22, fontWeight: '500', letterSpacing: -0.3 },
+  cardSectionCountPill: { minHeight: 26, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 13 },
+  cardSectionCount: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  sectionGap: { height: spacing.md },
   // Fixed, content-only height — flexGrow/flexShrink pinned to 0 so this
   // horizontal ScrollView can never inherit leftover vertical space from its
   // flex-column parent (the exact bug that was reserving a large empty gap
   // above the card list: an unbounded horizontal scroller in a flex column
   // stretching to fill available height instead of sizing to its chips).
   // Margins here (not flex) carry the search→filters and filters→list gaps.
-  chipScroll: { height: 26, flexGrow: 0, flexShrink: 0, marginTop: 12, marginBottom: 24 },
+  // The small bottom margin pairs with the section header's own paddingTop
+  // (spacing.xs) for a 12pt chips→heading gap — matching search→chips — and
+  // that padding travels with the header, so the gap is the same when stuck.
+  chipScroll: { height: 26, flexGrow: 0, flexShrink: 0, marginTop: 12, marginBottom: spacing.xxs },
   chipRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md },
   // Quiet by default — only the selected chip (theme.accent fill) is meant to
   // stand out; unselected chips stay small and low-contrast so they read as

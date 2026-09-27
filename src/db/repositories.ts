@@ -25,11 +25,14 @@ const CARD_TITLE_SQL = `COALESCE(NULLIF(TRIM(c.title), ''), (SELECT COALESCE(NUL
 // Everything a board card needs to render at stable dimensions — title, preview,
 // counts, and media dimensions/reference — resolved in SQL so no per-card follow-up
 // query is ever needed. Shared by the per-column and whole-board summary queries.
-type CardSummaryRow = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaPath: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null };
+// `isHidden` is 1 when any thought organized into the card is hidden in Chat, so
+// the board can cover it the same way Chat does.
+type CardSummaryRow = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaPath: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null; isHidden: number };
 const CARD_SUMMARY_SELECT_SQL = `SELECT c.id, c.column_id AS columnId, ${CARD_TITLE_SQL} AS title, c.position,
       (SELECT m.text FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id ORDER BY cm.position ASC LIMIT 1) AS preview,
       (SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id) AS attachmentCount,
       (SELECT COUNT(*) FROM card_messages cm WHERE cm.card_id = c.id) AS messageCount,
+      EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id AND m.is_hidden_content = 1) AS isHidden,
       ma.id AS mediaId, ma.message_id AS mediaMessageId, ma.type AS mediaType,
       ma.storage_path AS mediaPath, ma.mime_type AS mediaMimeType, ma.size AS mediaSize,
       ma.duration AS mediaDuration, ma.width AS mediaWidth, ma.height AS mediaHeight,
@@ -464,18 +467,23 @@ export function createBoardRepository(database: SQLiteDatabase) {
     // destination is already known. Still the same underlying message/card entities
     // as every other note, so it shows up in Chat's timeline exactly like any other
     // thought — no separate "board card" concept, no new chat thread.
-    async createNoteCard(input: { boardId: string; columnId: string; text: string }) {
+    // A note added straight into a column: text, an already-staged attachment
+    // (photo/video/file, stored exactly like a Chat attachment message), or both.
+    async createNoteCard(input: { boardId: string; columnId: string; text: string; attachment?: Omit<Attachment, 'id' | 'messageId' | 'createdAt'> | null }) {
       const trimmed = input.text.trim();
-      if (!trimmed) throw new Error('Write something before adding a note.');
+      const attachment = input.attachment ?? null;
+      if (!trimmed && !attachment) throw new Error('Write something or attach a file before adding a note.');
       const now = Date.now();
       const messageId = newId();
       const cardId = newId();
+      const title = attachmentCardTitle({ text: trimmed || null, type: attachment?.type ?? null, originalName: attachment?.originalName ?? null });
       await database.withExclusiveTransactionAsync(async (transaction) => {
         const column = await transaction.getFirstAsync<{ id: string }>('SELECT bc.id FROM board_columns bc INNER JOIN boards b ON b.id = bc.board_id WHERE bc.id = ? AND bc.board_id = ? AND b.archived_at IS NULL', input.columnId, input.boardId);
         if (!column) throw new Error('This column is no longer available.');
-        await transaction.runAsync('INSERT INTO messages (id, text, type, created_at, updated_at, archived_at, pinned, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', messageId, trimmed, 'text', now, now, null, 0, null);
+        await transaction.runAsync('INSERT INTO messages (id, text, type, created_at, updated_at, archived_at, pinned, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', messageId, trimmed || null, attachment?.type ?? 'text', now, now, null, 0, null);
+        if (attachment) await transaction.runAsync('INSERT INTO attachments (id, message_id, type, storage_path, original_name, mime_type, size, duration, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', newId(), messageId, attachment.type, attachment.storagePath, attachment.originalName, attachment.mimeType, attachment.size, attachment.duration, attachment.width, attachment.height, now);
         const position = await transaction.getFirstAsync<{ position: number }>('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM cards WHERE column_id = ? AND archived_at IS NULL', input.columnId);
-        await transaction.runAsync('INSERT INTO cards (id, board_id, column_id, title, position, archived_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', cardId, input.boardId, input.columnId, trimmed.slice(0, 120), position?.position ?? 0, null, now, now);
+        await transaction.runAsync('INSERT INTO cards (id, board_id, column_id, title, position, archived_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', cardId, input.boardId, input.columnId, title, position?.position ?? 0, null, now, now);
         await transaction.runAsync('INSERT INTO card_messages (card_id, message_id, position) VALUES (?, ?, ?)', cardId, messageId, 0);
       });
       return { cardId, messageId };
@@ -548,7 +556,7 @@ export function createBoardRepository(database: SQLiteDatabase) {
     listAllCardSummaries: (options: { searchTerm?: string } = {}) => {
       const term = options.searchTerm?.trim();
       const like = term ? `%${term.replace(/[%_]/g, '\\$&')}%` : null;
-      return database.getAllAsync<{ id: string; title: string; preview: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; updatedAt: number; pinned: number; photoCount: number; videoCount: number; fileCount: number; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number | null }>(`
+      return database.getAllAsync<{ id: string; title: string; preview: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; updatedAt: number; pinned: number; photoCount: number; videoCount: number; fileCount: number; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number | null; isHidden: number }>(`
         WITH card_media AS (
           SELECT cm.card_id AS cardId, a.type AS mediaType, a.storage_path AS path, a.duration AS duration, a.created_at AS createdAt,
             CASE a.type WHEN 'photo' THEN 1 WHEN 'video' THEN 2 WHEN 'audio' THEN 3 ELSE 9 END AS priority
@@ -574,7 +582,8 @@ export function createBoardRepository(database: SQLiteDatabase) {
           ((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id AND a.type = 'photo') + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.type = 'photo')) AS photoCount,
           ((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id AND a.type = 'video') + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.type = 'video')) AS videoCount,
           ((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id AND a.type = 'file') + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.type = 'file')) AS fileCount,
-          cmr.mediaType AS previewMediaType, cmr.path AS thumbnailPath, cmr.duration AS mediaDuration, cmr.mediaCount AS mediaCount
+          cmr.mediaType AS previewMediaType, cmr.path AS thumbnailPath, cmr.duration AS mediaDuration, cmr.mediaCount AS mediaCount,
+          EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id AND m.is_hidden_content = 1) AS isHidden
         FROM cards c
         INNER JOIN boards b ON b.id = c.board_id
         INNER JOIN board_columns bc ON bc.id = c.column_id
@@ -687,6 +696,10 @@ export function createBoardRepository(database: SQLiteDatabase) {
         await transaction.runAsync('UPDATE cards SET updated_at = ? WHERE id = ?', now, cardId);
       }); return added;
     },
+    // Hides or unhides every thought organized into the card, so the board card
+    // and those thoughts in Chat change together. Like setHiddenContent, leaves
+    // updated_at untouched so privacy changes never reorder anything.
+    async setCardHiddenContent(cardId: string, hidden: boolean) { await database.runAsync('UPDATE messages SET is_hidden_content = ? WHERE id IN (SELECT message_id FROM card_messages WHERE card_id = ?) AND deleted_at IS NULL', hidden ? 1 : 0, cardId); },
     async archiveCard(cardId: string) { const now = Date.now(); const result = await database.runAsync('UPDATE cards SET archived_at = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL', now, now, cardId); if (result.changes !== 1) throw new Error('That card is no longer available.'); },
     // Archiving a card deliberately does not touch card_comments or card_attachments
     // — both are preserved, matching the same recoverable-hide semantics as the

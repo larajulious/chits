@@ -5,16 +5,28 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { LoadingState } from '@/components/ui/primitives';
 import { AppDrawerProvider } from '@/components/navigation/app-drawer';
-import { AppDialogProvider } from '@/components/dialogs/app-dialog-provider';
+import { AppDialogProvider, useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { ThemeProvider, useTheme } from '@/components/theme-provider';
 // eslint-disable-next-line import/no-unresolved -- Expo resolves platform file suffixes at runtime.
 import { DatabaseProvider } from '@/db/provider';
-import { subscribeToAppReset } from '@/services/app-reset';
+import { consumeResetNotice, subscribeToAppReset } from '@/services/app-reset';
+
+// Shows the message a reset asked for (e.g. "Restore complete") once the fresh
+// tree — with its reopened database — has mounted.
+function ResetNotice() {
+  const { alert } = useAppDialog();
+  useEffect(() => {
+    const notice = consumeResetNotice();
+    if (notice) alert({ type: notice.type, icon: notice.type === 'success' ? 'checkmark-circle-outline' : 'alert-circle-outline', title: notice.title, message: notice.message });
+  }, [alert]);
+  return null;
+}
 
 function ThemedApp() {
   const { scheme, tokens } = useTheme();
   return (
     <AppDialogProvider>
+      <ResetNotice />
       <AppDrawerProvider><StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
         <Stack screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: tokens.background } }}>
           <Stack.Screen name="(tabs)" />

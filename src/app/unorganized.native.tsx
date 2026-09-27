@@ -412,15 +412,14 @@ export default function UnorganizedScreen() {
   };
 
   return <Screen>
+    <AppHeader title="Unorganized" leading={<IconButton label="Go back" onPress={() => router.back()}><Text style={styles.back}>‹</Text></IconButton>} />
     {selectionMode ? (
       <View style={[styles.header, { borderBottomColor: theme.borderSubtle }]}>
         <IconButton label="Exit selection" onPress={() => setSelected([])}><Ionicons accessible={false} name="close" size={22} color={theme.textPrimary} /></IconButton>
         <Text style={styles.selectionTitle}>{selected.length} selected</Text>
         <Pressable accessibilityRole="button" hitSlop={8} onPress={toggleSelectAll} style={styles.selectAllHit}><Text style={styles.selectAllText}>{selected.length === messages.length ? 'Deselect all' : 'Select all'}</Text></Pressable>
       </View>
-    ) : (
-      <AppHeader title="Unorganized" leading={<IconButton label="Go back" onPress={() => router.back()}><Text style={styles.back}>‹</Text></IconButton>} />
-    )}
+    ) : null}
     {!ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : messages.length ? <>
       <ScrollView contentContainerStyle={styles.list}>
         {!selectionMode ? <Text style={styles.intro}>{addToCard ? 'Select thoughts to attach to this card. Your original chat remains exactly as it is.' : 'Notes that haven’t been added to a board yet.'}</Text> : null}

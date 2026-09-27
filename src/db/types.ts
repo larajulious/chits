@@ -47,6 +47,9 @@ export interface CardListItem {
   boardId: string | null; boardName: string | null; boardAccent: string | null;
   columnId: string | null; columnName: string | null;
   createdAt: number; updatedAt: number; pinned: boolean;
+  // True when a thought on this card (or this thought itself) is hidden in
+  // Chat: the list shows a covered note instead of its text or media.
+  hidden: boolean;
   photoCount: number; videoCount: number; fileCount: number;
   // The single, deterministic media preview for this card/thought — resolved
   // once, in SQL, by priority (photo > video > audio) across BOTH a card's

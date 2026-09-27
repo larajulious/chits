@@ -11,7 +11,7 @@ import { AppHeader, EmptyState, IconButton, Screen } from '@/components/ui/primi
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { AttachmentContent } from '@/components/chat/message-row';
-import { AddNoteSheet } from '@/components/boards/add-note-sheet';
+import { AddNoteSheet, type NoteSubmission } from '@/components/boards/add-note-sheet';
 import { ColumnManagementSheet } from '@/components/boards/column-management-sheet';
 import { EditBoardSheet } from '@/components/boards/edit-board-sheet';
 import { resolveBoardIcon, tintWithAccent, type BoardIconName } from '@/constants/board-appearance';
@@ -25,7 +25,7 @@ type Column = { id: string; name: string; position: number };
 // `columns` for the carousel's FlatList `data`, but never stored, given an id, or
 // touched by any business logic (column counts, drag targets, navigator position).
 type CarouselItem = { kind: 'column'; column: Column } | { kind: 'add' };
-type Card = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaPath: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null };
+type Card = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaPath: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null; isHidden: number };
 type DragState = { card: Card; sourceColumnId: string; destinationColumnId: string; fromIndex: number; toIndex: number; height: number; startY: number; overlayTop: number; startScrollY: number };
 const EDGE_ZONE = 52;
 const EDGE_DWELL_MS = 450;
@@ -163,7 +163,7 @@ function shallowEqual(a: Record<string, unknown>, b: Record<string, unknown>): b
   return keysA.every((key) => Object.is(a[key], b[key]));
 }
 
-const CardSurface = memo(function CardSurface({ card, index, total, translationY, dragging = false, interactive = true, highlighted = false, accent, accentTint, accentBorderColor, columnName = '', canMovePrevColumn = false, canMoveNextColumn = false, onBeginDrag, onDragMove, onDragEnd, onDragCancel, onOpenMove, onReorder, onMoveColumn, scrollRef, pagerRef, activeDragCardId }: { card: Card; index: number; total: number; translationY?: SharedValue<number>; dragging?: boolean; interactive?: boolean; highlighted?: boolean; accent?: string; accentTint?: string; accentBorderColor?: string; columnName?: string; canMovePrevColumn?: boolean; canMoveNextColumn?: boolean; onBeginDrag?: () => void; onDragMove?: (dx: number, dy: number, pageX: number, pageY: number) => void; onDragEnd?: () => void; onDragCancel?: () => void; onOpenMove?: () => void; onReorder?: (direction: -1 | 1) => void; onMoveColumn?: (direction: -1 | 1) => void; scrollRef: RefObject<ScrollView | null>; pagerRef: RefObject<FlatList<CarouselItem> | null>; frozen?: boolean; activeDragCardId?: SharedValue<string | null> }) {
+const CardSurface = memo(function CardSurface({ card, index, total, translationY, dragging = false, interactive = true, highlighted = false, accent, accentTint, accentBorderColor, columnName = '', canMovePrevColumn = false, canMoveNextColumn = false, onBeginDrag, onDragMove, onDragEnd, onDragCancel, onOpenMove, onReorder, onMoveColumn, onShowContent, scrollRef, pagerRef, activeDragCardId }: { card: Card; index: number; total: number; translationY?: SharedValue<number>; dragging?: boolean; interactive?: boolean; highlighted?: boolean; accent?: string; accentTint?: string; accentBorderColor?: string; columnName?: string; canMovePrevColumn?: boolean; canMoveNextColumn?: boolean; onBeginDrag?: () => void; onDragMove?: (dx: number, dy: number, pageX: number, pageY: number) => void; onDragEnd?: () => void; onDragCancel?: () => void; onOpenMove?: () => void; onReorder?: (direction: -1 | 1) => void; onMoveColumn?: (direction: -1 | 1) => void; onShowContent?: () => void; scrollRef: RefObject<ScrollView | null>; pagerRef: RefObject<FlatList<CarouselItem> | null>; frozen?: boolean; activeDragCardId?: SharedValue<string | null> }) {
   // Opts out of React Compiler's own auto-memoization — the custom memo()
   // comparator below (the `frozen` freeze, load-bearing for keeping the live drag
   // gesture alive) must run exactly as written, not be reinterpreted by the
@@ -201,7 +201,8 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
     const hidden = activeDragCardId?.get() === card.id;
     return { position: hidden ? 'absolute' : 'relative', top: 0, left: 0, right: 0, opacity: hidden ? 0 : 1, zIndex: hidden ? -1 : 0 };
   });
-  const media: Attachment | null = card.mediaId && card.mediaMessageId && card.mediaType && card.mediaPath ? { id: card.mediaId, messageId: card.mediaMessageId, type: card.mediaType, storagePath: card.mediaPath, originalName: null, mimeType: card.mediaMimeType, size: card.mediaSize, duration: card.mediaDuration, width: card.mediaWidth, height: card.mediaHeight, createdAt: card.mediaCreatedAt ?? 0 } : null;
+  const hidden = card.isHidden === 1;
+  const media: Attachment | null = !hidden && card.mediaId && card.mediaMessageId && card.mediaType && card.mediaPath ? { id: card.mediaId, messageId: card.mediaMessageId, type: card.mediaType, storagePath: card.mediaPath, originalName: null, mimeType: card.mediaMimeType, size: card.mediaSize, duration: card.mediaDuration, width: card.mediaWidth, height: card.mediaHeight, createdAt: card.mediaCreatedAt ?? 0 } : null;
   const hasMetadata = Boolean(card.attachmentCount || card.messageCount > 1);
   const accessibleMetadata = [card.messageCount > 1 ? `${card.messageCount} thoughts` : null, card.attachmentCount ? `${card.attachmentCount} attachments` : null].filter(Boolean).join(', ');
   // Long-press anywhere on the card activates drag, but a touch that begins on the
@@ -273,14 +274,14 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
       .onEnd(() => { runOnJS(onDragEnd)(); })
       .onFinalize((_, success) => { if (!success) runOnJS(onDragCancel)(); });
   }, [cardRef, footerRef, handleRef, interactive, onBeginDrag, onDragCancel, onDragEnd, onDragMove, onReorder, pagerRef, scrollRef, translationY]);
-  const cardSurface = <Pressable ref={cardRef} disabled={!interactive} accessibilityRole="button" accessibilityLabel={`Open ${card.title || card.preview || 'untitled thought'}${accessibleMetadata ? `, ${accessibleMetadata}` : ''}`} accessibilityHint="Opens card details" onPress={() => router.push(`/card/${card.id}`)} style={({ pressed }) => [styles.card, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, dragging && styles.cardDragging, pressed && interactive && styles.cardPressed]}>
+  const cardSurface = <Pressable ref={cardRef} disabled={!interactive} accessibilityRole="button" accessibilityLabel={`Open ${hidden ? 'Hidden Chit' : card.title || card.preview || 'untitled thought'}${accessibleMetadata ? `, ${accessibleMetadata}` : ''}`} accessibilityHint="Opens card details" onPress={() => router.push(`/card/${card.id}`)} style={({ pressed }) => [styles.card, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, dragging && styles.cardDragging, pressed && interactive && styles.cardPressed]}>
     <Animated.View pointerEvents="none" accessible={false} style={[StyleSheet.absoluteFill, styles.cardHighlight, { backgroundColor: resolvedAccentTint, borderColor: resolvedAccentBorder }, highlightStyle]} />
     {media ? <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.cardMedia, { borderBottomColor: theme.borderSubtle }]}><AttachmentContent attachment={media} variant="board" /></View> : null}
     <View style={styles.cardBody}>
       <View style={styles.cardTop}>
         <View style={styles.cardOpen}>
-          <Text numberOfLines={2} style={[styles.title, { color: theme.textPrimary }]}>{card.title || card.preview || 'Untitled thought'}</Text>
-          {card.preview && card.preview !== card.title ? <Text numberOfLines={2} style={[styles.preview, { color: theme.textSecondary }]}>{card.preview}</Text> : null}
+          {hidden ? <View style={styles.hiddenTitle}><Ionicons accessible={false} name="eye-off-outline" size={17} color={theme.textMuted} /><Text numberOfLines={1} style={[styles.title, styles.hiddenTitleText, { color: theme.textMuted }]}>Hidden Chit</Text>{onShowContent ? <Pressable disabled={!interactive} hitSlop={8} accessibilityRole="button" accessibilityLabel="Show content" accessibilityHint="Makes this card and its thoughts in Chat visible again" onPress={(event) => { event.stopPropagation(); onShowContent(); }} style={({ pressed }) => [styles.showContent, { backgroundColor: theme.surfaceElevated }, pressed && styles.controlPressed]}><Ionicons accessible={false} name="eye-outline" size={15} color={resolvedAccent} /><Text style={[styles.moveText, { color: resolvedAccent }]}>Show</Text></Pressable> : null}</View> : <Text numberOfLines={2} style={[styles.title, { color: theme.textPrimary }]}>{card.title || card.preview || 'Untitled thought'}</Text>}
+          {!hidden && card.preview && card.preview !== card.title ? <Text numberOfLines={2} style={[styles.preview, { color: theme.textSecondary }]}>{card.preview}</Text> : null}
         </View>
         {interactive && translationY && onBeginDrag && onDragMove && onDragEnd && onDragCancel && onReorder && onMoveColumn ? <DragHandle index={index} total={total} translationY={translationY} handleRef={handleRef} columnName={columnName} canMovePrevColumn={canMovePrevColumn} canMoveNextColumn={canMoveNextColumn} onBegin={onBeginDrag} onMove={onDragMove} onEnd={onDragEnd} onCancel={onDragCancel} onReorder={onReorder} onMoveColumn={onMoveColumn} scrollRef={scrollRef} pagerRef={pagerRef} /> : <View style={styles.dragHandle}><DragDots /></View>}
       </View>
@@ -314,13 +315,14 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
   return shallowEqual(prev, next);
 });
 
-const BoardCardRow = memo(function BoardCardRow({ card, index, total, translationY, highlighted, accent, accentTint, accentBorderColor, columnName, canMovePrevColumn, canMoveNextColumn, onBeginDrag, onDragMove, onDragEnd, onDragCancel, onOpenMove, onReorder, onMoveColumn, scrollRef, pagerRef, frozen, activeDragCardId }: { card: Card; index: number; total: number; translationY: SharedValue<number>; highlighted?: boolean; accent?: string; accentTint?: string; accentBorderColor?: string; columnName?: string; canMovePrevColumn?: boolean; canMoveNextColumn?: boolean; onBeginDrag: (card: Card, index: number) => void; onDragMove: (dx: number, dy: number, pageX: number, pageY: number) => void; onDragEnd: () => void; onDragCancel: () => void; onOpenMove: (card: Card) => void; onReorder: (card: Card, index: number, direction: -1 | 1) => void; onMoveColumn?: (card: Card, direction: -1 | 1) => void; scrollRef: RefObject<ScrollView | null>; pagerRef: RefObject<FlatList<CarouselItem> | null>; frozen?: boolean; activeDragCardId?: SharedValue<string | null> }) {
+const BoardCardRow = memo(function BoardCardRow({ card, index, total, translationY, highlighted, accent, accentTint, accentBorderColor, columnName, canMovePrevColumn, canMoveNextColumn, onBeginDrag, onDragMove, onDragEnd, onDragCancel, onOpenMove, onReorder, onMoveColumn, onShowContent, scrollRef, pagerRef, frozen, activeDragCardId }: { card: Card; index: number; total: number; translationY: SharedValue<number>; highlighted?: boolean; accent?: string; accentTint?: string; accentBorderColor?: string; columnName?: string; canMovePrevColumn?: boolean; canMoveNextColumn?: boolean; onBeginDrag: (card: Card, index: number) => void; onDragMove: (dx: number, dy: number, pageX: number, pageY: number) => void; onDragEnd: () => void; onDragCancel: () => void; onOpenMove: (card: Card) => void; onReorder: (card: Card, index: number, direction: -1 | 1) => void; onMoveColumn?: (card: Card, direction: -1 | 1) => void; onShowContent: (card: Card) => void; scrollRef: RefObject<ScrollView | null>; pagerRef: RefObject<FlatList<CarouselItem> | null>; frozen?: boolean; activeDragCardId?: SharedValue<string | null> }) {
   'use no memo';
   const begin = useCallback(() => onBeginDrag(card, index), [card, index, onBeginDrag]);
   const openMove = useCallback(() => onOpenMove(card), [card, onOpenMove]);
   const moveEarlierOrLater = useCallback((direction: -1 | 1) => onReorder(card, index, direction), [card, index, onReorder]);
   const moveColumn = useCallback((direction: -1 | 1) => onMoveColumn?.(card, direction), [card, onMoveColumn]);
-  return <CardSurface card={card} index={index} total={total} translationY={translationY} highlighted={highlighted} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={columnName} canMovePrevColumn={canMovePrevColumn} canMoveNextColumn={canMoveNextColumn} onBeginDrag={begin} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={onDragCancel} onOpenMove={openMove} onReorder={moveEarlierOrLater} onMoveColumn={onMoveColumn ? moveColumn : undefined} scrollRef={scrollRef} pagerRef={pagerRef} frozen={frozen} activeDragCardId={activeDragCardId} />;
+  const showContent = useCallback(() => onShowContent(card), [card, onShowContent]);
+  return <CardSurface card={card} index={index} total={total} translationY={translationY} highlighted={highlighted} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={columnName} canMovePrevColumn={canMovePrevColumn} canMoveNextColumn={canMoveNextColumn} onBeginDrag={begin} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={onDragCancel} onOpenMove={openMove} onReorder={moveEarlierOrLater} onMoveColumn={onMoveColumn ? moveColumn : undefined} onShowContent={card.isHidden === 1 ? showContent : undefined} scrollRef={scrollRef} pagerRef={pagerRef} frozen={frozen} activeDragCardId={activeDragCardId} />;
 });
 
 function reorder(items: Card[], from: number, to: number) { const next = [...items]; const [item] = next.splice(from, 1); next.splice(Math.max(0, Math.min(to, next.length)), 0, item); return next.map((card, position) => ({ ...card, position })); }
@@ -597,6 +599,12 @@ export default function BoardScreen() {
   const finishDrag = useCallback(() => settleDrag(false), [settleDrag]);
   const cancelDrag = useCallback(() => settleDrag(true), [settleDrag]);
   const openCardMove = useCallback((card: Card) => setMoveCard(card), []);
+  const showCardContent = useCallback(async (card: Card) => {
+    let previousCards: Card[] = [];
+    setCards((current) => { previousCards = current; return current.map((item) => item.id === card.id ? { ...item, isHidden: 0 } : item); });
+    setError(null);
+    try { await repository.setCardHiddenContent(card.id, false); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); void AccessibilityInfo.announceForAccessibility('Content visible.'); } catch { setCards(previousCards); setError('That change could not be saved. Please try again.'); }
+  }, [repository]);
   const reorderCard = useCallback((card: Card, index: number, direction: -1 | 1) => { void reorderAccessible(card, index, direction); }, [reorderAccessible]);
   const moveToAdjacentColumn = useCallback(async (card: Card, direction: -1 | 1) => { const fromIndex = columnIndexRef.current; const destination = columns[fromIndex + direction]; if (!destination) return; await fetchColumn(destination.id);
     let previousCards: Card[] = []; let destinationIndex = 0;
@@ -622,18 +630,28 @@ export default function BoardScreen() {
   // state — no Unorganized round-trip, no board reload/flicker. Position is computed
   // the same way the repository computes it server-side (append after the column's
   // current cards), safe here because this is a local-first, single-writer app.
-  const submitAddNote = useCallback(async (text: string) => {
+  const submitAddNote = useCallback(async ({ text, attachment }: NoteSubmission) => {
     if (!id || !addNoteColumn) return;
     const targetColumn = addNoteColumn;
     const position = cards.filter((card) => card.columnId === targetColumn.id).length;
-    const { cardId } = await repository.createNoteCard({ boardId: id, columnId: targetColumn.id, text });
-    const newCard: Card = { id: cardId, columnId: targetColumn.id, title: text.trim().slice(0, 120) || null, position, preview: text.trim(), attachmentCount: 0, messageCount: 1, mediaId: null, mediaMessageId: null, mediaType: null, mediaPath: null, mediaMimeType: null, mediaSize: null, mediaDuration: null, mediaWidth: null, mediaHeight: null, mediaCreatedAt: null };
+    const { cardId } = await repository.createNoteCard({ boardId: id, columnId: targetColumn.id, text, attachment });
+    if (attachment) {
+      // A card with media: re-read just this column so the new card arrives with
+      // its thumbnail/counts exactly as the summary query builds them.
+      await fetchColumn(targetColumn.id, { force: true });
+      setColumnCounts((current) => ({ ...current, [targetColumn.id]: (current[targetColumn.id] ?? 0) + 1 }));
+      setJustAddedCardId(cardId);
+      setToast(`Added to ${targetColumn.name}`);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return;
+    }
+    const newCard: Card = { id: cardId, columnId: targetColumn.id, title: text.trim().slice(0, 120) || null, position, preview: text.trim(), attachmentCount: 0, messageCount: 1, mediaId: null, mediaMessageId: null, mediaType: null, mediaPath: null, mediaMimeType: null, mediaSize: null, mediaDuration: null, mediaWidth: null, mediaHeight: null, mediaCreatedAt: null, isHidden: 0 };
     setCards((current) => [...current, newCard]);
     setColumnCounts((current) => ({ ...current, [targetColumn.id]: (current[targetColumn.id] ?? 0) + 1 }));
     setJustAddedCardId(cardId);
     setToast(`Added to ${targetColumn.name}`);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [addNoteColumn, cards, id, repository]);
+  }, [addNoteColumn, cards, fetchColumn, id, repository]);
   const saveBoardAppearance = async (next: { name: string; icon: BoardIconName | null; accent: string | null }) => { if (!board) throw new Error('This board is no longer available.'); const previousBoard = board; setBoard({ ...board, name: next.name, icon: next.icon, accent: next.accent, updatedAt: Date.now() }); try { await repository.updateBoard(board.id, next); await Haptics.selectionAsync(); } catch (cause) { setBoard(previousBoard); throw cause; } };
   const renameColumn = async (name: string) => { if (!currentColumn) throw new Error('That column is no longer available.'); await repository.renameColumn(currentColumn.id, name.trim()); setColumns((current) => current.map((column) => column.id === currentColumn.id ? { ...column, name: name.trim() } : column)); await Haptics.selectionAsync(); };
   const deleteColumn = async (destinationColumnId?: string) => { if (!currentColumn) throw new Error('That column is no longer available.'); await repository.deleteColumn(currentColumn.id, destinationColumnId); await load(); await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); };
@@ -673,7 +691,7 @@ export default function BoardScreen() {
   const buildLaneRows = (column: Column, laneCards: Card[]): ReactNode[] => {
     const isSource = drag?.sourceColumnId === column.id;
     const isDestination = drag?.destinationColumnId === column.id;
-    if (!drag || (!isSource && !isDestination)) { const columnPosition = columns.findIndex((item) => item.id === column.id); return laneCards.map((card, index) => <Animated.View key={`card:${card.id}`} layout={cardLayoutTransition} entering={!reduceMotion && card.id === justAddedCardId ? FadeIn.duration(240) : undefined} onLayout={(event) => { layoutsRef.current[card.id] = event.nativeEvent.layout; }}><BoardCardRow card={card} index={index} total={laneCards.length} translationY={gestureTranslationY} highlighted={card.id === justAddedCardId} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={column.name} canMovePrevColumn={columnPosition > 0} canMoveNextColumn={columnPosition >= 0 && columnPosition < columns.length - 1} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} scrollRef={scrollRef} pagerRef={boardListRef} activeDragCardId={activeDragCardId} /></Animated.View>); }
+    if (!drag || (!isSource && !isDestination)) { const columnPosition = columns.findIndex((item) => item.id === column.id); return laneCards.map((card, index) => <Animated.View key={`card:${card.id}`} layout={cardLayoutTransition} entering={!reduceMotion && card.id === justAddedCardId ? FadeIn.duration(240) : undefined} onLayout={(event) => { layoutsRef.current[card.id] = event.nativeEvent.layout; }}><BoardCardRow card={card} index={index} total={laneCards.length} translationY={gestureTranslationY} highlighted={card.id === justAddedCardId} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={column.name} canMovePrevColumn={columnPosition > 0} canMoveNextColumn={columnPosition >= 0 && columnPosition < columns.length - 1} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} onShowContent={showCardContent} scrollRef={scrollRef} pagerRef={boardListRef} activeDragCardId={activeDragCardId} /></Animated.View>); }
     const rows: ReactNode[] = [];
     const displayCards = isSource ? laneCards.filter((card) => card.id !== drag.card.id) : laneCards;
     const placeholderIndex = isDestination ? drag.toIndex : undefined;
@@ -694,7 +712,7 @@ export default function BoardScreen() {
       const trueIndex = laneCards.indexOf(card);
       const filteredIndex = isSource && trueIndex > drag.fromIndex ? trueIndex - 1 : trueIndex;
       if (!isDragged && isDestination && filteredIndex === placeholderIndex) rows.push(placeholder);
-      rows.push(<Animated.View key={`card:${card.id}`} layout={cardLayoutTransition} entering={!reduceMotion && card.id === justAddedCardId ? FadeIn.duration(240) : undefined} onLayout={(event) => { layoutsRef.current[card.id] = event.nativeEvent.layout; }}><BoardCardRow card={card} index={isDragged ? drag.fromIndex : filteredIndex} total={total} translationY={gestureTranslationY} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={column.name} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} scrollRef={scrollRef} pagerRef={boardListRef} frozen={isDragged} activeDragCardId={activeDragCardId} /></Animated.View>);
+      rows.push(<Animated.View key={`card:${card.id}`} layout={cardLayoutTransition} entering={!reduceMotion && card.id === justAddedCardId ? FadeIn.duration(240) : undefined} onLayout={(event) => { layoutsRef.current[card.id] = event.nativeEvent.layout; }}><BoardCardRow card={card} index={isDragged ? drag.fromIndex : filteredIndex} total={total} translationY={gestureTranslationY} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={column.name} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} onShowContent={showCardContent} scrollRef={scrollRef} pagerRef={boardListRef} frozen={isDragged} activeDragCardId={activeDragCardId} /></Animated.View>);
     }
     if (isDestination && placeholderIndex === displayCards.length) rows.push(placeholder);
     return rows;
@@ -776,7 +794,7 @@ export default function BoardScreen() {
               </Animated.View>
             </View> : notYetLoaded ? <ColumnSkeleton />
             : loadFailed ? <Pressable accessibilityRole="button" accessibilityLabel={`Retry loading ${column.name}`} onPress={() => fetchColumn(column.id, { force: true })} style={({ pressed }) => [styles.emptyDrop, { borderColor: accentBorderColor, backgroundColor: theme.surface }, pressed && styles.emptyDropPressed]}><View style={[styles.emptyIcon, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name="refresh" size={24} color={theme.textMuted} /></View><Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>Couldn’t load this column</Text><Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>Tap to retry.</Text></Pressable>
-            : <View style={[styles.emptyDrop, { borderColor: accentBorderColor, backgroundColor: theme.surface }]}><View style={[styles.emptyIcon, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name="document-text-outline" size={24} color={theme.textMuted} /></View><Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>No notes here yet</Text><Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>Add something directly or move a note here.</Text><Pressable accessibilityRole="button" accessibilityLabel={`Add note to ${column.name}`} onPress={() => openAddNote(column)} style={({ pressed }) => [styles.emptyAddButton, { backgroundColor: accent }, pressed && styles.emptyDropPressed]}><Ionicons accessible={false} name="add" size={16} color={accentOn} /><Text style={[styles.emptyAddText, { color: accentOn }]}>Add note</Text></Pressable></View>}</ScrollView> : <View pointerEvents="none" style={styles.neighborCards}>{status === 'loaded' || laneCards.length ? <>{laneCards.slice(0, 3).map((card) => <View key={card.id} style={[styles.neighborCard, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}><Text numberOfLines={2} style={[styles.neighborCardTitle, { color: theme.textPrimary }]}>{card.title || card.preview || 'Untitled thought'}</Text></View>)}{!laneCards.length ? <View style={[styles.neighborEmpty, { borderColor: accentBorderColor }]}><Ionicons accessible={false} name="add" size={20} color={theme.textMuted} /><Text style={[styles.neighborEmptyText, { color: theme.textMuted }]}>Add a card</Text></View> : null}</> : [0, 1].map((key) => <View key={key} style={[styles.neighborCard, styles.neighborCardSkeleton, { backgroundColor: theme.surfaceElevated }]} />)}</View>}
+            : <View style={[styles.emptyDrop, { borderColor: accentBorderColor, backgroundColor: theme.surface }]}><View style={[styles.emptyIcon, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name="document-text-outline" size={24} color={theme.textMuted} /></View><Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>No notes here yet</Text><Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>Add something directly or move a note here.</Text><Pressable accessibilityRole="button" accessibilityLabel={`Add note to ${column.name}`} onPress={() => openAddNote(column)} style={({ pressed }) => [styles.emptyAddButton, { backgroundColor: accent }, pressed && styles.emptyDropPressed]}><Ionicons accessible={false} name="add" size={16} color={accentOn} /><Text style={[styles.emptyAddText, { color: accentOn }]}>Add note</Text></Pressable></View>}</ScrollView> : <View pointerEvents="none" style={styles.neighborCards}>{status === 'loaded' || laneCards.length ? <>{laneCards.slice(0, 3).map((card) => <View key={card.id} style={[styles.neighborCard, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}><Text numberOfLines={2} style={[styles.neighborCardTitle, { color: card.isHidden === 1 ? theme.textMuted : theme.textPrimary }]}>{card.isHidden === 1 ? 'Hidden Chit' : card.title || card.preview || 'Untitled thought'}</Text></View>)}{!laneCards.length ? <View style={[styles.neighborEmpty, { borderColor: accentBorderColor }]}><Ionicons accessible={false} name="add" size={20} color={theme.textMuted} /><Text style={[styles.neighborEmptyText, { color: theme.textMuted }]}>Add a card</Text></View> : null}</> : [0, 1].map((key) => <View key={key} style={[styles.neighborCard, styles.neighborCardSkeleton, { backgroundColor: theme.surfaceElevated }]} />)}</View>}
           </View>;
         }}
       />
@@ -845,7 +863,7 @@ const styles = StyleSheet.create({
   // No minHeight: a short single-line title should make the card short, not be
   // padded out to a fixed row height — the row already sizes to its tallest
   // child (the drag handle's touch target) via flexbox without one.
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs }, cardOpen: { flex: 1, minWidth: 0, justifyContent: 'center' }, title: { fontSize: 17, fontWeight: '600', lineHeight: 22 },
+  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs }, cardOpen: { flex: 1, minWidth: 0, justifyContent: 'center' }, hiddenTitle: { flexDirection: 'row', alignItems: 'center', gap: 6 }, hiddenTitleText: { flexShrink: 1 }, showContent: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto', paddingHorizontal: spacing.sm, borderRadius: 10 }, title: { fontSize: 17, fontWeight: '600', lineHeight: 22 },
   // The Pressable hit target stays 44x44 (accessible minimum) — only the DragDots
   // glyph inside it (dotGrid/dot below) shrinks, so the handle reads as smaller
   // without losing any tappable/draggable area.

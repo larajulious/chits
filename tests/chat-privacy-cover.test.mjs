@@ -74,3 +74,35 @@ test('covered actions and secondary surfaces do not expose content', () => {
   assert.match(unorganized, /if \(message\.isHiddenContent\) return 'Hidden Chit'/);
   assert.match(unorganized, /if \(message\.isHiddenContent\) return <View accessibilityLabel="Hidden content"/);
 });
+
+test('board cards linked to a hidden Chat thought are covered in their column', () => {
+  const database = new DatabaseSync(':memory:');
+  database.exec(`
+    CREATE TABLE messages (id TEXT PRIMARY KEY, is_hidden_content INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE card_messages (card_id TEXT NOT NULL, message_id TEXT NOT NULL);
+    CREATE TABLE cards (id TEXT PRIMARY KEY);
+    INSERT INTO messages VALUES ('visible', 0), ('secret', 1);
+    INSERT INTO cards VALUES ('plain'), ('private'), ('merged');
+    INSERT INTO card_messages VALUES ('plain', 'visible'), ('private', 'secret'), ('merged', 'visible'), ('merged', 'secret');
+  `);
+  const isHidden = database.prepare('SELECT EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id AND m.is_hidden_content = 1) AS isHidden FROM cards c WHERE c.id = ?');
+  assert.equal(isHidden.get('plain').isHidden, 0);
+  assert.equal(isHidden.get('private').isHidden, 1);
+  assert.equal(isHidden.get('merged').isHidden, 1);
+
+  const repository = read('src/db/repositories.ts');
+  const board = read('src/app/board/[id].native.tsx');
+  assert.match(repository, /CARD_SUMMARY_SELECT_SQL[\s\S]*?m\.is_hidden_content = 1\) AS isHidden/);
+  assert.match(board, /const media: Attachment \| null = !hidden &&/);
+  assert.match(board, /hidden \? <View style=\{styles\.hiddenTitle\}>[\s\S]*?Hidden Chit/);
+  assert.match(board, /\{!hidden && card\.preview/);
+});
+
+test('card details can hide or show content and covers it while hidden', () => {
+  const repository = read('src/db/repositories.ts');
+  const detail = read('src/app/card/[id].native.tsx');
+  assert.match(repository, /setCardHiddenContent\(cardId: string, hidden: boolean\)[\s\S]*?UPDATE messages SET is_hidden_content = \? WHERE id IN \(SELECT message_id FROM card_messages WHERE card_id = \?\)/);
+  assert.match(detail, /const contentHidden = messages\.some\(\(message\) => message\.isHiddenContent\)/);
+  assert.match(detail, /covered \? <Pressable[\s\S]*?Content hidden[\s\S]*?: messages\.map\(/);
+  assert.match(detail, /contentHidden \? 'Show content' : 'Hide content'/);
+});

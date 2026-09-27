@@ -12,7 +12,8 @@
       "bundleIdentifier": "com.larajulious.chitsapp",
       "buildNumber": "4",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryAddUsageDescription": "Allow Chits to save photos and videos you download to your Photos library."
       }
     },
     "android": {

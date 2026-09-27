@@ -6,12 +6,11 @@ import { ChitsLoaderOverlay } from '@/components/ui/chits-loader';
 import { EditNoteSpaceNameSheet } from '@/components/settings/edit-notespace-name-sheet';
 import { type ChatThemeKey } from '@/constants/theme';
 // eslint-disable-next-line import/no-unresolved -- Expo resolves platform file suffixes at runtime.
-import { createBackup, discardValidatedBackup, restoreBackup, validateBackup } from '@/services/backup-service';
+import { createBackup, discardValidatedBackup, RestoreError, restoreBackup, saveBackupFile, validateBackup } from '@/services/backup-service';
 import { triggerAppReset } from '@/services/app-reset';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Constants from 'expo-constants';
 import * as DocumentPicker from 'expo-document-picker';
-import * as Sharing from 'expo-sharing';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
@@ -81,14 +80,14 @@ export default function SettingsScreen() {
     setBackupBusy('backup'); setError(null);
     try {
       const zipPath = await createBackup(database);
-      // Sharing failing/being dismissed shouldn't block the "backup created"
-      // confirmation below — the zip itself already exists on disk at this point,
-      // which is what "success" actually means per the acceptance criteria.
-      try { if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(zipPath, { mimeType: 'application/zip', dialogTitle: 'Save Chits backup' }); } catch { /* not fatal */ }
+      // The zip is only in a temporary folder until it's saved somewhere the
+      // user keeps it; a cancelled save means there is no backup to report.
+      const saved = await saveBackupFile(zipPath);
+      if (!saved.saved) { setToast('Backup not saved'); return; }
       const now = Date.now();
       await database.runAsync("INSERT INTO app_settings (key, value, updated_at) VALUES ('last_backup_at', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at", String(now), now);
       setLastBackup(String(now));
-      setToast('Backup created');
+      setToast(saved.location ? `Backup saved to ${saved.location}` : 'Backup saved');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Chits could not create a backup. Please try again.');
     } finally {
@@ -96,27 +95,22 @@ export default function SettingsScreen() {
     }
   };
 
+  // restoreBackup stages everything before touching current data, then closes
+  // this screen's database connection to swap files. From that point the app
+  // must remount right away (nothing may query the closed connection), and the
+  // outcome is shown by the fresh app once it has reopened the database.
   const performRestore = async (extractedDir: string) => {
     setBackupBusy('restore');
     try {
-      await restoreBackup(extractedDir);
+      await restoreBackup(extractedDir, database);
+      triggerAppReset({ type: 'success', title: 'Restore complete', message: 'Your Chits data has been restored.' });
+    } catch (cause) {
+      console.warn('[backup] restore failed', cause instanceof RestoreError ? { message: cause.message, dataChanged: cause.dataChanged, cause: cause.cause } : cause);
+      const failure = { type: 'warning' as const, title: 'Restore failed', message: cause instanceof RestoreError && cause.dataChanged ? cause.message : 'Your current data was not changed.' };
+      if (cause instanceof RestoreError && cause.liveClosed) { triggerAppReset(failure); return; }
       setBackupBusy(null);
-      alert({
-        type: 'success',
-        icon: 'checkmark-circle-outline',
-        title: 'Restore complete',
-        message: 'Your Chits data has been restored.',
-        actionText: 'Continue',
-        onDismiss: () => { setSheet(null); triggerAppReset(); },
-      });
-    } catch {
-      setBackupBusy(null);
-      alert({
-        type: 'warning',
-        icon: 'alert-circle-outline',
-        title: 'Restore failed',
-        message: 'Your current data was not changed.',
-      });
+      void discardValidatedBackup(extractedDir);
+      alert({ ...failure, icon: 'alert-circle-outline' });
     }
   };
 

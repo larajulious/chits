@@ -1,5 +1,5 @@
 import { useContext, useRef, useState, type ComponentProps } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -114,7 +114,10 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
       // home-indicator phones) below it — that's what produced the oversized
       // gap. Capping at spacing.xs keeps just enough clearance to stay off the
       // home indicator on every device, including ones with no inset at all.
-      style={[styles.wrap, { paddingBottom: Math.min(insets.bottom, spacing.xs) || spacing.xs }]}
+      // Android is different: its inset is a real system bar (3-button
+      // Back/Home/Recents, or the gesture handle's touch zone), so the pill
+      // must clear all of it or its buttons end up underneath the system's.
+      style={[styles.wrap, { paddingBottom: Platform.OS === 'android' && insets.bottom > 0 ? insets.bottom + spacing.xxs : Math.min(insets.bottom, spacing.xs) || spacing.xs }]}
       onLayout={(event) => reportHeight?.(event.nativeEvent.layout.height)}
     >
       {/* Purely a layout container — caps the nav's width and centers it on

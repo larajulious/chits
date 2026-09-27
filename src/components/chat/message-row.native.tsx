@@ -7,16 +7,24 @@ import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { createVideoPlayer, useVideoPlayer, VideoView, type VideoThumbnail } from 'expo-video';
 import * as Sharing from 'expo-sharing';
 import { getInfoAsync } from 'expo-file-system/legacy';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { radii, spacing } from '@/constants/theme';
 import { useTheme } from '@/components/theme-provider';
 import { MessageContentRenderer, MessageMetadata } from '@/components/chat/message-note-cards';
 import type { Attachment, AttachmentLike, Message } from '@/db/types';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
+import { subscribeToAppReset } from '@/services/app-reset';
+import { isPdfAttachment } from '@/services/pdf-attachment';
+import { PdfViewer } from '@/components/pdf/pdf-viewer';
+import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
+import { exportActionLabel } from '@/services/attachment-export';
 
 let activeAudio: { token: symbol; pause: () => void } | null = null;
 const availabilityCache = new Map<string, boolean>();
+// Whether each attachment file exists is cached for the session; a restore
+// replaces the files on disk, so start over whenever the app resets.
+subscribeToAppReset(() => availabilityCache.clear());
 
 function formatTime(timestamp: number) { return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(timestamp); }
 function formatDuration(duration: number | null) { if (!duration) return '0:00'; return `${Math.floor(duration / 60000)}:${String(Math.floor(duration / 1000) % 60).padStart(2, '0')}`; }
@@ -27,12 +35,14 @@ function typeLabel(attachment: AttachmentLike) {
   if (attachment.type === 'photo') return 'Photo';
   if (attachment.type === 'video') return 'Video';
   if (attachment.type === 'audio') return 'Audio note';
+  if (isPdfAttachment(attachment)) return 'PDF file';
   const extension = attachment.originalName?.split('.').pop()?.toUpperCase();
   if (extension && extension.length <= 8) return `${extension} file`;
   if (attachment.mimeType?.includes('pdf')) return 'PDF file';
   return 'File';
 }
 function fileIcon(attachment: AttachmentLike): React.ComponentProps<typeof Ionicons>['name'] {
+  if (isPdfAttachment(attachment)) return 'document-text-outline';
   const value = `${attachment.mimeType ?? ''} ${attachment.originalName ?? ''}`.toLowerCase();
   if (value.includes('zip') || value.includes('archive') || value.includes('.rar')) return 'archive-outline';
   if (value.includes('sheet') || value.includes('excel') || value.includes('.csv') || value.includes('.xls')) return 'grid-outline';
@@ -53,12 +63,27 @@ function useAttachmentAvailable(uri: string) {
 
 function PhotoViewer({ attachment, onDismiss }: { attachment: AttachmentLike; onDismiss: () => void }) {
   const uri = resolveAttachmentUri(attachment.storagePath) ?? '';
-  return <Modal visible animationType="fade" presentationStyle="fullScreen" statusBarTranslucent={false} navigationBarTranslucent={false} onRequestClose={onDismiss}><SafeAreaProvider><SafeAreaView edges={['top', 'right', 'bottom', 'left']} style={styles.viewer}><Image source={uri} contentFit="contain" style={styles.fullImage} /><Pressable accessibilityRole="button" accessibilityLabel="Close photo" onPress={onDismiss} style={styles.viewerClose}><Ionicons accessible={false} name="close" size={24} color="#FFFFFF" /></Pressable></SafeAreaView></SafeAreaProvider></Modal>;
+  return <Modal visible animationType="fade" presentationStyle="fullScreen" statusBarTranslucent={false} navigationBarTranslucent={false} onRequestClose={onDismiss}><SafeAreaProvider><SafeAreaView edges={['top', 'right', 'bottom', 'left']} style={styles.viewer}><Image source={uri} contentFit="contain" style={styles.fullImage} /><ViewerActions attachment={attachment} label="photo" onDismiss={onDismiss} /></SafeAreaView></SafeAreaProvider></Modal>;
+}
+
+// Download + Close for the full-screen photo/video viewers, with the export
+// feedback shown inside the viewer (it sits above the rest of the app).
+// Absolutely positioned children ignore the SafeAreaView's padding, so the
+// top inset is applied explicitly to keep both buttons out of the status bar.
+function ViewerActions({ attachment, label, onDismiss }: { attachment: AttachmentLike; label: string; onDismiss: () => void }) {
+  const download = useAttachmentExport();
+  const insets = useSafeAreaInsets();
+  const top = { top: insets.top + spacing.sm };
+  return <>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${exportActionLabel(attachment)}, ${label}`} disabled={download.busy} onPress={() => void download.exportAttachment(attachment)} style={[styles.viewerClose, styles.viewerSecondary, top]}><Ionicons accessible={false} name="download-outline" size={22} color="#FFFFFF" /></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Close ${label}`} onPress={onDismiss} style={[styles.viewerClose, top]}><Ionicons accessible={false} name="close" size={24} color="#FFFFFF" /></Pressable>
+    {download.status ? <View pointerEvents="none" style={[styles.viewerToast, { bottom: insets.bottom + spacing.xl }]}><Text accessibilityLiveRegion="polite" style={styles.viewerToastText}>{download.status}</Text></View> : null}
+  </>;
 }
 
 function VideoViewer({ attachment, onDismiss }: { attachment: AttachmentLike; onDismiss: () => void }) {
   const player = useVideoPlayer(resolveAttachmentUri(attachment.storagePath) ?? '', (videoPlayer) => videoPlayer.play());
-  return <Modal visible animationType="fade" presentationStyle="fullScreen" statusBarTranslucent={false} navigationBarTranslucent={false} onRequestClose={onDismiss}><SafeAreaProvider><SafeAreaView edges={['top', 'right', 'bottom', 'left']} style={styles.videoViewer}><VideoView player={player as never} nativeControls fullscreenOptions={{ enable: true }} contentFit="contain" style={styles.video} /><Pressable accessibilityRole="button" accessibilityLabel="Close video" onPress={onDismiss} style={styles.viewerClose}><Ionicons accessible={false} name="close" size={24} color="#FFFFFF" /></Pressable></SafeAreaView></SafeAreaProvider></Modal>;
+  return <Modal visible animationType="fade" presentationStyle="fullScreen" statusBarTranslucent={false} navigationBarTranslucent={false} onRequestClose={onDismiss}><SafeAreaProvider><SafeAreaView edges={['top', 'right', 'bottom', 'left']} style={styles.videoViewer}><VideoView player={player as never} nativeControls fullscreenOptions={{ enable: true }} contentFit="contain" style={styles.video} /><ViewerActions attachment={attachment} label="video" onDismiss={onDismiss} /></SafeAreaView></SafeAreaProvider></Modal>;
 }
 
 function mediaAspectRatio(attachment: Pick<Attachment, 'width' | 'height'>) {
@@ -211,7 +236,11 @@ export function AttachmentContent({ attachment, accessibilityLabel, overlay, var
   if (attachment.type === 'photo') return <><View style={[mediaStyle, { backgroundColor: theme.surfaceElevated }]}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? 'Photo. Double tap to view fullscreen.'} accessibilityHint="Opens the photo fullscreen" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><Image source={uri} contentFit="cover" transition={120} allowDownscaling onError={() => setMediaError(true)} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <PhotoViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
   if (attachment.type === 'video') return <><View style={mediaStyle}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? `Video${attachment.duration ? `, ${durationSeconds(attachment.duration)} seconds` : ''}. Play video.`} accessibilityHint="Opens the video player" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><VideoPoster attachment={attachment} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <VideoViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
   if (attachment.type === 'audio') return <AudioPlayer attachment={attachment} />;
+  // PDFs open in Chits' own viewer; every other document keeps the existing
+  // system share/open-with flow.
+  const pdf = isPdfAttachment(attachment);
   const meta = [typeLabel(attachment).replace(/ file$/, ''), formatSize(attachment.size)].filter(Boolean).join(' · ');
+  if (pdf) return <><Pressable accessibilityRole="button" accessibilityLabel={`Open PDF, ${attachment.originalName ?? 'document'}${attachment.size ? `, ${formatSize(attachment.size)}` : ''}`} accessibilityHint="Opens the PDF in Chits" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [styles.fileTile, pressed && styles.fileTilePressed]}><View style={[styles.fileIcon, { backgroundColor: theme.surface }]}><Ionicons accessible={false} name="document-text-outline" size={22} color={accentColor ?? theme.accent} /><Text style={[styles.pdfBadge, { color: accentColor ?? theme.accent }]}>PDF</Text></View><View style={styles.fileCopy}><Text numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{attachment.originalName ?? 'Document.pdf'}</Text><Text style={[styles.attachmentMeta, { color: theme.textMuted }]}>{meta}</Text></View><Ionicons accessible={false} name="chevron-forward" size={18} color={theme.textMuted} />{overlay}</Pressable>{viewerOpen ? <PdfViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
   const open = async () => { setOpenError(null); try { if (!uri || !await Sharing.isAvailableAsync()) throw new Error(); await Sharing.shareAsync(uri, { mimeType: attachment.mimeType ?? undefined }); } catch { setOpenError('This file could not be opened.'); } };
   return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${typeLabel(attachment)}, ${attachment.originalName ?? 'document'}${attachment.size ? `, ${formatSize(attachment.size)}` : ''}`} onPress={() => void open()} onLongPress={onLongPress} delayLongPress={350} style={styles.fileTile}><View style={[styles.fileIcon, { backgroundColor: theme.surface }]}><Ionicons accessible={false} name={fileIcon(attachment)} size={24} color={accentColor ?? theme.accent} /></View><View style={styles.fileCopy}><Text numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{attachment.originalName ?? 'Document'}</Text><Text style={[styles.attachmentMeta, { color: theme.textMuted }]}>{openError ?? meta}</Text></View><Ionicons accessible={false} name="open-outline" size={18} color={theme.textMuted} />{overlay}</Pressable>;
 }
@@ -374,6 +403,8 @@ const styles = StyleSheet.create({
   audioTime: { fontSize: 11, lineHeight: 14, fontVariant: ['tabular-nums'] },
   fileTile: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingTop: spacing.sm },
   fileIcon: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 11 },
+  fileTilePressed: { opacity: 0.72 },
+  pdfBadge: { marginTop: -1, fontSize: 9, lineHeight: 11, fontWeight: '800', letterSpacing: 0.4 },
   fileCopy: { flex: 1, minWidth: 0 },
   fileName: { fontSize: 15, fontWeight: '600', lineHeight: 19 },
   attachmentMeta: { fontSize: 11, lineHeight: 15 },
@@ -389,4 +420,7 @@ const styles = StyleSheet.create({
   videoViewer: { flex: 1, justifyContent: 'center', backgroundColor: '#000000' },
   video: { width: '100%', height: '100%' },
   viewerClose: { position: 'absolute', top: spacing.sm, right: spacing.md, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.56)' },
+  viewerSecondary: { right: spacing.md + 44 + spacing.xs },
+  viewerToast: { position: 'absolute', bottom: spacing.xl * 2, alignSelf: 'center', maxWidth: '86%', paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: radii.control, backgroundColor: 'rgba(255,255,255,0.94)' },
+  viewerToastText: { color: '#111111', fontSize: 14, fontWeight: '600', textAlign: 'center' },
 });

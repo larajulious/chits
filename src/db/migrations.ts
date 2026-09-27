@@ -167,6 +167,9 @@ const migrations: Migration[] = [{
   },
 }];
 
+/** The schema version this build of Chits understands (the last migration). */
+export const LATEST_SCHEMA_VERSION = migrations[migrations.length - 1].version;
+
 export async function migrateDatabase(database: SQLiteDatabase) {
   await database.execAsync('PRAGMA journal_mode = WAL;');
   await database.execAsync('PRAGMA foreign_keys = ON;');

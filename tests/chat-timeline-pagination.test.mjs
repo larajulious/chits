@@ -125,3 +125,25 @@ test('10,000 mixed timeline items remain page-bounded and duplicate-free', () =>
   assert.equal(pages, 200);
   assert.equal(ids.size, 10_000);
 });
+
+test('focus refresh merges only when the loaded window stays contiguous, otherwise Chat reloads with fresh pagination', async () => {
+  const { canMergeTimelineRefresh } = await import('../src/services/timeline-refresh.ts');
+  const item = (id, createdAt) => ({ id, createdAt });
+  const key = (entry) => entry.id;
+  const compare = (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id);
+  const loaded = [item('a', 10), item('b', 20), item('c', 30)];
+
+  // Nothing new, or a note added elsewhere just now: cheap merge.
+  assert.equal(canMergeTimelineRefresh(loaded, loaded, false, key, compare), true);
+  assert.equal(canMergeTimelineRefresh(loaded, [...loaded, item('d', 40)], false, key, compare), true);
+  // Older-dated notes appeared (sample data, restore, import): the loaded window has a hole.
+  assert.equal(canMergeTimelineRefresh(loaded, [item('old', 15), ...loaded], false, key, compare), false);
+  assert.equal(canMergeTimelineRefresh(loaded, [item('x', 5), item('y', 25), item('z', 35)], true, key, compare), false);
+  // A full newest page sharing nothing with what's loaded means a gap bigger than one page.
+  assert.equal(canMergeTimelineRefresh(loaded, [item('p', 50), item('q', 60)], true, key, compare), false);
+  // First notes ever (empty feed) → load properly rather than merge.
+  assert.equal(canMergeTimelineRefresh([], [item('n', 1)], false, key, compare), false);
+
+  const chat = read('src/app/(tabs)/chat.native.tsx');
+  assert.match(chat, /if \(!canMergeTimelineRefresh\(feedRef\.current, latest, page\.hasMore, timelineKey, compareTimeline\)\) \{[\s\S]*?oldestCursorRef\.current = page\.nextCursor;[\s\S]*?hasMoreRef\.current = page\.hasMore;/);
+});

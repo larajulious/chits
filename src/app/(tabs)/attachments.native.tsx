@@ -17,7 +17,12 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { AttachmentContent } from '@/components/chat/message-row';
-import { AppHeader, EmptyState, IconButton, PrimaryButton, Screen } from '@/components/ui/primitives';
+import { isPdfAttachment } from '@/services/pdf-attachment';
+import { AppHeader, EmptyState, IconButton, PrimaryButton, Screen, SecondaryButton, Toast } from '@/components/ui/primitives';
+import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
+import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
+import { exportActionLabel, shareAttachment } from '@/services/attachment-export';
+import { exportFileName } from '@/services/attachment-export-naming';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { useTheme } from '@/components/theme-provider';
@@ -59,10 +64,12 @@ function formatFileSize(size: number | null) {
 }
 
 function fileExtension(item: AttachmentSummary) {
+  if (isPdfAttachment(item)) return 'PDF';
   return item.originalName?.split('.').pop()?.toUpperCase() ?? null;
 }
 
 function fileTileIcon(item: AttachmentSummary): React.ComponentProps<typeof Ionicons>['name'] {
+  if (isPdfAttachment(item)) return 'document-text-outline';
   const value = `${item.mimeType ?? ''} ${item.originalName ?? ''}`.toLowerCase();
   if (value.includes('zip') || value.includes('archive') || value.includes('.rar')) return 'archive-outline';
   if (value.includes('sheet') || value.includes('excel') || value.includes('.csv') || value.includes('.xls')) return 'grid-outline';
@@ -101,7 +108,7 @@ function TypeFilterChips({ filter, onChange }: { filter: TypeFilter; onChange: (
 // AttachmentContent (it renders a full inline player / full-width row for
 // those), so they get compact custom tiles here instead, matching the same
 // pattern card-list-row.native.tsx already uses for its own audio thumbnail.
-function AttachmentTile({ item, size, onPress }: { item: AttachmentSummary; size: number; onPress: () => void }) {
+function AttachmentTile({ item, size, onPress, onLongPress }: { item: AttachmentSummary; size: number; onPress: () => void; onLongPress: () => void }) {
   const { tokens: theme } = useTheme();
   const tileStyle = { width: size, height: size };
   let content: React.ReactNode;
@@ -126,13 +133,18 @@ function AttachmentTile({ item, size, onPress }: { item: AttachmentSummary; size
         <Text numberOfLines={1} style={[styles.tileMeta, { color: theme.textMuted }]}>{[fileExtension(item), size2].filter(Boolean).join(' · ')}</Text>
       </View>
     );
-    accessibilityLabel = `File, ${item.originalName ?? 'document'}`;
+    accessibilityLabel = `${isPdfAttachment(item) ? 'PDF' : 'File'}, ${item.originalName ?? 'document'}`;
   }
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityHint="Opens details. Hold for more actions."
+      accessibilityActions={[{ name: 'longpress', label: 'More actions' }]}
+      onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === 'longpress') onLongPress(); }}
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={350}
       style={({ pressed }) => [styles.tile, tileStyle, { backgroundColor: theme.surfaceElevated }, pressed && styles.tilePressed]}
     >
       {content}
@@ -142,6 +154,10 @@ function AttachmentTile({ item, size, onPress }: { item: AttachmentSummary; size
 
 function AttachmentDetailModal({ item, onClose, onViewCard }: { item: AttachmentSummary; onClose: () => void; onViewCard: (cardId: string) => void }) {
   const { tokens: theme } = useTheme();
+  const download = useAttachmentExport();
+  const [shareFailed, setShareFailed] = useState(false);
+  useEffect(() => { if (!shareFailed) return; const timer = setTimeout(() => setShareFailed(false), 2400); return () => clearTimeout(timer); }, [shareFailed]);
+  const attachment = toAttachmentLike(item);
   const contextLine = item.boardName ? `${item.boardName} • ${item.columnName}` : 'Unorganized';
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" statusBarTranslucent={false} navigationBarTranslucent={false} onRequestClose={onClose}>
@@ -150,14 +166,18 @@ function AttachmentDetailModal({ item, onClose, onViewCard }: { item: Attachment
           <AppHeader
             title={item.cardTitle ?? (item.type === 'photo' ? 'Photo' : item.type === 'video' ? 'Video' : item.type === 'audio' ? 'Audio note' : 'File')}
             leading={<IconButton label="Close" onPress={onClose}><Ionicons accessible={false} name="close" size={24} color={theme.textPrimary} /></IconButton>}
+            trailing={<IconButton label={exportActionLabel(attachment)} disabled={download.busy} onPress={() => void download.exportAttachment(attachment)}><Ionicons accessible={false} name="download-outline" size={22} color={theme.textPrimary} /></IconButton>}
           />
           <ScrollView contentContainerStyle={styles.detailContent}>
             <Text style={[styles.detailContext, { color: theme.textMuted }]}>{contextLine}</Text>
             <View style={styles.detailMediaWrap}>
-              <AttachmentContent attachment={toAttachmentLike(item)} variant="detail" />
+              <AttachmentContent attachment={attachment} variant="detail" />
             </View>
+            <Text numberOfLines={2} style={[styles.detailFileName, { color: theme.textSecondary }]}>{exportFileName(attachment)}{item.size ? ` · ${formatFileSize(item.size)}` : ''}</Text>
+            <SecondaryButton label="Share" onPress={() => void shareAttachment(attachment).then((shared) => setShareFailed(!shared))} />
             {item.cardId ? <PrimaryButton label="View card" onPress={() => onViewCard(item.cardId!)} /> : null}
           </ScrollView>
+          <Toast message={shareFailed ? 'This file could not be shared.' : download.status} />
         </SafeAreaView>
       </SafeAreaProvider>
     </Modal>
@@ -189,6 +209,10 @@ export default function AttachmentsScreen() {
   const [ready, setReady] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [detailItem, setDetailItem] = useState<AttachmentSummary | null>(null);
+  const { actionSheet } = useAppDialog();
+  const download = useAttachmentExport();
+  const [shareFailed, setShareFailed] = useState(false);
+  useEffect(() => { if (!shareFailed) return; const timer = setTimeout(() => setShareFailed(false), 2400); return () => clearTimeout(timer); }, [shareFailed]);
   const showLoader = useChitsLoading(!ready);
   const requestToken = useRef(0);
 
@@ -244,6 +268,22 @@ export default function AttachmentsScreen() {
     router.push({ pathname: '/card/[id]', params: { id: cardId } });
   };
 
+  // Long-press menu for a tile. Only actions that apply to this attachment
+  // appear ("View card" needs a card); Download/Save to Files and Share are
+  // kept separate — Share never stands in for saving a copy.
+  const openItemMenu = (item: AttachmentSummary) => {
+    const attachment = toAttachmentLike(item);
+    actionSheet({
+      title: exportFileName(attachment),
+      options: [
+        { label: 'Open', icon: 'open-outline', onPress: () => setDetailItem(item) },
+        { label: 'Share', icon: 'share-outline', onPress: () => void shareAttachment(attachment).then((shared) => setShareFailed(!shared)) },
+        { label: exportActionLabel(attachment), icon: 'download-outline', disabled: download.busy, onPress: () => void download.exportAttachment(attachment) },
+        ...(item.cardId ? [{ label: 'View card', icon: 'albums-outline' as const, onPress: () => viewCard(item.cardId!) }] : []),
+      ],
+    });
+  };
+
   const empty = emptyStateFor(filter, Boolean(searchTerm));
 
   return (
@@ -260,7 +300,7 @@ export default function AttachmentsScreen() {
         keyExtractor={(item) => `${item.source}-${item.id}`}
         columnWrapperStyle={styles.gridRow}
         contentContainerStyle={[styles.gridContent, { paddingBottom: tabBarHeight + spacing.md }]}
-        renderItem={({ item }) => <AttachmentTile item={item} size={tileSize} onPress={() => setDetailItem(item)} />}
+        renderItem={({ item }) => <AttachmentTile item={item} size={tileSize} onPress={() => setDetailItem(item)} onLongPress={() => openItemMenu(item)} />}
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <View style={[styles.searchField, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }]}>
@@ -307,6 +347,7 @@ export default function AttachmentsScreen() {
         maxToRenderPerBatch={18}
         windowSize={7}
       />
+      <Toast message={shareFailed ? 'This file could not be shared.' : download.status} />
       {detailItem ? <AttachmentDetailModal item={detailItem} onClose={() => setDetailItem(null)} onViewCard={viewCard} /> : null}
     </Screen>
   );
@@ -337,4 +378,5 @@ const styles = StyleSheet.create({
   detailContent: { padding: spacing.md, gap: spacing.md },
   detailContext: { fontSize: 13, fontWeight: '600' },
   detailMediaWrap: { borderRadius: radii.contentCard, overflow: 'hidden' },
+  detailFileName: { fontSize: 13, lineHeight: 18 },
 });

@@ -1,8 +1,10 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { openDatabaseAsync, backupDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
+import { Platform } from 'react-native';
 import { zip, unzip } from 'react-native-zip-archive';
 
-import { migrateDatabase } from '@/db/migrations';
+import { ChitsFiles } from '../../modules/chits-attachments';
+import { LATEST_SCHEMA_VERSION, migrateDatabase } from '@/db/migrations';
 import { normalizeStoredAttachmentPath } from '@/services/attachment-path';
 
 const BACKUP_VERSION = 1;
@@ -88,6 +90,29 @@ export async function createBackup(database: SQLiteDatabase): Promise<string> {
   }
 }
 
+export type BackupSaveResult = { saved: true; location: string | null } | { saved: false };
+
+/**
+ * Puts a finished backup zip somewhere the user keeps it, then deletes the
+ * temporary copy: straight into Downloads/Chits on Android 10+ (like Download),
+ * otherwise the system save screen (iOS Files sheet, older Android "Save as").
+ * Resolves { saved: false } if the user cancels — the backup then isn't kept
+ * anywhere, so it must not be reported as created.
+ */
+export async function saveBackupFile(zipPath: string): Promise<BackupSaveResult> {
+  const fileName = zipPath.split('/').pop() ?? 'chits-backup.zip';
+  try {
+    if (Platform.OS === 'android' && Number(Platform.Version) >= 29) {
+      const result = await ChitsFiles.saveToDownloadsAsync(zipPath, fileName, 'application/zip');
+      return result.status === 'saved' ? { saved: true, location: 'Downloads/Chits' } : { saved: false };
+    }
+    const result = await ChitsFiles.exportAsync(zipPath, fileName, 'application/zip');
+    return result.status === 'saved' ? { saved: true, location: null } : { saved: false };
+  } finally {
+    await FileSystem.deleteAsync(zipPath, { idempotent: true }).catch(() => undefined);
+  }
+}
+
 /**
  * Extracts and checks a candidate backup file WITHOUT touching any current data.
  * On success, `extractedDir` is left on disk (caller passes it to restoreBackup,
@@ -120,6 +145,10 @@ export async function validateBackup(fileUri: string): Promise<BackupValidation>
   if (metadata.app !== 'Chits' || metadata.backupVersion !== BACKUP_VERSION) {
     return { valid: false, reason: 'This backup was made by a version of Chits that isn’t supported here.' };
   }
+  // A newer app's database layout can't be safely opened by this version.
+  if (typeof metadata.schemaVersion === 'number' && metadata.schemaVersion > LATEST_SCHEMA_VERSION) {
+    return { valid: false, reason: 'This backup was made by a newer version of Chits. Update Chits, then restore it.' };
+  }
   // Confirm the extracted file actually opens as a real SQLite database, not just
   // a same-named file.
   try {
@@ -131,49 +160,108 @@ export async function validateBackup(fileUri: string): Promise<BackupValidation>
   return { valid: true, extractedDir: root, metadata };
 }
 
+/** Thrown by restoreBackup; `liveClosed` means the app must be reset to reopen its database. */
+export class RestoreError extends Error {
+  constructor(message: string, readonly dataChanged: boolean, readonly liveClosed: boolean, readonly cause?: unknown) {
+    super(message);
+  }
+}
+
 /**
  * Replaces the live database and attachments with the ones in `extractedDir`
- * (the directory validateBackup already confirmed is a real, openable backup).
- * Only call this after validateBackup has succeeded and the user has confirmed —
- * everything here is destructive to the current data.
+ * (already confirmed by validateBackup, and confirmed by the user).
+ *
+ * Stage first, swap last: the backup's database is copied beside the live one
+ * and upgraded there, and its attachments are copied beside the live folder —
+ * all while current data is untouched, so any failure up to this point (full
+ * storage, a bad file) leaves everything exactly as it was. Only then is the
+ * live connection closed (so it can't write to, or delete companion files of,
+ * the restored database) and the staged copies renamed into place, keeping the
+ * previous data until the swap succeeds so it can be rolled back.
+ *
+ * After it resolves the live connection is closed: the caller must reset the app.
  */
-export async function restoreBackup(extractedDir: string): Promise<void> {
+export async function restoreBackup(extractedDir: string, live: SQLiteDatabase): Promise<void> {
   const docDir = requireDir(FileSystem.documentDirectory, 'device storage');
   const sqliteDir = `${docDir}SQLite/`;
-  await FileSystem.makeDirectoryAsync(sqliteDir, { intermediates: true }).catch(() => undefined);
   const targetDbPath = `${sqliteDir}${DB_FILENAME}`;
-  // Clear WAL/SHM sidecars for the CURRENT db so leftover uncommitted pages from
-  // it can't shadow the restored file's content once reopened.
-  await FileSystem.deleteAsync(`${targetDbPath}-wal`, { idempotent: true });
-  await FileSystem.deleteAsync(`${targetDbPath}-shm`, { idempotent: true });
-  await FileSystem.deleteAsync(targetDbPath, { idempotent: true });
-  await FileSystem.copyAsync({ from: `${extractedDir}database.sqlite`, to: targetDbPath });
-
+  const stagedDbName = 'chits.restoring.db';
+  const stagedDbPath = `${sqliteDir}${stagedDbName}`;
+  const previousDbPath = `${sqliteDir}chits.previous.db`;
   const attachmentsTarget = `${docDir}${ATTACHMENTS_DIR_NAME}/`;
-  await FileSystem.deleteAsync(attachmentsTarget, { idempotent: true });
-  const attachmentsSource = `${extractedDir}attachments/`;
-  if ((await FileSystem.getInfoAsync(attachmentsSource)).exists) {
-    await FileSystem.copyAsync({ from: attachmentsSource, to: attachmentsTarget });
-  } else {
-    await FileSystem.makeDirectoryAsync(attachmentsTarget, { intermediates: true });
-  }
+  const stagedAttachments = `${docDir}${ATTACHMENTS_DIR_NAME}.restoring/`;
+  const previousAttachments = `${docDir}${ATTACHMENTS_DIR_NAME}.previous/`;
+  const removeDb = async (path: string) => {
+    for (const suffix of ['', '-wal', '-shm', '-journal']) await FileSystem.deleteAsync(`${path}${suffix}`, { idempotent: true }).catch(() => undefined);
+  };
 
-  // Bring older backups up to the current schema. Paths stay relative; runtime
-  // consumers resolve them against this installation's Documents directory.
-  const restored = await openDatabaseAsync(DB_FILENAME, undefined, sqliteDir);
+  // 1. Stage (current data untouched).
   try {
-    await migrateDatabase(restored);
-    for (const table of ['attachments', 'card_attachments'] as const) {
-      const rows = await restored.getAllAsync<{ id: string; storage_path: string | null }>(`SELECT id, storage_path FROM ${table}`);
-      for (const row of rows) {
-        const storagePath = normalizeStoredAttachmentPath(row.storage_path) ?? '';
-        await restored.runAsync(`UPDATE ${table} SET storage_path = ? WHERE id = ?`, storagePath, row.id);
+    await FileSystem.makeDirectoryAsync(sqliteDir, { intermediates: true }).catch(() => undefined);
+    await removeDb(stagedDbPath);
+    await FileSystem.deleteAsync(stagedAttachments, { idempotent: true });
+    await FileSystem.copyAsync({ from: `${extractedDir}database.sqlite`, to: stagedDbPath });
+    // Bring older backups up to the current schema, with paths kept relative
+    // (resolved against this installation's Documents directory at runtime).
+    const staged = await openDatabaseAsync(stagedDbName, undefined, sqliteDir);
+    try {
+      await migrateDatabase(staged);
+      for (const table of ['attachments', 'card_attachments'] as const) {
+        const rows = await staged.getAllAsync<{ id: string; storage_path: string | null }>(`SELECT id, storage_path FROM ${table}`);
+        for (const row of rows) {
+          const storagePath = normalizeStoredAttachmentPath(row.storage_path) ?? '';
+          await staged.runAsync(`UPDATE ${table} SET storage_path = ? WHERE id = ?`, storagePath, row.id);
+        }
       }
+      // Fold everything into the single database file so it can be renamed on its own.
+      await staged.execAsync('PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode = DELETE;');
+    } finally {
+      await staged.closeAsync();
     }
-  } finally {
-    await restored.closeAsync();
+    const attachmentsSource = `${extractedDir}attachments/`;
+    if ((await FileSystem.getInfoAsync(attachmentsSource)).exists) await FileSystem.copyAsync({ from: attachmentsSource, to: stagedAttachments });
+    else await FileSystem.makeDirectoryAsync(stagedAttachments, { intermediates: true });
+  } catch (cause) {
+    await removeDb(stagedDbPath);
+    await FileSystem.deleteAsync(stagedAttachments, { idempotent: true }).catch(() => undefined);
+    throw new RestoreError('The backup could not be prepared.', false, false, cause);
   }
 
+  // 2. Swap. Close the live connection first so nothing can write to or clean
+  // up files under the paths being replaced.
+  try {
+    await live.closeAsync();
+  } catch (cause) {
+    throw new RestoreError('Chits could not release its database.', false, false, cause);
+  }
+  let movedDb = false;
+  let movedAttachments = false;
+  try {
+    await removeDb(previousDbPath);
+    await FileSystem.deleteAsync(`${targetDbPath}-wal`, { idempotent: true });
+    await FileSystem.deleteAsync(`${targetDbPath}-shm`, { idempotent: true });
+    if ((await FileSystem.getInfoAsync(targetDbPath)).exists) { await FileSystem.moveAsync({ from: targetDbPath, to: previousDbPath }); movedDb = true; }
+    await FileSystem.moveAsync({ from: stagedDbPath, to: targetDbPath });
+    await FileSystem.deleteAsync(previousAttachments, { idempotent: true });
+    if ((await FileSystem.getInfoAsync(attachmentsTarget)).exists) { await FileSystem.moveAsync({ from: attachmentsTarget, to: previousAttachments }); movedAttachments = true; }
+    await FileSystem.moveAsync({ from: stagedAttachments, to: attachmentsTarget });
+  } catch (cause) {
+    // Roll back to the previous data.
+    try {
+      if (movedDb) { await removeDb(targetDbPath); await FileSystem.moveAsync({ from: previousDbPath, to: targetDbPath }); }
+      if (movedAttachments) { await FileSystem.deleteAsync(attachmentsTarget, { idempotent: true }); await FileSystem.moveAsync({ from: previousAttachments, to: attachmentsTarget }); }
+      await removeDb(stagedDbPath);
+      await FileSystem.deleteAsync(stagedAttachments, { idempotent: true });
+      throw new RestoreError('The backup could not be restored.', false, true, cause);
+    } catch (rollbackError) {
+      if (rollbackError instanceof RestoreError) throw rollbackError;
+      throw new RestoreError('The backup could not be restored and your previous data could not be fully put back.', true, true, cause);
+    }
+  }
+
+  // 3. Clean up the previous data and the extracted backup.
+  await removeDb(previousDbPath);
+  await FileSystem.deleteAsync(previousAttachments, { idempotent: true }).catch(() => undefined);
   await FileSystem.deleteAsync(extractedDir, { idempotent: true }).catch(() => undefined);
 }
 

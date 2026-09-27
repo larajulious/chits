@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { canMergeTimelineRefresh } from '@/services/timeline-refresh';
 import { AccessibilityInfo, ActivityIndicator, AppState, BackHandler, FlatList, Keyboard, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 
@@ -19,6 +21,7 @@ import { CONTENT_RANGE, COMPOSER_RANGE, useChatTransition } from '@/components/n
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { EmptyState, Screen, Toast } from '@/components/ui/primitives';
+import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
 import { radii, spacing } from '@/constants/theme';
 import { createMessageRepository } from '@/db/repositories';
 import type { Message, TimelineCursor, TimelineEvent, TimelineItem } from '@/db/types';
@@ -274,6 +277,7 @@ export default function ChatScreen() {
   const [selected, setSelected] = useState<Message | null>(null);
   const [temporarilyRevealedIds, setTemporarilyRevealedIds] = useState<Set<string>>(() => new Set());
   const [toast, setToast] = useState<string | null>(null);
+  const download = useAttachmentExport();
   const [pinnedMessages, setPinnedMessages] = useState<Message[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -295,6 +299,19 @@ export default function ChatScreen() {
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const [inputMaxed, setInputMaxed] = useState(false);
   const [composerHeight, setComposerHeight] = useState(64);
+  // The single source of the composer's bottom clearance. With the keyboard
+  // closed the chat runs edge-to-edge under Android's navigation bar (3-button
+  // or gesture) and the iPhone home indicator, so the dock sits the real
+  // system inset plus a small breathing gap above the screen edge (12pt when
+  // there's no inset at all). With the keyboard open the KeyboardAvoidingView
+  // already lifts the dock to the keyboard's top edge, and that keyboard height
+  // already covers the system bar, so the inset is NOT added again. Both flip
+  // on the same keyboard event the KeyboardAvoidingView reacts to, so the dock
+  // lands in one move with no jump. composerHeight (measured below, padding
+  // included) feeds the list footer, jump-to-latest and editing bar offsets,
+  // so they all follow this value automatically.
+  const insets = useSafeAreaInsets();
+  const composerBottomPadding = keyboardVisible ? spacing.xs : insets.bottom > 0 ? insets.bottom + spacing.xxs : spacing.sm;
   const [headerHeight, setHeaderHeight] = useState(72);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -370,6 +387,19 @@ export default function ChatScreen() {
       if (!active) return;
       setPinnedMessages(pinned);
       const latest = [...page.items].reverse();
+      if (!canMergeTimelineRefresh(feedRef.current, latest, page.hasMore, timelineKey, compareTimeline)) {
+        // History changed below the newest loaded item (e.g. sample data or a
+        // restore added older notes): reload from the newest page exactly like
+        // the first load, so pagination state is right and scrolling up loads
+        // everything back to the oldest note.
+        setFeed(latest);
+        oldestCursorRef.current = page.nextCursor;
+        hasMoreRef.current = page.hasMore;
+        setOlderError(false);
+        pendingScrollToLatest.current = true;
+        setShowJumpToLatest(false);
+        return;
+      }
       const { items, changed, hasNewItem } = refreshTimeline(feedRef.current, latest);
       if (hasNewItem) { if (nearBottom.current) pendingScrollToLatest.current = true; else setShowJumpToLatest(true); }
       if (changed) setFeed(items);
@@ -802,6 +832,8 @@ export default function ChatScreen() {
     animateComposerTransition();
     setIsRecordingAudio(recording);
     if (!recording) return;
+    // A recording has started, so any earlier "microphone access needed" error is stale.
+    setError(null);
     inputRef.current?.blur();
     Keyboard.dismiss();
     setComposerFocused(false);
@@ -852,14 +884,14 @@ export default function ChatScreen() {
         {searchOpen && searchQuery.trim() ? <View style={[styles.searchOverlay, { backgroundColor: theme.background }]}>
           {showSearchLoader ? <View style={styles.initialLoader}><ChitsLoader size="small" /></View>
           : searchResults.length === 0 ? <View style={[styles.noResults, { paddingTop: headerHeight }]}><Text style={[styles.noResultsText, { color: theme.textSecondary }]}>No matching Chits.</Text></View>
-          : <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.searchResultsList, { paddingTop: headerHeight }]}>
+          : <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.searchResultsList, { paddingTop: headerHeight, paddingBottom: spacing.lg + (keyboardVisible ? 0 : insets.bottom) }]}>
               {searchResults.map((item) => <SearchResultRow key={timelineKey(item)} item={item} onPress={() => openSearchResult(item)} />)}
             </ScrollView>}
         </View> : null}
-        {!searchOpen ? <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.background}00`, `${theme.background}10`, `${theme.background}80`, `${theme.background}EF`, theme.background]} locations={[0, 0.2, 0.5, 0.8, 1]} style={[styles.bottomFade, { height: Math.min(composerHeight, MIN_COMPOSER_INPUT_HEIGHT + spacing.sm) }]} /> : null}
+        {!searchOpen ? <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.background}00`, `${theme.background}10`, `${theme.background}80`, `${theme.background}EF`, theme.background]} locations={[0, 0.2, 0.5, 0.8, 1]} style={[styles.bottomFade, { height: Math.min(composerHeight, MIN_COMPOSER_INPUT_HEIGHT + spacing.sm + composerBottomPadding) }]} /> : null}
         {!searchOpen && showJumpToLatest ? <Pressable accessibilityRole="button" accessibilityLabel="Jump to latest message" onPress={jumpToLatest} style={({ pressed }) => [styles.jumpToLatest, { bottom: composerHeight + (editing ? 52 : spacing.md), backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, pressed && styles.sendPressed]}><Ionicons accessible={false} name="arrow-down" size={20} color={theme.textPrimary} /></Pressable> : null}
         {!searchOpen && editing && <View style={[styles.editing, { bottom: composerHeight + spacing.xs, backgroundColor: theme.surfaceElevated }]}><Text style={[styles.editingText, { color: theme.textSecondary }]}>{editing.attachments.length ? 'Editing description' : 'Editing thought'}</Text><Pressable accessibilityRole="button" onPress={cancelEditing}><Text style={[styles.cancel, { color: theme.accent }]}>Cancel</Text></Pressable></View>}
-        {!searchOpen ? <Animated.View onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setComposerHeight((current) => (current === next ? current : next)); composerMeasuredRef.current = true; maybePerformInitialScroll(); }} style={[styles.composerDock, { paddingBottom: keyboardVisible ? spacing.xs : spacing.sm }, composerRevealStyle]}>
+        {!searchOpen ? <Animated.View onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setComposerHeight((current) => (current === next ? current : next)); composerMeasuredRef.current = true; maybePerformInitialScroll(); }} style={[styles.composerDock, { paddingBottom: composerBottomPadding }, composerRevealStyle]}>
           {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { backgroundColor: theme.surfaceElevated, borderColor: theme.danger }]}><Ionicons accessible={false} name="alert-circle-outline" size={18} color={theme.danger} /><Text style={[styles.errorText, { color: theme.danger }]}>{error}</Text></View> : null}
           <GlassSurface style={[styles.composer, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, composerExpanded && styles.composerExpanded, composerFocused && { borderColor: theme.accentBorder }]}>
             {!isRecordingAudio && attachmentDraft ? <AttachmentDraftPreview draft={attachmentDraft} compact={composerFocused} onRemove={removeAttachmentDraft} /> : null}
@@ -883,8 +915,8 @@ export default function ChatScreen() {
           </View>
         </Animated.View>
         </View>
-      <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => setSelected(null)} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} onAddToBoard={addToBoard} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
-      <Toast message={toast} />
+      <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => setSelected(null)} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} onAddToBoard={addToBoard} onDownload={(message) => { setSelected(null); if (message.attachments[0]) void download.exportAttachment(message.attachments[0]); }} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
+      <Toast message={toast ?? download.status} />
       </Screen>
     </KeyboardAvoidingView>
   );

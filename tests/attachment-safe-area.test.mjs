@@ -15,3 +15,13 @@ test('attachment detail and fullscreen media modals own their safe-area context'
   assert.equal((media.match(/presentationStyle="fullScreen"/g) ?? []).length, 2);
   assert.doesNotMatch(media, /viewerClose:\s*\{[^}]*top:\s*54/);
 });
+
+test('chat composer clears the system navigation bar without doubling the inset under the keyboard', () => {
+  const chat = readFileSync(new URL('../src/app/(tabs)/chat.native.tsx', import.meta.url), 'utf8');
+  assert.match(chat, /const insets = useSafeAreaInsets\(\);/);
+  assert.match(chat, /const composerBottomPadding = keyboardVisible \? spacing\.xs : insets\.bottom > 0 \? insets\.bottom \+ spacing\.xxs : spacing\.sm;/);
+  assert.match(chat, /styles\.composerDock, \{ paddingBottom: composerBottomPadding \}/);
+  // The list's end spacing is derived from the measured dock (padding included), never a fixed number.
+  assert.match(chat, /ListFooterComponent=\{<View style=\{\{ height: composerHeight \+ spacing\.md \}\} \/>\}/);
+  assert.doesNotMatch(chat, /paddingBottom: keyboardVisible \? spacing\.xs : spacing\.sm/);
+});

@@ -5,9 +5,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { AttachmentContent } from '@/components/chat/message-row';
 import { useTheme } from '@/components/theme-provider';
 import { radii, spacing } from '@/constants/theme';
+import { tintWithAccent } from '@/constants/board-appearance';
 import type { AttachmentLike, CardListItem } from '@/db/types';
-
-const THUMBNAIL_SIZE = 68;
 
 function formatCardDate(timestamp: number) {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(timestamp);
@@ -33,35 +32,6 @@ function getCardPreviewMedia(item: CardListItem): AttachmentLike | null {
     originalName: null, mimeType: null, size: null, duration: item.mediaDuration,
     width: null, height: null, createdAt: item.updatedAt,
   };
-}
-
-// A single compact square preview — the SAME footprint for photo, video, and
-// audio, so a media card and a text-only card share nearly identical
-// geometry (just this one small corner element differs). Deliberately NOT a
-// full-width image: one large edge-to-edge photo was overpowering every
-// text-only note in the list and breaking the list's scanning rhythm.
-function CardThumbnail({ media, overflowCount }: { media: AttachmentLike; overflowCount: number }) {
-  const { tokens: theme } = useTheme();
-  return (
-    <View style={styles.thumbnail}>
-      {media.type === 'audio' ? (
-        <View style={[styles.audioThumbnail, { backgroundColor: theme.accentSoft }]}>
-          <Ionicons accessible={false} name="mic" size={20} color={theme.accentStrong} />
-          {media.duration ? <Text style={[styles.audioThumbnailDuration, { color: theme.accentStrong }]}>{formatDurationSeconds(media.duration)}</Text> : null}
-        </View>
-      ) : (
-        // pointerEvents="none": AttachmentContent's photo/video branches each
-        // open their own fullscreen viewer on tap — here the whole card is the
-        // one navigation target (opens Card Details), so touches on the
-        // thumbnail must fall through to the outer Pressable rather than
-        // compete with it.
-        <View pointerEvents="none">
-          <AttachmentContent attachment={media} variant="thumbnail" />
-        </View>
-      )}
-      {overflowCount > 0 ? <View style={[styles.overflowBadge, { backgroundColor: 'rgba(0,0,0,0.66)' }]}><Text style={styles.overflowBadgeText}>+{overflowCount}</Text></View> : null}
-    </View>
-  );
 }
 
 // A short, human phrase describing the media itself — omitted when the
@@ -96,24 +66,73 @@ function accessibleTitle(item: CardListItem): string {
   return item.title;
 }
 
-// The global Cards view's row — a flattened, board-agnostic sibling of
-// CardSurface (board/[id].native.tsx) built for a plain vertical list rather
-// than a draggable column: same title/preview fallback data, no drag/move
-// footer, board name + column name surfaced instead since a card here can be
-// from any board. Every card — pinned, plain, or with media — shares this
-// exact same anatomy/padding/typography; only the optional thumbnail differs.
-// Memoized since this list can grow into the hundreds.
-export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: { item: CardListItem; onPress: () => void; onMore: () => void }) {
-  const { tokens: theme } = useTheme();
-  const hasPreview = Boolean(item.preview && item.preview !== item.title);
-  const media = getCardPreviewMedia(item);
-  const overflowCount = Math.max(0, item.mediaCount - 1);
-  const fileBadge = item.fileCount > 0 ? { count: item.fileCount } : null;
+const GENERIC_MEDIA_TITLES = new Set(['Photo', 'Video', 'Audio note', 'Attachment']);
 
-  const location = item.boardName ? `${item.boardName} • ${item.columnName}` : 'Unorganized';
+type NoteContent =
+  | { kind: 'hidden' }
+  | { kind: 'text'; title: string | null; body: string | null }
+  | { kind: 'file'; name: string };
+
+// What the note *says*, decided once so the layout below stays declarative.
+// A quick thought is shown as its own words (body text, like handwriting on a
+// note), and a bold title appears only when the card has a real one distinct
+// from its text. Titles that merely restate the media ("Photo", "Video") are
+// dropped because the picture already says it, and a file-only card becomes a
+// document chip rather than a filename masquerading as a headline.
+function noteContent(item: CardListItem, hasMedia: boolean): NoteContent {
+  if (item.hidden) return { kind: 'hidden' };
+  const title = item.title.trim();
+  const preview = item.preview?.trim() || null;
+  if (preview) {
+    return preview.startsWith(title) || title.startsWith(preview)
+      ? { kind: 'text', title: null, body: preview }
+      : { kind: 'text', title, body: preview };
+  }
+  if (item.fileCount > 0 && !hasMedia) return { kind: 'file', name: title };
+  if (GENERIC_MEDIA_TITLES.has(title)) return { kind: 'text', title: null, body: null };
+  // A card keeps its explicit title as a title; an unorganized thought's
+  // "title" is just its own text, so it reads as the note body.
+  return item.kind === 'card' ? { kind: 'text', title, body: null } : { kind: 'text', title: null, body: title };
+}
+
+function fileKindLabel(name: string, count: number) {
+  if (count > 1) return `${count} files`;
+  const extension = name.match(/\.([a-z0-9]{1,6})$/i)?.[1];
+  return extension ? `${extension.toUpperCase()} document` : 'Document';
+}
+
+// Unorganized notes sit on a warm, neutral paper; board notes take a soft
+// tint of their board's color, like sticky notes, so a glance at the grid
+// shows which notes belong together.
+const WARM_PAPER = '#FBFAF6';
+function paperColors(accent: string | null, dark: boolean, surface: string, border: string) {
+  if (dark) return { paper: accent ? tintWithAccent(surface, accent, 0.16) : surface, edge: accent ? tintWithAccent(border, accent, 0.3) : border };
+  return { paper: accent ? tintWithAccent('#FFFFFF', accent, 0.1) : WARM_PAPER, edge: accent ? tintWithAccent(border, accent, 0.35) : border };
+}
+
+// One note in the Cards grid, designed as a *note* rather than a list item: a
+// sheet of paper whose content leads, with photos/videos inset at the top like
+// a clipped picture, voice notes as an audio pill, files as a document chip,
+// and a quiet footer pinned to the bottom saying where the note lives (the
+// board's color as a small dot) and when. Every variant shares the same paper,
+// padding and footer so the grid keeps one rhythm. Memoized since this list
+// can grow into the hundreds.
+export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: { item: CardListItem; onPress: () => void; onMore: () => void }) {
+  const { scheme, tokens: theme } = useTheme();
+  const dark = scheme === 'dark';
+  const media = item.hidden ? null : getCardPreviewMedia(item);
+  const picture = media && media.type !== 'audio' ? media : null;
+  const audio = media?.type === 'audio' ? media : null;
+  const overflowCount = Math.max(0, item.mediaCount - 1);
+  const content = noteContent(item, Boolean(media));
+  const showFileBadge = item.fileCount > 0 && content.kind !== 'file' && !item.hidden;
+
+  const paper = paperColors(item.hidden ? null : item.boardAccent, dark, theme.surface, theme.borderSubtle);
+  // Half-width notes: the board name alone reads cleanly; the column is in the label for screen readers.
+  const location = item.boardName ?? 'Unorganized';
   const mediaPhrase = mediaAccessibilityPhrase(item);
   const overflowPhrase = overflowCount > 0 ? `${overflowCount} more attachment${overflowCount === 1 ? '' : 's'}.` : '';
-  const accessibleLabel = `Card. ${accessibleTitle(item)}. ${mediaPhrase ? `${mediaPhrase} ` : ''}${overflowPhrase ? `${overflowPhrase} ` : ''}${item.boardName ?? 'Unorganized'}${item.columnName ? `, ${item.columnName}` : ''}.`;
+  const accessibleLabel = `${item.hidden ? 'Hidden note' : `Note. ${accessibleTitle(item)}`}. ${mediaPhrase ? `${mediaPhrase} ` : ''}${overflowPhrase ? `${overflowPhrase} ` : ''}${item.pinned ? 'Pinned. ' : ''}${item.boardName ?? 'Unorganized'}${item.columnName ? `, ${item.columnName}` : ''}.`;
 
   return (
     <Pressable
@@ -122,57 +141,104 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
       accessibilityHint={item.kind === 'thought' ? 'Opens in Chat' : 'Opens card details'}
       onPress={onPress}
       style={({ pressed }) => [
-        styles.card,
-        { backgroundColor: theme.surface, borderColor: theme.borderSubtle, borderLeftColor: item.boardAccent ?? theme.borderSubtle },
+        styles.note,
+        { backgroundColor: paper.paper, borderColor: paper.edge },
+        !dark && styles.paperShadow,
         pressed && styles.pressed,
       ]}
     >
-      <View style={styles.top}>
-        <View style={styles.copy}>
-          <View style={styles.titleRow}>
-            <Text numberOfLines={1} style={[styles.title, { color: theme.textPrimary }]}>{item.title}</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="Card actions" hitSlop={8} onPress={(event) => { event.stopPropagation(); onMore(); }} style={styles.more}>
-              <Ionicons accessible={false} name="ellipsis-horizontal" size={18} color={theme.textMuted} />
-            </Pressable>
-          </View>
-          {hasPreview ? <Text numberOfLines={2} style={[styles.preview, { color: theme.textSecondary }]}>{item.preview}</Text> : null}
+      <View style={styles.noteContent}>
+      {picture ? (
+        // pointerEvents="none": the whole note is the tap target (Card
+        // Details / Chat); the picture must not open its own viewer.
+        <View pointerEvents="none" style={[styles.picture, { backgroundColor: theme.surfaceElevated }]}>
+          <AttachmentContent attachment={picture} variant="grid" />
+          {overflowCount > 0 ? <View style={styles.overflowBadge}><Text style={styles.overflowBadgeText}>+{overflowCount}</Text></View> : null}
         </View>
-        {media ? <CardThumbnail media={media} overflowCount={overflowCount} /> : null}
+      ) : null}
+
+      {content.kind === 'hidden' ? (
+        <View style={styles.hiddenRow}>
+          <View style={[styles.hiddenIcon, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name="eye-off-outline" size={16} color={theme.textMuted} /></View>
+          <View style={styles.flexCopy}>
+            <Text style={[styles.hiddenTitle, { color: theme.textSecondary }]}>Hidden Chit</Text>
+            <Text style={[styles.hiddenCopy, { color: theme.textMuted }]}>Content is hidden</Text>
+          </View>
+        </View>
+      ) : content.kind === 'file' ? (
+        <View style={styles.fileRow}>
+          <View style={[styles.fileIcon, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name={/\.pdf$/i.test(content.name) ? 'document-text-outline' : 'document-outline'} size={20} color={theme.textSecondary} /></View>
+          <View style={styles.flexCopy}>
+            <Text numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{content.name}</Text>
+            <Text style={[styles.fileMeta, { color: theme.textMuted }]}>{fileKindLabel(content.name, item.fileCount)}</Text>
+          </View>
+        </View>
+      ) : (
+        <>
+          {content.title ? <Text numberOfLines={3} style={[styles.title, { color: theme.textPrimary }]}>{content.title}</Text> : null}
+          {content.body ? <Text numberOfLines={content.title ? 5 : 8} style={[content.title ? styles.bodyUnderTitle : styles.body, { color: content.title ? theme.textSecondary : theme.textPrimary }]}>{content.body}</Text> : null}
+        </>
+      )}
+
+      {audio ? (
+        <View style={[styles.audioPill, { backgroundColor: theme.accentSoft }]}>
+          <Ionicons accessible={false} name="mic" size={14} color={theme.accentStrong} />
+          <Text style={[styles.audioText, { color: theme.accentStrong }]}>Voice note{audio.duration ? ` · ${formatDurationSeconds(audio.duration)}` : ''}</Text>
+        </View>
+      ) : null}
       </View>
 
-      <View style={styles.metaRow}>
-        <View style={styles.metaLeft}>
-          <Text numberOfLines={1} style={[styles.location, { color: theme.textMuted }]}>{location}</Text>
-          {fileBadge ? <View style={styles.fileBadge}><Ionicons accessible={false} name="document-outline" size={11} color={theme.textMuted} /><Text style={[styles.fileBadgeText, { color: theme.textMuted }]}>{fileBadge.count}</Text></View> : null}
+      <View style={styles.footer}>
+        <View style={styles.footerLeft}>
+          {item.boardName
+            ? <View style={[styles.boardDot, { backgroundColor: item.boardAccent ?? theme.textMuted }]} />
+            : <Ionicons accessible={false} name="file-tray-outline" size={13} color={theme.textMuted} />}
+          <Text numberOfLines={1} style={[styles.location, { color: theme.textSecondary }]}>{location}</Text>
         </View>
-        <Text style={[styles.date, { color: theme.textMuted }]}>{formatCardDate(item.updatedAt)}</Text>
+        <View style={styles.footerMeta}>
+          {item.pinned ? <Ionicons accessible={false} name="pin" size={12} color={theme.textMuted} /> : null}
+          {showFileBadge ? <View style={styles.fileBadge}><Ionicons accessible={false} name="attach" size={13} color={theme.textMuted} /><Text style={[styles.fileBadgeText, { color: theme.textMuted }]}>{item.fileCount}</Text></View> : null}
+          <Text style={[styles.date, { color: theme.textMuted }]}>{formatCardDate(item.updatedAt)}</Text>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Card actions" hitSlop={10} onPress={(event) => { event.stopPropagation(); onMore(); }} style={styles.more}>
+          <Ionicons accessible={false} name="ellipsis-horizontal" size={17} color={theme.textMuted} />
+        </Pressable>
       </View>
     </Pressable>
   );
 });
 
 const styles = StyleSheet.create({
-  card: { marginBottom: 10, borderRadius: radii.compactCard, borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, overflow: 'hidden', paddingVertical: 12, paddingHorizontal: 14 },
-  pressed: { opacity: 0.6 },
-  top: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  copy: { flex: 1, minWidth: 0 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  title: { flex: 1, fontSize: 15, fontWeight: '600' },
-  preview: { marginTop: 5, fontSize: 13, lineHeight: 18 },
-  more: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center', marginRight: -2 },
-  // Fixed square (not full-width) — every card, media or not, keeps roughly
-  // the same footprint. `overflow: 'hidden'` clips the inner AttachmentContent
-  // (which is styled edge-to-edge for its own 'board'/'chat'/'detail' variants
-  // elsewhere) down to this thumbnail's own rounded corners.
-  thumbnail: { width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE, borderRadius: 10, overflow: 'hidden' },
-  audioThumbnail: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', gap: 3 },
-  audioThumbnailDuration: { fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  overflowBadge: { position: 'absolute', right: 4, bottom: 4, minWidth: 20, height: 16, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
-  overflowBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginTop: 9 },
-  metaLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minWidth: 0 },
-  location: { flexShrink: 1, fontSize: 12, fontWeight: '500' },
-  fileBadge: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  // flex: 1 + space-between: notes in a grid row share a height and keep their footer at the bottom.
+  note: { flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0, justifyContent: 'space-between', paddingHorizontal: 14, paddingTop: 14, paddingBottom: 8, borderRadius: radii.contentCard, borderWidth: StyleSheet.hairlineWidth },
+  // A soft lift so the note reads as paper on the page, not a table row.
+  paperShadow: { shadowColor: '#000000', shadowOpacity: 0.07, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
+  pressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
+  noteContent: { minWidth: 0, alignSelf: 'stretch' },
+  picture: { height: 118, marginBottom: 10, borderRadius: 12, overflow: 'hidden' },
+  overflowBadge: { position: 'absolute', right: 8, bottom: 8, minWidth: 26, height: 20, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.62)' },
+  overflowBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+  title: { fontSize: 15.5, lineHeight: 20, fontWeight: '700', letterSpacing: -0.1 },
+  body: { fontSize: 15, lineHeight: 21 },
+  bodyUnderTitle: { marginTop: 4, fontSize: 13.5, lineHeight: 19 },
+  flexCopy: { flex: 1, minWidth: 0 },
+  hiddenRow: { gap: spacing.xs },
+  hiddenIcon: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 17 },
+  hiddenTitle: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  hiddenCopy: { fontSize: 12, lineHeight: 16 },
+  fileRow: { gap: spacing.xs },
+  fileIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 11 },
+  fileName: { fontSize: 14, lineHeight: 19, fontWeight: '600' },
+  fileMeta: { marginTop: 1, fontSize: 12, lineHeight: 16 },
+  audioPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 28, marginTop: 10, paddingHorizontal: 10, borderRadius: radii.pill },
+  audioText: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  footer: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 12 },
+  footerLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  footerMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  boardDot: { width: 8, height: 8, borderRadius: 4 },
+  location: { flexShrink: 1, fontSize: 12, fontWeight: '600' },
+  fileBadge: { flexDirection: 'row', alignItems: 'center', gap: 1 },
   fileBadgeText: { fontSize: 11, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  date: { fontSize: 12 },
+  date: { fontSize: 11.5, fontVariant: ['tabular-nums'] },
+  more: { width: 26, height: 28, alignItems: 'center', justifyContent: 'center', marginRight: -6 },
 });
