@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 
+import { showPermissionSettingsPrompt } from '@/components/permissions/permission-settings-prompt';
 import type { AttachmentLike } from '@/db/types';
 import { exportAttachment } from '@/services/attachment-export';
 import { exportFeedback } from '@/services/attachment-export-naming';
@@ -35,6 +36,9 @@ export function useAttachmentExport() {
     try {
       const outcome = await exportAttachment(attachment);
       if (outcome.status === 'saved') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // Photos access was declined on an earlier attempt and the user tried
+      // again: offer Settings. (Declining the prompt itself comes back as a cancel.)
+      if (outcome.status === 'failed' && outcome.code === 'permission') showPermissionSettingsPrompt('photos');
       setFeedback(exportFeedback(outcome));
     } finally {
       clearTimeout(timer);

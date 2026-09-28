@@ -30,10 +30,11 @@ export async function stageAttachment(sourceUri: string, type: MessageType, meta
  * throws an Error with a user-facing message otherwise.
  */
 export async function pickAndStageMedia(type: 'photo' | 'video'): Promise<AttachmentDraft | null> {
-  // The library permission prompt is a dialog-style activity on Android; see dismissKeyboardAsync.
+  // The picker opens as a dialog-style activity on Android; see dismissKeyboardAsync.
   await dismissKeyboardAsync();
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) throw new Error(permission.canAskAgain ? 'Photo library access is needed to attach that item.' : 'Photo access is turned off for Chits. Turn it on in Settings › Apps › Chits › Permissions.');
+  // No photo-library permission: the system picker (PHPicker on iOS, the Photo
+  // Picker on Android) runs outside Chits and hands back only what the user
+  // chooses, so Chits never asks for — or depends on — library access.
   const result = await ImagePicker.launchImageLibraryAsync(type === 'photo' ? {
     mediaTypes: ['images'],
     quality: 0.82,

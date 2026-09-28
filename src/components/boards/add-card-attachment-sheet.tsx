@@ -1,6 +1,6 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { type ComponentProps } from 'react';
+import { useEffect, useRef, type ComponentProps } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
@@ -8,7 +8,12 @@ import { BottomSheetSurface } from '@/components/ui/primitives';
 import { spacing } from '@/constants/theme';
 
 type Kind = 'photo' | 'video' | 'file';
-type Props = { visible: boolean; onClose: () => void; onPick: (kind: Kind) => void };
+type Props = {
+  visible: boolean;
+  onClose: () => void;
+  /** Called once the sheet has fully closed — iOS can't present the system picker over a closing modal. */
+  onPick: (kind: Kind) => void;
+};
 
 function Row({ icon, label, onPress }: { icon: ComponentProps<typeof Ionicons>['name']; label: string; onPress: () => void }) {
   const { tokens: theme } = useTheme();
@@ -23,17 +28,33 @@ function Row({ icon, label, onPress }: { icon: ComponentProps<typeof Ionicons>['
 // Video/File picker embedded directly in Card Details.
 export function AddCardAttachmentSheet({ visible, onClose, onPick }: Props) {
   const { tokens: theme } = useTheme();
-  return <Modal transparent animationType="slide" visible={visible} onRequestClose={onClose}>
+  // The chosen kind waits here until the sheet has closed: onDismiss on iOS,
+  // the next frame on Android (which has no onDismiss and no such limitation).
+  const pending = useRef<Kind | null>(null);
+  const choose = (kind: Kind) => { pending.current = kind; onClose(); };
+  const dismiss = () => { pending.current = null; onClose(); };
+  const finishClosing = () => {
+    const kind = pending.current;
+    pending.current = null;
+    if (kind) onPick(kind);
+  };
+  useEffect(() => {
+    if (visible || Platform.OS === 'ios' || !pending.current) return;
+    const frame = requestAnimationFrame(finishClosing);
+    return () => cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reacts to the sheet closing.
+  }, [visible]);
+  return <Modal transparent animationType="slide" visible={visible} onRequestClose={dismiss} onDismiss={Platform.OS === 'ios' ? finishClosing : undefined}>
     <View style={styles.backdrop}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Close add attachment" onPress={onClose} style={StyleSheet.absoluteFill} />
+      <Pressable accessibilityRole="button" accessibilityLabel="Close add attachment" onPress={dismiss} style={StyleSheet.absoluteFill} />
       <SafeAreaView edges={['bottom']} style={styles.sheet}>
         <BottomSheetSurface>
           <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
           <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Add attachment</Text>
           <View style={styles.group}>
-            <Row icon="image-outline" label="Photo" onPress={() => onPick('photo')} />
-            <Row icon="videocam-outline" label="Video" onPress={() => onPick('video')} />
-            <Row icon="document-outline" label="File" onPress={() => onPick('file')} />
+            <Row icon="image-outline" label="Photo" onPress={() => choose('photo')} />
+            <Row icon="videocam-outline" label="Video" onPress={() => choose('video')} />
+            <Row icon="document-outline" label="File" onPress={() => choose('file')} />
           </View>
         </BottomSheetSurface>
       </SafeAreaView>

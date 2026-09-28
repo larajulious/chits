@@ -104,6 +104,23 @@ test('card attachment and whole-card deletion both restore the default backgroun
   }
 });
 
+test('deleting a card deletes its thoughts too, but moving it back to Unorganized keeps them', async () => {
+  const { sqlite, database } = fixture();
+  sqlite.exec(`INSERT INTO cards VALUES ('other'); INSERT INTO card_messages VALUES ('card', 'message'), ('card', 'message-2'), ('other', 'message-2');`);
+  const repository = production.createBoardRepository(database);
+  assert.deepEqual(await repository.deleteCard('card'), [cardPath, photoPath]);
+  // A thought also organized into another card stays with that card.
+  assert.deepEqual(sqlite.prepare('SELECT id FROM messages').all().map((row) => row.id), ['message-2']);
+  assert.deepEqual(sqlite.prepare('SELECT id FROM attachments').all().map((row) => row.id), ['photo-2']);
+  assert.deepEqual(sqlite.prepare('SELECT card_id FROM card_messages').all().map((row) => row.card_id), ['other']);
+
+  const detached = fixture();
+  detached.sqlite.exec(`INSERT INTO card_messages VALUES ('card', 'message')`);
+  assert.deepEqual(await production.createBoardRepository(detached.database).detachCard('card'), [cardPath]);
+  assert.equal(detached.sqlite.prepare('SELECT COUNT(*) AS count FROM messages').get().count, 2);
+  assert.equal(detached.sqlite.prepare('SELECT COUNT(*) AS count FROM attachments').get().count, 2);
+});
+
 test('shared physical files stay available until their final attachment reference is deleted', async () => {
   const { sqlite, database } = fixture();
   sqlite.prepare('UPDATE card_attachments SET storage_path = ? WHERE id = ?').run(photoPath, 'card-photo');

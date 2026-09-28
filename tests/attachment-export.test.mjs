@@ -86,7 +86,8 @@ test('Download saves straight to the device where the platform allows it', async
   assert.equal(feedback({ status: 'saved', destination: 'downloads' }), 'Saved to Downloads/Chits');
   assert.equal(feedback({ status: 'saved', destination: 'photos' }), 'Saved to Photos');
   assert.equal(feedback({ status: 'saved', destination: 'chosen' }), 'File saved successfully');
-  assert.match(feedback({ status: 'failed', code: 'permission' }), /Settings/);
+  // A blocked Photos permission gets the explicit Settings prompt, not a toast.
+  assert.equal(feedback({ status: 'failed', code: 'permission' }), null);
 
   const android = read('modules/chits-attachments/android/src/main/java/expo/modules/chitsattachments/ChitsFilesModule.kt');
   assert.match(android, /MediaStore\.Downloads\.EXTERNAL_CONTENT_URI/);

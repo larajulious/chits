@@ -13,7 +13,7 @@
       "buildNumber": "4",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSPhotoLibraryAddUsageDescription": "Allow Chits to save photos and videos you download to your Photos library."
+        "NSPhotoLibraryAddUsageDescription": "Chits saves a copy of a photo or video to your photo library only when you choose Save to Photos."
       }
     },
     "android": {
@@ -47,15 +47,15 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Chits to add selected photos and videos to your private chat.",
+          "photosPermission": "Chits only uses the photos and videos you choose to attach to a note or set as your chat background.",
           "cameraPermission": false,
-          "microphonePermission": "Allow Chits to record a voice note for your private chat."
+          "microphonePermission": "Chits uses your microphone only when you choose to record a voice note."
         }
       ],
       [
         "expo-audio",
         {
-          "microphonePermission": "Allow Chits to record a voice note for your private chat.",
+          "microphonePermission": "Chits uses your microphone only when you choose to record a voice note.",
           "enableBackgroundRecording": false,
           "enableBackgroundPlayback": false
         }

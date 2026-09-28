@@ -91,7 +91,10 @@ test('card_reminders: one per card, and deleting the card removes its reminder',
 
 test('reminder wiring: permission only on first set, deep link, and cleanup on delete', () => {
   const service = read('src/services/reminders.native.ts');
-  assert.match(service, /if \(!current\.canAskAgain\) return 'denied';/);
+  // Asked only from setCardReminder (a Set Reminder tap), via the shared check-then-prompt logic.
+  assert.match(service, /const access = await ensureNotificationPermission\(\);/);
+  assert.match(service, /return resolvePermission\(/);
+  assert.equal(service.match(/requestPermissionsAsync/g).length, 1);
   assert.match(service, /data: \{ type: REMINDER_NOTIFICATION_TYPE, cardId, url: `\/card\/\$\{cardId\}` \}/);
   assert.match(service, /handle\(Notifications\.getLastNotificationResponse\(\)\);/);
   const layout = read('src/app/_layout.tsx');

@@ -397,7 +397,7 @@ export default function BoardsScreen() {
         {
           label: 'Delete card', icon: 'trash-outline', destructive: true, onPress: () => confirm({
             type: 'destructive', icon: 'trash-outline', title: 'Delete card?',
-            message: 'Removing this card does not delete your original messages — they remain in Chat.',
+            message: 'This deletes the card and its Chits, including from Chat. This can’t be undone.',
             confirmText: 'Delete card',
             onConfirm: async () => {
               const removableUris = await boardRepository.deleteCard(item.id);

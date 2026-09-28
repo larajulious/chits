@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
+import { AppState, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -134,6 +134,12 @@ export default function CardDetailScreen() {
   // and reconcile on focus so edits made elsewhere refresh the notification text.
   useEffect(() => subscribeToReminderChanges(() => void loadReminder()), [loadReminder]);
   useFocusEffect(useCallback(() => { void loadReminder(); void requestReminderSync(); }, [loadReminder]));
+  // Coming back from iOS Settings: refresh only the displayed permission status
+  // (a status check, never a prompt, and nothing reopens on its own).
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') void loadReminder(); });
+    return () => subscription.remove();
+  }, [loadReminder]);
 
   const saveReminder = async (date: Date) => {
     const result = await setCardReminder(database, id, date.getTime());
@@ -260,8 +266,8 @@ export default function CardDetailScreen() {
   // talk-back event, and never touches the linked thought's own source attachment.
   const openAddAttachment = () => { setNotice(null); setAddAttachmentOpen(true); };
 
+  // Runs after AddCardAttachmentSheet has fully closed (it closes itself on a pick).
   const pickCardAttachment = async (kind: 'photo' | 'video' | 'file') => {
-    setAddAttachmentOpen(false);
     if (attachmentBusy) return;
     setAttachmentBusy(true);
     setNotice(null);
@@ -276,8 +282,7 @@ export default function CardDetailScreen() {
         sourceUri = asset.uri;
         details = { type: 'file', originalName: asset.name, mimeType: asset.mimeType ?? null, size: asset.size ?? null, width: null, height: null, duration: null };
       } else {
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) { setNotice(`${kind === 'photo' ? 'Photo' : 'Video'} library access is needed to attach that item.`); return; }
+        // No photo-library permission: the system picker hands back only what the user chooses.
         const result = await ImagePicker.launchImageLibraryAsync(kind === 'photo' ? {
           mediaTypes: ['images'], quality: 0.82,
           preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
@@ -393,7 +398,7 @@ export default function CardDetailScreen() {
     type: 'destructive',
     icon: 'trash-outline',
     title: 'Delete card?',
-    message: 'Removing this card does not delete your original messages — they remain in Chat.',
+    message: 'This deletes the card and its Chits, including from Chat. This can’t be undone.',
     confirmText: 'Delete card',
     onConfirm: async () => {
       const removableUris = await repository.deleteCard(id);
@@ -500,7 +505,7 @@ export default function CardDetailScreen() {
           </View>
           <View style={styles.flexCopy}>
             <Text style={styles.actionTitle}>{reminder ? formatReminder(new Date(reminder.scheduledAt), new Date()) : 'Remind me'}</Text>
-            <Text style={[styles.actionCopy, reminder && !notificationsAllowed && { color: theme.danger }]}>{reminder ? (notificationsAllowed ? 'Reminder' : 'Notifications are off — tap to fix') : 'Get notified about this card'}</Text>
+            <Text style={styles.actionCopy}>{reminder ? (notificationsAllowed ? 'Reminder' : 'Notifications are off') : 'Get notified about this card'}</Text>
           </View>
           <Ionicons accessible={false} name="chevron-forward" size={16} color={theme.textMuted} />
         </Pressable>

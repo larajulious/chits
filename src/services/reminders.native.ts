@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { createReminderRepository } from '@/db/repositories';
+import { resolvePermission, type PermissionState } from '@/services/permissions';
 import { planReminderSync, reminderBody, REMINDER_NOTIFICATION_TYPE, REMINDER_TITLE, type ScheduledReminder } from '@/services/reminder-content';
 
 const CHANNEL_ID = 'reminders';
@@ -52,19 +53,20 @@ export async function hasNotificationPermission(): Promise<boolean> {
 }
 
 /**
- * Asks for notification permission only when it hasn't been decided yet —
- * called the first time the user sets a reminder, never at launch. Once the
- * user has declined, the system won't show the prompt again, so neither do we;
- * the caller explains and offers Settings instead.
+ * Asks for notification permission only on a deliberate "Set Reminder" tap,
+ * never at launch, and shows the system prompt only while the OS still allows
+ * it. 'denied' means the user just declined that prompt, so the caller must
+ * stop quietly (App Review Guideline 5.1.1(iv)); 'blocked' means they declined
+ * earlier and are trying again, so the caller may offer Settings.
  */
-export async function requestNotificationPermission(): Promise<'granted' | 'denied'> {
+export async function ensureNotificationPermission(): Promise<PermissionState> {
   // Android 13 only shows its permission prompt once a channel exists.
   await ensureReminderChannel();
-  const current = await Notifications.getPermissionsAsync();
-  if (isGranted(current)) return 'granted';
-  if (!current.canAskAgain) return 'denied';
-  const next = await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowSound: true, allowBadge: false } });
-  return isGranted(next) ? 'granted' : 'denied';
+  const status = (permission: Notifications.NotificationPermissionsStatus) => ({ granted: isGranted(permission), canAskAgain: permission.canAskAgain });
+  return resolvePermission(
+    async () => status(await Notifications.getPermissionsAsync()),
+    async () => status(await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowSound: true, allowBadge: false } })),
+  );
 }
 
 async function scheduleNotification(cardId: string, scheduledAt: number, body: string): Promise<string> {
@@ -96,7 +98,7 @@ async function scheduledReminders(): Promise<ScheduledReminder[]> {
 // ---------------------------------------------------------------------------
 // Setting and removing.
 
-export type SetReminderResult = { ok: true } | { ok: false; reason: 'permission' | 'failed' };
+export type SetReminderResult = { ok: true } | { ok: false; reason: 'declined' | 'blocked' | 'failed' };
 
 /**
  * Sets (or changes) a card's reminder: permission first, then the new local
@@ -105,7 +107,9 @@ export type SetReminderResult = { ok: true } | { ok: false; reason: 'permission'
  */
 export async function setCardReminder(database: SQLiteDatabase, cardId: string, scheduledAt: number): Promise<SetReminderResult> {
   try {
-    if (await requestNotificationPermission() !== 'granted') return { ok: false, reason: 'permission' };
+    const access = await ensureNotificationPermission();
+    if (access === 'denied') return { ok: false, reason: 'declined' };
+    if (access === 'blocked') return { ok: false, reason: 'blocked' };
     const repository = createReminderRepository(database);
     const previous = await repository.get(cardId);
     const source = (await repository.listForSync()).find((row) => row.cardId === cardId);

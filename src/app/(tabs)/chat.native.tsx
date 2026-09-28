@@ -74,19 +74,27 @@ function mergeTimeline(current: TimelineItem[], additions: TimelineItem[]) {
 // single-item callers; this wrapper is only for the bulk background refresh, where we
 // also want to leave genuinely-unchanged items at their existing object reference
 // (MessageRow is memoized) so a plain refocus with nothing new doesn't re-render every
-// visible row — only the ones whose data actually changed.
-function refreshTimeline(current: TimelineItem[], latest: TimelineItem[]) {
+// visible row — only the ones whose data actually changed. An item inside the
+// refreshed window that the refresh no longer returns was deleted or archived
+// elsewhere (e.g. together with its card), so it's dropped; older loaded items
+// outside that window are left alone.
+function refreshTimeline(current: TimelineItem[], latest: TimelineItem[], latestHasMore: boolean) {
   const latestByKey = new Map(latest.map((item) => [timelineKey(item), item]));
+  const windowStart = latestHasMore ? latest[0]?.createdAt ?? Infinity : -Infinity;
   const seenKeys = new Set<string>();
   let changed = false;
-  const kept = current.map((item) => {
+  const kept = current.flatMap((item) => {
     const key = timelineKey(item);
     const incoming = latestByKey.get(key);
-    if (!incoming) return item;
+    if (!incoming) {
+      if (item.createdAt <= windowStart) return [item];
+      changed = true;
+      return [];
+    }
     seenKeys.add(key);
-    if (JSON.stringify(incoming) === JSON.stringify(item)) return item;
+    if (JSON.stringify(incoming) === JSON.stringify(item)) return [item];
     changed = true;
-    return incoming;
+    return [incoming];
   });
   const added = latest.filter((item) => !seenKeys.has(timelineKey(item)));
   if (added.length) changed = true;
@@ -398,7 +406,7 @@ export default function ChatScreen() {
         setShowJumpToLatest(false);
         return;
       }
-      const { items, changed, hasNewItem } = refreshTimeline(feedRef.current, latest);
+      const { items, changed, hasNewItem } = refreshTimeline(feedRef.current, latest, page.hasMore);
       if (hasNewItem) { if (nearBottom.current) pendingScrollToLatest.current = true; else setShowJumpToLatest(true); }
       if (changed) setFeed(items);
     }).catch(() => undefined);
@@ -767,10 +775,18 @@ export default function ChatScreen() {
   const addToBoard = () => { if (!selected) return; const message = selected; setSelected(null); if (message.organization) { router.push(`/board/${message.organization.boardId}?highlightColumnId=${message.organization.columnId}`); return; } router.push(`/unorganized?messageId=${message.id}`); };
   const openPinned = useCallback((message: Message) => { setFocusedId(message.id); setFeed((current) => mergeTimeline(current, [{ kind: 'message', message, createdAt: message.createdAt }])); }, []);
   const openSettings = useCallback(() => router.push('/settings'), [router]);
+  // Set by an action that opens another modal; run by MessageActions once its
+  // sheet has fully closed, since iOS can't show the two at once.
+  const afterActionsClosed = useRef<(() => void) | null>(null);
+  const runAfterActionsClosed = useCallback(() => {
+    const action = afterActionsClosed.current;
+    afterActionsClosed.current = null;
+    action?.();
+  }, []);
   const remove = () => {
     if (!selected) return;
     const message = selected;
-    confirm({
+    afterActionsClosed.current = () => confirm({
       type: 'destructive',
       icon: 'trash-outline',
       title: 'Delete thought?',
@@ -784,6 +800,7 @@ export default function ChatScreen() {
         await Promise.all(removableUris.map((storagePath) => deleteAttachment(storagePath)));
       }, message),
     });
+    setSelected(null);
   };
   const openEvent = useCallback((event: TimelineEvent) => { if (event.relatedBoardId) router.push(`/board/${event.relatedBoardId}`); }, [router]);
   const renderFeedItem = useCallback(({ item, index }: { item: FeedItem; index: number }) => <View>{(index === 0 || dayStart(feed[index - 1].createdAt) !== dayStart(item.createdAt)) && <DateSeparator label={dateLabel(item.createdAt)} />}{item.kind === 'message' ? <MessageRow message={item.message} focused={item.message.id === focusedId} temporarilyRevealed={temporarilyRevealedIds.has(item.message.id)} onReveal={revealContent} onHideAgain={hideAgain} onLongPress={setSelected} /> : <ChitsRow event={item.event} onPress={() => openEvent(item.event)} />}</View>, [feed, focusedId, hideAgain, openEvent, revealContent, temporarilyRevealedIds]);
@@ -918,7 +935,7 @@ export default function ChatScreen() {
           </View>
         </View>
         </View>
-      <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => setSelected(null)} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} onAddToBoard={addToBoard} onDownload={(message) => { setSelected(null); if (message.attachments[0]) void download.exportAttachment(message.attachments[0]); }} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
+      <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => { afterActionsClosed.current = null; setSelected(null); }} onClosed={runAfterActionsClosed} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} onAddToBoard={addToBoard} onDownload={(message) => { setSelected(null); if (message.attachments[0]) void download.exportAttachment(message.attachments[0]); }} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
       <Toast message={toast ?? download.status} />
       </Screen>
     </KeyboardAvoidingView></BackgroundReadabilityProvider></Animated.View>

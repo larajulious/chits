@@ -1,7 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 // Reminders are local notifications scheduled by the native app; the web build has none.
-export type SetReminderResult = { ok: true } | { ok: false; reason: 'permission' | 'failed' };
+export type SetReminderResult = { ok: true } | { ok: false; reason: 'declined' | 'blocked' | 'failed' };
 export function subscribeToReminderChanges(_: () => void): () => void { return () => undefined; }
 export function registerReminderDatabase(_: SQLiteDatabase | null) {}
 export function requestReminderSync(): Promise<void> { return Promise.resolve(); }

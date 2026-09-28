@@ -397,23 +397,35 @@ export function createMessageRepository(database: SQLiteDatabase) {
 
 export function createBoardRepository(database: SQLiteDatabase) {
   // See the comment on `deleteCard`/`detachCard` below — both user-facing
-  // actions ("Delete card" and "Move back to Unorganized") reduce to this
-  // exact same transaction, since card_messages is only the join between a
-  // card and its source Chat messages, never the messages themselves.
-  const removeCardOrganization = async (cardId: string) => {
+  // actions ("Delete card" and "Move back to Unorganized") remove the card the
+  // same way; only "Delete card" also deletes the thoughts organized into it.
+  const removeCard = async (cardId: string, deleteThoughts: boolean) => {
     let removableUris: string[] = [];
     await database.withExclusiveTransactionAsync(async (transaction) => {
       const attachments = await transaction.getAllAsync<{ storage_path: string }>('SELECT storage_path FROM card_attachments WHERE card_id = ?', cardId);
       removableUris = attachments.map((row) => row.storage_path);
+      // A thought also organized into another card is only unlinked, so that card keeps it.
+      const messageIds = deleteThoughts
+        ? (await transaction.getAllAsync<{ id: string }>('SELECT cm.message_id AS id FROM card_messages cm WHERE cm.card_id = ? AND NOT EXISTS (SELECT 1 FROM card_messages other WHERE other.message_id = cm.message_id AND other.card_id != cm.card_id)', cardId)).map(({ id }) => id)
+        : [];
+      const messagePlaceholders = messageIds.map(() => '?').join(', ');
+      if (messageIds.length) {
+        const messageAttachments = await transaction.getAllAsync<{ storage_path: string }>(`SELECT storage_path FROM attachments WHERE message_id IN (${messagePlaceholders})`, ...messageIds);
+        removableUris.push(...messageAttachments.map((row) => row.storage_path));
+      }
       await clearChatBackgroundForPaths(transaction, removableUris);
       await transaction.runAsync('DELETE FROM card_attachments WHERE card_id = ?', cardId);
-      removableUris = await unreferencedAttachmentPaths(transaction, removableUris);
       await transaction.runAsync('DELETE FROM card_comments WHERE card_id = ?', cardId);
       await transaction.runAsync('DELETE FROM card_messages WHERE card_id = ?', cardId);
       // The foreign key cascades too; explicit so no reminder row can outlive its card.
       await transaction.runAsync('DELETE FROM card_reminders WHERE card_id = ?', cardId);
       const result = await transaction.runAsync('DELETE FROM cards WHERE id = ?', cardId);
       if (result.changes !== 1) throw new Error('That card is no longer available.');
+      if (messageIds.length) {
+        await transaction.runAsync(`DELETE FROM attachments WHERE message_id IN (${messagePlaceholders})`, ...messageIds);
+        await transaction.runAsync(`DELETE FROM messages WHERE id IN (${messagePlaceholders})`, ...messageIds);
+      }
+      removableUris = await unreferencedAttachmentPaths(transaction, removableUris);
     });
     notifyChatBackgroundChanged();
     notifyAttachmentsChanged();
@@ -767,16 +779,15 @@ export function createBoardRepository(database: SQLiteDatabase) {
     // Archiving a card deliberately does not touch card_comments or card_attachments
     // — both are preserved, matching the same recoverable-hide semantics as the
     // card itself.
-    // Returns the removed card_attachments' storage paths so the caller can unlink
+    // Both return the removed attachments' storage paths so the caller can unlink
     // the actual files (this layer only owns the DB; see card-attachment-storage
     // for the file lifecycle) — mirrors messageRepository.deletePermanently's
-    // removableUris pattern. Shared by deleteCard AND detachCard below: card_messages
-    // rows are only the JOIN between a card and its source Chat messages, never
-    // the messages themselves, so removing a card — whether the user frames that
-    // as "Delete card" or "Move back to Unorganized" — is the exact same
-    // transaction either way. Deliberately aliased rather than duplicated so the
-    // two user-facing actions can never silently drift apart.
-    deleteCard: removeCardOrganization,
+    // removableUris pattern. deleteCard AND detachCard share removeCard so the
+    // card-removal part can never silently drift apart.
+    // "Delete card" removes the card together with the thoughts organized into
+    // it — from Chat too — so nothing of it lingers in the Cards view as an
+    // Unorganized note. Not recoverable (archiveCard is the recoverable path).
+    deleteCard: (cardId: string) => removeCard(cardId, true),
     // "Move back to Unorganized" (see PHASE: DETACH CARD FROM BOARD / RETURN TO
     // UNORGANIZED) — removes the card as an organizational object while leaving
     // its linked Chat message(s) completely untouched (pinned state, text,
@@ -785,7 +796,7 @@ export function createBoardRepository(database: SQLiteDatabase) {
     // immediately qualify for messageRepository.listUnorganized()/
     // countUnorganized() again with zero further work — Unorganized is derived
     // from the absence of an active card relationship, never a stored flag.
-    detachCard: removeCardOrganization,
+    detachCard: (cardId: string) => removeCard(cardId, false),
     // Lightweight counts for the "Move back to Unorganized" confirmation copy —
     // how many source Chits are linked, and how much card-only data
     // (comments/attachments) would be discarded — without loading any of that

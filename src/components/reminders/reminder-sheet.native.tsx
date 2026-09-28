@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTimePicker } from '@expo/ui/community/datetime-picker';
 
+import { showPermissionSettingsPrompt } from '@/components/permissions/permission-settings-prompt';
 import { useTheme } from '@/components/theme-provider';
 import { radii, spacing } from '@/constants/theme';
 import type { SetReminderResult } from '@/services/reminders';
@@ -54,7 +55,7 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
   const [androidPicker, setAndroidPicker] = useState<'date' | 'time' | null>(null);
   // "Pick date & time" on Android runs the date dialog then the time dialog.
   const [chainTime, setChainTime] = useState(false);
-  const [problem, setProblem] = useState<'past' | 'permission' | 'failed' | null>(null);
+  const [problem, setProblem] = useState<'past' | 'declined' | 'failed' | null>(null);
   const [busy, setBusy] = useState<'save' | 'remove' | null>(null);
   const options = useMemo(() => reminderQuickOptions(now), [now]);
 
@@ -91,6 +92,8 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
     const result = await onSave(value);
     setBusy(null);
     if (result.ok) onClose();
+    // Declined on an earlier attempt and tried again: offer Settings explicitly.
+    else if (result.reason === 'blocked') showPermissionSettingsPrompt('notifications');
     else setProblem(result.reason);
   };
 
@@ -152,11 +155,10 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
             {problem === 'past' || (!valid && !busy) ? (
               <View accessibilityRole="alert" style={styles.inline}><Ionicons accessible={false} name="alert-circle-outline" size={16} color={theme.danger} /><Text style={[styles.inlineText, { color: theme.danger }]}>Choose a future time.</Text></View>
             ) : null}
-            {problem === 'permission' ? (
-              <View accessibilityRole="alert" style={[styles.notice, { backgroundColor: theme.surfaceElevated }]}>
-                <Text style={[styles.noticeText, { color: theme.textSecondary }]}>Notifications are disabled. Enable them in your device settings to receive reminders.</Text>
-                <Pressable accessibilityRole="button" hitSlop={8} onPress={() => void Linking.openSettings()} style={({ pressed }) => [styles.noticeAction, pressed && styles.pressed]}><Text style={[styles.noticeActionText, { color: accent }]}>Open Settings</Text></Pressable>
-              </View>
+            {problem === 'declined' ? (
+              // Just declined at the system prompt: a plain status line only — no
+              // prompt and no Settings shortcut (App Review Guideline 5.1.1(iv)).
+              <View accessibilityRole="alert" style={styles.inline}><Ionicons accessible={false} name="notifications-off-outline" size={16} color={theme.textSecondary} /><Text style={[styles.inlineText, { color: theme.textSecondary }]}>Reminder not set. Notifications aren’t allowed for Chits.</Text></View>
             ) : null}
             {problem === 'failed' ? (
               <View accessibilityRole="alert" style={styles.inline}><Ionicons accessible={false} name="alert-circle-outline" size={16} color={theme.danger} /><Text style={[styles.inlineText, { color: theme.danger }]}>The reminder couldn’t be set. Please try again.</Text></View>
@@ -284,10 +286,6 @@ const styles = StyleSheet.create({
   fieldButtonText: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.sm },
   inlineText: { fontSize: 13, fontWeight: '600' },
-  notice: { marginTop: spacing.sm, gap: spacing.xs, padding: spacing.sm, borderRadius: radii.control },
-  noticeText: { fontSize: 13, lineHeight: 19 },
-  noticeAction: { alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' },
-  noticeActionText: { fontSize: 14, fontWeight: '700' },
   actions: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.lg },
   textButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.sm },
   textButtonLabel: { fontSize: 15, fontWeight: '600' },

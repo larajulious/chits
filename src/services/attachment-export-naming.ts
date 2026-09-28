@@ -113,13 +113,16 @@ export function downloadActionLabel(platform: string, type: AttachmentLike['type
   return type === 'photo' || type === 'video' ? 'Save to Photos' : 'Save to Files';
 }
 
-/** User-facing feedback for an export; null when nothing should be shown (cancel). */
+/**
+ * User-facing feedback for an export; null when nothing should be shown
+ * (cancel, or 'permission', which gets the explicit Settings prompt instead).
+ */
 export function exportFeedback(outcome: ExportOutcome): string | null {
   if (outcome.status === 'saved') return outcome.destination === 'downloads' ? 'Saved to Downloads/Chits' : outcome.destination === 'photos' ? 'Saved to Photos' : 'File saved successfully';
   if (outcome.status === 'cancelled') return null;
   if (outcome.code === 'missing') return 'This file is no longer on this device.';
   if (outcome.code === 'no_space') return 'Not enough storage space to save this file.';
-  if (outcome.code === 'permission') return 'Chits can’t save to Photos. Allow it in Settings › Chits › Photos.';
+  if (outcome.code === 'permission') return null;
   return 'Unable to save this file. Please try again.';
 }
 

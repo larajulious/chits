@@ -1,7 +1,7 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useState, type ComponentProps } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ComponentProps } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { getRecordingPermissionsAsync, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
+import { RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
 import { deleteAsync } from 'expo-file-system/legacy';
 
 import { BottomSheetSurface } from '@/components/ui/primitives';
@@ -10,6 +10,8 @@ import { spacing } from '@/constants/theme';
 import type { MessageType } from '@/db/types';
 import { pickAndStageFile, pickAndStageMedia, stageAttachment, type AttachmentDraft } from '@/services/attachment-import';
 import { dismissKeyboardAsync } from '@/services/keyboard';
+import { ensureMicrophonePermission } from '@/services/permissions';
+import { showPermissionSettingsPrompt } from '@/components/permissions/permission-settings-prompt';
 
 export type { AttachmentDraft } from '@/services/attachment-import';
 
@@ -42,7 +44,12 @@ export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(functi
   // Picking/staging is shared with the Add note sheet (services/attachment-import).
   // As before, cancelling a picker leaves the attachment sheet open; choosing
   // something (or an error) closes it.
+  // Ref, not state: a fast double tap must not open two pickers or two
+  // permission prompts before `saving` re-renders.
+  const busy = useRef(false);
   const run = async (task: () => Promise<AttachmentDraft | null>) => {
+    if (busy.current) return;
+    busy.current = true;
     setSaving(true);
     try {
       const draft = await task();
@@ -53,6 +60,7 @@ export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(functi
       onError(error instanceof Error ? error.message : 'The attachment could not be prepared.');
       setOpen(false);
     } finally {
+      busy.current = false;
       setSaving(false);
     }
   };
@@ -61,21 +69,26 @@ export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(functi
   const pickFile = () => run(pickAndStageFile);
 
   const startRecording = useCallback(async () => {
-    if (disabled || saving || recorderState.isRecording) return;
+    if (disabled || saving || recorderState.isRecording || busy.current) return;
+    busy.current = true;
     try {
       // Close the keyboard *before* any permission prompt can appear (see
       // dismissKeyboardAsync) and only ask when access isn't already granted.
       await dismissKeyboardAsync();
-      const current = await getRecordingPermissionsAsync();
-      const permission = current.granted ? current : await requestRecordingPermissionsAsync();
-      // After repeated refusals Android stops showing the prompt (canAskAgain false), so point to Settings.
-      if (!permission.granted) { onError(permission.canAskAgain ? 'Microphone access is needed to record audio.' : 'Microphone access is turned off for Chits. Turn it on in Settings › Apps › Chits › Permissions.'); return; }
+      const access = await ensureMicrophonePermission();
+      // Declined at the system prompt just now: stop quietly (no banner, no
+      // Settings), leaving the sheet and any draft as they were.
+      if (access === 'denied') return;
+      // Declined on an earlier attempt and tried again: offer Settings.
+      if (access === 'blocked') { showPermissionSettingsPrompt('microphone'); return; }
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, interruptionMode: 'doNotMix', shouldPlayInBackground: false, shouldRouteThroughEarpiece: false });
       await recorder.prepareToRecordAsync();
       recorder.record();
       setOpen(false);
     } catch {
       onError('Audio recording could not start. Please try again.');
+    } finally {
+      busy.current = false;
     }
   }, [disabled, onError, recorder, recorderState.isRecording, saving]);
 

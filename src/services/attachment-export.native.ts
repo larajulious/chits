@@ -5,6 +5,7 @@ import * as Sharing from 'expo-sharing';
 import { ChitsFiles } from '../../modules/chits-attachments';
 import type { AttachmentLike } from '@/db/types';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
+import { ensurePhotosAddPermission } from '@/services/permissions';
 import { downloadActionLabel, downloadMethod, exportFileName, exportMimeType, failureCodeFromNative, type ExportOutcome } from '@/services/attachment-export-naming';
 
 export type { ExportOutcome } from '@/services/attachment-export-naming';
@@ -17,7 +18,8 @@ export function exportActionLabel(attachment: Pick<AttachmentLike, 'type'>): str
 /**
  * "Download": saves a copy of a locally stored attachment onto the device.
  *  - Android 10+: one tap, straight into Download/Chits (no picker, no permission).
- *  - iOS photos/videos: one tap, straight into the Photos app (add-only access).
+ *  - iOS photos/videos: one tap, straight into the Photos app (add-only access,
+ *    asked on the first Save to Photos tap; see ensurePhotosAddPermission).
  *  - Otherwise (iOS documents/audio, Android 7–9): the system save screen,
  *    because iOS has no shared Downloads folder and older Android would need a
  *    storage permission.
@@ -39,6 +41,10 @@ export async function exportAttachment(attachment: AttachmentLike): Promise<Expo
       return result.status === 'saved' ? { status: 'saved', uri: result.uri, destination: 'downloads' } : { status: 'cancelled' };
     }
     if (method === 'photos') {
+      const access = await ensurePhotosAddPermission();
+      // Just declined at the system prompt: a normal cancel, nothing more to show.
+      if (access === 'denied') return { status: 'cancelled' };
+      if (access === 'blocked') return { status: 'failed', code: 'permission' };
       const result = await ChitsFiles.saveToPhotosAsync(uri, fileName, attachment.type === 'video' ? 'video' : 'photo');
       return result.status === 'saved' ? { status: 'saved', destination: 'photos' } : { status: 'cancelled' };
     }

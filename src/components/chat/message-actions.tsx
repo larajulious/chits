@@ -1,6 +1,6 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { type ComponentProps } from 'react';
+import { useEffect, useState, type ComponentProps } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomSheetSurface } from '@/components/ui/primitives';
@@ -21,6 +21,8 @@ type Props = {
   message: Message | null;
   temporarilyRevealed: boolean;
   onDismiss: () => void;
+  /** Runs once the sheet has fully closed — the earliest another modal can be shown on iOS. */
+  onClosed?: () => void;
   onCopy: (message: Message) => void;
   onEdit: () => void;
   onPin: (message: Message) => void;
@@ -43,14 +45,28 @@ function ActionRow({ icon, label, onPress, destructive = false }: { icon: Compon
   </Pressable>;
 }
 
-export function MessageActions({ message, temporarilyRevealed, onDismiss, onCopy, onEdit, onPin, onAddToBoard, onDownload, onReveal, onHideAgain, onHideContent, onShowContent, onArchive, onDelete }: Props) {
+export function MessageActions({ message: current, temporarilyRevealed, onDismiss, onClosed, onCopy, onEdit, onPin, onAddToBoard, onDownload, onReveal, onHideAgain, onHideContent, onShowContent, onArchive, onDelete }: Props) {
   const { tokens: theme } = useTheme();
+  // Stays mounted (showing the last message) until the native modal has really
+  // closed, like AppDialog: iOS can't present another modal (e.g. the delete
+  // confirmation) while this one is still up or dismissing.
+  const [shown, setShown] = useState<Message | null>(current);
+  if (current && current !== shown) setShown(current);
+  const finishClosing = () => { setShown(null); onClosed?.(); };
+  useEffect(() => {
+    // Android has no onDismiss; its modal is gone by the next frame.
+    if (current || !shown || Platform.OS === 'ios') return;
+    const frame = requestAnimationFrame(finishClosing);
+    return () => cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reacts to the sheet closing.
+  }, [current]);
+  const message = current ?? shown;
   if (!message) return null;
   const hasAttachment = message.attachments.length > 0;
   const covered = message.isHiddenContent && !temporarilyRevealed;
   const preview = covered ? 'Hidden Chit' : message.text || (hasAttachment ? `${message.attachments[0].type === 'audio' ? 'Audio note' : message.attachments[0].type[0].toUpperCase() + message.attachments[0].type.slice(1)} attachment` : 'Thought');
   const copyable = getCopyableMessageText(message);
-  return <Modal transparent animationType="slide" visible onRequestClose={onDismiss}>
+  return <Modal transparent animationType="slide" visible={Boolean(current)} onRequestClose={onDismiss} onDismiss={Platform.OS === 'ios' ? finishClosing : undefined}>
     <View style={styles.backdrop}>
       <Pressable accessibilityRole="button" accessibilityLabel="Close thought actions" onPress={onDismiss} style={StyleSheet.absoluteFill} />
       <SafeAreaView edges={['bottom']} style={styles.sheet}>
