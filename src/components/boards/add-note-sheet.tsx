@@ -54,9 +54,13 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   const [staging, setStaging] = useState(false);
   const [draft, setDraft] = useState<AttachmentDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Full-screen writing mode (like Edit Note) for longer notes; same state, so
+  // text and any attachment carry over when switching either way.
+  const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
     if (visible && !wasVisible.current) {
+      setFullscreen(false);
       setText('');
       setSaving(false);
       setStaging(false);
@@ -97,6 +101,61 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
     }
   };
 
+  const toggleFullscreen = () => {
+    setFullscreen((current) => !current);
+    // The other layout has its own input; keep the cursor in the note.
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const noteInput = (
+    <TextInput
+      ref={inputRef}
+      accessibilityLabel="Note text"
+      value={text}
+      onChangeText={(value) => { setText(value); setError(null); }}
+      placeholder={fullscreen ? 'Start writing…' : 'Write something...'}
+      placeholderTextColor={theme.textMuted}
+      selectionColor={theme.accent}
+      cursorColor={theme.accent}
+      multiline
+      scrollEnabled
+      textAlignVertical="top"
+      maxLength={MAX_NOTE_LENGTH}
+      editable={!saving}
+      style={fullscreen
+        ? [styles.fullInput, { color: theme.textPrimary }]
+        : [styles.input, draft && styles.inputWithAttachment, { backgroundColor: theme.background, borderColor: theme.borderSubtle, color: theme.textPrimary }]}
+    />
+  );
+
+  const attachmentArea = draft ? (
+    <View style={styles.attachmentPreview}>
+      <AttachmentDraftPreview draft={draft} compact={fullscreen} onRemove={discardDraft} />
+    </View>
+  ) : (
+    <View style={styles.attachRow}>
+      {ATTACH_OPTIONS.map((option) => (
+        <Pressable
+          key={option.key}
+          accessibilityRole="button"
+          accessibilityLabel={`Attach ${option.label.toLowerCase()}`}
+          accessibilityState={{ disabled: busy }}
+          disabled={busy}
+          onPress={() => void attach(option.key)}
+          style={({ pressed }) => [styles.attachChip, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, busy && styles.disabled, pressed && styles.pressed]}
+        >
+          <Ionicons accessible={false} name={option.icon} size={17} color={theme.textSecondary} />
+          <Text style={[styles.attachLabel, { color: theme.textPrimary }]}>{option.label}</Text>
+        </Pressable>
+      ))}
+      {staging ? <ActivityIndicator accessibilityLabel="Preparing attachment" size="small" color={theme.textMuted} /> : null}
+    </View>
+  );
+
+  const contextLine = boardName && columnName
+    ? <Text accessibilityLabel={`Adding to ${boardName}, ${columnName}`} style={[styles.context, { color: theme.textSecondary }]}>Adding to <Text style={{ color: theme.textPrimary, fontWeight: '700' }}>{boardName}</Text>  ›  <Text style={{ color: theme.textPrimary, fontWeight: '700' }}>{columnName}</Text></Text>
+    : <Text style={[styles.context, { color: theme.textSecondary }]}>Saved to <Text style={{ color: theme.textPrimary, fontWeight: '700' }}>Unorganized</Text> — add it to a board anytime.</Text>;
+
   const submit = async () => {
     if (!canAdd) return;
     setSaving(true);
@@ -121,75 +180,64 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
       onRequestClose={close}
       onShow={() => requestAnimationFrame(() => inputRef.current?.focus())}
     >
-      <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close add note" style={StyleSheet.absoluteFill} onPress={close} />
-        <SafeAreaView edges={['bottom']} style={[styles.safeArea, { backgroundColor: theme.surface }]}>
-          <GlassSurface style={[styles.sheet, { borderColor: theme.borderSubtle }]}>
-            <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
-            <View style={styles.content}>
-              <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Add note</Text>
-              {boardName && columnName ? <Text accessibilityLabel={`Adding to ${boardName}, ${columnName}`} style={[styles.context, { color: theme.textSecondary }]}>
-                Adding to <Text style={{ color: theme.textPrimary, fontWeight: '700' }}>{boardName}</Text>  ›  <Text style={{ color: theme.textPrimary, fontWeight: '700' }}>{columnName}</Text>
-              </Text> : <Text style={[styles.context, { color: theme.textSecondary }]}>Saved to <Text style={{ color: theme.textPrimary, fontWeight: '700' }}>Unorganized</Text> — add it to a board anytime.</Text>}
-
-              <TextInput
-                ref={inputRef}
-                accessibilityLabel="Note text"
-                value={text}
-                onChangeText={(value) => { setText(value); setError(null); }}
-                placeholder="Write something..."
-                placeholderTextColor={theme.textMuted}
-                selectionColor={theme.accent}
-                cursorColor={theme.accent}
-                multiline
-                maxLength={MAX_NOTE_LENGTH}
-                editable={!saving}
-                style={[styles.input, draft && styles.inputWithAttachment, { backgroundColor: theme.background, borderColor: theme.borderSubtle, color: theme.textPrimary }]}
-              />
-
-              {draft ? (
-                <View style={styles.attachmentPreview}>
-                  <AttachmentDraftPreview draft={draft} compact={false} onRemove={discardDraft} />
-                </View>
-              ) : (
-                <View style={styles.attachRow}>
-                  {ATTACH_OPTIONS.map((option) => (
-                    <Pressable
-                      key={option.key}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Attach ${option.label.toLowerCase()}`}
-                      accessibilityState={{ disabled: busy }}
-                      disabled={busy}
-                      onPress={() => void attach(option.key)}
-                      style={({ pressed }) => [styles.attachChip, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, busy && styles.disabled, pressed && styles.pressed]}
-                    >
-                      <Ionicons accessible={false} name={option.icon} size={17} color={theme.textSecondary} />
-                      <Text style={[styles.attachLabel, { color: theme.textPrimary }]}>{option.label}</Text>
-                    </Pressable>
-                  ))}
-                  {staging ? <ActivityIndicator accessibilityLabel="Preparing attachment" size="small" color={theme.textMuted} /> : null}
-                </View>
-              )}
-              {error ? <Text accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</Text> : null}
-
-              <View style={styles.actions}>
-                <Pressable accessibilityRole="button" disabled={busy} onPress={close} style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
-                  <Text style={[styles.cancelText, { color: theme.textSecondary }]}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Add note"
-                  accessibilityState={{ disabled: !canAdd }}
-                  disabled={!canAdd}
-                  onPress={() => void submit()}
-                  style={({ pressed }) => [styles.addButton, { backgroundColor: theme.accent }, !canAdd && styles.disabled, pressed && canAdd && styles.pressed]}
-                >
-                  {saving ? <ActivityIndicator accessibilityLabel="Adding note" size="small" color={theme.accentText} /> : <Text style={[styles.addText, { color: theme.accentText }]}>Add</Text>}
-                </Pressable>
-              </View>
+      <KeyboardAvoidingView style={[styles.backdrop, fullscreen && { backgroundColor: theme.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        {fullscreen ? (
+          <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={styles.fullScreen}>
+            {/* Same header pattern as Edit Note: exit on the left, Add (✓) on the right. */}
+            <View style={[styles.fullHeader, { borderBottomColor: theme.borderSubtle }]}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Exit full screen" hitSlop={8} disabled={saving} onPress={toggleFullscreen} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
+                <Ionicons accessible={false} name="contract-outline" size={22} color={theme.textPrimary} />
+              </Pressable>
+              <Text accessibilityRole="header" style={[styles.fullTitle, { color: theme.textPrimary }]}>Add note</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="Add note" accessibilityState={{ disabled: !canAdd }} disabled={!canAdd} hitSlop={8} onPress={() => void submit()} style={({ pressed }) => [styles.headerButton, pressed && canAdd && styles.pressed]}>
+                {saving ? <ActivityIndicator accessibilityLabel="Adding note" size="small" color={theme.accent} /> : <Ionicons accessible={false} name="checkmark" size={24} color={canAdd ? theme.accent : theme.textMuted} />}
+              </Pressable>
             </View>
-          </GlassSurface>
-        </SafeAreaView>
+            <View style={styles.fullContext}>{contextLine}</View>
+            {noteInput}
+            <View style={[styles.fullFooter, { borderTopColor: theme.borderSubtle }]}>
+              {error ? <Text accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</Text> : null}
+              {attachmentArea}
+            </View>
+          </SafeAreaView>
+        ) : (
+          <>
+            <Pressable accessibilityRole="button" accessibilityLabel="Close add note" style={StyleSheet.absoluteFill} onPress={close} />
+            <SafeAreaView edges={['bottom']} style={[styles.safeArea, { backgroundColor: theme.surface }]}>
+              <GlassSurface style={[styles.sheet, { borderColor: theme.borderSubtle }]}>
+                <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
+                <View style={styles.content}>
+                  <View style={styles.titleRow}>
+                    <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Add note</Text>
+                    <Pressable accessibilityRole="button" accessibilityLabel="Write in full screen" hitSlop={8} disabled={busy} onPress={toggleFullscreen} style={({ pressed }) => [styles.expandButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>
+                      <Ionicons accessible={false} name="expand-outline" size={18} color={theme.textSecondary} />
+                    </Pressable>
+                  </View>
+                  {contextLine}
+                  {noteInput}
+                  {attachmentArea}
+                  {error ? <Text accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</Text> : null}
+
+                  <View style={styles.actions}>
+                    <Pressable accessibilityRole="button" disabled={busy} onPress={close} style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
+                      <Text style={[styles.cancelText, { color: theme.textSecondary }]}>Cancel</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Add note"
+                      accessibilityState={{ disabled: !canAdd }}
+                      disabled={!canAdd}
+                      onPress={() => void submit()}
+                      style={({ pressed }) => [styles.addButton, { backgroundColor: theme.accent }, !canAdd && styles.disabled, pressed && canAdd && styles.pressed]}
+                    >
+                      {saving ? <ActivityIndicator accessibilityLabel="Adding note" size="small" color={theme.accentText} /> : <Text style={[styles.addText, { color: theme.accentText }]}>Add</Text>}
+                    </Pressable>
+                  </View>
+                </View>
+              </GlassSurface>
+            </SafeAreaView>
+          </>
+        )}
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -201,7 +249,18 @@ const styles = StyleSheet.create({
   sheet: { flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth },
   handle: { alignSelf: 'center', width: 36, height: 4, marginTop: spacing.xs, borderRadius: 2 },
   content: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.lg },
-  title: { fontSize: 20, lineHeight: 25, fontWeight: '800' },
+  title: { flex: 1, fontSize: 20, lineHeight: 25, fontWeight: '800' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  expandButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18 },
+  // Full-screen mode mirrors Edit Note (card/edit-content): plain header, the
+  // page itself is the writing surface, attachments sit above the keyboard.
+  fullScreen: { flex: 1, alignSelf: 'stretch' },
+  fullHeader: { minHeight: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth },
+  headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  fullTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700' },
+  fullContext: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
+  fullInput: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.xs, fontSize: 17, lineHeight: 27 },
+  fullFooter: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth },
   context: { marginTop: spacing.xxs, marginBottom: spacing.md, fontSize: 13, lineHeight: 18 },
   inputWithAttachment: { minHeight: 64 },
   attachRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm },

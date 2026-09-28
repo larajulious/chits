@@ -36,6 +36,8 @@ export function MessageMetadata({ message, inside = false, onActions, onHideAgai
     </View>) : null}
     <Text style={[styles.time, { color: tokens.textMuted }]}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? ' · edited' : ''}</Text>
     {message.pinned ? <Ionicons accessibilityLabel="Pinned" name="pin-outline" size={13} color={tokens.textMuted} /> : null}
+    {/* Very subtle: this thought's card has an upcoming reminder. */}
+    {message.organization?.reminderAt ? <Ionicons accessibilityLabel="Reminder set" name="notifications-outline" size={13} color={tokens.textMuted} /> : null}
     {onHideAgain ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" hitSlop={8} onPress={onHideAgain} style={({ pressed }) => [styles.privacyAction, pressed && styles.pressed]}><Ionicons accessible={false} name="eye-off-outline" size={16} color={tokens.textMuted} /></Pressable> : null}
     <Pressable accessibilityRole="button" accessibilityLabel="Thought actions" hitSlop={8} onPress={onActions} style={styles.more}>
       <Ionicons accessible={false} name="ellipsis-horizontal" size={17} color={tokens.textMuted} />

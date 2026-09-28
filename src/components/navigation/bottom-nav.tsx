@@ -132,10 +132,10 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
         <LinearGradient pointerEvents="none" colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0)']} style={styles.feather} />
         <Animated.View style={[styles.surface, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, navFadeStyle]}>
           <NavItem
-            label="Boards"
-            icon="grid-outline"
+            label="Notes"
+            icon="reader-outline"
             focused={activeName === 'index'}
-            accessibilityLabel={`Boards${activeName === 'index' ? '. Current screen.' : ''}`}
+            accessibilityLabel={`Notes${activeName === 'index' ? '. Current screen.' : ''}`}
             onPress={() => go(boardsRoute?.name)}
           />
           <View style={styles.centerSlot} pointerEvents="none">

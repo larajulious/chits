@@ -303,8 +303,8 @@ export default function AttachmentsScreen() {
         renderItem={({ item }) => <AttachmentTile item={item} size={tileSize} onPress={() => setDetailItem(item)} onLongPress={() => openItemMenu(item)} />}
         ListHeaderComponent={
           <View style={styles.listHeader}>
-            <View style={[styles.searchField, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }]}>
-              <Ionicons accessible={false} name="search-outline" size={16} color={theme.textMuted} />
+            <View style={[styles.searchField, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
+              <Ionicons accessible={false} name="search" size={16} color={theme.textMuted} />
               <TextInput
                 accessibilityLabel="Search attachments"
                 value={searchInput}
@@ -354,11 +354,16 @@ export default function AttachmentsScreen() {
 }
 
 const styles = StyleSheet.create({
-  listHeader: { paddingHorizontal: spacing.md, paddingBottom: spacing.xs },
-  searchField: { minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, borderRadius: 19, borderWidth: StyleSheet.hairlineWidth, marginTop: spacing.xs },
-  searchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
-  chipScroll: { height: 30, flexGrow: 0, flexShrink: 0, marginTop: spacing.sm },
-  chipRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  // No side padding of its own: the grid's content padding already insets the
+  // header by spacing.md, so the search field spans the same width as Cards'.
+  listHeader: { paddingBottom: spacing.xs },
+  // Same field as the Cards tab search (index.native.tsx searchBar/searchInput)
+  // so search looks and feels identical wherever it appears.
+  searchField: { height: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.xxs, marginTop: 16, paddingHorizontal: spacing.sm + spacing.xxs, borderRadius: radii.pill, borderWidth: StyleSheet.hairlineWidth },
+  searchInput: { flex: 1, height: '100%', fontSize: 15, padding: 0 },
+  // Bleeds to the screen edges so chips scroll edge to edge (like the Cards tab), while resting at the same inset.
+  chipScroll: { height: 30, flexGrow: 0, flexShrink: 0, marginTop: spacing.sm, marginHorizontal: -spacing.md },
+  chipRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md },
   chip: { height: 26, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, borderRadius: radii.pill, borderWidth: StyleSheet.hairlineWidth },
   chipLabel: { fontSize: 12, fontWeight: '600' },
   sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginTop: spacing.md, marginBottom: spacing.xs },

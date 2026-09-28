@@ -25,6 +25,8 @@ import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
 import { AppHeader, EmptyState, IconButton, Screen, Toast } from '@/components/ui/primitives';
 import { AddNoteSheet, type NoteSubmission } from '@/components/boards/add-note-sheet';
 import { groupByMonth } from '@/services/card-grouping';
+import { detachConfirmationMessage } from '@/services/detach-card';
+import { requestReminderSync, subscribeToReminderChanges } from '@/services/reminders';
 import { BoardAppearanceFields } from '@/components/boards/board-appearance-fields';
 import { CardListRow } from '@/components/boards/card-list-row.native';
 import { resolveBoardIcon, type BoardIconName } from '@/constants/board-appearance';
@@ -80,7 +82,7 @@ function unorganizedToCardListItem(row: UnorganizedSummaryRow): CardListItem {
   return {
     id: row.id, kind: 'thought', title, preview,
     boardId: null, boardName: null, boardAccent: null, columnId: null, columnName: null,
-    createdAt: row.createdAt, updatedAt: row.updatedAt, pinned: row.pinned === 1, hidden,
+    createdAt: row.createdAt, updatedAt: row.updatedAt, pinned: row.pinned === 1, hidden, reminderAt: null,
     photoCount: row.photoCount, videoCount: row.videoCount, fileCount: row.fileCount,
     previewMediaType: hidden ? null : row.previewMediaType, thumbnailPath: hidden ? null : row.thumbnailPath, mediaDuration: hidden ? null : row.mediaDuration, mediaCount: hidden ? 0 : row.mediaCount,
   };
@@ -137,6 +139,8 @@ function ViewSwitch({ mode, onChange }: { mode: ViewMode; onChange: (next: ViewM
             onPress={() => onChange(option)}
             style={[styles.switchOption, selected && { backgroundColor: theme.surface }]}
           >
+            {/* Filled when selected, outline otherwise. */}
+            <Ionicons accessible={false} name={option === 'boards' ? (selected ? 'grid' : 'grid-outline') : (selected ? 'albums' : 'albums-outline')} size={15} color={selected ? theme.textPrimary : theme.textMuted} />
             <Text style={[styles.switchLabel, { color: selected ? theme.textPrimary : theme.textMuted }]}>
               {option === 'boards' ? 'Boards' : 'Cards'}
             </Text>
@@ -253,6 +257,10 @@ export default function BoardsScreen() {
       : { ...row, kind: 'card' as const, pinned: row.pinned === 1, hidden: false, mediaCount: row.mediaCount ?? 0 }));
     setUnorganizedThoughts(thoughtRows.map(unorganizedToCardListItem));
   }, [boardRepository, messageRepository]);
+  // Card deletes/archives/hides go through loadCards afterwards, so reconciling
+  // here cancels notifications for removed cards and refreshes hidden text;
+  // reminder changes made elsewhere (set, removed, fired) reload the list.
+  useEffect(() => subscribeToReminderChanges(() => void loadCards(cardSearch)), [cardSearch, loadCards]);
 
   useFocusEffect(useCallback(() => {
     void load();
@@ -318,38 +326,29 @@ export default function BoardsScreen() {
     ];
   }, [cards, unorganizedThoughts, cardFilter]);
 
-  // "Move back to Unorganized" — see PHASE: DETACH CARD FROM BOARD / RETURN TO
-  // UNORGANIZED. Fetches a lightweight preview (this row doesn't already have
-  // message/comment/attachment counts loaded the way Card Details does) to
-  // decide whether the trivial case (one source Chit, nothing card-only to
-  // lose) can proceed immediately, or whether a merged card / card-only data
-  // needs to be spelled out first. boardRepository.detachCard is the exact
-  // same DB transaction as deleteCard; it never touches the source Chat
-  // message(s), so they immediately qualify for Unorganized again.
+  // "Move back to Unorganized" — always confirmed first. Fetches a lightweight
+  // preview (this row doesn't have message/comment/attachment counts loaded the
+  // way Card Details does) so the confirmation can spell out a merged card or
+  // card-only data that will be removed. boardRepository.detachCard never
+  // touches the source Chat message(s), so they return to Unorganized.
   const moveCardBackToUnorganized = useCallback(async (item: CardListItem) => {
     // The query is a bare `SELECT ... (no FROM)`, so SQLite always returns
     // exactly one row — this fallback only exists to satisfy the type checker.
     const preview = await boardRepository.getCardDetachPreview(item.id) ?? { messageCount: 0, commentCount: 0, attachmentCount: 0 };
-    const extras: string[] = [];
-    if (preview.commentCount) extras.push(`${preview.commentCount} comment${preview.commentCount === 1 ? '' : 's'}`);
-    if (preview.attachmentCount) extras.push(`${preview.attachmentCount} attachment${preview.attachmentCount === 1 ? '' : 's'}`);
-    const messageParts: string[] = [];
-    if (preview.messageCount > 1) messageParts.push(`${preview.messageCount} Chits will be returned to Unorganized.`);
-    if (extras.length) messageParts.push(`This card has additional details that belong to the card. Moving it back will remove:\n${extras.map((extra) => `• ${extra}`).join('\n')}`);
 
     const run = async () => {
       const removableUris = await boardRepository.detachCard(item.id);
+      void requestReminderSync();
       await Promise.all(removableUris.map((uri) => removeCardAttachmentFile(uri)));
       await loadCards(cardSearch);
       setCardToast('Moved back to Unorganized');
     };
 
-    if (!messageParts.length) { await run(); return; }
     confirm({
       type: 'default',
       icon: 'arrow-undo-outline',
       title: 'Move this card back to Unorganized?',
-      message: messageParts.join('\n\n'),
+      message: detachConfirmationMessage({ boardName: item.boardName, messageCount: preview.messageCount, commentCount: preview.commentCount, attachmentCount: preview.attachmentCount }),
       confirmText: 'Move',
       accentColor: item.boardAccent,
       onConfirm: run,
@@ -367,7 +366,7 @@ export default function BoardsScreen() {
               type: 'default', icon: 'archive-outline', title: 'Archive thought?',
               message: 'You can restore it later from Archive.',
               confirmText: 'Archive thought',
-              onConfirm: () => messageRepository.archive(item.id).then(() => loadCards(cardSearch)),
+              onConfirm: () => messageRepository.archive(item.id).then(() => { void requestReminderSync(); return loadCards(cardSearch); }),
             }),
           },
           {
@@ -375,7 +374,7 @@ export default function BoardsScreen() {
               type: 'destructive', icon: 'trash-outline', title: 'Delete thought?',
               message: 'This can’t be undone.',
               confirmText: 'Delete thought',
-              onConfirm: () => messageRepository.softDelete(item.id).then(() => loadCards(cardSearch)),
+              onConfirm: () => messageRepository.softDelete(item.id).then(() => { void requestReminderSync(); return loadCards(cardSearch); }),
             }),
           },
         ],
@@ -392,7 +391,7 @@ export default function BoardsScreen() {
             type: 'default', icon: 'archive-outline', title: 'Archive card?',
             message: 'You can restore it later from Archive. Your original messages remain in Chat.',
             confirmText: 'Archive card', accentColor: item.boardAccent,
-            onConfirm: () => boardRepository.archiveCard(item.id).then(() => loadCards(cardSearch)),
+            onConfirm: () => boardRepository.archiveCard(item.id).then(() => { void requestReminderSync(); return loadCards(cardSearch); }),
           }),
         },
         {
@@ -402,6 +401,7 @@ export default function BoardsScreen() {
             confirmText: 'Delete card',
             onConfirm: async () => {
               const removableUris = await boardRepository.deleteCard(item.id);
+      void requestReminderSync();
               await Promise.all(removableUris.map((uri) => removeCardAttachmentFile(uri)));
               await loadCards(cardSearch);
             },
@@ -716,11 +716,11 @@ const styles = StyleSheet.create({
   // Filters → first section 24).
   switchWrap: { paddingHorizontal: spacing.md, paddingTop: 16, paddingBottom: 0 },
   switchTrack: { flexDirection: 'row', height: 32, borderRadius: radii.control, padding: 3 },
-  switchOption: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: radii.control - 2 },
+  switchOption: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: radii.control - 2 },
   switchLabel: { fontSize: 13, fontWeight: '600' },
   // Compact, quiet search control (44px, hairline border) — deliberately NOT
   // the visually dominant element on this screen; the cards are.
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.xxs, height: 44, marginHorizontal: spacing.md, marginTop: 16, paddingHorizontal: spacing.sm, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth },
+  searchBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.xxs, height: 44, marginHorizontal: spacing.md, marginTop: 16, paddingHorizontal: spacing.sm + spacing.xxs, borderRadius: radii.pill, borderWidth: StyleSheet.hairlineWidth },
   searchInput: { flex: 1, height: '100%', fontSize: 15, padding: 0 },
   searchCollapsed: { height: 0, opacity: 0, overflow: 'hidden' },
   cardList: { flex: 1 },

@@ -63,7 +63,7 @@ const DrawerContext = createContext<DrawerContextValue | null>(null);
 // listed again here too since the drawer is reachable from every screen, not
 // just Boards itself. Search stays its own top-corner action rather than a
 // third list row, matching its existing placement.
-const boardsDestination: Destination = { label: 'Boards', path: '/', icon: 'grid-outline' };
+const boardsDestination: Destination = { label: 'Notes', path: '/', icon: 'reader-outline' };
 const archiveDestination: Destination = { label: 'Archive', path: '/archive', icon: 'archive-outline' };
 const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
 

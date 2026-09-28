@@ -3,7 +3,8 @@ export type MessageType = 'text' | 'photo' | 'video' | 'audio' | 'file';
 export interface Message {
   id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number;
   archivedAt: number | null; pinned: boolean; isHiddenContent: boolean; deletedAt: number | null; attachments: Attachment[];
-  organization?: { boardId: string; boardName: string; columnId: string; columnName: string } | null;
+  // reminderAt: the upcoming reminder on the card this thought belongs to (null when none).
+  organization?: { boardId: string; boardName: string; columnId: string; columnName: string; cardId?: string; reminderAt?: number | null } | null;
 }
 
 // The fields every attachment-shaped thing has in common, regardless of what it's
@@ -50,6 +51,8 @@ export interface CardListItem {
   // True when a thought on this card (or this thought itself) is hidden in
   // Chat: the list shows a covered note instead of its text or media.
   hidden: boolean;
+  // Upcoming reminder on this card (ms), or null. Thoughts never have one.
+  reminderAt: number | null;
   photoCount: number; videoCount: number; fileCount: number;
   // The single, deterministic media preview for this card/thought — resolved
   // once, in SQL, by priority (photo > video > audio) across BOTH a card's

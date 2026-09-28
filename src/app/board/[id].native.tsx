@@ -17,6 +17,8 @@ import { EditBoardSheet } from '@/components/boards/edit-board-sheet';
 import { resolveBoardIcon, tintWithAccent, type BoardIconName } from '@/constants/board-appearance';
 import { spacing } from '@/constants/theme';
 import { createBoardRepository } from '@/db/repositories';
+import { formatReminder } from '@/services/reminder-time';
+import { requestReminderSync, subscribeToReminderChanges } from '@/services/reminders';
 import { useTheme } from '@/components/theme-provider';
 import type { Attachment, Board } from '@/db/types';
 
@@ -25,7 +27,7 @@ type Column = { id: string; name: string; position: number };
 // `columns` for the carousel's FlatList `data`, but never stored, given an id, or
 // touched by any business logic (column counts, drag targets, navigator position).
 type CarouselItem = { kind: 'column'; column: Column } | { kind: 'add' };
-type Card = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaPath: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null; isHidden: number };
+type Card = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; reminderAt: number | null; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaPath: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null; isHidden: number };
 type DragState = { card: Card; sourceColumnId: string; destinationColumnId: string; fromIndex: number; toIndex: number; height: number; startY: number; overlayTop: number; startScrollY: number };
 const EDGE_ZONE = 52;
 const EDGE_DWELL_MS = 450;
@@ -203,8 +205,9 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
   });
   const hidden = card.isHidden === 1;
   const media: Attachment | null = !hidden && card.mediaId && card.mediaMessageId && card.mediaType && card.mediaPath ? { id: card.mediaId, messageId: card.mediaMessageId, type: card.mediaType, storagePath: card.mediaPath, originalName: null, mimeType: card.mediaMimeType, size: card.mediaSize, duration: card.mediaDuration, width: card.mediaWidth, height: card.mediaHeight, createdAt: card.mediaCreatedAt ?? 0 } : null;
-  const hasMetadata = Boolean(card.attachmentCount || card.messageCount > 1);
-  const accessibleMetadata = [card.messageCount > 1 ? `${card.messageCount} thoughts` : null, card.attachmentCount ? `${card.attachmentCount} attachments` : null].filter(Boolean).join(', ');
+  const reminderLabel = card.reminderAt ? formatReminder(new Date(card.reminderAt), new Date()) : null;
+  const hasMetadata = Boolean(card.attachmentCount || card.messageCount > 1 || reminderLabel);
+  const accessibleMetadata = [card.messageCount > 1 ? `${card.messageCount} thoughts` : null, card.attachmentCount ? `${card.attachmentCount} attachments` : null, reminderLabel ? `Reminder ${reminderLabel}` : null].filter(Boolean).join(', ');
   // Long-press anywhere on the card activates drag, but a touch that begins on the
   // handle (which owns its own faster long-press) or the footer controls (Move /
   // reorder buttons, which must stay independently and immediately tappable) must
@@ -287,6 +290,7 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
       </View>
 
       {hasMetadata ? <View style={styles.meta}>
+        {reminderLabel ? <View style={styles.metaItem}><Ionicons accessible={false} name="notifications-outline" size={13} color={theme.textMuted} /><Text style={[styles.metaText, { color: theme.textMuted }]}>{reminderLabel}</Text></View> : null}
         {card.messageCount > 1 ? <View style={styles.metaItem}><Ionicons accessible={false} name="layers-outline" size={14} color={theme.textMuted} /><Text style={[styles.metaText, { color: theme.textMuted }]}>{card.messageCount} thoughts</Text></View> : null}
         {card.attachmentCount ? <View style={styles.metaItem}><Ionicons accessible={false} name="attach-outline" size={14} color={theme.textMuted} /><Text style={[styles.metaText, { color: theme.textMuted }]}>{card.attachmentCount} {card.attachmentCount === 1 ? 'attachment' : 'attachments'}</Text></View> : null}
       </View> : null}
@@ -482,6 +486,8 @@ export default function BoardScreen() {
   // looking at — force-bypassing the loaded/loading dedupe — and leave everything
   // else (other columns' arrays, scroll position, column index) untouched.
   const refreshActiveColumn = useCallback(() => { const activeId = currentColumnRef.current?.id; if (activeId) void fetchColumn(activeId, { force: true }); }, [fetchColumn]);
+  // A reminder set, removed or fired elsewhere updates this column's bell indicators.
+  useEffect(() => subscribeToReminderChanges(refreshActiveColumn), [refreshActiveColumn]);
   useFocusEffect(useCallback(() => {
     if (boardStatusRef.current !== 'ready') { void load(); return; }
     refreshActiveColumn();
@@ -645,7 +651,7 @@ export default function BoardScreen() {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return;
     }
-    const newCard: Card = { id: cardId, columnId: targetColumn.id, title: text.trim().slice(0, 120) || null, position, preview: text.trim(), attachmentCount: 0, messageCount: 1, mediaId: null, mediaMessageId: null, mediaType: null, mediaPath: null, mediaMimeType: null, mediaSize: null, mediaDuration: null, mediaWidth: null, mediaHeight: null, mediaCreatedAt: null, isHidden: 0 };
+    const newCard: Card = { id: cardId, columnId: targetColumn.id, title: text.trim().slice(0, 120) || null, position, preview: text.trim(), attachmentCount: 0, messageCount: 1, reminderAt: null, mediaId: null, mediaMessageId: null, mediaType: null, mediaPath: null, mediaMimeType: null, mediaSize: null, mediaDuration: null, mediaWidth: null, mediaHeight: null, mediaCreatedAt: null, isHidden: 0 };
     setCards((current) => [...current, newCard]);
     setColumnCounts((current) => ({ ...current, [targetColumn.id]: (current[targetColumn.id] ?? 0) + 1 }));
     setJustAddedCardId(cardId);
@@ -654,7 +660,7 @@ export default function BoardScreen() {
   }, [addNoteColumn, cards, fetchColumn, id, repository]);
   const saveBoardAppearance = async (next: { name: string; icon: BoardIconName | null; accent: string | null }) => { if (!board) throw new Error('This board is no longer available.'); const previousBoard = board; setBoard({ ...board, name: next.name, icon: next.icon, accent: next.accent, updatedAt: Date.now() }); try { await repository.updateBoard(board.id, next); await Haptics.selectionAsync(); } catch (cause) { setBoard(previousBoard); throw cause; } };
   const renameColumn = async (name: string) => { if (!currentColumn) throw new Error('That column is no longer available.'); await repository.renameColumn(currentColumn.id, name.trim()); setColumns((current) => current.map((column) => column.id === currentColumn.id ? { ...column, name: name.trim() } : column)); await Haptics.selectionAsync(); };
-  const deleteColumn = async (destinationColumnId?: string) => { if (!currentColumn) throw new Error('That column is no longer available.'); await repository.deleteColumn(currentColumn.id, destinationColumnId); await load(); await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); };
+  const deleteColumn = async (destinationColumnId?: string) => { if (!currentColumn) throw new Error('That column is no longer available.'); await repository.deleteColumn(currentColumn.id, destinationColumnId); void requestReminderSync(); await load(); await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); };
   const getDeleteCardCount = async () => { if (!currentColumn) throw new Error('That column is no longer available.'); return repository.getColumnCardCount(currentColumn.id); };
   const reorderColumn = async (direction: -1 | 1) => { const next = columnIndex + direction; if (next < 0 || next >= columns.length || !id) return; const previousColumns = columns; const reordered = [...columns]; [reordered[columnIndex], reordered[next]] = [reordered[next], reordered[columnIndex]]; setColumns(reordered); setColumnIndex(next); try { await repository.reorderColumns(id, reordered.map((column) => column.id)); await Haptics.selectionAsync(); } catch (cause) { setColumns(previousColumns); setColumnIndex(columnIndex); throw cause; } };
   // One board-level error rather than per-column ones: a failed initial load means

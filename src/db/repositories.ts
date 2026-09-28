@@ -21,17 +21,21 @@ const eventFromRow = (row: EventRow): TimelineEvent => {
 };
 const pageValues = (page: PageOptions) => [page.limit ?? DEFAULT_PAGE_SIZE, page.offset ?? 0] as const;
 const attachmentCardTitle = (message: { text: string | null; type: MessageType | null; originalName: string | null }) => message.text?.trim().slice(0, 120) || (message.type === 'file' ? message.originalName?.trim().slice(0, 120) || 'Attachment' : message.type === 'photo' ? 'Photo' : message.type === 'video' ? 'Video' : message.type === 'audio' ? 'Audio note' : 'Attachment');
+// "Now" inside SQL (ms), for selecting only upcoming reminders.
+const SQL_NOW_MS = "CAST(strftime('%s', 'now') AS INTEGER) * 1000";
+const UPCOMING_REMINDER_SQL = `(SELECT r.scheduled_at FROM card_reminders r WHERE r.card_id = c.id AND r.scheduled_at > ${SQL_NOW_MS})`;
 const CARD_TITLE_SQL = `COALESCE(NULLIF(TRIM(c.title), ''), (SELECT COALESCE(NULLIF(TRIM(m.text), ''), CASE WHEN a.type = 'file' THEN COALESCE(NULLIF(TRIM(a.original_name), ''), 'Attachment') WHEN a.type = 'photo' THEN 'Photo' WHEN a.type = 'video' THEN 'Video' WHEN a.type = 'audio' THEN 'Audio note' ELSE 'Attachment' END) FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id LEFT JOIN attachments a ON a.message_id = m.id WHERE cm.card_id = c.id ORDER BY cm.position ASC, a.created_at ASC LIMIT 1), 'Attachment')`;
 // Everything a board card needs to render at stable dimensions — title, preview,
 // counts, and media dimensions/reference — resolved in SQL so no per-card follow-up
 // query is ever needed. Shared by the per-column and whole-board summary queries.
 // `isHidden` is 1 when any thought organized into the card is hidden in Chat, so
 // the board can cover it the same way Chat does.
-type CardSummaryRow = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaPath: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null; isHidden: number };
+type CardSummaryRow = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; reminderAt: number | null; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaPath: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null; isHidden: number };
 const CARD_SUMMARY_SELECT_SQL = `SELECT c.id, c.column_id AS columnId, ${CARD_TITLE_SQL} AS title, c.position,
       (SELECT m.text FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id ORDER BY cm.position ASC LIMIT 1) AS preview,
       (SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id) AS attachmentCount,
       (SELECT COUNT(*) FROM card_messages cm WHERE cm.card_id = c.id) AS messageCount,
+      ${UPCOMING_REMINDER_SQL} AS reminderAt,
       EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id AND m.is_hidden_content = 1) AS isHidden,
       ma.id AS mediaId, ma.message_id AS mediaMessageId, ma.type AS mediaType,
       ma.storage_path AS mediaPath, ma.mime_type AS mediaMimeType, ma.size AS mediaSize,
@@ -132,7 +136,7 @@ export function createMessageRepository(database: SQLiteDatabase) {
     if (!messages.length) return messages;
     const ids = messages.map(({ id }) => id);
     const attachmentRows = await database.getAllAsync<AttachmentRow>(`SELECT * FROM attachments WHERE message_id IN (${ids.map(() => '?').join(', ')}) ORDER BY created_at ASC`, ...ids);
-    const organizationRows = await database.getAllAsync<{ messageId: string; boardId: string; boardName: string; columnId: string; columnName: string }>(`SELECT cm.message_id AS messageId, c.board_id AS boardId, b.name AS boardName, bc.id AS columnId, bc.name AS columnName FROM card_messages cm INNER JOIN cards c ON c.id = cm.card_id INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id WHERE cm.message_id IN (${ids.map(() => '?').join(', ')}) AND c.archived_at IS NULL AND b.archived_at IS NULL ORDER BY c.created_at ASC`, ...ids);
+    const organizationRows = await database.getAllAsync<{ messageId: string; boardId: string; boardName: string; columnId: string; columnName: string; cardId: string; reminderAt: number | null }>(`SELECT cm.message_id AS messageId, c.board_id AS boardId, b.name AS boardName, bc.id AS columnId, bc.name AS columnName, c.id AS cardId, ${UPCOMING_REMINDER_SQL} AS reminderAt FROM card_messages cm INNER JOIN cards c ON c.id = cm.card_id INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id WHERE cm.message_id IN (${ids.map(() => '?').join(', ')}) AND c.archived_at IS NULL AND b.archived_at IS NULL ORDER BY c.created_at ASC`, ...ids);
     const grouped = new Map<string, Attachment[]>();
     const organizationByMessage = new Map<string, (typeof organizationRows)[number]>();
     for (const organization of organizationRows) if (!organizationByMessage.has(organization.messageId)) organizationByMessage.set(organization.messageId, organization);
@@ -352,6 +356,8 @@ export function createBoardRepository(database: SQLiteDatabase) {
       await transaction.runAsync('DELETE FROM card_attachments WHERE card_id = ?', cardId);
       await transaction.runAsync('DELETE FROM card_comments WHERE card_id = ?', cardId);
       await transaction.runAsync('DELETE FROM card_messages WHERE card_id = ?', cardId);
+      // The foreign key cascades too; explicit so no reminder row can outlive its card.
+      await transaction.runAsync('DELETE FROM card_reminders WHERE card_id = ?', cardId);
       const result = await transaction.runAsync('DELETE FROM cards WHERE id = ?', cardId);
       if (result.changes !== 1) throw new Error('That card is no longer available.');
     });
@@ -556,7 +562,7 @@ export function createBoardRepository(database: SQLiteDatabase) {
     listAllCardSummaries: (options: { searchTerm?: string } = {}) => {
       const term = options.searchTerm?.trim();
       const like = term ? `%${term.replace(/[%_]/g, '\\$&')}%` : null;
-      return database.getAllAsync<{ id: string; title: string; preview: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; updatedAt: number; pinned: number; photoCount: number; videoCount: number; fileCount: number; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number | null; isHidden: number }>(`
+      return database.getAllAsync<{ id: string; title: string; preview: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; updatedAt: number; pinned: number; photoCount: number; videoCount: number; fileCount: number; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number | null; isHidden: number; reminderAt: number | null }>(`
         WITH card_media AS (
           SELECT cm.card_id AS cardId, a.type AS mediaType, a.storage_path AS path, a.duration AS duration, a.created_at AS createdAt,
             CASE a.type WHEN 'photo' THEN 1 WHEN 'video' THEN 2 WHEN 'audio' THEN 3 ELSE 9 END AS priority
@@ -583,7 +589,8 @@ export function createBoardRepository(database: SQLiteDatabase) {
           ((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id AND a.type = 'video') + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.type = 'video')) AS videoCount,
           ((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id AND a.type = 'file') + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.type = 'file')) AS fileCount,
           cmr.mediaType AS previewMediaType, cmr.path AS thumbnailPath, cmr.duration AS mediaDuration, cmr.mediaCount AS mediaCount,
-          EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id AND m.is_hidden_content = 1) AS isHidden
+          EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id AND m.is_hidden_content = 1) AS isHidden,
+          ${UPCOMING_REMINDER_SQL} AS reminderAt
         FROM cards c
         INNER JOIN boards b ON b.id = c.board_id
         INNER JOIN board_columns bc ON bc.id = c.column_id
@@ -778,6 +785,41 @@ export function createBoardRepository(database: SQLiteDatabase) {
       const result = await database.runAsync('DELETE FROM card_attachments WHERE id = ?', attachmentId);
       if (result.changes !== 1) throw new Error('That attachment is no longer available.');
       return row.storage_path;
+    },
+  };
+}
+
+// Card reminders (one per card; see migration 20). The notification side lives
+// in services/reminders — this is only the local record.
+export type CardReminder = { cardId: string; scheduledAt: number; notificationId: string | null };
+export type ReminderSyncSource = CardReminder & {
+  cardActive: number; hidden: number; text: string | null; title: string | null; attachmentType: MessageType | null;
+};
+export function createReminderRepository(database: SQLiteDatabase) {
+  return {
+    get: (cardId: string) => database.getFirstAsync<CardReminder>('SELECT card_id AS cardId, scheduled_at AS scheduledAt, notification_id AS notificationId FROM card_reminders WHERE card_id = ?', cardId),
+    // Upsert: a card has at most one reminder, so setting a new time replaces it.
+    save: async (cardId: string, scheduledAt: number, notificationId: string | null) => {
+      const now = Date.now();
+      await database.runAsync('INSERT INTO card_reminders (card_id, scheduled_at, notification_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(card_id) DO UPDATE SET scheduled_at = excluded.scheduled_at, notification_id = excluded.notification_id, updated_at = excluded.updated_at', cardId, scheduledAt, notificationId, now, now);
+    },
+    setNotificationId: (cardId: string, notificationId: string | null) => database.runAsync('UPDATE card_reminders SET notification_id = ?, updated_at = ? WHERE card_id = ?', notificationId, Date.now(), cardId),
+    remove: (cardId: string) => database.runAsync('DELETE FROM card_reminders WHERE card_id = ?', cardId),
+    // Everything the sync needs to rebuild each notification's text and to know
+    // whether its card is still live (not archived, board not archived).
+    listForSync: () => database.getAllAsync<ReminderSyncSource>(`
+      SELECT r.card_id AS cardId, r.scheduled_at AS scheduledAt, r.notification_id AS notificationId,
+        (c.id IS NOT NULL AND c.archived_at IS NULL AND b.archived_at IS NULL) AS cardActive,
+        EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = r.card_id AND m.is_hidden_content = 1) AS hidden,
+        (SELECT m.text FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = r.card_id ORDER BY cm.position ASC LIMIT 1) AS text,
+        c.title AS title,
+        (SELECT a.type FROM card_messages cm INNER JOIN attachments a ON a.message_id = cm.message_id WHERE cm.card_id = r.card_id ORDER BY cm.position ASC, a.created_at ASC LIMIT 1) AS attachmentType
+      FROM card_reminders r
+      LEFT JOIN cards c ON c.id = r.card_id
+      LEFT JOIN boards b ON b.id = c.board_id`),
+    deleteMany: async (cardIds: string[]) => {
+      if (!cardIds.length) return;
+      await database.runAsync(`DELETE FROM card_reminders WHERE card_id IN (${cardIds.map(() => '?').join(', ')})`, ...cardIds);
     },
   };
 }

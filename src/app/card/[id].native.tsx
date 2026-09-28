@@ -20,6 +20,11 @@ import { radii, spacing, type ThemeTokens } from '@/constants/theme';
 import { createBoardRepository } from '@/db/repositories';
 import { persistCardAttachment, removeCardAttachmentFile } from '@/services/card-attachment-storage';
 import { exportActionLabel, shareAttachment } from '@/services/attachment-export';
+import { detachConfirmationMessage } from '@/services/detach-card';
+import { ReminderSheet } from '@/components/reminders/reminder-sheet';
+import { createReminderRepository, type CardReminder } from '@/db/repositories';
+import { hasNotificationPermission, removeCardReminder, requestReminderSync, setCardReminder, subscribeToReminderChanges } from '@/services/reminders';
+import { formatReminder } from '@/services/reminder-time';
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
 import type { CardAttachment, Message } from '@/db/types';
 
@@ -72,6 +77,15 @@ export default function CardDetailScreen() {
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const showAttachmentLoader = useChitsLoading(attachmentBusy);
   const [toast, setToast] = useState<string | null>(null);
+  // The card's upcoming reminder (a fired one is never shown as upcoming), and
+  // whether the device would actually deliver it.
+  const reminderRepository = useMemo(() => createReminderRepository(database), [database]);
+  const [reminder, setReminder] = useState<CardReminder | null>(null);
+  const [notificationsAllowed, setNotificationsAllowed] = useState(true);
+  const [reminderSheetOpen, setReminderSheetOpen] = useState(false);
+  // Bumped on every open so the sheet remounts with the current reminder.
+  const [reminderSheetKey, setReminderSheetKey] = useState(0);
+  const openReminderSheet = () => { setReminderSheetKey((key) => key + 1); setReminderSheetOpen(true); };
   const download = useAttachmentExport();
   // Session-only peek at hidden content, mirroring Chat's temporary reveal — the
   // stored hidden flag only changes through the Hide/Show content action.
@@ -101,6 +115,32 @@ export default function CardDetailScreen() {
   }, [id, repository]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
+
+  const loadReminder = useCallback(async () => {
+    if (!id) return;
+    const [row, allowed] = await Promise.all([reminderRepository.get(id), hasNotificationPermission().catch(() => false)]);
+    setReminder(row && row.scheduledAt > Date.now() ? row : null);
+    setNotificationsAllowed(allowed);
+  }, [id, reminderRepository]);
+  // Reload whenever a reminder changes anywhere (set, removed, fired, reconciled),
+  // and reconcile on focus so edits made elsewhere refresh the notification text.
+  useEffect(() => subscribeToReminderChanges(() => void loadReminder()), [loadReminder]);
+  useFocusEffect(useCallback(() => { void loadReminder(); void requestReminderSync(); }, [loadReminder]));
+
+  const saveReminder = async (date: Date) => {
+    const result = await setCardReminder(database, id, date.getTime());
+    if (result.ok) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setToast(`Reminder set for ${formatReminder(date, new Date())}`);
+      await loadReminder();
+    }
+    return result;
+  };
+  const deleteReminder = async () => {
+    await removeCardReminder(database, id);
+    setToast('Reminder removed');
+    await loadReminder();
+  };
 
   const startTitleEdit = () => {
     setTitleDraft(detail?.explicitTitle ?? '');
@@ -301,32 +341,23 @@ export default function CardDetailScreen() {
     return isSameDay(timestamp, renderedAt) ? `Today · ${time}` : `${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(timestamp)} · ${time}`;
   };
 
-  // Non-destructive: the original Chat message(s) already exist independently
-  // of the card and are never touched by this — see repository.detachCard,
-  // which is the same DB operation as deleteCard minus the "destructive"
-  // framing, since card_messages is only the join relationship, never the
-  // messages themselves. Confirmation is skipped for the trivial case (one
-  // source message, nothing card-only to lose) per PHASE: DETACH CARD FROM
-  // BOARD / RETURN TO UNORGANIZED — anything beyond that (a merged card, or
-  // card-only comments/attachments) is spelled out before it happens.
+  // Non-destructive for the Chits themselves: the original Chat message(s)
+  // exist independently of the card and are never touched — see
+  // repository.detachCard (card_messages is only the join relationship). It
+  // always asks first; merged cards and card-only comments/attachments, which
+  // are removed, are spelled out in the confirmation.
   const moveBackToUnorganized = () => {
-    const extras: string[] = [];
-    if (comments.length) extras.push(`${comments.length} comment${comments.length === 1 ? '' : 's'}`);
-    if (cardAttachments.length) extras.push(`${cardAttachments.length} attachment${cardAttachments.length === 1 ? '' : 's'}`);
-    const messageParts: string[] = [];
-    if (messages.length > 1) messageParts.push(`${messages.length} Chits will be returned to Unorganized.`);
-    if (extras.length) messageParts.push(`This card has additional details that belong to the card. Moving it back will remove:\n${extras.map((extra) => `• ${extra}`).join('\n')}`);
     const run = async () => {
       const removableUris = await repository.detachCard(id);
       await Promise.all(removableUris.map((uri) => removeCardAttachmentFile(uri)));
+      void requestReminderSync();
       router.back();
     };
-    if (!messageParts.length) { void run(); return; }
     confirm({
       type: 'default',
       icon: 'arrow-undo-outline',
       title: 'Move this card back to Unorganized?',
-      message: messageParts.join('\n\n'),
+      message: detachConfirmationMessage({ boardName: detail?.boardName ?? null, messageCount: messages.length, commentCount: comments.length, attachmentCount: cardAttachments.length }),
       confirmText: 'Move',
       accentColor: detail?.boardAccent ?? null,
       onConfirm: run,
@@ -341,6 +372,8 @@ export default function CardDetailScreen() {
       setTemporarilyRevealed(false);
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setToast(hidden ? 'Content hidden' : 'Content visible');
+      // A hidden card's reminder must stop showing its words on the lock screen.
+      void requestReminderSync();
     } catch {
       setNotice('Chits could not change this card’s visibility.');
     }
@@ -353,7 +386,7 @@ export default function CardDetailScreen() {
     message: 'You can restore it later from Archive. Your original messages remain in Chat.',
     confirmText: 'Archive card',
     accentColor: detail?.boardAccent ?? null,
-    onConfirm: async () => { await repository.archiveCard(id); router.back(); },
+    onConfirm: async () => { await repository.archiveCard(id); void requestReminderSync(); router.back(); },
   });
 
   const destroy = () => confirm({
@@ -365,6 +398,8 @@ export default function CardDetailScreen() {
     onConfirm: async () => {
       const removableUris = await repository.deleteCard(id);
       await Promise.all(removableUris.map((uri) => removeCardAttachmentFile(uri)));
+      // The reminder row went with the card; cancel its scheduled notification too.
+      void requestReminderSync();
       router.back();
     },
   });
@@ -431,7 +466,7 @@ export default function CardDetailScreen() {
           <Text accessibilityRole="header" style={styles.sectionTitle}>CONTENT</Text>
           <View style={styles.contentHeaderActions}>
             {contentHidden && !covered ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" hitSlop={8} onPress={() => setTemporarilyRevealed(false)} style={styles.inlineEdit}><Ionicons accessible={false} name="eye-off-outline" size={16} color={theme.textMuted} /><Text style={[styles.inlineEditText, { color: theme.textMuted }]}>Hide again</Text></Pressable> : null}
-            {singleThoughtEditable ? <Pressable accessibilityRole="button" accessibilityLabel="Edit content" hitSlop={8} onPress={() => openContentEditor(messages[0])}><Text style={styles.inlineEditText}>Edit</Text></Pressable>
+            {singleThoughtEditable ? <Pressable accessibilityRole="button" accessibilityLabel="Edit content" hitSlop={8} onPress={() => openContentEditor(messages[0])}><Text style={[styles.inlineEditText, { color: contentAccentStrong }]}>Edit</Text></Pressable>
               : messages.length > 1 ? <View style={styles.countBadge}><Text style={styles.countText}>{messages.length}</Text></View> : null}
           </View>
         </View>
@@ -444,13 +479,30 @@ export default function CardDetailScreen() {
           </Pressable> : messages.map((message, index) => <View key={message.id} style={index > 0 && styles.thought}>
             {messages.length > 1 ? <View style={styles.thoughtHeader}>
               <Text style={styles.thoughtLabel}>THOUGHT {index + 1}</Text>
-              {message.text ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit thought ${index + 1}`} hitSlop={8} onPress={() => openContentEditor(message)} style={styles.inlineEdit}><Ionicons accessible={false} name="create-outline" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Edit</Text></Pressable> : null}
+              {message.text ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit thought ${index + 1}`} hitSlop={8} onPress={() => openContentEditor(message)} style={styles.inlineEdit}><Ionicons accessible={false} name="create-outline" size={16} color={contentAccentStrong} /><Text style={[styles.inlineEditText, { color: contentAccentStrong }]}>Edit</Text></Pressable> : null}
             </View> : null}
             <MessageContentRenderer message={message} mode="detail" accentColor={detail.boardAccent ?? undefined} renderAttachments={() => <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} /></View>)}</View>} />
-            {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={`Add a description to ${messageFallback(message)}`} onPress={() => openContentEditor(message)} style={styles.addDescription}><Ionicons accessible={false} name="add" size={16} color={theme.accent} /><Text style={styles.inlineEditText}>Add description</Text></Pressable> : null}
+            {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={`Add a description to ${messageFallback(message)}`} onPress={() => openContentEditor(message)} style={styles.addDescription}><Ionicons accessible={false} name="add" size={16} color={contentAccentStrong} /><Text style={[styles.inlineEditText, { color: contentAccentStrong }]}>Add description</Text></Pressable> : null}
             {index < messages.length - 1 ? <View style={styles.contentThoughtDivider} /> : null}
           </View>)}
         </View>
+
+        {/* One quiet row: "Remind me", or the reminder's time once set. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={reminder ? `Reminder, ${formatReminder(new Date(reminder.scheduledAt), new Date())}${notificationsAllowed ? '' : '. Notifications are off'}. Change or remove` : 'Remind me. Get notified about this card'}
+          onPress={openReminderSheet}
+          style={({ pressed }) => [styles.reminderRow, pressed && styles.pressed]}
+        >
+          <View style={[styles.reminderIcon, { backgroundColor: theme.surfaceElevated }]}>
+            <Ionicons accessible={false} name={reminder ? 'notifications' : 'notifications-outline'} size={17} color={reminder ? contentAccentStrong : theme.textSecondary} />
+          </View>
+          <View style={styles.flexCopy}>
+            <Text style={styles.actionTitle}>{reminder ? formatReminder(new Date(reminder.scheduledAt), new Date()) : 'Remind me'}</Text>
+            <Text style={[styles.actionCopy, reminder && !notificationsAllowed && { color: theme.danger }]}>{reminder ? (notificationsAllowed ? 'Reminder' : 'Notifications are off — tap to fix') : 'Get notified about this card'}</Text>
+          </View>
+          <Ionicons accessible={false} name="chevron-forward" size={16} color={theme.textMuted} />
+        </Pressable>
 
         <View style={styles.sectionHeader}><Text accessibilityRole="header" style={styles.sectionTitle}>DETAILS</Text></View>
         <View style={styles.detailsCard}>
@@ -543,7 +595,7 @@ export default function CardDetailScreen() {
       <View style={[styles.stickyComposer, { paddingBottom: insets.bottom + spacing.xs, backgroundColor: theme.background, borderTopColor: theme.borderSubtle }]}>
         {editingCommentId ? <View style={styles.composerEditBar}>
           <Pressable accessibilityRole="button" accessibilityLabel="Cancel edit" hitSlop={8} onPress={cancelCommentEdit} style={styles.composerEditCancel}><Ionicons accessible={false} name="close" size={16} color={theme.textMuted} /><Text style={styles.composerEditCancelText}>Cancel</Text></Pressable>
-          <Text style={styles.composerEditLabel}>Editing comment</Text>
+          <Text style={[styles.composerEditLabel, { color: contentAccentStrong }]}>Editing comment</Text>
         </View> : null}
         <View style={styles.stickyComposerRow}>
           <TextInput
@@ -562,15 +614,16 @@ export default function CardDetailScreen() {
             accessibilityState={{ disabled: !(editingCommentId ? commentEditDraft : commentDraft).trim() || savingComment }}
             disabled={!(editingCommentId ? commentEditDraft : commentDraft).trim() || savingComment}
             onPress={() => void (editingCommentId ? saveCommentEdit() : sendComment())}
-            style={({ pressed }) => [styles.commentSend, { backgroundColor: (editingCommentId ? commentEditDraft : commentDraft).trim() ? theme.accent : theme.surfaceElevated }, pressed && Boolean((editingCommentId ? commentEditDraft : commentDraft).trim()) && styles.pressed]}
+            style={({ pressed }) => [styles.commentSend, { backgroundColor: (editingCommentId ? commentEditDraft : commentDraft).trim() ? contentAccentSolid : theme.surfaceElevated }, pressed && Boolean((editingCommentId ? commentEditDraft : commentDraft).trim()) && styles.pressed]}
           >
-            <Ionicons accessible={false} name={editingCommentId ? 'checkmark' : 'arrow-up'} size={18} color={(editingCommentId ? commentEditDraft : commentDraft).trim() ? theme.accentText : theme.textMuted} />
+            <Ionicons accessible={false} name={editingCommentId ? 'checkmark' : 'arrow-up'} size={18} color={(editingCommentId ? commentEditDraft : commentDraft).trim() ? contentAccentOn : theme.textMuted} />
           </Pressable>
         </View>
       </View>
     </KeyboardAvoidingView>
     <AddCardAttachmentSheet visible={addAttachmentOpen} onClose={() => setAddAttachmentOpen(false)} onPick={(kind) => void pickCardAttachment(kind)} />
     <Toast message={toast ?? download.status} />
+    <ReminderSheet key={reminderSheetKey} visible={reminderSheetOpen} existing={reminder?.scheduledAt ?? null} accent={contentAccentSolid} accentOn={contentAccentOn} onClose={() => setReminderSheetOpen(false)} onSave={saveReminder} onRemove={deleteReminder} />
   </Screen>;
 }
 
@@ -649,6 +702,8 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   // One compact card, two groups: Board/Column (what it belongs to — more
   // important) separated from Created/Edited (metadata) by a single divider
   // rather than a border under every row, which reads as a settings list.
+  reminderRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xl, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 14, backgroundColor: tokens.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: tokens.borderSubtle },
+  reminderIcon: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 17 },
   detailsCard: { marginTop: spacing.sm, borderRadius: 14, backgroundColor: tokens.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: tokens.borderSubtle, paddingHorizontal: spacing.md },
   detailGroup: { paddingVertical: spacing.xxs },
   detailDivider: { height: StyleSheet.hairlineWidth, backgroundColor: tokens.borderSubtle },

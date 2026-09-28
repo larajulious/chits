@@ -14,19 +14,17 @@ function sourceFiles(directory) {
   });
 }
 
-test('active app has no retired route, UI, service, or package', () => {
-  const appFiles = sourceFiles('src').filter((path) => path !== 'src/db/migrations.ts');
-  const activeSource = appFiles.map(read).join('\n');
-  const packageJson = JSON.parse(read('package.json'));
-  const appJson = JSON.parse(read('app.json'));
-
-  assert.doesNotMatch(activeSource, /\breminders?\b|remind me|remind later|\bhasReminder\b/i);
-  assert.equal(packageJson.dependencies['expo-notifications'], undefined);
-  assert.equal(packageJson.dependencies['@react-native-community/datetimepicker'], undefined);
-  assert.equal(appJson.expo.plugins.some((plugin) => plugin === 'expo-notifications'), false);
-  assert.equal(appFiles.some((path) => path.includes('/reminders.') || path.includes('notification-observer') || path.includes('/reminder-')), false);
+test('reminders came back only as card metadata, not the retired task feature', () => {
+  const appFiles = sourceFiles('src');
+  // No standalone Reminders screen/route or drawer entry, and no scheduling UI beyond the card sheet.
+  assert.equal(appFiles.some((path) => /src\/app\/.*reminders?\./.test(path)), false);
   assert.doesNotMatch(read('src/app/_layout.tsx'), /name=["']reminders["']/i);
   assert.doesNotMatch(read('src/components/navigation/app-drawer.native.tsx'), /['"]\/reminders['"]/i);
+  assert.equal(JSON.parse(read('package.json')).dependencies['@react-native-community/datetimepicker'], undefined);
+  // One reminder per card, removed with the card.
+  const migrations = read('src/db/migrations.ts');
+  assert.match(migrations, /CREATE TABLE IF NOT EXISTS card_reminders \(card_id TEXT PRIMARY KEY NOT NULL,[^;]*ON DELETE CASCADE\)/);
+  assert.doesNotMatch(migrations, /card_reminders[^;]*(priority|repeat|recurr|completed)/i);
 });
 
 test('retirement migration removes only deprecated scheduling data', () => {

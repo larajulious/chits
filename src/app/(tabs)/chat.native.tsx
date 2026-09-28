@@ -7,6 +7,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { canMergeTimelineRefresh } from '@/services/timeline-refresh';
+import { requestReminderSync } from '@/services/reminders';
 import { AccessibilityInfo, ActivityIndicator, AppState, BackHandler, FlatList, Keyboard, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 
@@ -734,6 +735,7 @@ export default function ChatScreen() {
   const hideContent = useCallback((message: Message) => {
     void runAction(async () => {
       await repository.setHiddenContent(message.id, true);
+      void requestReminderSync();
       animatePrivacyTransition();
       updateMessagePrivacy(message.id, true);
       setTemporarilyRevealedIds((current) => { const next = new Set(current); next.delete(message.id); return next; });
@@ -744,6 +746,7 @@ export default function ChatScreen() {
   const showContent = useCallback((message: Message) => {
     void runAction(async () => {
       await repository.setHiddenContent(message.id, false);
+      void requestReminderSync();
       animatePrivacyTransition();
       updateMessagePrivacy(message.id, false);
       setTemporarilyRevealedIds((current) => { const next = new Set(current); next.delete(message.id); return next; });
@@ -761,7 +764,7 @@ export default function ChatScreen() {
     void Clipboard.setStringAsync(text).then(() => { void Haptics.selectionAsync(); setToast('Copied to clipboard'); }).catch(() => setError('Couldn’t copy. Try again.'));
   };
   const togglePin = (message: Message) => { const pinned = !message.pinned; void runAction(async () => { await repository.setPinned(message.id, pinned); setFeed((current) => current.map((item) => item.kind === 'message' && item.message.id === message.id ? { ...item, message: { ...item.message, pinned } } : item)); await refreshPinned(); void Haptics.selectionAsync(); }, message); };
-  const archive = () => { if (!selected) return; const message = selected; void runAction(async () => { await repository.archive(message.id); setFeed((current) => current.filter((item) => item.kind !== 'message' || item.message.id !== message.id)); await refreshPinned(); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }, message); };
+  const archive = () => { if (!selected) return; const message = selected; void runAction(async () => { await repository.archive(message.id); void requestReminderSync(); setFeed((current) => current.filter((item) => item.kind !== 'message' || item.message.id !== message.id)); await refreshPinned(); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }, message); };
   // Already organized: jump straight to where it lives instead of routing back
   // through "add to board" (which would just re-organize the same thought).
   const addToBoard = () => { if (!selected) return; const message = selected; setSelected(null); if (message.organization) { router.push(`/board/${message.organization.boardId}?highlightColumnId=${message.organization.columnId}`); return; } router.push(`/unorganized?messageId=${message.id}`); };
@@ -778,6 +781,7 @@ export default function ChatScreen() {
       confirmText: 'Delete thought',
       onConfirm: () => runAction(async () => {
         const removableUris = await repository.deletePermanently(message.id);
+        void requestReminderSync();
         setFeed((current) => current.filter((item) => item.kind !== 'message' || item.message.id !== message.id));
         await refreshPinned();
         await Promise.all(removableUris.map((storagePath) => deleteAttachment(storagePath)));

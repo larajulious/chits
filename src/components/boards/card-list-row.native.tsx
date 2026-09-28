@@ -6,6 +6,7 @@ import { AttachmentContent } from '@/components/chat/message-row';
 import { useTheme } from '@/components/theme-provider';
 import { radii, spacing } from '@/constants/theme';
 import { tintWithAccent } from '@/constants/board-appearance';
+import { formatReminder } from '@/services/reminder-time';
 import type { AttachmentLike, CardListItem } from '@/db/types';
 
 function formatCardDate(timestamp: number) {
@@ -132,7 +133,8 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
   const location = item.boardName ?? 'Unorganized';
   const mediaPhrase = mediaAccessibilityPhrase(item);
   const overflowPhrase = overflowCount > 0 ? `${overflowCount} more attachment${overflowCount === 1 ? '' : 's'}.` : '';
-  const accessibleLabel = `${item.hidden ? 'Hidden note' : `Note. ${accessibleTitle(item)}`}. ${mediaPhrase ? `${mediaPhrase} ` : ''}${overflowPhrase ? `${overflowPhrase} ` : ''}${item.pinned ? 'Pinned. ' : ''}${item.boardName ?? 'Unorganized'}${item.columnName ? `, ${item.columnName}` : ''}.`;
+  const reminderLabel = item.reminderAt ? formatReminder(new Date(item.reminderAt), new Date()) : null;
+  const accessibleLabel = `${item.hidden ? 'Hidden note' : `Note. ${accessibleTitle(item)}`}. ${mediaPhrase ? `${mediaPhrase} ` : ''}${overflowPhrase ? `${overflowPhrase} ` : ''}${item.pinned ? 'Pinned. ' : ''}${reminderLabel ? `Reminder ${reminderLabel}. ` : ''}${item.boardName ?? 'Unorganized'}${item.columnName ? `, ${item.columnName}` : ''}.`;
 
   return (
     <Pressable
@@ -186,6 +188,13 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
           <Text style={[styles.audioText, { color: theme.accentStrong }]}>Voice note{audio.duration ? ` · ${formatDurationSeconds(audio.duration)}` : ''}</Text>
         </View>
       ) : null}
+      {/* Secondary metadata, not a due date: a small muted bell and time. */}
+      {reminderLabel ? (
+        <View style={styles.reminderLine}>
+          <Ionicons accessible={false} name="notifications-outline" size={12} color={theme.textMuted} />
+          <Text numberOfLines={1} style={[styles.reminderText, { color: theme.textMuted }]}>{reminderLabel}</Text>
+        </View>
+      ) : null}
       </View>
 
       <View style={styles.footer}>
@@ -232,6 +241,8 @@ const styles = StyleSheet.create({
   fileMeta: { marginTop: 1, fontSize: 12, lineHeight: 16 },
   audioPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 28, marginTop: 10, paddingHorizontal: 10, borderRadius: radii.pill },
   audioText: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  reminderLine: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 },
+  reminderText: { flexShrink: 1, fontSize: 11.5, fontWeight: '600', fontVariant: ['tabular-nums'] },
   footer: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 12 },
   footerLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 5 },
   footerMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },

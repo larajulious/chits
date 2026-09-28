@@ -4,6 +4,8 @@ import { normalizeStoredAttachmentPath } from '@/services/attachment-path';
 
 type Migration = { version: number; up: (database: SQLiteDatabase) => Promise<void> };
 
+export const CARD_REMINDERS_SCHEMA = 'CREATE TABLE IF NOT EXISTS card_reminders (card_id TEXT PRIMARY KEY NOT NULL, scheduled_at INTEGER NOT NULL, notification_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS idx_card_reminders_scheduled ON card_reminders(scheduled_at);';
+
 export const RETIRED_SCHEDULING_DATA_MIGRATION = "DROP TABLE IF EXISTS reminders; DELETE FROM app_settings WHERE key = 'reminder_default_minutes';";
 
 const migrations: Migration[] = [{
@@ -164,6 +166,15 @@ const migrations: Migration[] = [{
       ALTER TABLE card_attachments_relative RENAME TO card_attachments;
       CREATE INDEX idx_card_attachments_card ON card_attachments(card_id, created_at ASC);
     `);
+  },
+}, {
+  version: 20,
+  up: async (database) => {
+    // One reminder per card (card_id is the key). It is metadata on the card,
+    // not a task: it cascades away with the card, and a fired reminder's row is
+    // removed by the reminder sync. notification_id is the local notification
+    // scheduled on this device (NULL until scheduled, e.g. right after a restore).
+    await database.execAsync(CARD_REMINDERS_SCHEMA);
   },
 }];
 

@@ -71,6 +71,13 @@
             "enableSceneSupport": true
           }
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#6E63D9"
+        }
       ]
     ],
     "experiments": {
