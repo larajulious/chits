@@ -1,22 +1,15 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
 import { AppState, Modal } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { attachmentExists, deleteAttachment } from '@/services/attachment-storage';
 import { readChatBackground, removeChatBackground, writeChatBackground } from '@/db/chat-background';
-import { attachmentBackgroundImage, subscribeToChatBackgroundChanges, type ChatBackground, type ChatBackgroundImage } from '@/services/chat-background';
+import { subscribeToChatBackgroundChanges, type ChatBackground, type ChatBackgroundImage } from '@/services/chat-background';
 import type { AttachmentLike } from '@/db/types';
 import { dismissKeyboardAsync } from '@/services/keyboard';
+import { ChatBackgroundContext } from './chat-background-context';
 import { ChatBackgroundPreview } from './chat-background-preview';
 
-type Context = {
-  background: ChatBackground | null;
-  applyBackground: (value: ChatBackground) => Promise<void>;
-  removeBackground: () => Promise<void>;
-  openBackgroundPreview: (image: ChatBackgroundImage, onApplied?: () => void) => void;
-  isCurrentBackground: (image: Pick<AttachmentLike, 'storagePath'>) => boolean;
-};
-const BackgroundContext = createContext<Context | null>(null);
 export function ChatBackgroundProvider({ children }: PropsWithChildren) {
   const database = useSQLiteContext();
   const [background, setBackground] = useState<ChatBackground | null>(null);
@@ -53,11 +46,9 @@ export function ChatBackgroundProvider({ children }: PropsWithChildren) {
   }, [database]);
   const openBackgroundPreview = useCallback((image: ChatBackgroundImage, onApplied?: () => void) => { void dismissKeyboardAsync().then(() => setPreview({ image, onApplied })); }, []);
   const value = useMemo(() => ({ background, applyBackground, removeBackground, openBackgroundPreview, isCurrentBackground: (image: Pick<AttachmentLike, 'storagePath'>) => background?.storagePath === image.storagePath }), [background, applyBackground, removeBackground, openBackgroundPreview]);
-  return <BackgroundContext.Provider value={value}>{children}
+  return <ChatBackgroundContext.Provider value={value}>{children}
     <Modal visible={preview !== null} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setPreview(null)}>
       <SafeAreaProvider>{preview ? <ChatBackgroundPreview image={preview.image} onCancel={() => setPreview(null)} onApplied={() => { setPreview(null); preview.onApplied?.(); }} /> : null}</SafeAreaProvider>
     </Modal>
-  </BackgroundContext.Provider>;
+  </ChatBackgroundContext.Provider>;
 }
-export function useChatBackground() { const context = useContext(BackgroundContext); if (!context) throw new Error('ChatBackgroundProvider is missing.'); return context; }
-export { attachmentBackgroundImage };

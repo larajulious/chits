@@ -4,7 +4,8 @@ import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-
 import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { AppDialogProvider, useAppDialog } from '@/components/dialogs/app-dialog-provider';
-import { useChatBackground, attachmentBackgroundImage } from '@/components/chat/chat-background-provider';
+import { useChatBackground } from '@/components/chat/chat-background-context';
+import { attachmentBackgroundImage } from '@/services/chat-background';
 import { ChatBackgroundPreview } from '@/components/chat/chat-background-preview';
 import { useAttachmentExport } from './use-attachment-export';
 import { useAttachmentDeletion } from './use-attachment-deletion';

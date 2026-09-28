@@ -10,7 +10,7 @@ import { ChatComposerSurface } from './chat-composer-surface';
 import { ChatBackgroundLayer } from './background-layer';
 import { BackgroundStyleControls } from './background-style-controls';
 import { BackgroundReadabilityProvider } from './background-readability';
-import { useChatBackground } from './chat-background-provider';
+import { useChatBackground } from './chat-background-context';
 import { DEFAULT_BACKGROUND_DIM, type ChatBackgroundImage } from '@/services/chat-background';
 import type { Message } from '@/db/types';
 

@@ -22,7 +22,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  UIManager,
   View,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -37,9 +36,6 @@ import { Toast } from '@/components/ui/primitives';
 import { spacing } from '@/constants/theme';
 import { createBoardRepository } from '@/db/repositories';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 // Short, restrained transition — no bounce — reused for both the Pinned header's
 // search/close swap and a row's fade+collapse on unpin.
 const PINNED_TRANSITION = LayoutAnimation.create(180, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity);

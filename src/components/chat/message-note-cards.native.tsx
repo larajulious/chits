@@ -47,24 +47,21 @@ export function MessageMetadata({ message, inside = false, onActions, onHideAgai
   </View>;
 }
 
-export function QuickThoughtBubble({ message, focused, onActions, onHideAgain }: NoteProps) {
+export function QuickThoughtBubble({ message, focused, onActions, onHideAgain, preview = false }: NoteProps & { preview?: boolean }) {
   const { tokens, themeKey } = useTheme();
+  const bubbleStyle = [styles.quickThought, { backgroundColor: themeKey === 'light' ? tokens.accentSoft : tokens.accent, borderColor: focused ? tokens.accentStrong : 'transparent' }, focused && styles.focused];
+  const content = <PlainTextContent text={message.text ?? ''} mode="compact" color={themeKey === 'light' ? tokens.textPrimary : tokens.accentText} />;
   return <>
-    <Pressable
+    {preview ? <View style={bubbleStyle}>{content}</View> : <Pressable
       accessibilityRole="button"
       accessibilityLabel={messageLabel(message)}
       delayLongPress={350}
       onLongPress={onActions}
-      style={({ pressed }) => [
-        styles.quickThought,
-        { backgroundColor: themeKey === 'light' ? tokens.accentSoft : tokens.accent, borderColor: focused ? tokens.accentStrong : 'transparent' },
-        focused && styles.focused,
-        pressed && styles.pressed,
-      ]}
+      style={({ pressed }) => [bubbleStyle, pressed && styles.pressed]}
     >
-      <PlainTextContent text={message.text ?? ''} mode="compact" color={themeKey === 'light' ? tokens.textPrimary : tokens.accentText} />
-    </Pressable>
-    <MessageMetadata message={message} onActions={onActions} onHideAgain={onHideAgain} />
+      {content}
+    </Pressable>}
+    {!preview ? <MessageMetadata message={message} onActions={onActions} onHideAgain={onHideAgain} /> : null}
   </>;
 }
 

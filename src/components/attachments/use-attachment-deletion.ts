@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
-import { useChatBackground } from '@/components/chat/chat-background-provider';
+import { useChatBackground } from '@/components/chat/chat-background-context';
 import { createAttachmentRepository } from '@/db/repositories';
 import { deleteAttachment } from '@/services/attachment-storage';
 import type { AttachmentLike } from '@/db/types';

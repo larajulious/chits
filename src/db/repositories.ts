@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { clearChatBackgroundForPaths, unreferencedAttachmentPaths } from './chat-background';
 import { notifyChatBackgroundChanged } from '../services/chat-background';
 import { notifyAttachmentsChanged } from '../services/attachment-changes';
-import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type AttachmentFilterType, type AttachmentPage, type AttachmentPageOptions, type AttachmentSummary, type Board, type Message, type MessageType, type PageOptions, type TimelineEvent, type TimelineEventType, type TimelineItem, type TimelinePage, type TimelinePageOptions } from './types';
+import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type AttachmentFilterType, type AttachmentLike, type AttachmentPage, type AttachmentPageOptions, type AttachmentSummary, type Board, type Message, type MessageType, type PageOptions, type TimelineEvent, type TimelineEventType, type TimelineItem, type TimelinePage, type TimelinePageOptions } from './types';
 
 const DEFAULT_PAGE_SIZE = 50;
 type MessageRow = { id: string; text: string | null; type: Message['type']; created_at: number; updated_at: number; archived_at: number | null; pinned: number; is_hidden_content: number; deleted_at: number | null };
@@ -28,6 +28,27 @@ const attachmentCardTitle = (message: { text: string | null; type: MessageType |
 const SQL_NOW_MS = "CAST(strftime('%s', 'now') AS INTEGER) * 1000";
 const UPCOMING_REMINDER_SQL = `(SELECT r.scheduled_at FROM card_reminders r WHERE r.card_id = c.id AND r.scheduled_at > ${SQL_NOW_MS})`;
 const CARD_TITLE_SQL = `COALESCE(NULLIF(TRIM(c.title), ''), (SELECT COALESCE(NULLIF(TRIM(m.text), ''), CASE WHEN a.type = 'file' THEN COALESCE(NULLIF(TRIM(a.original_name), ''), 'Attachment') WHEN a.type = 'photo' THEN 'Photo' WHEN a.type = 'video' THEN 'Video' WHEN a.type = 'audio' THEN 'Audio note' ELSE 'Attachment' END) FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id LEFT JOIN attachments a ON a.message_id = m.id WHERE cm.card_id = c.id ORDER BY cm.position ASC, a.created_at ASC LIMIT 1), 'Attachment')`;
+// A card's total attachment count, across BOTH sources Card Details renders: the
+// attachments on its linked Chat messages AND its own directly-attached
+// card_attachments. The one definition every surface that shows a card's
+// attachment count (Board card, Chat "+N" badge, Card Details) reads from, so
+// they can never disagree; CARD_ATTACHMENT_ITEMS_SQL below is the matching rows.
+const CARD_ATTACHMENT_COUNT_SQL = `((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id)
+        + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.deleted_at IS NULL))`;
+// The rows behind CARD_ATTACHMENT_COUNT_SQL, as AttachmentLike + `cardId`, sortable
+// into Card Details' own order with CARD_ATTACHMENT_ORDER_SQL: each linked
+// thought's attachments (by thought position), then the card's directly-attached ones.
+const CARD_ATTACHMENT_ITEMS_SQL = `
+  SELECT cm.card_id AS cardId, a.id, a.type, a.storage_path AS storagePath, a.original_name AS originalName, a.mime_type AS mimeType, a.size, a.duration, a.width, a.height, a.created_at AS createdAt, 0 AS sourceOrder, cm.position AS position
+  FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id
+  UNION ALL
+  SELECT ca.card_id, ca.id, ca.type, ca.storage_path, ca.original_name, ca.mime_type, ca.size, ca.duration, ca.width, ca.height, ca.created_at, 1, 0
+  FROM card_attachments ca WHERE ca.deleted_at IS NULL`;
+const CARD_ATTACHMENT_ORDER_SQL = 'sourceOrder ASC, position ASC, createdAt ASC';
+const CARD_ATTACHMENT_COLUMNS_SQL = 'id, type, storagePath, originalName, mimeType, size, duration, width, height, createdAt';
+// How many of a card's attachments Chat loads up front for its mosaic (at most 3
+// tiles besides the thought's own, which may itself be among these).
+const CHAT_CARD_ATTACHMENT_PREVIEW_LIMIT = 4;
 // Everything a board card needs to render at stable dimensions — title, preview,
 // counts, and media dimensions/reference — resolved in SQL so no per-card follow-up
 // query is ever needed. Shared by the per-column and whole-board summary queries.
@@ -36,7 +57,7 @@ const CARD_TITLE_SQL = `COALESCE(NULLIF(TRIM(c.title), ''), (SELECT COALESCE(NUL
 type CardSummaryRow = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; reminderAt: number | null; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaPath: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null; isHidden: number };
 const CARD_SUMMARY_SELECT_SQL = `SELECT c.id, c.column_id AS columnId, ${CARD_TITLE_SQL} AS title, c.position,
       (SELECT m.text FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id ORDER BY cm.position ASC LIMIT 1) AS preview,
-      (SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id) AS attachmentCount,
+      ${CARD_ATTACHMENT_COUNT_SQL} AS attachmentCount,
       (SELECT COUNT(*) FROM card_messages cm WHERE cm.card_id = c.id) AS messageCount,
       ${UPCOMING_REMINDER_SQL} AS reminderAt,
       EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id AND m.is_hidden_content = 1) AS isHidden,
@@ -154,12 +175,25 @@ export function createMessageRepository(database: SQLiteDatabase) {
     if (!messages.length) return messages;
     const ids = messages.map(({ id }) => id);
     const attachmentRows = await database.getAllAsync<AttachmentRow>(`SELECT * FROM attachments WHERE message_id IN (${ids.map(() => '?').join(', ')}) ORDER BY created_at ASC`, ...ids);
-    const organizationRows = await database.getAllAsync<{ messageId: string; boardId: string; boardName: string; columnId: string; columnName: string; cardId: string; reminderAt: number | null }>(`SELECT cm.message_id AS messageId, c.board_id AS boardId, b.name AS boardName, bc.id AS columnId, bc.name AS columnName, c.id AS cardId, ${UPCOMING_REMINDER_SQL} AS reminderAt FROM card_messages cm INNER JOIN cards c ON c.id = cm.card_id INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id WHERE cm.message_id IN (${ids.map(() => '?').join(', ')}) AND c.archived_at IS NULL AND b.archived_at IS NULL ORDER BY c.created_at ASC`, ...ids);
+    const organizationRows = await database.getAllAsync<{ messageId: string; boardId: string; boardName: string; columnId: string; columnName: string; cardId: string; reminderAt: number | null; attachmentCount: number }>(`SELECT cm.message_id AS messageId, c.board_id AS boardId, b.name AS boardName, bc.id AS columnId, bc.name AS columnName, c.id AS cardId, ${UPCOMING_REMINDER_SQL} AS reminderAt, ${CARD_ATTACHMENT_COUNT_SQL} AS attachmentCount FROM card_messages cm INNER JOIN cards c ON c.id = cm.card_id INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id WHERE cm.message_id IN (${ids.map(() => '?').join(', ')}) AND c.archived_at IS NULL AND b.archived_at IS NULL ORDER BY c.created_at ASC`, ...ids);
     const grouped = new Map<string, Attachment[]>();
     const organizationByMessage = new Map<string, (typeof organizationRows)[number]>();
     for (const organization of organizationRows) if (!organizationByMessage.has(organization.messageId)) organizationByMessage.set(organization.messageId, organization);
     for (const row of attachmentRows) grouped.set(row.message_id, [...(grouped.get(row.message_id) ?? []), attachmentFromRow(row)]);
-    return messages.map((message) => ({ ...message, attachments: grouped.get(message.id) ?? [], organization: organizationByMessage.get(message.id) ?? null }));
+    // The first few attachments of every card on this page, in one query, for
+    // Chat's attachment mosaic — only for cards that have more than one.
+    const mosaicCardIds = [...new Set([...organizationByMessage.values()].filter((organization) => organization.attachmentCount > 1).map((organization) => organization.cardId))];
+    const previewRows = mosaicCardIds.length ? await database.getAllAsync<AttachmentLike & { cardId: string }>(`
+      SELECT cardId, ${CARD_ATTACHMENT_COLUMNS_SQL} FROM (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY cardId ORDER BY ${CARD_ATTACHMENT_ORDER_SQL}) AS rn
+        FROM (${CARD_ATTACHMENT_ITEMS_SQL}) WHERE cardId IN (${mosaicCardIds.map(() => '?').join(', ')})
+      ) WHERE rn <= ? ORDER BY cardId, rn`, ...mosaicCardIds, CHAT_CARD_ATTACHMENT_PREVIEW_LIMIT) : [];
+    const previewByCard = new Map<string, AttachmentLike[]>();
+    for (const { cardId, ...item } of previewRows) previewByCard.set(cardId, [...(previewByCard.get(cardId) ?? []), item]);
+    return messages.map((message) => {
+      const organization = organizationByMessage.get(message.id);
+      return { ...message, attachments: grouped.get(message.id) ?? [], organization: organization ? { ...organization, attachmentPreview: previewByCard.get(organization.cardId) ?? [] } : null };
+    });
   };
   return {
     async createAttachmentMessage(input: Omit<Attachment, 'id' | 'messageId' | 'createdAt'>, text: string | null = null): Promise<Message> {
@@ -695,7 +729,7 @@ export function createBoardRepository(database: SQLiteDatabase) {
         await transaction.runAsync('UPDATE boards SET updated_at = ? WHERE id = ?', now, card.board_id);
       });
     },
-    getCardDetail: (cardId: string) => database.getFirstAsync<{ id: string; title: string | null; explicitTitle: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; pinned: number; attachmentCount: number }>(`SELECT c.id, ${CARD_TITLE_SQL} AS title, c.title AS explicitTitle, c.board_id AS boardId, b.name AS boardName, b.accent AS boardAccent, c.column_id AS columnId, bc.name AS columnName, c.created_at AS createdAt, c.pinned, (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id) AS attachmentCount FROM cards c INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id WHERE c.id = ? AND c.archived_at IS NULL`, cardId),
+    getCardDetail: (cardId: string) => database.getFirstAsync<{ id: string; title: string | null; explicitTitle: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; pinned: number; attachmentCount: number }>(`SELECT c.id, ${CARD_TITLE_SQL} AS title, c.title AS explicitTitle, c.board_id AS boardId, b.name AS boardName, b.accent AS boardAccent, c.column_id AS columnId, bc.name AS columnName, c.created_at AS createdAt, c.pinned, ${CARD_ATTACHMENT_COUNT_SQL} AS attachmentCount FROM cards c INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id WHERE c.id = ? AND c.archived_at IS NULL`, cardId),
     async updateCardTitle(cardId: string, title: string | null) {
       const result = await database.runAsync('UPDATE cards SET title = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL', title?.trim() || null, Date.now(), cardId);
       if (result.changes !== 1) throw new Error('That card is no longer available.');
@@ -792,6 +826,10 @@ export function createBoardRepository(database: SQLiteDatabase) {
     // "source" attachment (that stays in `attachments`, owned by messages). Oldest
     // first, matching the stable-chronology ordering used everywhere else cards
     // list their own content (card_messages, card_comments).
+    // Every attachment on a card, in Card Details' own order — used by Chat's
+    // attachment gallery to browse the whole card from any one of its thoughts.
+    listCardAttachmentItems: (cardId: string) => database.getAllAsync<AttachmentLike>(
+      `SELECT ${CARD_ATTACHMENT_COLUMNS_SQL} FROM (${CARD_ATTACHMENT_ITEMS_SQL}) WHERE cardId = ? ORDER BY ${CARD_ATTACHMENT_ORDER_SQL}`, cardId),
     listCardAttachments: (cardId: string) => database.getAllAsync<{ id: string; cardId: string; type: 'photo' | 'video' | 'file'; storagePath: string; originalName: string | null; mimeType: string | null; size: number | null; width: number | null; height: number | null; duration: number | null; createdAt: number; updatedAt: number }>('SELECT id, card_id AS cardId, type, storage_path AS storagePath, original_name AS originalName, mime_type AS mimeType, size, width, height, duration, created_at AS createdAt, updated_at AS updatedAt FROM card_attachments WHERE card_id = ? AND deleted_at IS NULL ORDER BY created_at ASC', cardId),
     async addCardAttachment(cardId: string, details: { type: 'photo' | 'video' | 'file'; storagePath: string; originalName: string | null; mimeType: string | null; size: number | null; width: number | null; height: number | null; duration: number | null }) {
       const now = Date.now(); const id = newId();

@@ -4,7 +4,10 @@ export interface Message {
   id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number;
   archivedAt: number | null; pinned: boolean; isHiddenContent: boolean; deletedAt: number | null; attachments: Attachment[];
   // reminderAt: the upcoming reminder on the card this thought belongs to (null when none).
-  organization?: { boardId: string; boardName: string; columnId: string; columnName: string; cardId?: string; reminderAt?: number | null } | null;
+  // attachmentCount: every attachment on that card (all its thoughts' plus its own) —
+  // the same total the Board card and Card Details show. attachmentPreview: the first
+  // few of those, in Card Details' order, for Chat's attachment mosaic.
+  organization?: { boardId: string; boardName: string; columnId: string; columnName: string; cardId?: string; reminderAt?: number | null; attachmentCount?: number; attachmentPreview?: AttachmentLike[] } | null;
 }
 
 // The fields every attachment-shaped thing has in common, regardless of what it's

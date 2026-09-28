@@ -11,7 +11,8 @@ import * as DocumentPicker from 'expo-document-picker';
 
 import { PhotoAttachmentViewer } from '@/components/attachments/photo-attachment-viewer';
 import { useAttachmentDeletion } from '@/components/attachments/use-attachment-deletion';
-import { useChatBackground, attachmentBackgroundImage } from '@/components/chat/chat-background-provider';
+import { useChatBackground } from '@/components/chat/chat-background-context';
+import { attachmentBackgroundImage } from '@/services/chat-background';
 import { subscribeToAttachmentChanges } from '@/services/attachment-changes';
 import { AttachmentContent } from '@/components/chat/message-row';
 import { MessageContentRenderer } from '@/components/chat/message-note-cards';

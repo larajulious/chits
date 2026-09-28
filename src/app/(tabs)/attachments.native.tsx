@@ -16,7 +16,8 @@ import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-import { useChatBackground, attachmentBackgroundImage } from '@/components/chat/chat-background-provider';
+import { useChatBackground } from '@/components/chat/chat-background-context';
+import { attachmentBackgroundImage, DEFAULT_BACKGROUND_DIM } from '@/services/chat-background';
 import { useAttachmentDeletion } from '@/components/attachments/use-attachment-deletion';
 import { PhotoAttachmentViewer } from '@/components/attachments/photo-attachment-viewer';
 import { subscribeToAttachmentChanges } from '@/services/attachment-changes';
@@ -200,7 +201,7 @@ export default function AttachmentsScreen() {
   const router = useRouter();
   const { chooseBackground } = useLocalSearchParams<{ chooseBackground?: string }>();
   const choosingBackground = chooseBackground === '1';
-  const { openBackgroundPreview, isCurrentBackground } = useChatBackground();
+  const { isCurrentBackground } = useChatBackground();
   const deletion = useAttachmentDeletion();
   const { openDrawer } = useAppDrawer();
   const { tokens: theme } = useTheme();
@@ -295,7 +296,11 @@ export default function AttachmentsScreen() {
     });
   };
 
-  const selectPhoto = (item: AttachmentSummary) => openBackgroundPreview(attachmentBackgroundImage(item), () => { router.setParams({ chooseBackground: undefined }); router.navigate('/chat'); });
+  const returnToAppearance = (chatAppearanceSelection: string) => {
+    router.setParams({ chooseBackground: undefined });
+    router.dismissTo({ pathname: '/settings', params: { chatAppearanceSelection } });
+  };
+  const selectPhoto = (item: AttachmentSummary) => returnToAppearance(JSON.stringify({ ...attachmentBackgroundImage(item), dim: DEFAULT_BACKGROUND_DIM, blur: false }));
   const empty = emptyStateFor(choosingBackground ? 'photo' : filter, Boolean(searchTerm));
 
   return (
@@ -303,7 +308,7 @@ export default function AttachmentsScreen() {
       <AppHeader
         title={choosingBackground ? 'Choose a Background' : 'Attachments'}
         subtitle={ready ? pluralize(totalCount, 'item') : undefined}
-        leading={<IconButton label={choosingBackground ? 'Cancel background selection' : 'Open navigation'} onPress={() => { if (choosingBackground) { router.setParams({ chooseBackground: undefined }); if (router.canGoBack()) router.back(); else router.navigate('/settings'); } else openDrawer(); }}><Ionicons accessible={false} name={choosingBackground ? 'close' : 'reorder-two-outline'} size={24} color={theme.textPrimary} /></IconButton>}
+        leading={<IconButton label={choosingBackground ? 'Cancel background selection' : 'Open navigation'} onPress={() => { if (choosingBackground) returnToAppearance('current'); else openDrawer(); }}><Ionicons accessible={false} name={choosingBackground ? 'close' : 'reorder-two-outline'} size={24} color={theme.textPrimary} /></IconButton>}
       />
       <FlatList
         data={items}

@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
+import { FlatList, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { BlurTargetView, BlurView } from 'expo-blur';
@@ -7,11 +7,13 @@ import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { createVideoPlayer, useVideoPlayer, VideoView, type VideoThumbnail } from 'expo-video';
 import * as Sharing from 'expo-sharing';
 import { getInfoAsync } from 'expo-file-system/legacy';
+import { useSQLiteContext } from 'expo-sqlite';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { radii, spacing } from '@/constants/theme';
 import { useTheme } from '@/components/theme-provider';
 import { MessageContentRenderer, MessageMetadata } from '@/components/chat/message-note-cards';
+import { createBoardRepository } from '@/db/repositories';
 import type { Attachment, AttachmentLike, Message } from '@/db/types';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
 import { subscribeToAppReset } from '@/services/app-reset';
@@ -201,7 +203,9 @@ function AttachmentLoading({ attachment, style }: { attachment: AttachmentLike; 
   return <View accessibilityLabel={`${typeLabel(attachment)} loading`} style={[styles.unavailable, style, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name={icon} size={25} color={theme.textMuted} /></View>;
 }
 
-export function AttachmentContent({ attachment, accessibilityLabel, overlay, variant = 'chat', accentColor, onLongPress }: { attachment: AttachmentLike; accessibilityLabel?: string; overlay?: ReactNode; variant?: 'chat' | 'board' | 'detail' | 'thumbnail' | 'grid'; accentColor?: string; onLongPress?: () => void }) {
+// `onOpen` (photo/video only): a tap hands off to the caller's multi-attachment
+// gallery instead of this attachment's own single-item viewer.
+export function AttachmentContent({ attachment, accessibilityLabel, overlay, variant = 'chat', accentColor, onLongPress, onOpen }: { attachment: AttachmentLike; accessibilityLabel?: string; overlay?: ReactNode; variant?: 'chat' | 'board' | 'detail' | 'thumbnail' | 'grid'; accentColor?: string; onLongPress?: () => void; onOpen?: () => void }) {
   const { tokens: theme } = useTheme();
   const { height: screenHeight } = useWindowDimensions();
   const uri = resolveAttachmentUri(attachment.storagePath) ?? '';
@@ -229,8 +233,9 @@ export function AttachmentContent({ attachment, accessibilityLabel, overlay, var
   const mediaStyle = variant === 'board' ? [styles.media, styles.boardMedia] : variant === 'thumbnail' ? [styles.media, styles.thumbnailMedia] : variant === 'grid' ? [styles.media, styles.gridMedia] : variant === 'detail' ? [styles.media, styles.detailMedia, { aspectRatio }] : [styles.media, styles.chatMedia, { aspectRatio, maxHeight: Math.round(screenHeight * 0.6) }];
   if (available === null) return <AttachmentLoading attachment={attachment} style={mediaStyle} />;
   if (available === false || mediaError) return <Unavailable attachment={attachment} style={mediaStyle} />;
-  if (attachment.type === 'photo') return <><View style={[mediaStyle, { backgroundColor: theme.surfaceElevated }]}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? 'Photo. Double tap to view fullscreen.'} accessibilityHint="Opens the photo fullscreen" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><Image source={uri} contentFit="cover" transition={120} allowDownscaling onError={() => setMediaError(true)} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <PhotoAttachmentViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
-  if (attachment.type === 'video') return <><View style={mediaStyle}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? `Video${attachment.duration ? `, ${durationSeconds(attachment.duration)} seconds` : ''}. Play video.`} accessibilityHint="Opens the video player" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><VideoPoster attachment={attachment} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <VideoViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
+  const galleryHint = 'Opens all attachments on this card';
+  if (attachment.type === 'photo') return <><View style={[mediaStyle, { backgroundColor: theme.surfaceElevated }]}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? 'Photo. Double tap to view fullscreen.'} accessibilityHint={onOpen ? galleryHint : 'Opens the photo fullscreen'} onPress={onOpen ?? (() => setViewerOpen(true))} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><Image source={uri} contentFit="cover" transition={120} allowDownscaling onError={() => setMediaError(true)} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <PhotoAttachmentViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
+  if (attachment.type === 'video') return <><View style={mediaStyle}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? `Video${attachment.duration ? `, ${durationSeconds(attachment.duration)} seconds` : ''}. Play video.`} accessibilityHint={onOpen ? galleryHint : 'Opens the video player'} onPress={onOpen ?? (() => setViewerOpen(true))} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><VideoPoster attachment={attachment} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <VideoViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
   if (attachment.type === 'audio') return <AudioPlayer attachment={attachment} />;
   // PDFs open in Chits' own viewer; every other document keeps the existing
   // system share/open-with flow.
@@ -241,19 +246,40 @@ export function AttachmentContent({ attachment, accessibilityLabel, overlay, var
   return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${typeLabel(attachment)}, ${attachment.originalName ?? 'document'}${attachment.size ? `, ${formatSize(attachment.size)}` : ''}`} onPress={() => void open()} onLongPress={onLongPress} delayLongPress={350} style={styles.fileTile}><View style={[styles.fileIcon, { backgroundColor: theme.surface }]}><Ionicons accessible={false} name={fileIcon(attachment)} size={24} color={accentColor ?? theme.accent} /></View><View style={styles.fileCopy}><Text numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{attachment.originalName ?? 'Document'}</Text><Text style={[styles.attachmentMeta, { color: theme.textMuted }]}>{openError ?? meta}</Text></View><Ionicons accessible={false} name="open-outline" size={18} color={theme.textMuted} />{overlay}</Pressable>;
 }
 
-function MediaMetadata({ message, video = false, onActions, onHideAgain }: { message: Message; video?: boolean; onActions: () => void; onHideAgain?: () => void }) {
-  return <>{message.organization ? <View accessibilityLabel={`Organized in ${message.organization.boardName}, ${message.organization.columnName}`} style={styles.mediaBoardChip}><Text numberOfLines={1} style={styles.mediaBoardChipText}>{message.organization.boardName} · {message.organization.columnName}</Text></View> : null}<View style={[styles.mediaTimestamp, video && styles.mediaTimestampLeft]}><Text style={styles.mediaTimestampText}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? ' · edited' : ''}</Text>{message.pinned ? <Ionicons accessibilityLabel="Pinned" name="pin-outline" size={12} color="#FFFFFF" /> : null}{message.organization?.reminderAt ? <Ionicons accessibilityLabel="Reminder set" name="notifications-outline" size={12} color="#FFFFFF" /> : null}</View>{onHideAgain ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" onPress={onHideAgain} hitSlop={6} style={styles.mediaPrivacy}><Ionicons accessible={false} name="eye-off-outline" size={16} color="#FFFFFF" /></Pressable> : null}<Pressable accessibilityRole="button" accessibilityLabel="Thought actions" onPress={onActions} hitSlop={6} style={styles.mediaActions}><Ionicons accessible={false} name="ellipsis-horizontal" size={17} color="#FFFFFF" /></Pressable></>;
+// `timestampLeft`: the bottom-right corner is taken (a video's duration or the
+// "+N" badge), so the timestamp moves to the bottom-left instead.
+function MediaMetadata({ message, timestampLeft = false, onActions, onHideAgain }: { message: Message; timestampLeft?: boolean; onActions: () => void; onHideAgain?: () => void }) {
+  return <>{message.organization ? <View accessibilityLabel={`Organized in ${message.organization.boardName}, ${message.organization.columnName}`} style={styles.mediaBoardChip}><Text numberOfLines={1} style={styles.mediaBoardChipText}>{message.organization.boardName} · {message.organization.columnName}</Text></View> : null}<View style={[styles.mediaTimestamp, timestampLeft && styles.mediaTimestampLeft]}><Text style={styles.mediaTimestampText}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? ' · edited' : ''}</Text>{message.pinned ? <Ionicons accessibilityLabel="Pinned" name="pin-outline" size={12} color="#FFFFFF" /> : null}{message.organization?.reminderAt ? <Ionicons accessibilityLabel="Reminder set" name="notifications-outline" size={12} color="#FFFFFF" /> : null}</View>{onHideAgain ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" onPress={onHideAgain} hitSlop={6} style={styles.mediaPrivacy}><Ionicons accessible={false} name="eye-off-outline" size={16} color="#FFFFFF" /></Pressable> : null}<Pressable accessibilityRole="button" accessibilityLabel="Thought actions" onPress={onActions} hitSlop={6} style={styles.mediaActions}><Ionicons accessible={false} name="ellipsis-horizontal" size={17} color="#FFFFFF" /></Pressable></>;
 }
 
 function AttachmentMessage({ message, attachment, focused, onLongPress, onHideAgain }: { message: Message; attachment: Attachment; focused: boolean; onLongPress: (message: Message) => void; onHideAgain?: () => void }) {
   const { tokens: theme } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
+  const database = useSQLiteContext();
+  const [gallery, setGallery] = useState<{ items: AttachmentLike[]; initialIndex: number } | null>(null);
   const visual = attachment.type === 'photo' || attachment.type === 'video';
+  // An organized thought's preview stands in for its whole card, so "+N" counts
+  // every other attachment on that card — the same total the Board card and Card
+  // Details show. An unorganized thought only ever has its own attachment(s).
+  const cardId = message.organization?.cardId ?? null;
+  const totalAttachments = message.organization?.attachmentCount ?? message.attachments.length;
+  const moreCount = visual ? Math.max(totalAttachments - 1, 0) : 0;
+  // This thought's own attachment first, then the rest of its card in Card Details' order.
+  const mosaicItems = moreCount > 0 ? [attachment, ...(message.organization?.attachmentPreview ?? []).filter((item) => item.id !== attachment.id)].slice(0, MOSAIC_MAX_TILES) : [];
+  // Opens on `startId` (a mosaic tile) or else this thought's own attachment.
+  const openGallery = async (startId = attachment.id) => {
+    // A failed/empty lookup still opens on the visible attachment rather than doing nothing.
+    const items = await (cardId ? createBoardRepository(database).listCardAttachmentItems(cardId) : Promise.resolve(message.attachments as AttachmentLike[])).catch(() => [] as AttachmentLike[]);
+    const list = items.length ? items : [attachment];
+    const start = list.findIndex((item) => item.id === startId);
+    setGallery({ items: list, initialIndex: Math.max(0, start >= 0 ? start : list.findIndex((item) => item.id === attachment.id)) });
+  };
   const seconds = durationSeconds(attachment.duration);
+  const moreLabel = moreCount ? ` ${moreCount} more attachment${moreCount === 1 ? '' : 's'}.` : '';
   const accessibilityLabel = attachment.type === 'photo'
-    ? `Photo.${message.text ? ` Description: ${message.text}.` : ''}`
+    ? `Photo.${message.text ? ` Description: ${message.text}.` : ''}${moreLabel}`
     : attachment.type === 'video'
-      ? `Video${seconds ? `, ${seconds} seconds` : ''}.${message.text ? ` Description: ${message.text}.` : ''} Play video.`
+      ? `Video${seconds ? `, ${seconds} seconds` : ''}.${message.text ? ` Description: ${message.text}.` : ''}${moreLabel} Play video.`
       : undefined;
   // Wider than a short text bubble (this is the message surface, not a card inside
   // one), but capped well short of the full chat width so it still reads as a
@@ -261,10 +287,119 @@ function AttachmentMessage({ message, attachment, focused, onLongPress, onHideAg
   const chatWidth = screenWidth - spacing.md * 2;
   const messageMaxWidth = Math.min(520, Math.round(chatWidth * 0.8));
   return <Pressable accessible={false} onLongPress={() => onLongPress(message)} delayLongPress={350} style={({ pressed }) => [styles.attachmentMessage, { maxWidth: messageMaxWidth, backgroundColor: theme.surface, borderColor: focused ? theme.accentStrong : theme.borderSubtle }, focused && styles.focused, pressed && styles.pressed]}>
-    <AttachmentContent attachment={attachment} accessibilityLabel={accessibilityLabel} overlay={visual && !message.text ? <MediaMetadata message={message} video={attachment.type === 'video'} onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /> : null} />
+    {mosaicItems.length > 1
+      ? <MediaMosaic items={mosaicItems} total={totalAttachments} firstLabel={accessibilityLabel} onOpen={(startId) => void openGallery(startId)} onLongPress={() => onLongPress(message)} overlay={!message.text ? <MediaMetadata message={message} timestampLeft onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /> : null} />
+      : <AttachmentContent attachment={attachment} accessibilityLabel={accessibilityLabel} onOpen={moreCount > 0 ? () => void openGallery() : undefined} overlay={visual && !message.text ? <MediaMetadata message={message} timestampLeft={attachment.type === 'video'} onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /> : null} />}
     {message.text ? <View style={[styles.descriptionSurface, visual && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.borderSubtle }]}><Text accessible={!visual} style={[styles.attachmentDescription, { color: theme.textPrimary }]}>{message.text}</Text><MessageMetadata message={message} inside splitPills={attachment.type === 'audio'} onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /></View> : null}
     {!visual && !message.text ? <MessageMetadata message={message} inside splitPills={attachment.type === 'audio'} onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /> : null}
+    {gallery ? <AttachmentGallery attachments={gallery.items} initialIndex={gallery.initialIndex} onDismiss={() => setGallery(null)} /> : null}
   </Pressable>;
+}
+
+const MOSAIC_MAX_TILES = 4;
+
+// Aspect ratio of the whole mosaic (2 tiles side by side read best a little wider).
+function mosaicAspectRatio(count: number) { return count === 2 ? 4 / 3 : 1; }
+
+function MosaicVideoFace({ item }: { item: AttachmentLike }) {
+  const { tokens: theme } = useTheme();
+  const thumbnail = useVideoThumbnail(item.storagePath);
+  return <>
+    {thumbnail ? <Image source={thumbnail} contentFit="cover" style={StyleSheet.absoluteFill} /> : <Ionicons accessible={false} name="videocam-outline" size={28} color={theme.textMuted} />}
+    <View style={styles.mosaicPlay}><Ionicons accessible={false} name="play" size={16} color="#FFFFFF" /></View>
+    <View style={styles.durationBadge}><Text style={styles.durationText}>{formatDuration(item.duration)}</Text></View>
+  </>;
+}
+
+// Audio, PDFs and other files have no picture, so their tile is an icon + name.
+function MosaicFileFace({ item }: { item: AttachmentLike }) {
+  const { tokens: theme } = useTheme();
+  const icon = item.type === 'photo' ? 'image-outline' : item.type === 'audio' ? 'volume-medium-outline' : fileIcon(item);
+  const name = item.type === 'file' ? item.originalName ?? typeLabel(item) : typeLabel(item);
+  return <View style={styles.mosaicFile}>
+    <Ionicons accessible={false} name={icon} size={26} color={theme.accent} />
+    <Text numberOfLines={2} style={[styles.mosaicFileName, { color: theme.textSecondary }]}>{name}</Text>
+  </View>;
+}
+
+function MosaicTile({ item, label, hiddenCount, onPress, onLongPress }: { item: AttachmentLike; label: string; hiddenCount: number; onPress: () => void; onLongPress: () => void }) {
+  const { tokens: theme } = useTheme();
+  const [photoFailed, setPhotoFailed] = useState(false);
+  return <Pressable accessibilityRole="button" accessibilityLabel={hiddenCount ? `${label} ${hiddenCount} more attachment${hiddenCount === 1 ? '' : 's'}.` : label} accessibilityHint="Opens the card's attachments" onPress={onPress} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [styles.mosaicTile, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>
+    {item.type === 'photo' && !photoFailed ? <Image source={resolveAttachmentUri(item.storagePath)} contentFit="cover" transition={120} allowDownscaling recyclingKey={item.id} onError={() => setPhotoFailed(true)} style={StyleSheet.absoluteFill} />
+      : item.type === 'video' ? <MosaicVideoFace item={item} />
+      : <MosaicFileFace item={item} />}
+    {hiddenCount > 0 ? <View style={styles.mosaicMore}><Text style={styles.mosaicMoreText}>+{hiddenCount}</Text></View> : null}
+  </Pressable>;
+}
+
+// An organized thought whose card holds several attachments shows them as an
+// album: 2 side by side, 3 as one large + two stacked, 4+ as a 2×2 grid. When the
+// card has more than fit, the last tile is dimmed with "+N" — N being everything
+// not fully visible, so "+3" always means three more to see. Any tile opens the
+// gallery on that attachment.
+function MediaMosaic({ items, total, firstLabel, onOpen, onLongPress, overlay }: { items: AttachmentLike[]; total: number; firstLabel?: string; onOpen: (startId: string) => void; onLongPress: () => void; overlay?: ReactNode }) {
+  const { height: screenHeight } = useWindowDimensions();
+  const hiddenCount = total > items.length ? total - (items.length - 1) : 0;
+  const tile = (index: number) => {
+    const item = items[index];
+    const label = index === 0 && firstLabel ? firstLabel : `${typeLabel(item)}, ${index + 1} of ${total}.`;
+    return <MosaicTile key={item.id} item={item} label={label} hiddenCount={index === items.length - 1 ? hiddenCount : 0} onPress={() => onOpen(item.id)} onLongPress={onLongPress} />;
+  };
+  return <View style={[styles.mosaic, { aspectRatio: mosaicAspectRatio(items.length), maxHeight: Math.min(340, Math.round(screenHeight * 0.6)) }]}>
+    {items.length === 2 ? <>{tile(0)}{tile(1)}</>
+      : items.length === 3 ? <>{tile(0)}<View style={styles.mosaicColumn}>{tile(1)}{tile(2)}</View></>
+      : <><View style={styles.mosaicColumn}>{tile(0)}{tile(2)}</View><View style={styles.mosaicColumn}>{tile(1)}{tile(3)}</View></>}
+    {overlay}
+  </View>;
+}
+
+function GalleryVideo({ attachment }: { attachment: AttachmentLike }) {
+  const player = useVideoPlayer(resolveAttachmentUri(attachment.storagePath) ?? '', (videoPlayer) => videoPlayer.play());
+  return <VideoView player={player as never} nativeControls fullscreenOptions={{ enable: true }} contentFit="contain" style={styles.video} />;
+}
+
+// One full-screen page. Only the page in view mounts a video player, so swiping
+// away stops (and releases) it. Audio/PDF/files reuse AttachmentContent's own
+// player/viewer/open flow on a card, exactly as Card Details presents them.
+function GalleryPage({ attachment, active, width }: { attachment: AttachmentLike; active: boolean; width: number }) {
+  const { tokens: theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  return <View style={[styles.galleryPage, { width, paddingTop: insets.top + 60, paddingBottom: insets.bottom + spacing.md }]}>
+    {attachment.type === 'photo' ? <Image source={resolveAttachmentUri(attachment.storagePath)} contentFit="contain" style={StyleSheet.absoluteFill} />
+      : attachment.type === 'video' ? (active ? <GalleryVideo attachment={attachment} /> : <VideoPoster attachment={attachment} style={styles.video} />)
+      : <View style={[styles.galleryCard, { backgroundColor: theme.surface }]}><AttachmentContent attachment={attachment} variant="detail" /></View>}
+  </View>;
+}
+
+// Swipe through every attachment behind a "+N" preview, starting on the one
+// that was tapped.
+function AttachmentGallery({ attachments, initialIndex, onDismiss }: { attachments: AttachmentLike[]; initialIndex: number; onDismiss: () => void }) {
+  const { width } = useWindowDimensions();
+  const [index, setIndex] = useState(initialIndex);
+  const current = attachments[index] ?? attachments[0];
+  const position = `${index + 1} of ${attachments.length}`;
+  return <Modal visible animationType="fade" presentationStyle="fullScreen" statusBarTranslucent={false} navigationBarTranslucent={false} onRequestClose={onDismiss}><SafeAreaProvider><View style={styles.videoViewer}>
+    <FlatList
+      data={attachments}
+      keyExtractor={(item) => item.id}
+      horizontal
+      pagingEnabled
+      showsHorizontalScrollIndicator={false}
+      initialScrollIndex={initialIndex}
+      getItemLayout={(_, itemIndex) => ({ length: width, offset: width * itemIndex, index: itemIndex })}
+      onMomentumScrollEnd={({ nativeEvent }) => setIndex(Math.max(0, Math.min(attachments.length - 1, Math.round(nativeEvent.contentOffset.x / width))))}
+      extraData={index}
+      renderItem={({ item, index: itemIndex }) => <GalleryPage attachment={item} active={itemIndex === index} width={width} />}
+    />
+    <GalleryPosition label={position} />
+    <ViewerActions attachment={current} label={`${typeLabel(current).toLowerCase()}, ${position}`} onDismiss={onDismiss} />
+  </View></SafeAreaProvider></Modal>;
+}
+
+function GalleryPosition({ label }: { label: string }) {
+  const insets = useSafeAreaInsets();
+  return <View style={[styles.galleryPosition, { top: insets.top + spacing.sm }]}><Text accessibilityLiveRegion="polite" style={styles.galleryPositionText}>{label}</Text></View>;
 }
 
 function hiddenCopy(message: Message) {
@@ -284,7 +419,9 @@ function hiddenFallbackHeight(message: Message, width: number, screenHeight: num
   }
   if (attachment.type === 'photo' || attachment.type === 'video') {
     const mediaHeight = Math.max(170, Math.min(Math.round(width / mediaAspectRatio(attachment)), Math.round(screenHeight * 0.6)));
-    return mediaHeight + (message.text ? 72 : 0);
+    const mosaicCount = Math.min(MOSAIC_MAX_TILES, message.organization?.attachmentCount ?? 1);
+    const height = mosaicCount > 1 ? Math.min(Math.round(width / mosaicAspectRatio(mosaicCount)), 340, Math.round(screenHeight * 0.6)) : mediaHeight;
+    return height + (message.text ? 72 : 0);
   }
   if (attachment.type === 'audio') return message.text ? 146 : 112;
   return message.text ? 136 : 102;
@@ -384,6 +521,15 @@ const styles = StyleSheet.create({
   videoPlay: { position: 'absolute', alignSelf: 'center', top: '50%', marginTop: -23, width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 23, backgroundColor: 'rgba(0,0,0,0.62)' },
   durationBadge: { position: 'absolute', right: spacing.xs, bottom: spacing.xs, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.7)' },
   durationText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+  // 2px gutters between tiles; the bubble's own surface shows through them.
+  mosaic: { width: '100%', flexDirection: 'row', gap: 2 },
+  mosaicColumn: { flex: 1, gap: 2 },
+  mosaicTile: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  mosaicPlay: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', paddingLeft: 2, borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.62)' },
+  mosaicFile: { alignItems: 'center', gap: spacing.xxs, paddingHorizontal: spacing.xs },
+  mosaicFileName: { fontSize: 11, lineHeight: 14, fontWeight: '600', textAlign: 'center' },
+  mosaicMore: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.52)' },
+  mosaicMoreText: { color: '#FFFFFF', fontSize: 26, lineHeight: 32, fontWeight: '700', fontVariant: ['tabular-nums'] },
   unavailable: { alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
   unavailableText: { fontSize: 14, fontWeight: '600' },
   audioPlayer: { minHeight: 88, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingTop: spacing.sm, paddingBottom: spacing.xs },
@@ -417,6 +563,10 @@ const styles = StyleSheet.create({
   video: { width: '100%', height: '100%' },
   viewerClose: { position: 'absolute', top: spacing.sm, right: spacing.md, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.56)' },
   viewerSecondary: { right: spacing.md + 44 + spacing.xs },
+  galleryPage: { height: '100%', alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md },
+  galleryCard: { width: '100%', maxWidth: 520, overflow: 'hidden', paddingBottom: spacing.sm, borderRadius: radii.contentCard },
+  galleryPosition: { position: 'absolute', left: spacing.md, minHeight: 32, justifyContent: 'center', paddingHorizontal: spacing.sm, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.56)' },
+  galleryPositionText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
   viewerToast: { position: 'absolute', bottom: spacing.xl * 2, alignSelf: 'center', maxWidth: '86%', paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: radii.control, backgroundColor: 'rgba(255,255,255,0.94)' },
   viewerToastText: { color: '#111111', fontSize: 14, fontWeight: '600', textAlign: 'center' },
 });

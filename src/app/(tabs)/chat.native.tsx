@@ -23,7 +23,7 @@ import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { ChatComposerSurface } from '@/components/chat/chat-composer-surface';
 import { BackgroundReadabilityProvider } from '@/components/chat/background-readability';
 import { ChatBackgroundLayer } from '@/components/chat/background-layer';
-import { useChatBackground } from '@/components/chat/chat-background-provider';
+import { useChatBackground } from '@/components/chat/chat-background-context';
 import { subscribeToAttachmentChanges } from '@/services/attachment-changes';
 import { EmptyState, Screen, Toast } from '@/components/ui/primitives';
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';

@@ -1,12 +1,9 @@
 import { forwardRef } from 'react';
-import { LayoutAnimation, Platform, Pressable, StyleSheet, TextInput, UIManager, View } from 'react-native';
+import { LayoutAnimation, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/components/theme-provider';
 import { useChatTransition } from '@/components/navigation/chat-transition';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 // Short, restrained cross-fade — no bounce — used whenever the row swaps between
 // its default and expanded-search layouts.
 const HEADER_TRANSITION = LayoutAnimation.create(180, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity);
