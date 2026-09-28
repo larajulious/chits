@@ -47,7 +47,8 @@ test('temporary hide control lives with message metadata instead of floating ove
 test('temporary reveal is session-only and clears on navigation and background', () => {
   const screen = read('src/app/(tabs)/chat.native.tsx');
   assert.match(screen, /temporarilyRevealedIds/);
-  assert.match(screen, /return \(\) => setTemporarilyRevealedIds\(new Set\(\)\)/);
+  assert.match(screen, /return \(\) => \{[^}]*setTemporarilyRevealedIds\(new Set\(\)\)/);
+  assert.match(screen, /\[onChatFocus, onChatBlur\]/);
   assert.match(screen, /AppState\.addEventListener\('change'[\s\S]*?state !== 'active'[\s\S]*?setTemporarilyRevealedIds\(new Set\(\)\)/);
   assert.match(screen, /repository\.setHiddenContent\(message\.id, true\)/);
   assert.match(screen, /repository\.setHiddenContent\(message\.id, false\)/);

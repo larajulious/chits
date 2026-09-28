@@ -53,18 +53,22 @@ type DialogState =
 export function AppDialogProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<DialogState>(null);
   const [visible, setVisible] = useState(false);
-  const closingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const afterDismiss = useRef<(() => void) | null>(null);
 
-  const dismiss = useCallback(() => {
+  const dismiss = useCallback((after?: () => void) => {
+    afterDismiss.current = after ?? null;
     setVisible(false);
-    // Keep `state` mounted through the closing fade so content doesn't pop away
-    // before the animation finishes; AppDialog's own effect drives the fade.
-    if (closingTimer.current) clearTimeout(closingTimer.current);
-    closingTimer.current = setTimeout(() => setState(null), 220);
+  }, []);
+
+  const finishDismiss = useCallback(() => {
+    const action = afterDismiss.current;
+    afterDismiss.current = null;
+    setState(null);
+    action?.();
   }, []);
 
   const open = useCallback((next: DialogState) => {
-    if (closingTimer.current) clearTimeout(closingTimer.current);
+    afterDismiss.current = null;
     setState(next);
     setVisible(true);
   }, []);
@@ -111,6 +115,7 @@ export function AppDialogProvider({ children }: PropsWithChildren) {
       <AppDialog
         kind="confirm"
         visible={visible}
+        onDismissComplete={finishDismiss}
         type={options.type ?? 'default'}
         title={options.title}
         message={options.message}
@@ -131,6 +136,7 @@ export function AppDialogProvider({ children }: PropsWithChildren) {
       <AppDialog
         kind="alert"
         visible={visible}
+        onDismissComplete={finishDismiss}
         type={options.type ?? 'info'}
         title={options.title}
         message={options.message}
@@ -147,13 +153,14 @@ export function AppDialogProvider({ children }: PropsWithChildren) {
       <AppDialog
         kind="actionSheet"
         visible={visible}
+        onDismissComplete={finishDismiss}
         type="default"
         title={options.title}
         message={options.message}
-        options={options.options.map((option) => ({ ...option, onPress: () => { dismiss(); option.onPress(); } }))}
+        options={options.options.map((option) => ({ ...option, onPress: () => dismiss(option.onPress) }))}
         cancelText={options.cancelText ?? 'Cancel'}
-        onCancel={dismiss}
-        onRequestClose={dismiss}
+        onCancel={() => dismiss()}
+        onRequestClose={() => dismiss()}
       />
     );
   }

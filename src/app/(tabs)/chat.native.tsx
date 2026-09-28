@@ -18,9 +18,13 @@ import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { MessageActions, getCopyableMessageText } from '@/components/chat/message-actions';
 import { MessageRow } from '@/components/chat/message-row';
 import { useTheme } from '@/components/theme-provider';
-import { CONTENT_RANGE, COMPOSER_RANGE, useChatTransition } from '@/components/navigation/chat-transition';
+import { CONTENT_RANGE, useChatTransition } from '@/components/navigation/chat-transition';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
-import { GlassSurface } from '@/components/ui/glass-surface';
+import { ChatComposerSurface } from '@/components/chat/chat-composer-surface';
+import { BackgroundReadabilityProvider } from '@/components/chat/background-readability';
+import { ChatBackgroundLayer } from '@/components/chat/background-layer';
+import { useChatBackground } from '@/components/chat/chat-background-provider';
+import { subscribeToAttachmentChanges } from '@/services/attachment-changes';
 import { EmptyState, Screen, Toast } from '@/components/ui/primitives';
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
 import { radii, spacing } from '@/constants/theme';
@@ -220,21 +224,13 @@ export default function ChatScreen() {
   const router = useRouter();
   const { tokens: theme } = useTheme();
   const { confirm } = useAppDialog();
-  // Chat's own entrance reveal — see PHASE: REDESIGN CHAT TRANSITION — CONNECTED
-  // FLOATING BUTTON. Header + message history read from the SAME shared
-  // `progress` value the nav-button transition drives (CONTENT_RANGE), and the
-  // composer reads its own, slightly later window (COMPOSER_RANGE) — the moment
-  // the traveling Chat-button clone dissolves into it. Driven by `progress`
-  // rather than a mount effect, since Chat is a persistent tab that only mounts
-  // once ever — a mount effect would only ever play this once.
-  const { progress, closeChat, opening } = useChatTransition();
-  const contentRevealStyle = useAnimatedStyle(() => {
-    const t = interpolate(progress.get(), CONTENT_RANGE, [0, 1], Extrapolation.CLAMP);
+  const { background, isCurrentBackground } = useChatBackground();
+  // Background, timeline, header and composer form one visual unit. After the
+  // entrance, native navigation owns the whole scene's exit without a pre-fade.
+  const { progress, openingToken, closeChat, onChatFocus, onChatBlur } = useChatTransition();
+  const screenRevealStyle = useAnimatedStyle(() => {
+    const t = openingToken.get() > 0 ? interpolate(progress.get(), CONTENT_RANGE, [0, 1], Extrapolation.CLAMP) : 1;
     return { opacity: t, transform: [{ translateY: (1 - t) * 8 }] };
-  });
-  const composerRevealStyle = useAnimatedStyle(() => {
-    const t = interpolate(progress.get(), COMPOSER_RANGE, [0, 1], Extrapolation.CLAMP);
-    return { opacity: t, transform: [{ translateY: (1 - t) * 14 }, { scale: 0.97 + t * 0.03 }] };
   });
   const listRef = useRef<FlatList<FeedItem>>(null);
   const inputRef = useRef<TextInput>(null);
@@ -359,20 +355,21 @@ export default function ChatScreen() {
   }, [loadInitial]);
 
   useEffect(() => { feedRef.current = feed; }, [feed]);
+  useFocusEffect(useCallback(() => subscribeToAttachmentChanges(() => {
+    const ids = feedRef.current.flatMap((item) => item.kind === 'message' ? [item.message.id] : []);
+    void Promise.all(ids.map((id) => repository.getActiveById(id))).then((messages) => {
+      const updated = new Map(messages.filter((message): message is Message => message !== null).map((message) => [message.id, message]));
+      setFeed((current) => current.map((item) => item.kind === 'message' && updated.has(item.message.id) ? { ...item, message: updated.get(item.message.id)! } : item));
+      void refreshPinned();
+    }).catch(() => undefined);
+  }), [repository, refreshPinned]));
 
-  // Chat's header/content/composer opacity is driven entirely by `progress` (see
-  // the entrance-reveal comment above) — correct for the bottom-nav balloon
-  // transition, which always ends with `progress` at 1, but any OTHER way of
-  // landing here (e.g. Card Details' "Open in Chat" doing a plain router.push)
-  // never touches `progress` at all. Left at its default 0, the whole screen
-  // renders fully transparent — a blank/white screen, not a crash. Snap it to 1
-  // instantly whenever Chat gains focus outside of an in-flight balloon open
-  // (which is already animating `progress` toward 1 itself and must be left
-  // alone) and it isn't already fully open.
+
+  // Stable callbacks: changing transition state must not run focus cleanup.
   useFocusEffect(useCallback(() => {
-    if (!opening && progress.get() < 1) progress.set(1);
-    return () => setTemporarilyRevealedIds(new Set());
-  }, [opening, progress]));
+    onChatFocus();
+    return () => { onChatBlur(); setTemporarilyRevealedIds(new Set()); };
+  }, [onChatFocus, onChatBlur]));
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -611,7 +608,7 @@ export default function ChatScreen() {
   useEffect(() => () => { if (searchTimer.current) clearTimeout(searchTimer.current); }, []);
 
   // Android hardware back / gesture-nav back always closes search first if it's
-  // open, otherwise closes Chat itself via the same transition the header's X
+  // open, otherwise closes Chat itself via the same handler the header's Back
   // button uses — bottom-tabs' default `backBehavior` would otherwise silently
   // switch the active tab on its own, bypassing closeChat() entirely and leaving
   // its shared `progress` value stuck at "open" (see chat-transition.tsx).
@@ -777,8 +774,8 @@ export default function ChatScreen() {
       type: 'destructive',
       icon: 'trash-outline',
       title: 'Delete thought?',
-      message: 'This removes it from Chits and from any cards. This can’t be undone.',
-      confirmText: 'Delete thought',
+      message: message.attachments.some(isCurrentBackground) ? 'This photo is currently your chat background. Deleting this thought also restores the default background.' : 'This removes it from Chits and from any cards. This can’t be undone.',
+      confirmText: message.attachments.some(isCurrentBackground) ? 'Remove Background & Delete' : 'Delete thought',
       onConfirm: () => runAction(async () => {
         const removableUris = await repository.deletePermanently(message.id);
         void requestReminderSync();
@@ -844,9 +841,11 @@ export default function ChatScreen() {
   }, [animateComposerTransition]);
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <Animated.View testID="chat-transition-container" style={[styles.flex, { backgroundColor: theme.background }, screenRevealStyle]}><BackgroundReadabilityProvider active={background !== null}><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: theme.background }}>
-        <View style={styles.timelineLayer} onLayout={() => { maybePerformInitialScroll(); if (hasPositionedRef.current && nearBottom.current) scrollToLatest(false); }}><Animated.View style={[styles.flex, contentRevealStyle]}>{isInitialLoading ? (showInitialLoader ? <View style={styles.initialLoader}><ChitsLoader /></View> : null) : feed.length === 0 ? <EmptyState title="What’s on your mind?" description="Send yourself anything. You can organize it later." /> : <FlatList
+        <ChatBackgroundLayer background={background} />
+        {background ? <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: theme.background }} /> : null}
+        <View style={styles.timelineLayer} onLayout={() => { maybePerformInitialScroll(); if (hasPositionedRef.current && nearBottom.current) scrollToLatest(false); }}><View style={styles.flex}>{isInitialLoading ? (showInitialLoader ? <View style={styles.initialLoader}><ChitsLoader /></View> : null) : feed.length === 0 ? <View style={styles.initialLoader}><EmptyState title="What’s on your mind?" description="Send yourself anything. You can organize it later." style={background ? { flex: 0, alignSelf: 'stretch', marginHorizontal: spacing.md, paddingVertical: spacing.lg, borderRadius: radii.contentCard, backgroundColor: theme.surface } : undefined} /></View> : <FlatList
           ref={listRef} data={feed} keyExtractor={(item) => `${item.kind}-${item.kind === 'message' ? item.message.id : item.event.id}`}
           renderItem={renderFeedItem}
           // The feed is oldest-first, so a small default render window mounts the
@@ -884,7 +883,7 @@ export default function ChatScreen() {
             // the user hasn't scrolled away, or the initial landing falls short.
             if (hasPositionedRef.current && nearBottom.current) listRef.current?.scrollToEnd({ animated: false });
           }}
-        />}</Animated.View>
+        />}</View>
         {searchOpen && searchQuery.trim() ? <View style={[styles.searchOverlay, { backgroundColor: theme.background }]}>
           {showSearchLoader ? <View style={styles.initialLoader}><ChitsLoader size="small" /></View>
           : searchResults.length === 0 ? <View style={[styles.noResults, { paddingTop: headerHeight }]}><Text style={[styles.noResultsText, { color: theme.textSecondary }]}>No matching Chits.</Text></View>
@@ -895,15 +894,15 @@ export default function ChatScreen() {
         {!searchOpen ? <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.background}00`, `${theme.background}10`, `${theme.background}80`, `${theme.background}EF`, theme.background]} locations={[0, 0.2, 0.5, 0.8, 1]} style={[styles.bottomFade, { height: Math.min(composerHeight, MIN_COMPOSER_INPUT_HEIGHT + spacing.sm + composerBottomPadding) }]} /> : null}
         {!searchOpen && showJumpToLatest ? <Pressable accessibilityRole="button" accessibilityLabel="Jump to latest message" onPress={jumpToLatest} style={({ pressed }) => [styles.jumpToLatest, { bottom: composerHeight + (editing ? 52 : spacing.md), backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, pressed && styles.sendPressed]}><Ionicons accessible={false} name="arrow-down" size={20} color={theme.textPrimary} /></Pressable> : null}
         {!searchOpen && editing && <View style={[styles.editing, { bottom: composerHeight + spacing.xs, backgroundColor: theme.surfaceElevated }]}><Text style={[styles.editingText, { color: theme.textSecondary }]}>{editing.attachments.length ? 'Editing description' : 'Editing thought'}</Text><Pressable accessibilityRole="button" onPress={cancelEditing}><Text style={[styles.cancel, { color: theme.accent }]}>Cancel</Text></Pressable></View>}
-        {!searchOpen ? <Animated.View onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setComposerHeight((current) => (current === next ? current : next)); composerMeasuredRef.current = true; maybePerformInitialScroll(); }} style={[styles.composerDock, { paddingBottom: composerBottomPadding }, composerRevealStyle]}>
+        {!searchOpen ? <View onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setComposerHeight((current) => (current === next ? current : next)); composerMeasuredRef.current = true; maybePerformInitialScroll(); }} style={[styles.composerDock, { paddingBottom: composerBottomPadding }]}>
           {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { backgroundColor: theme.surfaceElevated, borderColor: theme.danger }]}><Ionicons accessible={false} name="alert-circle-outline" size={18} color={theme.danger} /><Text style={[styles.errorText, { color: theme.danger }]}>{error}</Text></View> : null}
-          <GlassSurface style={[styles.composer, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, composerExpanded && styles.composerExpanded, composerFocused && { borderColor: theme.accentBorder }]}>
+          <ChatComposerSurface style={[styles.composer, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, composerExpanded && styles.composerExpanded, composerFocused && { borderColor: theme.accentBorder }]}>
             {!isRecordingAudio && attachmentDraft ? <AttachmentDraftPreview draft={attachmentDraft} compact={composerFocused} onRemove={removeAttachmentDraft} /> : null}
             {!isRecordingAudio ? <TextInput ref={inputRef} accessibilityLabel={attachmentDraft || editing?.attachments.length ? 'Attachment description' : 'Message note'} value={draft} onChangeText={setDraft} onFocus={focusComposer} onBlur={blurComposer} onContentSizeChange={({ nativeEvent }) => handleContentSizeChange(nativeEvent.contentSize.height)} placeholder={attachmentDraft || editing?.attachments.length ? 'Add a description...' : editing ? 'Edit thought...' : 'Message note...'} placeholderTextColor={theme.textMuted} selectionColor={theme.accent} cursorColor={theme.accent} multiline maxLength={10000} scrollEnabled={!composerFocused || inputMaxed} style={[styles.input, composerExpanded ? styles.inputExpanded : styles.inputCompact, composerExpanded ? styles.inputAutoGrow : styles.inputFixed, { color: theme.textPrimary }]} textAlignVertical={composerExpanded ? 'top' : 'center'} /> : null}
             <View pointerEvents={composerExpanded ? 'auto' : 'box-none'} style={[styles.composerActions, isRecordingAudio ? styles.composerActionsRecording : composerExpanded ? styles.composerActionsExpanded : styles.composerActionsCompact]}><AttachmentPicker ref={attachmentPickerRef} disabled={Boolean(attachmentDraft) || Boolean(editing) || isSaving} onSelected={attachmentSelected} onError={setError} onRecordingChange={recordingChanged} onOpenChange={setAttachmentPickerOpen} />{!isRecordingAudio ? <Pressable accessibilityRole="button" accessibilityLabel={canSend ? 'Send message' : 'Record audio'} accessibilityState={{ disabled: isSaving }} disabled={isSaving} onPress={() => { if (canSend) void send(); else attachmentPickerRef.current?.startAudio(); }} style={({ pressed }) => [styles.sendButton, { backgroundColor: isSaving ? theme.surfaceElevated : theme.accent }, pressed && styles.sendPressed]}><Ionicons accessible={false} name={canSend ? 'arrow-up' : 'mic-outline'} size={20} color={theme.accentText} /></Pressable> : null}</View>
-          </GlassSurface>
-        </Animated.View> : null}
-        <Animated.View style={[styles.headerWrap, contentRevealStyle]} pointerEvents="box-none">
+          </ChatComposerSurface>
+        </View> : null}
+        <View style={styles.headerWrap} pointerEvents="box-none">
           <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.background}F2`, `${theme.background}B3`, `${theme.background}00`]} locations={[0, 0.65, 1]} style={[styles.headerFade, { height: headerHeight + spacing.xl }]} />
           <View style={styles.headerBlock} onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setHeaderHeight((current) => (current === next ? current : next)); headerMeasuredRef.current = true; maybePerformInitialScroll(); }}>
             <ChatHeader
@@ -917,12 +916,12 @@ export default function ChatScreen() {
             />
             {!searchOpen && pinnedMessages.length > 0 ? <QuickFilterRow pinned={pinnedMessages} onSelect={openPinned} /> : null}
           </View>
-        </Animated.View>
+        </View>
         </View>
       <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => setSelected(null)} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} onAddToBoard={addToBoard} onDownload={(message) => { setSelected(null); if (message.attachments[0]) void download.exportAttachment(message.attachments[0]); }} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
       <Toast message={toast ?? download.status} />
       </Screen>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingView></BackgroundReadabilityProvider></Animated.View>
   );
 }
 

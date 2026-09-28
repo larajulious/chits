@@ -6,6 +6,7 @@ import { classifyMessage, classifyText, parseInlineContent, parseParagraphs, par
 import { useTheme } from '@/components/theme-provider';
 import { radii, spacing } from '@/constants/theme';
 import type { Message } from '@/db/types';
+import { useBackgroundReadability } from './background-readability';
 
 type NoteProps = { message: Message; focused: boolean; onActions: () => void; onHideAgain?: () => void };
 type ContentMode = 'compact' | 'detail';
@@ -20,7 +21,8 @@ function messageLabel(message: Message) {
 
 export function MessageMetadata({ message, inside = false, onActions, onHideAgain, splitPills = false }: { message: Message; inside?: boolean; onActions: () => void; onHideAgain?: () => void; splitPills?: boolean }) {
   const { tokens } = useTheme();
-  return <View style={[styles.metadata, inside && styles.metadataInside]}>
+  const backgroundActive = useBackgroundReadability();
+  return <View style={[styles.metadata, inside && styles.metadataInside, backgroundActive && !inside && { alignSelf: 'flex-end', backgroundColor: tokens.surface, paddingHorizontal: 8, borderRadius: 12 }]}>
     {message.organization ? (splitPills ? <>
       <View accessibilityLabel={`Board: ${message.organization.boardName}`} style={[styles.pill, { backgroundColor: tokens.accentSoft }]}>
         <Ionicons accessible={false} name="folder-outline" size={11} color={tokens.accentStrong} />

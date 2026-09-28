@@ -4,6 +4,7 @@ import { useTheme, type AppAppearance } from '@/components/theme-provider';
 import { IconButton } from '@/components/ui/primitives';
 import { ChitsLoaderOverlay } from '@/components/ui/chits-loader';
 import { EditNoteSpaceNameSheet } from '@/components/settings/edit-notespace-name-sheet';
+import { ChatAppearanceSettings } from '@/components/settings/chat-appearance-settings';
 import { type ChatThemeKey } from '@/constants/theme';
 // eslint-disable-next-line import/no-unresolved -- Expo resolves platform file suffixes at runtime.
 import { createBackup, discardValidatedBackup, RestoreError, restoreBackup, saveBackupFile, validateBackup } from '@/services/backup-service';
@@ -170,6 +171,7 @@ export default function SettingsScreen() {
           <Text accessibilityLiveRegion="polite" style={[styles.description, { color: tokens.textSecondary }]}>{themes[themeKey].name}</Text>
         </View>
       </Section>
+      <ChatAppearanceSettings />
       <Section title="DATA"><SettingsRow label="Backup & Restore" description={lastBackup && !Number.isNaN(new Date(Number(lastBackup)).getTime()) ? 'Last backup: ' + new Date(Number(lastBackup)).toLocaleDateString() : 'Last backup: Never'} onPress={() => setSheet('backup')} /></Section>
 
     </ScrollView>

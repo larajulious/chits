@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, View } from 'react-native';
 import { router, Stack, usePathname } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
@@ -9,6 +9,7 @@ import { LoadingState } from '@/components/ui/primitives';
 import { AppDrawerProvider } from '@/components/navigation/app-drawer';
 import { AppDialogProvider, useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { ThemeProvider, useTheme } from '@/components/theme-provider';
+import { ChatBackgroundProvider } from '@/components/chat/chat-background-provider';
 // eslint-disable-next-line import/no-unresolved -- Expo resolves platform file suffixes at runtime.
 import { DatabaseProvider } from '@/db/provider';
 import { consumeResetNotice, subscribeToAppReset } from '@/services/app-reset';
@@ -55,18 +56,20 @@ function ThemedApp() {
   const { scheme, tokens } = useTheme();
   return (
     <AppDialogProvider>
-      <ResetNotice />
-      <ReminderCoordinator />
-      <AppDrawerProvider><StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-        <Stack screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: tokens.background } }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="settings" />
-          <Stack.Screen name="unorganized" />
-          <Stack.Screen name="board/[id]" />
-          <Stack.Screen name="card/[id]" />
-          <Stack.Screen name="card/edit-content" />
-        </Stack>
-      </AppDrawerProvider>
+      <View style={{ flex: 1, backgroundColor: tokens.background }}>
+        <ResetNotice />
+        <ReminderCoordinator />
+        <AppDrawerProvider><StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+          <Stack screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: tokens.background } }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="settings" />
+            <Stack.Screen name="unorganized" />
+            <Stack.Screen name="board/[id]" />
+            <Stack.Screen name="card/[id]" />
+            <Stack.Screen name="card/edit-content" />
+          </Stack>
+        </AppDrawerProvider>
+      </View>
     </AppDialogProvider>
   );
 }
@@ -83,7 +86,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Suspense fallback={<LoadingState />} key={resetKey}>
         <DatabaseProvider>
-          <ThemeProvider><ThemedApp /></ThemeProvider>
+          <ThemeProvider><ChatBackgroundProvider><ThemedApp /></ChatBackgroundProvider></ThemeProvider>
         </DatabaseProvider>
       </Suspense>
     </GestureHandlerRootView>

@@ -33,7 +33,7 @@ const NAV_SURFACE_HEIGHT = 64;
 export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
   const { tokens: theme } = useTheme();
   const reportHeight = useContext(BottomTabBarHeightCallbackContext);
-  const { progress, openChat } = useChatTransition();
+  const { progress, openingToken, openChat } = useChatTransition();
   const chatButtonRef = useRef<View>(null);
   const pressScale = useSharedValue(1);
   // Hides this button the instant it's tapped so the transition overlay's
@@ -58,15 +58,6 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
     setPreviousActiveName(activeName);
     if (previousActiveName === 'chat' && activeName !== 'chat') {
       if (travelling) setTravelling(false);
-      // Defends against ever leaving Chat by a path other than closeChat() — e.g.
-      // bottom-tabs' own `backBehavior` silently switching tabs on Android
-      // hardware/gesture back before chat.native.tsx's focus-scoped BackHandler
-      // gets a chance to intercept it. Without this, `progress` stays at 1 from
-      // the open animation, and this nav's own fade (driven by that same
-      // progress) stays rendered as "still open" — i.e. invisible — even though
-      // we're already back on this tab. A no-op whenever closeChat() DID run
-      // normally, since progress is already back at 0 by the time this fires.
-      if (progress.get() > 0) progress.set(0);
     }
   }
 
@@ -92,7 +83,7 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
   // choreography — the Chat button itself is handled separately (press bounce +
   // the overlay's traveling clone once tapped), never by this fade.
   const navFadeStyle = useAnimatedStyle(() => {
-    const t = interpolate(progress.get(), NAV_FADE_RANGE, [1, 0], Extrapolation.CLAMP);
+    const t = openingToken.get() > 0 ? interpolate(progress.get(), NAV_FADE_RANGE, [1, 0], Extrapolation.CLAMP) : 1;
     return { opacity: t, transform: [{ translateY: (1 - t) * 8 }] };
   });
   const pressedStyle = useAnimatedStyle(() => ({ transform: [{ scale: travelling ? 0 : pressScale.get() }] }));

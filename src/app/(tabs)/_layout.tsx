@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router/tabs';
 
 import { BottomNav } from '@/components/navigation/bottom-nav';
 import { ChatTransitionProvider } from '@/components/navigation/chat-transition';
+import { useTheme } from '@/components/theme-provider';
 
 // Boards, Chat, and Attachments are the app's 3 persistent destinations (see
 // PHASE: REDESIGN CHITS BOTTOM NAVIGATION, PHASE: GLOBAL ATTACHMENTS SCREEN) —
@@ -14,9 +15,10 @@ import { ChatTransitionProvider } from '@/components/navigation/chat-transition'
 // above every screen — see PHASE: REFINE CHAT NAVIGATION TRANSITION and
 // chat-transition.tsx.
 export default function TabLayout() {
+  const { tokens } = useTheme();
   return (
     <ChatTransitionProvider>
-      <Tabs tabBar={(props) => <BottomNav {...props} />} screenOptions={{ headerShown: false }}>
+      <Tabs backBehavior="history" tabBar={(props) => <BottomNav {...props} />} screenOptions={{ headerShown: false, animation: 'none', sceneStyle: { backgroundColor: tokens.background } }}>
         <Tabs.Screen name="index" />
         <Tabs.Screen name="chat" />
         <Tabs.Screen name="attachments" />

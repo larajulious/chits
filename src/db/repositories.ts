@@ -1,4 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { clearChatBackgroundForPaths, unreferencedAttachmentPaths } from './chat-background';
+import { notifyChatBackgroundChanged } from '../services/chat-background';
+import { notifyAttachmentsChanged } from '../services/attachment-changes';
 import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type AttachmentFilterType, type AttachmentPage, type AttachmentPageOptions, type AttachmentSummary, type Board, type Message, type MessageType, type PageOptions, type TimelineEvent, type TimelineEventType, type TimelineItem, type TimelinePage, type TimelinePageOptions } from './types';
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -101,6 +104,21 @@ function attachmentWhereClause(options: { type?: AttachmentFilterType; searchTer
 
 export function createAttachmentRepository(database: SQLiteDatabase) {
   return {
+    async delete(attachment: { id: string; storagePath: string }) {
+      let removable: string[] = [];
+      await database.withExclusiveTransactionAsync(async (transaction) => {
+        const row = await transaction.getFirstAsync<{ source: string; storagePath: string }>(`SELECT 'message' AS source, storage_path AS storagePath FROM attachments WHERE id = ?
+          UNION ALL SELECT 'card' AS source, storage_path AS storagePath FROM card_attachments WHERE id = ?`, attachment.id, attachment.id);
+        if (!row || row.storagePath !== attachment.storagePath) throw new Error('That attachment is no longer available.');
+        await clearChatBackgroundForPaths(transaction, [row.storagePath]);
+        const table = row.source === 'message' ? 'attachments' : 'card_attachments';
+        await transaction.runAsync(`DELETE FROM ${table} WHERE id = ?`, attachment.id);
+        removable = await unreferencedAttachmentPaths(transaction, [row.storagePath]);
+      });
+      notifyChatBackgroundChanged();
+      notifyAttachmentsChanged();
+      return removable;
+    },
     async list(options: AttachmentPageOptions = {}): Promise<AttachmentPage> {
       const limit = options.limit ?? 24;
       const offset = options.offset ?? 0;
@@ -287,15 +305,15 @@ export function createMessageRepository(database: SQLiteDatabase) {
         const message = await transaction.getFirstAsync<{ id: string }>('SELECT id FROM messages WHERE id = ?', id);
         if (!message) throw new Error('That thought is no longer available.');
         const attachments = await transaction.getAllAsync<{ storagePath: string }>('SELECT storage_path AS storagePath FROM attachments WHERE message_id = ?', id);
-        for (const attachment of attachments) {
-          const shared = await transaction.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM attachments WHERE storage_path = ? AND message_id != ?', attachment.storagePath, id);
-          if (!(shared?.count ?? 0)) removableUris.push(attachment.storagePath);
-        }
+        await clearChatBackgroundForPaths(transaction, attachments.map((attachment) => attachment.storagePath));
         await transaction.runAsync('DELETE FROM card_messages WHERE message_id = ?', id);
         await transaction.runAsync('DELETE FROM attachments WHERE message_id = ?', id);
+        removableUris.push(...await unreferencedAttachmentPaths(transaction, attachments.map((attachment) => attachment.storagePath)));
         const result = await transaction.runAsync('DELETE FROM messages WHERE id = ?', id);
         if (result.changes !== 1) throw new Error('That thought is no longer available.');
       });
+      notifyChatBackgroundChanged();
+      notifyAttachmentsChanged();
       return [...new Set(removableUris)];
     },
     async listUnorganized(page: PageOptions = {}) {
@@ -353,7 +371,9 @@ export function createBoardRepository(database: SQLiteDatabase) {
     await database.withExclusiveTransactionAsync(async (transaction) => {
       const attachments = await transaction.getAllAsync<{ storage_path: string }>('SELECT storage_path FROM card_attachments WHERE card_id = ?', cardId);
       removableUris = attachments.map((row) => row.storage_path);
+      await clearChatBackgroundForPaths(transaction, removableUris);
       await transaction.runAsync('DELETE FROM card_attachments WHERE card_id = ?', cardId);
+      removableUris = await unreferencedAttachmentPaths(transaction, removableUris);
       await transaction.runAsync('DELETE FROM card_comments WHERE card_id = ?', cardId);
       await transaction.runAsync('DELETE FROM card_messages WHERE card_id = ?', cardId);
       // The foreign key cascades too; explicit so no reminder row can outlive its card.
@@ -361,6 +381,8 @@ export function createBoardRepository(database: SQLiteDatabase) {
       const result = await transaction.runAsync('DELETE FROM cards WHERE id = ?', cardId);
       if (result.changes !== 1) throw new Error('That card is no longer available.');
     });
+    notifyChatBackgroundChanged();
+    notifyAttachmentsChanged();
     return removableUris;
   };
   return {
@@ -782,9 +804,8 @@ export function createBoardRepository(database: SQLiteDatabase) {
     async deleteCardAttachment(attachmentId: string) {
       const row = await database.getFirstAsync<{ storage_path: string }>('SELECT storage_path FROM card_attachments WHERE id = ?', attachmentId);
       if (!row) throw new Error('That attachment is no longer available.');
-      const result = await database.runAsync('DELETE FROM card_attachments WHERE id = ?', attachmentId);
-      if (result.changes !== 1) throw new Error('That attachment is no longer available.');
-      return row.storage_path;
+      const removable = await createAttachmentRepository(database).delete({ id: attachmentId, storagePath: row.storage_path });
+      return removable[0] ?? null;
     },
   };
 }

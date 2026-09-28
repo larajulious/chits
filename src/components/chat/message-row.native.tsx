@@ -17,6 +17,7 @@ import { resolveAttachmentUri } from '@/services/attachment-storage';
 import { subscribeToAppReset } from '@/services/app-reset';
 import { isPdfAttachment } from '@/services/pdf-attachment';
 import { PdfViewer } from '@/components/pdf/pdf-viewer';
+import { PhotoAttachmentViewer } from '@/components/attachments/photo-attachment-viewer';
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
 import { exportActionLabel } from '@/services/attachment-export';
 
@@ -59,11 +60,6 @@ function useAttachmentAvailable(uri: string) {
     return () => { active = false; };
   }, [uri]);
   return available;
-}
-
-function PhotoViewer({ attachment, onDismiss }: { attachment: AttachmentLike; onDismiss: () => void }) {
-  const uri = resolveAttachmentUri(attachment.storagePath) ?? '';
-  return <Modal visible animationType="fade" presentationStyle="fullScreen" statusBarTranslucent={false} navigationBarTranslucent={false} onRequestClose={onDismiss}><SafeAreaProvider><SafeAreaView edges={['top', 'right', 'bottom', 'left']} style={styles.viewer}><Image source={uri} contentFit="contain" style={styles.fullImage} /><ViewerActions attachment={attachment} label="photo" onDismiss={onDismiss} /></SafeAreaView></SafeAreaProvider></Modal>;
 }
 
 // Download + Close for the full-screen photo/video viewers, with the export
@@ -233,7 +229,7 @@ export function AttachmentContent({ attachment, accessibilityLabel, overlay, var
   const mediaStyle = variant === 'board' ? [styles.media, styles.boardMedia] : variant === 'thumbnail' ? [styles.media, styles.thumbnailMedia] : variant === 'grid' ? [styles.media, styles.gridMedia] : variant === 'detail' ? [styles.media, styles.detailMedia, { aspectRatio }] : [styles.media, styles.chatMedia, { aspectRatio, maxHeight: Math.round(screenHeight * 0.6) }];
   if (available === null) return <AttachmentLoading attachment={attachment} style={mediaStyle} />;
   if (available === false || mediaError) return <Unavailable attachment={attachment} style={mediaStyle} />;
-  if (attachment.type === 'photo') return <><View style={[mediaStyle, { backgroundColor: theme.surfaceElevated }]}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? 'Photo. Double tap to view fullscreen.'} accessibilityHint="Opens the photo fullscreen" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><Image source={uri} contentFit="cover" transition={120} allowDownscaling onError={() => setMediaError(true)} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <PhotoViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
+  if (attachment.type === 'photo') return <><View style={[mediaStyle, { backgroundColor: theme.surfaceElevated }]}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? 'Photo. Double tap to view fullscreen.'} accessibilityHint="Opens the photo fullscreen" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><Image source={uri} contentFit="cover" transition={120} allowDownscaling onError={() => setMediaError(true)} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <PhotoAttachmentViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
   if (attachment.type === 'video') return <><View style={mediaStyle}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? `Video${attachment.duration ? `, ${durationSeconds(attachment.duration)} seconds` : ''}. Play video.`} accessibilityHint="Opens the video player" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><VideoPoster attachment={attachment} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <VideoViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
   if (attachment.type === 'audio') return <AudioPlayer attachment={attachment} />;
   // PDFs open in Chits' own viewer; every other document keeps the existing

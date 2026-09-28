@@ -25,17 +25,21 @@ type Props = {
 // opened from (Boards, normally). "More" opens Settings, the closest existing
 // destination to a chat-level overflow menu.
 export const ChatHeader = forwardRef<TextInput, Props>(function ChatHeader({ searchOpen, searchQuery, onOpenSearch, onCloseSearch, onSearchChange, onOpenSettings }, searchInputRef) {
-  const { tokens } = useTheme();
   const { closeChat } = useChatTransition();
   const openSearch = () => { LayoutAnimation.configureNext(HEADER_TRANSITION); onOpenSearch(); };
   const closeSearch = () => { LayoutAnimation.configureNext(HEADER_TRANSITION); onCloseSearch(); };
+  return <ChatHeaderSurface ref={searchInputRef} searchOpen={searchOpen} searchQuery={searchQuery} onBack={searchOpen ? closeSearch : closeChat} onOpenSearch={openSearch} onSearchChange={onSearchChange} onOpenSettings={onOpenSettings} />;
+});
+
+export const ChatHeaderSurface = forwardRef<TextInput, Omit<Props, 'onCloseSearch'> & { onBack: () => void; preview?: boolean }>(function ChatHeaderSurface({ searchOpen, searchQuery, onBack, onOpenSearch, onSearchChange, onOpenSettings, preview = false }, searchInputRef) {
+  const { tokens } = useTheme();
   return <View style={styles.row}>
     {searchOpen ? (
-      <Pressable accessibilityRole="button" accessibilityLabel="Close search" onPress={closeSearch} style={({ pressed }) => [styles.iconButton, { backgroundColor: tokens.surface }, pressed && { backgroundColor: tokens.surfaceElevated }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Close search" onPress={onBack} style={({ pressed }) => [styles.iconButton, { backgroundColor: tokens.surface }, pressed && { backgroundColor: tokens.surfaceElevated }]}>
         <Ionicons accessible={false} name="arrow-back" size={20} color={tokens.textPrimary} />
       </Pressable>
     ) : (
-      <Pressable accessibilityRole="button" accessibilityLabel="Back" accessibilityHint="Closes Chat and returns to where you came from" onPress={closeChat} style={({ pressed }) => [styles.iconButton, { backgroundColor: tokens.surface }, pressed && { backgroundColor: tokens.surfaceElevated }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Back" accessibilityHint="Closes Chat and returns to where you came from" onPress={onBack} style={({ pressed }) => [styles.iconButton, { backgroundColor: tokens.surface }, pressed && { backgroundColor: tokens.surfaceElevated }]}>
         <Ionicons accessible={false} name="arrow-back" size={20} color={tokens.textPrimary} />
       </Pressable>
     )}
@@ -43,10 +47,11 @@ export const ChatHeader = forwardRef<TextInput, Props>(function ChatHeader({ sea
       <Ionicons accessible={false} name="search-outline" size={17} color={tokens.textMuted} />
       <TextInput
         ref={searchInputRef}
+        editable={!preview}
         accessibilityLabel="Search your notes"
         value={searchQuery}
         onChangeText={onSearchChange}
-        onFocus={openSearch}
+        onFocus={onOpenSearch}
         placeholder="Search your notes..."
         placeholderTextColor={tokens.textMuted}
         selectionColor={tokens.accent}

@@ -8,11 +8,15 @@ const read = (path) => readFileSync(new URL(path, root), 'utf8');
 test('attachment detail and fullscreen media modals own their safe-area context', () => {
   const attachments = read('src/app/(tabs)/attachments.native.tsx');
   const media = read('src/components/chat/message-row.native.tsx');
+  const photo = read('src/components/attachments/photo-attachment-viewer.native.tsx');
 
   assert.match(attachments, /<Modal[^>]+presentationStyle="fullScreen"[^>]+statusBarTranslucent=\{false\}/);
   assert.match(attachments, /<SafeAreaProvider>[\s\S]+<SafeAreaView edges=\{\['top', 'right', 'bottom', 'left'\]\}/);
-  assert.equal((media.match(/<SafeAreaProvider>/g) ?? []).length, 2);
-  assert.equal((media.match(/presentationStyle="fullScreen"/g) ?? []).length, 2);
+  for (const viewer of [media, photo]) {
+    assert.match(viewer, /<SafeAreaProvider>/);
+    assert.match(viewer, /presentationStyle="fullScreen"/);
+  }
+  assert.match(photo, /top: insets\.top \+ 8/);
   assert.doesNotMatch(media, /viewerClose:\s*\{[^}]*top:\s*54/);
 });
 

@@ -11,11 +11,15 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
+import { useChatBackground, attachmentBackgroundImage } from '@/components/chat/chat-background-provider';
+import { useAttachmentDeletion } from '@/components/attachments/use-attachment-deletion';
+import { PhotoAttachmentViewer } from '@/components/attachments/photo-attachment-viewer';
+import { subscribeToAttachmentChanges } from '@/services/attachment-changes';
 import { AttachmentContent } from '@/components/chat/message-row';
 import { isPdfAttachment } from '@/services/pdf-attachment';
 import { AppHeader, EmptyState, IconButton, PrimaryButton, Screen, SecondaryButton, Toast } from '@/components/ui/primitives';
@@ -108,7 +112,7 @@ function TypeFilterChips({ filter, onChange }: { filter: TypeFilter; onChange: (
 // AttachmentContent (it renders a full inline player / full-width row for
 // those), so they get compact custom tiles here instead, matching the same
 // pattern card-list-row.native.tsx already uses for its own audio thumbnail.
-function AttachmentTile({ item, size, onPress, onLongPress }: { item: AttachmentSummary; size: number; onPress: () => void; onLongPress: () => void }) {
+function AttachmentTile({ item, size, onPress, onLongPress, selectingBackground = false }: { item: AttachmentSummary; size: number; onPress: () => void; onLongPress: () => void; selectingBackground?: boolean }) {
   const { tokens: theme } = useTheme();
   const tileStyle = { width: size, height: size };
   let content: React.ReactNode;
@@ -139,8 +143,8 @@ function AttachmentTile({ item, size, onPress, onLongPress }: { item: Attachment
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityHint="Opens details. Hold for more actions."
-      accessibilityActions={[{ name: 'longpress', label: 'More actions' }]}
+      accessibilityHint={selectingBackground ? 'Opens Chat Background Preview.' : 'Opens details. Hold for more actions.'}
+      accessibilityActions={selectingBackground ? [] : [{ name: 'longpress', label: 'More actions' }]}
       onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === 'longpress') onLongPress(); }}
       onPress={onPress}
       onLongPress={onLongPress}
@@ -194,6 +198,10 @@ function emptyStateFor(filter: TypeFilter, hasSearch: boolean) {
 export default function AttachmentsScreen() {
   const database = useSQLiteContext();
   const router = useRouter();
+  const { chooseBackground } = useLocalSearchParams<{ chooseBackground?: string }>();
+  const choosingBackground = chooseBackground === '1';
+  const { openBackgroundPreview, isCurrentBackground } = useChatBackground();
+  const deletion = useAttachmentDeletion();
   const { openDrawer } = useAppDrawer();
   const { tokens: theme } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
@@ -221,7 +229,7 @@ export default function AttachmentsScreen() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const queryOptions = useMemo(() => ({ type: filter === 'all' ? undefined : filter, searchTerm: searchTerm || undefined }), [filter, searchTerm]);
+  const queryOptions = useMemo(() => ({ type: choosingBackground ? 'photo' as const : filter === 'all' ? undefined : filter, searchTerm: searchTerm || undefined }), [choosingBackground, filter, searchTerm]);
 
   // Filter/search changes always restart pagination from the first page — a
   // pending "load more" for a since-abandoned filter/search combination must
@@ -241,7 +249,7 @@ export default function AttachmentsScreen() {
     setReady(true);
   }, [repository, queryOptions]);
 
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  useFocusEffect(useCallback(() => { void load(); return subscribeToAttachmentChanges(() => void load()); }, [load]));
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -275,23 +283,27 @@ export default function AttachmentsScreen() {
     const attachment = toAttachmentLike(item);
     actionSheet({
       title: exportFileName(attachment),
+      message: isCurrentBackground(attachment) ? 'Current Chat Background' : undefined,
       options: [
+        ...(item.type === 'photo' ? [{ label: 'Set as Chat Background', icon: 'image-outline' as const, onPress: () => selectPhoto(item) }] : []),
         { label: 'Open', icon: 'open-outline', onPress: () => setDetailItem(item) },
         { label: 'Share', icon: 'share-outline', onPress: () => void shareAttachment(attachment).then((shared) => setShareFailed(!shared)) },
         { label: exportActionLabel(attachment), icon: 'download-outline', disabled: download.busy, onPress: () => void download.exportAttachment(attachment) },
+        { label: 'Delete Attachment', icon: 'trash-outline', destructive: true, onPress: () => deletion.confirmDelete(attachment, () => setDetailItem(null)) },
         ...(item.cardId ? [{ label: 'View card', icon: 'albums-outline' as const, onPress: () => viewCard(item.cardId!) }] : []),
       ],
     });
   };
 
-  const empty = emptyStateFor(filter, Boolean(searchTerm));
+  const selectPhoto = (item: AttachmentSummary) => openBackgroundPreview(attachmentBackgroundImage(item), () => { router.setParams({ chooseBackground: undefined }); router.navigate('/chat'); });
+  const empty = emptyStateFor(choosingBackground ? 'photo' : filter, Boolean(searchTerm));
 
   return (
     <Screen edges={['top', 'left', 'right']}>
       <AppHeader
-        title="Attachments"
+        title={choosingBackground ? 'Choose a Background' : 'Attachments'}
         subtitle={ready ? pluralize(totalCount, 'item') : undefined}
-        leading={<IconButton label="Open navigation" onPress={openDrawer}><Ionicons accessible={false} name="reorder-two-outline" size={24} color={theme.textPrimary} /></IconButton>}
+        leading={<IconButton label={choosingBackground ? 'Cancel background selection' : 'Open navigation'} onPress={() => { if (choosingBackground) { router.setParams({ chooseBackground: undefined }); if (router.canGoBack()) router.back(); else router.navigate('/settings'); } else openDrawer(); }}><Ionicons accessible={false} name={choosingBackground ? 'close' : 'reorder-two-outline'} size={24} color={theme.textPrimary} /></IconButton>}
       />
       <FlatList
         data={items}
@@ -300,7 +312,7 @@ export default function AttachmentsScreen() {
         keyExtractor={(item) => `${item.source}-${item.id}`}
         columnWrapperStyle={styles.gridRow}
         contentContainerStyle={[styles.gridContent, { paddingBottom: tabBarHeight + spacing.md }]}
-        renderItem={({ item }) => <AttachmentTile item={item} size={tileSize} onPress={() => setDetailItem(item)} onLongPress={() => openItemMenu(item)} />}
+        renderItem={({ item }) => <AttachmentTile item={item} size={tileSize} selectingBackground={choosingBackground} onPress={() => choosingBackground ? selectPhoto(item) : setDetailItem(item)} onLongPress={() => { if (!choosingBackground) openItemMenu(item); }} />}
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <View style={[styles.searchField, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
@@ -321,7 +333,7 @@ export default function AttachmentsScreen() {
                 </Pressable>
               ) : null}
             </View>
-            <TypeFilterChips filter={filter} onChange={setFilter} />
+            {choosingBackground ? <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>Photos · Choose a photo to preview</Text> : <TypeFilterChips filter={filter} onChange={setFilter} />}
             {items.length ? <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Recent</Text> : null}
           </View>
         }
@@ -347,8 +359,8 @@ export default function AttachmentsScreen() {
         maxToRenderPerBatch={18}
         windowSize={7}
       />
-      <Toast message={shareFailed ? 'This file could not be shared.' : download.status} />
-      {detailItem ? <AttachmentDetailModal item={detailItem} onClose={() => setDetailItem(null)} onViewCard={viewCard} /> : null}
+      <Toast message={deletion.status ?? (shareFailed ? 'This file could not be shared.' : download.status)} />
+      {detailItem?.type === 'photo' ? <PhotoAttachmentViewer attachment={toAttachmentLike(detailItem)} onDismiss={() => setDetailItem(null)} /> : detailItem ? <AttachmentDetailModal item={detailItem} onClose={() => setDetailItem(null)} onViewCard={viewCard} /> : null}
     </Screen>
   );
 }

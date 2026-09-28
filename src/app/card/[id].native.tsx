@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -9,6 +9,10 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 
+import { PhotoAttachmentViewer } from '@/components/attachments/photo-attachment-viewer';
+import { useAttachmentDeletion } from '@/components/attachments/use-attachment-deletion';
+import { useChatBackground, attachmentBackgroundImage } from '@/components/chat/chat-background-provider';
+import { subscribeToAttachmentChanges } from '@/services/attachment-changes';
 import { AttachmentContent } from '@/components/chat/message-row';
 import { MessageContentRenderer } from '@/components/chat/message-note-cards';
 import { AddCardAttachmentSheet } from '@/components/boards/add-card-attachment-sheet';
@@ -26,7 +30,7 @@ import { createReminderRepository, type CardReminder } from '@/db/repositories';
 import { hasNotificationPermission, removeCardReminder, requestReminderSync, setCardReminder, subscribeToReminderChanges } from '@/services/reminders';
 import { formatReminder } from '@/services/reminder-time';
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
-import type { CardAttachment, Message } from '@/db/types';
+import type { AttachmentLike, CardAttachment, Message } from '@/db/types';
 
 type Detail = { id: string; title: string | null; explicitTitle: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; pinned: number; attachmentCount: number };
 type Comment = { id: string; cardId: string; text: string; createdAt: number; updatedAt: number };
@@ -58,6 +62,9 @@ export default function CardDetailScreen() {
   const repository = useMemo(() => createBoardRepository(database), [database]);
   const { tokens: theme } = useTheme();
   const { confirm, actionSheet } = useAppDialog();
+  const { openBackgroundPreview, isCurrentBackground } = useChatBackground();
+  const attachmentDeletion = useAttachmentDeletion();
+  const [viewingPhoto, setViewingPhoto] = useState<AttachmentLike | null>(null);
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [detail, setDetail] = useState<Detail | null | undefined>();
@@ -114,7 +121,7 @@ export default function CardDetailScreen() {
     if (nextDetail) void repository.markOpened('card', id);
   }, [id, repository]);
 
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  useFocusEffect(useCallback(() => { void load(); return subscribeToAttachmentChanges(() => void load()); }, [load]));
 
   const loadReminder = useCallback(async () => {
     if (!id) return;
@@ -305,35 +312,27 @@ export default function CardDetailScreen() {
     if (!await shareAttachment(attachment)) setNotice('This attachment could not be shared.');
   };
 
-  const deleteCardAttachmentNow = async (attachment: CardAttachment) => {
-    const previous = cardAttachments;
-    setCardAttachments((current) => current.filter((item) => item.id !== attachment.id));
-    try {
-      await repository.deleteCardAttachment(attachment.id);
-      await removeCardAttachmentFile(attachment.storagePath);
-    } catch {
-      setCardAttachments(previous);
-      setNotice('Chits could not delete that attachment.');
-    }
-  };
-
-  const confirmDeleteCardAttachment = (attachment: CardAttachment) => confirm({
-    type: 'destructive',
-    icon: 'trash-outline',
-    title: 'Delete attachment?',
-    message: 'This attachment will be removed from this card.',
-    confirmText: 'Delete attachment',
-    onConfirm: () => void deleteCardAttachmentNow(attachment),
-  });
-
-  const openCardAttachmentActions = (attachment: CardAttachment) => actionSheet({
-    title: attachment.type === 'file' ? (attachment.originalName ?? 'File') : attachment.type === 'photo' ? 'Photo' : 'Video',
+  const openPhotoActions = (attachment: AttachmentLike) => actionSheet({
+    title: 'Photo',
+    message: isCurrentBackground(attachment) ? 'Current Chat Background' : undefined,
     options: [
-      { label: 'Share', icon: 'share-outline', onPress: () => void shareCardAttachment(attachment) },
+      { label: 'View', icon: 'expand-outline', onPress: () => { Keyboard.dismiss(); setViewingPhoto(attachment); } },
       { label: exportActionLabel(attachment), icon: 'download-outline', disabled: download.busy, onPress: () => void download.exportAttachment(attachment) },
-      { label: 'Delete', icon: 'trash-outline', destructive: true, onPress: () => confirmDeleteCardAttachment(attachment) },
+      { label: 'Use as Chat Background', icon: 'image-outline', onPress: () => openBackgroundPreview(attachmentBackgroundImage(attachment), () => router.navigate('/chat')) },
+      { label: 'Delete Attachment', icon: 'trash-outline', destructive: true, onPress: () => attachmentDeletion.confirmDelete(attachment) },
     ],
   });
+  const openCardAttachmentActions = (attachment: CardAttachment) => {
+    if (attachment.type === 'photo') { openPhotoActions(attachment); return; }
+    actionSheet({
+      title: attachment.type === 'file' ? (attachment.originalName ?? 'File') : 'Video',
+      options: [
+        { label: 'Share', icon: 'share-outline', onPress: () => void shareCardAttachment(attachment) },
+        { label: exportActionLabel(attachment), icon: 'download-outline', disabled: download.busy, onPress: () => void download.exportAttachment(attachment) },
+        { label: 'Delete Attachment', icon: 'trash-outline', destructive: true, onPress: () => attachmentDeletion.confirmDelete(attachment) },
+      ],
+    });
+  };
 
   const isSameDay = (a: number, b: number) => { const da = new Date(a); const db = new Date(b); return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate(); };
   const commentTimeLabel = (timestamp: number) => {
@@ -442,6 +441,7 @@ export default function CardDetailScreen() {
       leading={<IconButton label="Go back" onPress={() => router.back()}><Ionicons accessible={false} name="chevron-back" size={24} color={theme.textPrimary} /></IconButton>}
       trailing={<IconButton label="Open in Chat" onPress={() => router.push(messages[0] ? `/chat?messageId=${messages[0].id}` : '/chat')}><Ionicons accessible={false} name="chatbubble-outline" size={22} color={theme.textPrimary} /></IconButton>}
     />
+    {viewingPhoto ? <PhotoAttachmentViewer attachment={viewingPhoto} onDismiss={() => setViewingPhoto(null)} /> : null}
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView ref={scrollRef} style={styles.flex} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
         <View style={styles.hero}>
@@ -481,7 +481,7 @@ export default function CardDetailScreen() {
               <Text style={styles.thoughtLabel}>THOUGHT {index + 1}</Text>
               {message.text ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit thought ${index + 1}`} hitSlop={8} onPress={() => openContentEditor(message)} style={styles.inlineEdit}><Ionicons accessible={false} name="create-outline" size={16} color={contentAccentStrong} /><Text style={[styles.inlineEditText, { color: contentAccentStrong }]}>Edit</Text></Pressable> : null}
             </View> : null}
-            <MessageContentRenderer message={message} mode="detail" accentColor={detail.boardAccent ?? undefined} renderAttachments={() => <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} /></View>)}</View>} />
+            <MessageContentRenderer message={message} mode="detail" accentColor={detail.boardAccent ?? undefined} renderAttachments={() => <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} onLongPress={attachment.type === 'photo' ? () => openPhotoActions(attachment) : undefined} overlay={attachment.type === 'photo' ? <AttachmentActionsButton onPress={() => openPhotoActions(attachment)} style={styles.attachmentActionsOverlay} iconColor="#FFFFFF" /> : undefined} /></View>)}</View>} />
             {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={`Add a description to ${messageFallback(message)}`} onPress={() => openContentEditor(message)} style={styles.addDescription}><Ionicons accessible={false} name="add" size={16} color={contentAccentStrong} /><Text style={[styles.inlineEditText, { color: contentAccentStrong }]}>Add description</Text></Pressable> : null}
             {index < messages.length - 1 ? <View style={styles.contentThoughtDivider} /> : null}
           </View>)}
@@ -622,7 +622,7 @@ export default function CardDetailScreen() {
       </View>
     </KeyboardAvoidingView>
     <AddCardAttachmentSheet visible={addAttachmentOpen} onClose={() => setAddAttachmentOpen(false)} onPick={(kind) => void pickCardAttachment(kind)} />
-    <Toast message={toast ?? download.status} />
+    <Toast message={attachmentDeletion.status ?? toast ?? download.status} />
     <ReminderSheet key={reminderSheetKey} visible={reminderSheetOpen} existing={reminder?.scheduledAt ?? null} accent={contentAccentSolid} accentOn={contentAccentOn} onClose={() => setReminderSheetOpen(false)} onSave={saveReminder} onRemove={deleteReminder} />
   </Screen>;
 }

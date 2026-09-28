@@ -1,77 +1,51 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import { AccessibilityInfo, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Animated, { Easing, Extrapolation, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
+import Animated, { cancelAnimation, Easing, Extrapolation, interpolate, runOnJS, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { useTheme } from '@/components/theme-provider';
+import { createChatTransitionLifecycle, type ChatReturnPath } from '@/services/chat-transition-lifecycle';
 
 export type ChatOrigin = { x: number; y: number; size: number };
-type PreviousTabPath = '/' | '/attachments';
-
 const OPEN_DURATION = 320;
-// Slightly faster than opening — this isn't a perfect reverse of the open
-// sequence, just a return to rest, per PHASE: REDESIGN CHAT TRANSITION —
-// CONNECTED FLOATING BUTTON.
-const CLOSE_DURATION = 260;
 const EASING = Easing.out(Easing.cubic);
-// The underlying tab switch is masked by MASK_RANGE's brief pulse — see below —
-// so it should land while that pulse is near its peak opacity.
 const NAV_SWITCH_AT = 0.35;
 
-// Every piece of the Chat entrance reads its own window from the SAME shared
-// `progress` value (0 closed .. 1 open), so the whole choreography lives in one
-// place instead of scattered magic numbers, and every piece naturally overlaps
-// rather than running as a hard sequence. Exported so chat.native.tsx (content +
-// composer) and bottom-nav.tsx (nav item fade) can build their own
-// useAnimatedStyle from the identical ranges described in the phase spec.
+// One reveal window for the complete Chat, including its background.
 export const NAV_FADE_RANGE: [number, number] = [0.19, 0.56];
 export const CONTENT_RANGE: [number, number] = [0.3, 0.85];
-export const COMPOSER_RANGE: [number, number] = [0.55, 1];
 const MASK_RANGE: [number, number, number] = [0.22, 0.38, 0.56];
-// The traveling button clone: holds at the origin, lifts ~16px, then (from the
-// halfway point) eases toward the composer while shrinking and fading — "the
-// button visually hands control to the composer" rather than the screen zooming.
 const LIFT_KEYFRAMES: [number, number, number] = [0, 0.15, 0.5];
 const TRAVEL_START = 0.5;
 const BUTTON_FADE_RANGE: [number, number, number] = [0, 0.55, 0.85];
 
 type ChatTransitionContextValue = {
   progress: SharedValue<number>;
+  openingToken: SharedValue<number>;
   reduceMotion: boolean;
-  // Exposed so Chat itself can tell a real balloon-driven open (where `progress`
-  // is already animating 0 -> 1 and must be left alone) apart from any other way
-  // of arriving at Chat — a plain `router.push('/chat')` from elsewhere (e.g.
-  // Card Details' "Open in Chat") never touches `progress` at all, which
-  // otherwise leaves the whole screen at its reveal animation's rest opacity: 0.
-  opening: boolean;
-  openChat: (origin: ChatOrigin, fromPath: PreviousTabPath) => void;
+  openChat: (origin: ChatOrigin, fromPath: ChatReturnPath) => void;
   closeChat: () => void;
+  onChatFocus: () => void;
+  onChatBlur: () => void;
 };
-
 const ChatTransitionContext = createContext<ChatTransitionContextValue | null>(null);
 
-// Drives the "connected floating button" transition between the Chat nav button
-// and the Chat tab — see PHASE: REDESIGN CHAT TRANSITION — CONNECTED FLOATING
-// BUTTON. Lives above the Tabs navigator (in (tabs)/_layout.tsx) so it can own
-// navigation itself (expo-router's router works regardless of nesting) and
-// render its overlay (a brief crossfade mask + the traveling button clone) above
-// every screen. A single shared `progress` value is the one source of truth for
-// the nav fade, Chat's content reveal, and the composer's entrance, so replaying
-// the transition on every open/close never depends on Chat remounting (it
-// doesn't — Tabs keeps it alive to preserve its state).
+// Keeps the balloon entrance above the persistent Tabs navigator. Back changes
+// scenes immediately, with the entire Chat still rendered; there is no separate
+// content/composer fade and no reverse mask pulse before navigation.
 export function ChatTransitionProvider({ children }: PropsWithChildren) {
   const { tokens: theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const progress = useSharedValue(0);
+  const openingToken = useSharedValue(0);
+  const [lifecycle] = useState(createChatTransitionLifecycle);
   const [origin, setOrigin] = useState<ChatOrigin | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
-  const [opening, setOpening] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const previousPath = useRef<PreviousTabPath>('/');
 
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
@@ -79,51 +53,75 @@ export function ChatTransitionProvider({ children }: PropsWithChildren) {
     return () => subscription.remove();
   }, []);
 
-  const openChat = useCallback((nextOrigin: ChatOrigin, fromPath: PreviousTabPath) => {
-    previousPath.current = fromPath;
+  const navigateToChat = useCallback((token: number) => {
+    if (lifecycle.navigateOpen(token)) router.navigate('/chat');
+  }, [lifecycle, router]);
+  const finishOpening = useCallback((token: number) => {
+    // Even if JS was busy at the crossover, a completed entrance navigates once.
+    navigateToChat(token);
+    if (!lifecycle.finishOpen(token)) return;
+    openingToken.set(0);
+    setOverlayVisible(false);
+  }, [lifecycle, navigateToChat, openingToken]);
+
+  // Navigate at the actual animation crossover, rather than an elapsed timer.
+  useAnimatedReaction(
+    () => progress.get() >= NAV_SWITCH_AT ? openingToken.get() : 0,
+    (token, previous) => { if (token > 0 && token !== previous) runOnJS(navigateToChat)(token); },
+  );
+
+  const openChat = useCallback((nextOrigin: ChatOrigin, fromPath: ChatReturnPath) => {
+    const token = lifecycle.beginOpen(fromPath);
+    if (token === null) return;
     setOrigin(nextOrigin);
-    progress.set(0);
     if (reduceMotion) {
-      router.navigate('/chat');
-      progress.set(withTiming(1, { duration: 140, easing: Easing.linear }));
+      progress.set(1);
+      navigateToChat(token);
+      finishOpening(token);
       return;
     }
-    setOpening(true);
+    progress.set(0);
+    openingToken.set(token);
     setOverlayVisible(true);
-    setTimeout(() => router.navigate('/chat'), OPEN_DURATION * NAV_SWITCH_AT);
     progress.set(withTiming(1, { duration: OPEN_DURATION, easing: EASING }, (finished) => {
-      if (finished) { runOnJS(setOverlayVisible)(false); runOnJS(setOpening)(false); }
+      if (finished) runOnJS(finishOpening)(token);
     }));
-  }, [progress, reduceMotion, router]);
+  }, [lifecycle, progress, openingToken, reduceMotion, navigateToChat, finishOpening]);
 
   const closeChat = useCallback(() => {
-    const finish = () => {
-      router.navigate(previousPath.current);
-      setOverlayVisible(false);
-    };
-    setOpening(false);
-    if (reduceMotion) {
-      progress.set(withTiming(0, { duration: 140, easing: Easing.linear }, (finished) => { if (finished) runOnJS(finish)(); }));
-      return;
-    }
-    setOverlayVisible(true);
-    progress.set(withTiming(0, { duration: CLOSE_DURATION, easing: EASING }, (finished) => {
-      if (finished) runOnJS(finish)();
-    }));
-  }, [progress, reduceMotion, router]);
+    const destination = lifecycle.close();
+    if (!destination) return;
+    // Stop an unfinished entrance, retaining its complete visual tree until blur.
+    cancelAnimation(progress);
+    if (!destination.balloonVisit && router.canGoBack()) router.back();
+    else router.navigate(destination.returnPath);
+  }, [lifecycle, progress, router]);
 
-  // Approximate composer center — the message composer itself doesn't exist to
-  // measure until Chat has mounted, and doesn't need to be exact: the button
-  // only needs to travel *toward* it to read as "handing off," not land on its
-  // precise pixel (see the phase spec's "use coordinated position/scale/opacity
-  // to create the illusion").
+  const onChatFocus = useCallback(() => {
+    if (lifecycle.focus()) return;
+    // Direct links/history returns show the complete screen immediately.
+    openingToken.set(0);
+    progress.set(1);
+  }, [lifecycle, openingToken, progress]);
+  const onChatBlur = useCallback(() => {
+    lifecycle.blur();
+    cancelAnimation(progress);
+    openingToken.set(0);
+    setOverlayVisible(false);
+    // Leave progress intact. A native stack can still be drawing this scene
+    // after blur; only the next entrance resets it, while Chat is inactive.
+  }, [lifecycle, progress, openingToken]);
+
+  useEffect(() => () => {
+    lifecycle.blur();
+    cancelAnimation(progress);
+  }, [lifecycle, progress]);
+
   const targetX = screenWidth / 2;
   const targetY = screenHeight - insets.bottom - 64;
-
   const maskStyle = useAnimatedStyle(() => ({
     opacity: interpolate(progress.get(), MASK_RANGE, [0, 1, 0], Extrapolation.CLAMP),
   }));
-
   const buttonStyle = useAnimatedStyle(() => {
     if (!origin) return { opacity: 0 };
     const p = progress.get();
@@ -134,38 +132,23 @@ export function ChatTransitionProvider({ children }: PropsWithChildren) {
     const opacity = interpolate(p, BUTTON_FADE_RANGE, [1, 1, 0], Extrapolation.CLAMP);
     return { opacity, transform: [{ translateX }, { translateY }, { scale }] };
   });
+  const value = useMemo<ChatTransitionContextValue>(() => ({ progress, openingToken, reduceMotion, openChat, closeChat, onChatFocus, onChatBlur }), [progress, openingToken, reduceMotion, openChat, closeChat, onChatFocus, onChatBlur]);
 
-  const value = useMemo<ChatTransitionContextValue>(() => ({ progress, reduceMotion, opening, openChat, closeChat }), [progress, reduceMotion, opening, openChat, closeChat]);
-
-  return (
-    <ChatTransitionContext.Provider value={value}>
+  return <ChatTransitionContext.Provider value={value}>
+    <View style={[styles.screen, { backgroundColor: theme.background }]}>
       {children}
-      {overlayVisible ? (
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }, maskStyle]} />
-          {opening && origin ? (
-            <Animated.View
-              style={[
-                styles.travelButton,
-                { left: origin.x - origin.size / 2, top: origin.y - origin.size / 2, width: origin.size, height: origin.size, borderRadius: origin.size / 2, backgroundColor: theme.accent },
-                buttonStyle,
-              ]}
-            >
-              <Ionicons accessible={false} name="chatbox" size={23} color="#FFFFFF" />
-            </Animated.View>
-          ) : null}
-        </View>
-      ) : null}
-    </ChatTransitionContext.Provider>
-  );
+      {overlayVisible ? <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }, maskStyle]} />
+        {origin ? <Animated.View style={[styles.travelButton, { left: origin.x - origin.size / 2, top: origin.y - origin.size / 2, width: origin.size, height: origin.size, borderRadius: origin.size / 2, backgroundColor: theme.accent }, buttonStyle]}>
+          <Ionicons accessible={false} name="chatbox" size={23} color="#FFFFFF" />
+        </Animated.View> : null}
+      </View> : null}
+    </View>
+  </ChatTransitionContext.Provider>;
 }
-
 export function useChatTransition() {
   const context = useContext(ChatTransitionContext);
   if (!context) throw new Error('useChatTransition must be used within ChatTransitionProvider');
   return context;
 }
-
-const styles = StyleSheet.create({
-  travelButton: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-});
+const styles = StyleSheet.create({ screen: { flex: 1 }, travelButton: { position: 'absolute', alignItems: 'center', justifyContent: 'center' } });

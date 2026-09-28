@@ -27,6 +27,7 @@ type BaseProps = {
   accentColor?: string | null;
   dismissOnBackdrop?: boolean;
   onRequestClose: () => void;
+  onDismissComplete?: () => void;
 };
 
 type ConfirmProps = BaseProps & {
@@ -69,13 +70,17 @@ export function AppDialog(props: AppDialogProps) {
   // per React's own guidance) — the fade-in itself still runs in the effect below.
   if (visible && !mounted) setMounted(true);
   const progress = useSharedValue(visible ? 1 : 0);
+  const finishClosing = () => {
+    setMounted(false);
+    if (Platform.OS !== 'ios') requestAnimationFrame(() => props.onDismissComplete?.());
+  };
 
   useEffect(() => {
     if (visible) {
       progress.value = withTiming(1, { duration: 180, easing: Easing.out(Easing.quad) });
     } else if (mounted) {
       progress.value = withTiming(0, { duration: 140, easing: Easing.in(Easing.quad) }, (finished) => {
-        if (finished) runOnJS(setMounted)(false);
+        if (finished) runOnJS(finishClosing)();
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `mounted`/`progress` intentionally excluded: this effect only reacts to `visible` changing.
@@ -94,15 +99,13 @@ export function AppDialog(props: AppDialogProps) {
   const backdropStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
   const cardStyle = useAnimatedStyle(() => ({ opacity: progress.value, transform: [{ scale: 0.96 + progress.value * 0.04 }] }));
 
-  if (!mounted) return null;
-
   const isConfirm = props.kind === 'confirm';
   const isAlert = props.kind === 'alert';
   const isActionSheet = props.kind === 'actionSheet';
   const busy = isConfirm && Boolean(props.loading);
 
   return (
-    <Modal transparent visible={mounted} statusBarTranslucent onRequestClose={onRequestClose} animationType="none">
+    <Modal transparent visible={mounted} statusBarTranslucent onRequestClose={onRequestClose} onDismiss={props.onDismissComplete} animationType="none">
       <View style={styles.wrap}>
         <Animated.View style={[styles.backdrop, backdropStyle]}>
           <Pressable
