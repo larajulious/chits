@@ -30,6 +30,7 @@ import { ReminderSheet } from '@/components/reminders/reminder-sheet';
 import { createReminderRepository, type CardReminder } from '@/db/repositories';
 import { hasNotificationPermission, removeCardReminder, requestReminderSync, setCardReminder, subscribeToReminderChanges } from '@/services/reminders';
 import { formatReminder } from '@/services/reminder-time';
+import { shareNoteHref } from '@/services/share-note-source';
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
 import type { AttachmentLike, CardAttachment, Message } from '@/db/types';
 
@@ -188,6 +189,8 @@ export default function CardDetailScreen() {
     setNotice(null);
     router.push(`/card/edit-content?messageId=${message.id}`);
   };
+
+  const openShareNote = () => { Keyboard.dismiss(); router.push(shareNoteHref({ cardId: id })); };
 
   const sendComment = async () => {
     const text = commentDraft.trim();
@@ -471,6 +474,7 @@ export default function CardDetailScreen() {
         <View style={[styles.sectionHeader, styles.contentSectionHeader]}>
           <Text accessibilityRole="header" style={styles.sectionTitle}>CONTENT</Text>
           <View style={styles.contentHeaderActions}>
+            {!covered ? <Pressable accessibilityRole="button" accessibilityLabel="Share Note" hitSlop={8} onPress={openShareNote} style={styles.inlineEdit}><Ionicons accessible={false} name="images-outline" size={16} color={contentAccentStrong} /></Pressable> : null}
             {contentHidden && !covered ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" hitSlop={8} onPress={() => setTemporarilyRevealed(false)} style={styles.inlineEdit}><Ionicons accessible={false} name="eye-off-outline" size={16} color={theme.textMuted} /><Text style={[styles.inlineEditText, { color: theme.textMuted }]}>Hide again</Text></Pressable> : null}
             {singleThoughtEditable ? <Pressable accessibilityRole="button" accessibilityLabel="Edit content" hitSlop={8} onPress={() => openContentEditor(messages[0])}><Text style={[styles.inlineEditText, { color: contentAccentStrong }]}>Edit</Text></Pressable>
               : messages.length > 1 ? <View style={styles.countBadge}><Text style={styles.countText}>{messages.length}</Text></View> : null}
@@ -576,6 +580,13 @@ export default function CardDetailScreen() {
 
         <View style={styles.sectionHeader}><Text accessibilityRole="header" style={styles.sectionTitle}>CARD ACTIONS</Text></View>
         <View style={styles.cardActions}>
+          {!covered ? <>
+            <Pressable accessibilityRole="button" accessibilityHint="Turn this card into an image you can share or save." onPress={openShareNote} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
+              <Ionicons accessible={false} name="images-outline" size={18} color={theme.textSecondary} />
+              <View style={styles.flexCopy}><Text style={styles.actionTitle}>Share Note</Text><Text style={styles.actionCopy}>Turn this card into an image you can share or save.</Text></View>
+            </Pressable>
+            <View style={styles.actionDivider} />
+          </> : null}
           <Pressable accessibilityRole="button" onPress={() => void setContentHidden(!contentHidden)} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
             <Ionicons accessible={false} name={contentHidden ? 'eye-outline' : 'eye-off-outline'} size={18} color={theme.textSecondary} />
             <View style={styles.flexCopy}><Text style={styles.actionTitle}>{contentHidden ? 'Show content' : 'Hide content'}</Text><Text style={styles.actionCopy}>{contentHidden ? 'Make this card and its Chits visible again.' : 'Cover this card on the board and its Chits in Chat.'}</Text></View>

@@ -29,6 +29,7 @@ import { detachConfirmationMessage } from '@/services/detach-card';
 import { requestReminderSync, subscribeToReminderChanges } from '@/services/reminders';
 import { BoardAppearanceFields } from '@/components/boards/board-appearance-fields';
 import { CardListRow } from '@/components/boards/card-list-row.native';
+import { shareNoteHref } from '@/services/share-note-source';
 import { resolveBoardIcon, type BoardIconName } from '@/constants/board-appearance';
 import { radii, spacing } from '@/constants/theme';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
@@ -360,6 +361,7 @@ export default function BoardsScreen() {
       actionSheet({
         title: item.title,
         options: [
+          ...(item.hidden ? [] : [{ label: 'Share Note', icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ messageId: item.id })) }]),
           { label: item.pinned ? 'Unpin' : 'Pin', icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void messageRepository.setPinned(item.id, !item.pinned).then(() => loadCards(cardSearch)) },
           {
             label: 'Archive thought', icon: 'archive-outline', onPress: () => confirm({
@@ -384,6 +386,7 @@ export default function BoardsScreen() {
     actionSheet({
       title: item.title,
       options: [
+        ...(item.hidden ? [] : [{ label: 'Share Note', icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ cardId: item.id })) }]),
         { label: item.pinned ? 'Unpin' : 'Pin', icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void boardRepository.setPinned('card', item.id, !item.pinned).then(() => loadCards(cardSearch)) },
         { label: 'Move back to Unorganized', icon: 'arrow-undo-outline', onPress: () => void moveCardBackToUnorganized(item) },
         {

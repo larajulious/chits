@@ -16,6 +16,7 @@ import { AttachmentPicker, type AttachmentDraft, type AttachmentPickerHandle } f
 import { ChatHeader } from '@/components/chat/chat-header';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { MessageActions, getCopyableMessageText } from '@/components/chat/message-actions';
+import { shareNoteHref } from '@/services/share-note-source';
 import { MessageRow } from '@/components/chat/message-row';
 import { useTheme } from '@/components/theme-provider';
 import { CONTENT_RANGE, useChatTransition } from '@/components/navigation/chat-transition';
@@ -936,7 +937,7 @@ export default function ChatScreen() {
           </View>
         </View>
         </View>
-      <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => { afterActionsClosed.current = null; setSelected(null); }} onClosed={runAfterActionsClosed} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} onAddToBoard={addToBoard} onDownload={(message) => { setSelected(null); if (message.attachments[0]) void download.exportAttachment(message.attachments[0]); }} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
+      <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => { afterActionsClosed.current = null; setSelected(null); }} onClosed={runAfterActionsClosed} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} onAddToBoard={addToBoard} onDownload={(message) => { setSelected(null); if (message.attachments[0]) void download.exportAttachment(message.attachments[0]); }} onShareNote={(message) => { afterActionsClosed.current = () => router.push(shareNoteHref({ messageId: message.id })); setSelected(null); }} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
       <Toast message={toast ?? download.status} />
       </Screen>
     </KeyboardAvoidingView></BackgroundReadabilityProvider></Animated.View>

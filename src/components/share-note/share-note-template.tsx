@@ -1,0 +1,211 @@
+import { memo, type ComponentProps } from 'react';
+import { Platform, StyleSheet, Text, View, type TextStyle } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+
+import { SHARE_NOTE_FONT_METRICS, type ShareNoteFontStyle, type ShareNoteTheme } from '@/constants/share-note-themes';
+import { resolveAttachmentUri } from '@/services/attachment-storage';
+import { fitShareNoteText, shareNoteLayout, SHARE_NOTE_DESIGN_WIDTH, type ShareNoteFormat, type ShareNoteImage, type ShareNoteLayout, type ShareNoteMode, type ShareNoteTextFit } from '@/services/share-note';
+
+// System faces only — nothing to download or fail to load before a capture.
+const FONTS: Record<ShareNoteFontStyle, TextStyle> = Platform.select({
+  ios: {
+    formal: { fontWeight: '600', letterSpacing: -0.2 },
+    casual: { fontFamily: 'ui-rounded', fontWeight: '600' },
+    playful: { fontFamily: 'ui-rounded', fontWeight: '700' },
+    elegant: { fontFamily: 'ui-serif', fontStyle: 'italic', fontWeight: '400' },
+    bold: { fontWeight: '900', letterSpacing: -0.6 },
+    expressive: { fontFamily: 'ui-serif', fontWeight: '700', letterSpacing: -0.3 },
+  },
+  default: {
+    // A named medium face: many Android system fonts (e.g. Samsung's) have no 600 and fall back to regular.
+    formal: { fontFamily: 'sans-serif-medium', fontWeight: '500' },
+    casual: { fontFamily: 'sans-serif', fontWeight: '500' },
+    playful: { fontFamily: 'sans-serif-medium', fontWeight: '700' },
+    elegant: { fontFamily: 'serif', fontStyle: 'italic', fontWeight: '400' },
+    bold: { fontFamily: 'sans-serif', fontWeight: '900', letterSpacing: -0.4 },
+    expressive: { fontFamily: 'serif', fontWeight: '700' },
+  },
+});
+const QUOTE_FONT: TextStyle = Platform.select({ ios: { fontFamily: 'ui-serif' }, default: { fontFamily: 'serif' } });
+
+const isDark = (hex: string) => {
+  const [r, g, b] = [1, 3, 5].map((index) => parseInt(hex.slice(index, index + 2), 16));
+  return r * 0.299 + g * 0.587 + b * 0.114 < 110;
+};
+
+export type ShareNoteContent = { title: string | null; text: string | null; images: ShareNoteImage[] };
+
+export type ShareNoteTemplateProps = {
+  content: ShareNoteContent;
+  theme: ShareNoteTheme;
+  format: ShareNoteFormat;
+  mode: ShareNoteMode;
+  showBranding: boolean;
+  /** The drawn width in points; every design unit scales by width / 360. */
+  width: number;
+  onImageLoad?: (id: string) => void;
+};
+
+/** Layout + text fit for a note, shared by the template and the composer's "too long" hint. */
+export function measureShareNote({ content, theme, format, mode, showBranding }: Omit<ShareNoteTemplateProps, 'width' | 'onImageLoad'>): { layout: ShareNoteLayout; fit: ShareNoteTextFit | null } {
+  const layout = shareNoteLayout({
+    format, mode, imageCount: content.images.length, hasTitle: mode !== 'image' && Boolean(content.title),
+    showMark: theme.mark === 'quote' || theme.mark === 'bar', showBranding,
+  });
+  const fit = layout.text && content.text && mode !== 'image'
+    ? fitShareNoteText(content.text, layout.text, { mode, format, metrics: SHARE_NOTE_FONT_METRICS[theme.fontStyle] })
+    : null;
+  return { layout, fit };
+}
+
+/**
+ * The designed Share Note — the one renderer behind both the live preview and
+ * the exported image. It is drawn from design units, never from the app's own
+ * UI, so the file looks like a crafted card rather than a screenshot. Only
+ * text and photos appear; everything else about the note stays private.
+ */
+export const ShareNoteTemplate = memo(function ShareNoteTemplate({ content, theme, format, mode, showBranding, width, onImageLoad }: ShareNoteTemplateProps) {
+  const u = width / SHARE_NOTE_DESIGN_WIDTH;
+  const { layout, fit } = measureShareNote({ content, theme, format, mode, showBranding });
+  const { canvas, card, content: box } = layout;
+  const { colors } = theme;
+  const darkCanvas = isDark(colors.background);
+  const cardRadius = 26 * u;
+  const textAlign = theme.align;
+  const center = textAlign === 'center';
+  const font = FONTS[theme.fontStyle];
+
+  const cardFrame = { left: card.left * u, top: card.top * u, width: card.width * u, height: card.height * u, borderRadius: cardRadius };
+
+  return <View collapsable={false} style={{ width: canvas.width * u, height: canvas.height * u, overflow: 'hidden', backgroundColor: colors.background }}>
+    {theme.backgroundType === 'gradient' ? <LinearGradient colors={[colors.background, colors.backgroundEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} /> : null}
+    <Decorations theme={theme} u={u} canvas={canvas} />
+
+    {/* A drawn two-layer shadow: platform shadows (Android elevation especially) don't survive a capture. */}
+    <View style={[styles.absolute, cardFrame, { top: cardFrame.top + 10 * u, left: cardFrame.left + 4 * u, width: cardFrame.width - 8 * u, backgroundColor: darkCanvas ? 'rgba(0,0,0,0.35)' : 'rgba(24,32,40,0.07)' }]} />
+    <View style={[styles.absolute, cardFrame, { top: cardFrame.top + 4 * u, backgroundColor: darkCanvas ? 'rgba(0,0,0,0.3)' : 'rgba(24,32,40,0.06)' }]} />
+
+    <View style={[styles.absolute, cardFrame, { backgroundColor: colors.surface, overflow: 'hidden' }]}>
+      <View style={{ position: 'absolute', left: card.padding * u, top: card.padding * u, width: box.width * u, height: box.height * u }}>
+        {layout.images.map((frame, index) => {
+          const image = content.images[index];
+          const uri = image ? resolveAttachmentUri(image.storagePath) : null;
+          return <View key={image?.id ?? index} style={[styles.absolute, { left: frame.left * u, top: frame.top * u, width: frame.width * u, height: frame.height * u, borderRadius: 16 * u, backgroundColor: colors.decoration, overflow: 'hidden' }]}>
+            {uri ? <Image source={{ uri }} contentFit="cover" cachePolicy="memory" style={StyleSheet.absoluteFill} onLoad={() => onImageLoad?.(image.id)} onError={() => onImageLoad?.(image.id)} /> : null}
+          </View>;
+        })}
+
+        {layout.textBlock ? <View style={[styles.absolute, styles.textBlock, { top: layout.textBlock.top * u, height: layout.textBlock.height * u, alignItems: center ? 'center' : 'flex-start' }]}>
+          {layout.mark ? <View style={{ height: layout.mark.height * u, justifyContent: 'flex-start', alignItems: center ? 'center' : 'flex-start' }}>
+            {theme.mark === 'quote'
+              ? <Text style={[QUOTE_FONT, styles.quote, { fontSize: 58 * u, lineHeight: 62 * u, height: layout.mark.height * u, color: colors.accent }]}>“</Text>
+              : <View style={{ marginTop: 4 * u, width: 30 * u, height: 4 * u, borderRadius: 2 * u, backgroundColor: colors.accent }} />}
+          </View> : null}
+          {layout.title && content.title ? <Text numberOfLines={1} style={[styles.title, { width: box.width * u, height: layout.title.height * u, fontSize: 11 * u, lineHeight: 16 * u, letterSpacing: 1.2 * u, color: colors.accent, textAlign }]}>{content.title.toUpperCase()}</Text> : null}
+          {fit && content.text ? <Text
+            numberOfLines={fit.maxLines}
+            ellipsizeMode="tail"
+            style={[font, styles.body, {
+              width: box.width * u, maxHeight: fit.maxLines * fit.lineHeight * u,
+              fontSize: fit.fontSize * u, lineHeight: fit.lineHeight * u,
+              letterSpacing: (font.letterSpacing ?? 0) * u, color: colors.textPrimary, textAlign,
+            }]}
+          >{content.text}</Text> : null}
+        </View> : null}
+
+        {layout.footer ? <View style={[styles.absolute, styles.footer, { top: layout.footer.top * u, height: layout.footer.height * u, justifyContent: center || mode === 'image' ? 'center' : 'flex-start', gap: 5 * u }]}>
+          <Ionicons name="chatbubbles" size={11 * u} color={colors.accent} />
+          <Text style={[styles.footerText, { fontSize: 10 * u, lineHeight: 14 * u, letterSpacing: 0.3 * u, color: colors.textSecondary }]}>Shared from Chits</Text>
+        </View> : null}
+      </View>
+    </View>
+
+    {theme.mark === 'tape' ? <View style={[styles.absolute, { left: (canvas.width / 2 - 44) * u, top: (card.top - 11) * u, width: 88 * u, height: 24 * u, borderRadius: 3 * u, backgroundColor: colors.accent, opacity: 0.28, transform: [{ rotate: '-3deg' }] }]} /> : null}
+    {theme.stickers ? <CornerStickers theme={theme} u={u} canvas={canvas} card={card} /> : null}
+  </View>;
+});
+
+type IconName = ComponentProps<typeof Ionicons>['name'];
+type Canvas = ShareNoteLayout['canvas'];
+
+// Deterministic "scatter": the same note always draws the same way, in the
+// preview and in the file.
+const scatter = (index: number, salt: number) => {
+  const value = Math.sin(index * 12.9898 + salt * 78.233) * 43758.5453;
+  return value - Math.floor(value);
+};
+
+function Decorations({ theme, u, canvas }: { theme: ShareNoteTheme; u: number; canvas: Canvas }) {
+  const ink = theme.colors.decoration;
+  const { width, height } = canvas;
+  switch (theme.decorationStyle) {
+    case 'soft-shapes':
+      return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <View style={[styles.absolute, { left: (width - 110) * u, top: -70 * u, width: 220 * u, height: 220 * u, borderRadius: 110 * u, backgroundColor: ink, opacity: 0.55 }]} />
+        <View style={[styles.absolute, { left: -80 * u, top: (height - 120) * u, width: 200 * u, height: 200 * u, borderRadius: 100 * u, backgroundColor: ink, opacity: 0.45 }]} />
+        <View style={[styles.absolute, { left: (width - 34) * u, top: height * 0.58 * u, width: 56 * u, height: 56 * u, borderRadius: 28 * u, backgroundColor: ink, opacity: 0.5 }]} />
+      </View>;
+    case 'lines':
+      return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        {Array.from({ length: Math.ceil(height / 22) }, (_, index) => <View key={index} style={[styles.absolute, { left: 0, right: 0, top: (index * 22 + 11) * u, height: Math.max(1, 0.75 * u), backgroundColor: ink }]} />)}
+      </View>;
+    case 'dots':
+      return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        {Array.from({ length: Math.ceil(height / 40) * 8 }, (_, index) => {
+          const row = Math.floor(index / 8);
+          const size = (1.6 + scatter(index, 1) * 2.8) * u;
+          return <View key={index} style={[styles.absolute, { left: ((index % 8) * 48 + (row % 2) * 24 + scatter(index, 2) * 10) * u, top: (row * 40 + scatter(index, 3) * 12) * u, width: size, height: size, borderRadius: size / 2, backgroundColor: ink, opacity: 0.5 + scatter(index, 4) * 0.5 }]} />;
+        })}
+      </View>;
+    case 'stickers':
+      return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        {Array.from({ length: 10 }, (_, index) => {
+          const glyphs = theme.stickers ?? ['sparkles'];
+          const size = (14 + scatter(index, 5) * 22) * u;
+          return <Ionicons key={index} name={glyphs[index % glyphs.length] as IconName} size={size} color={ink} style={[styles.absolute, { left: scatter(index, 6) * (width - 30) * u, top: scatter(index, 7) * (height - 30) * u, opacity: 0.55, transform: [{ rotate: `${Math.round(scatter(index, 8) * 50 - 25)}deg` }] }]} />;
+        })}
+      </View>;
+    case 'confetti': {
+      const palette = theme.confetti ?? [theme.colors.accent];
+      return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        {Array.from({ length: 22 }, (_, index) => {
+          const shape = index % 3;
+          const size = (6 + scatter(index, 9) * 10) * u;
+          return <View key={index} style={[styles.absolute, {
+            left: scatter(index, 10) * (width - 12) * u, top: scatter(index, 11) * (height - 12) * u,
+            width: shape === 2 ? size * 2.2 : size, height: shape === 2 ? size * 0.5 : size,
+            borderRadius: shape === 0 ? size : 2 * u, backgroundColor: palette[index % palette.length],
+            transform: [{ rotate: `${Math.round(scatter(index, 12) * 180)}deg` }],
+          }]} />;
+        })}
+      </View>;
+    }
+    default:
+      return null;
+  }
+}
+
+// A couple of stickers on the card's corners, like they were pressed on by hand.
+function CornerStickers({ theme, u, canvas, card }: { theme: ShareNoteTheme; u: number; canvas: Canvas; card: ShareNoteLayout['card'] }) {
+  const glyphs = (theme.stickers ?? []) as IconName[];
+  if (!glyphs.length) return null;
+  const spots = [
+    { left: canvas.width - card.left - 22, top: card.top - 16, size: 30, rotate: 14 },
+    { left: card.left - 10, top: canvas.height - card.top - 20, size: 26, rotate: -12 },
+  ];
+  return <>
+    {spots.map((spot, index) => <Ionicons key={index} name={glyphs[index % glyphs.length]} size={spot.size * u} color={theme.colors.accent} style={[styles.absolute, { left: spot.left * u, top: spot.top * u, transform: [{ rotate: `${spot.rotate}deg` }] }]} />)}
+  </>;
+}
+
+const styles = StyleSheet.create({
+  absolute: { position: 'absolute' },
+  textBlock: { left: 0, right: 0, justifyContent: 'center' },
+  quote: { includeFontPadding: false, fontWeight: '700' },
+  title: { fontWeight: '800' },
+  body: { includeFontPadding: false },
+  footer: { left: 0, right: 0, flexDirection: 'row', alignItems: 'center' },
+  footerText: { fontWeight: '600' },
+});

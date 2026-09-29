@@ -68,6 +68,7 @@ function ThemedApp() {
             <Stack.Screen name="board/[id]" />
             <Stack.Screen name="card/[id]" />
             <Stack.Screen name="card/edit-content" />
+            <Stack.Screen name="share-note" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
           </Stack>
         </AppDrawerProvider>
       </View>

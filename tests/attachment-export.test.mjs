@@ -91,7 +91,10 @@ test('Download saves straight to the device where the platform allows it', async
 
   const android = read('modules/chits-attachments/android/src/main/java/expo/modules/chitsattachments/ChitsFilesModule.kt');
   assert.match(android, /MediaStore\.Downloads\.EXTERNAL_CONTENT_URI/);
-  assert.match(android, /"\$\{Environment\.DIRECTORY_DOWNLOADS\}\/Chits"/);
+  assert.match(android, /saveToMediaStore\(uri, fileName, mimeType, MediaStore\.Downloads\.EXTERNAL_CONTENT_URI, Environment\.DIRECTORY_DOWNLOADS\)/);
+  // Generated images (Share Note) go to Pictures/Chits, so they show in the gallery.
+  assert.match(android, /saveToMediaStore\(uri, fileName, mimeType, MediaStore\.Images\.Media\.EXTERNAL_CONTENT_URI, Environment\.DIRECTORY_PICTURES\)/);
+  assert.match(android, /RELATIVE_PATH, "\$directory\/Chits"/);
   assert.match(android, /IS_PENDING, 1/);
   const ios = read('modules/chits-attachments/ios/ChitsFilesModule.swift');
   assert.match(ios, /PHPhotoLibrary\.requestAuthorization\(for: \.addOnly\)/);

@@ -132,37 +132,13 @@ class ChitsFilesModule : Module() {
     // resolves name clashes itself ("Invoice (1).pdf"). A failed copy removes
     // the pending entry so no empty file is left behind.
     AsyncFunction("saveToDownloadsAsync") { uri: String, fileName: String, mimeType: String? ->
-      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) throw UnsupportedOnThisAndroidException()
-      val resolver = context.contentResolver
-      val name = ChitsLocalFiles.safeFileName(fileName)
-      val values = ContentValues().apply {
-        put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-        put(MediaStore.MediaColumns.MIME_TYPE, platformMimeType(name, mimeType))
-        put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/Chits")
-        put(MediaStore.MediaColumns.IS_PENDING, 1)
-      }
-      val destination = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: throw IOException("Downloads could not create the file.")
-      try {
-        openSource(uri).use { input ->
-          val output = resolver.openOutputStream(destination, "w") ?: throw IOException("Downloads could not open the file.")
-          output.use { input.copyTo(it) }
-        }
-        resolver.update(destination, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
-      } catch (error: Throwable) {
-        try { resolver.delete(destination, null, null) } catch (_: Throwable) {}
-        Log.w(TAG, "Unable to save to Downloads", error)
-        val code = when {
-          isOutOfSpace(error) -> "ERR_EXPORT_NO_SPACE"
-          error is FileNotFoundException || error is FileUnavailableException -> "ERR_FILE_MISSING"
-          else -> "ERR_EXPORT_FAILED"
-        }
-        throw CodedException(code, error.message ?: "The file could not be saved.", error)
-      }
-      // The name MediaStore actually used (it may have added " (1)").
-      val savedName = resolver.query(destination, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-        if (cursor.moveToFirst()) cursor.getString(0) else null
-      } ?: name
-      mapOf("status" to "saved", "uri" to destination.toString(), "location" to "Downloads/Chits", "fileName" to savedName)
+      saveToMediaStore(uri, fileName, mimeType, MediaStore.Downloads.EXTERNAL_CONTENT_URI, Environment.DIRECTORY_DOWNLOADS)
+    }
+
+    // The same one-tap copy, but into Pictures/Chits so a generated image (Share
+    // Note) lands in the gallery alongside the user's photos, not in Downloads.
+    AsyncFunction("saveToPicturesAsync") { uri: String, fileName: String, mimeType: String? ->
+      saveToMediaStore(uri, fileName, mimeType, MediaStore.Images.Media.EXTERNAL_CONTENT_URI, Environment.DIRECTORY_PICTURES)
     }
 
     OnActivityResult { _, (requestCode, resultCode, data) ->
@@ -216,6 +192,40 @@ class ChitsFilesModule : Module() {
   // Storage providers append an extension when the MIME type and filename
   // disagree (e.g. "Voice note.m4a" + "audio/m4a" → "Voice note.m4a.mp4"), so
   // prefer the platform's own mapping for the file's extension when it has one.
+  private fun saveToMediaStore(uri: String, fileName: String, mimeType: String?, collection: Uri, directory: String): Map<String, String> {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) throw UnsupportedOnThisAndroidException()
+    val resolver = context.contentResolver
+    val name = ChitsLocalFiles.safeFileName(fileName)
+    val values = ContentValues().apply {
+      put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+      put(MediaStore.MediaColumns.MIME_TYPE, platformMimeType(name, mimeType))
+      put(MediaStore.MediaColumns.RELATIVE_PATH, "$directory/Chits")
+      put(MediaStore.MediaColumns.IS_PENDING, 1)
+    }
+    val destination = resolver.insert(collection, values) ?: throw IOException("$directory could not create the file.")
+    try {
+      openSource(uri).use { input ->
+        val output = resolver.openOutputStream(destination, "w") ?: throw IOException("$directory could not open the file.")
+        output.use { input.copyTo(it) }
+      }
+      resolver.update(destination, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+    } catch (error: Throwable) {
+      try { resolver.delete(destination, null, null) } catch (_: Throwable) {}
+      Log.w(TAG, "Unable to save to $directory", error)
+      val code = when {
+        isOutOfSpace(error) -> "ERR_EXPORT_NO_SPACE"
+        error is FileNotFoundException || error is FileUnavailableException -> "ERR_FILE_MISSING"
+        else -> "ERR_EXPORT_FAILED"
+      }
+      throw CodedException(code, error.message ?: "The file could not be saved.", error)
+    }
+    // The name MediaStore actually used (it may have added " (1)").
+    val savedName = resolver.query(destination, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+      if (cursor.moveToFirst()) cursor.getString(0) else null
+    } ?: name
+    return mapOf("status" to "saved", "uri" to destination.toString(), "location" to "$directory/Chits", "fileName" to savedName)
+  }
+
   private fun platformMimeType(fileName: String, fallback: String?): String {
     val extension = fileName.substringAfterLast('.', "").lowercase()
     val fromExtension = if (extension.isNotEmpty()) MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) else null

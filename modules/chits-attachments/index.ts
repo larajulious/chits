@@ -39,6 +39,8 @@ type ChitsFilesNativeModule = {
   exportAsync(uri: string, fileName: string, mimeType: string | null): Promise<NativeExportResult>;
   /** Android 10+: one-tap copy into the public Download/Chits folder (MediaStore; no permission). Rejects with ERR_UNSUPPORTED below Android 10. */
   saveToDownloadsAsync(uri: string, fileName: string, mimeType: string | null): Promise<NativeExportResult>;
+  /** Android 10+: one-tap copy of an image into the public Pictures/Chits folder, so it shows in gallery apps. Rejects with ERR_UNSUPPORTED below Android 10. */
+  saveToPicturesAsync(uri: string, fileName: string, mimeType: string | null): Promise<NativeExportResult>;
   /** iOS: one-tap copy of a photo or video into the Photos library (add-only access). Rejects with ERR_EXPORT_PERMISSION if access is refused. */
   saveToPhotosAsync(uri: string, fileName: string, kind: 'photo' | 'video'): Promise<NativeExportResult>;
 };
