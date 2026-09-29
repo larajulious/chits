@@ -5,6 +5,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { createReminderRepository } from '@/db/repositories';
 import { resolvePermission, type PermissionState } from '@/services/permissions';
 import { planReminderSync, reminderBody, REMINDER_NOTIFICATION_TYPE, REMINDER_TITLE, type ScheduledReminder } from '@/services/reminder-content';
+import { isBackupOperationActive } from '@/services/backup-operation';
 
 const CHANNEL_ID = 'reminders';
 
@@ -147,10 +148,23 @@ export async function removeCardReminder(database: SQLiteDatabase, cardId: strin
 let syncDatabase: SQLiteDatabase | null = null;
 let running: Promise<void> | null = null;
 let rerun = false;
+let syncPaused = false;
+
+/** Drain device reconciliation before a backup snapshot or closing the database. */
+export async function pauseReminderSync() {
+  syncPaused = true;
+  rerun = false;
+  await running;
+}
+export function resumeReminderSync() {
+  syncPaused = false;
+  void requestReminderSync();
+}
 
 /** Registered by the root layout with the live database (again after a restore). */
 export function registerReminderDatabase(database: SQLiteDatabase | null) {
   syncDatabase = database;
+  if (database) syncPaused = false;
 }
 
 async function runSync(database: SQLiteDatabase) {
@@ -190,11 +204,11 @@ async function runSync(database: SQLiteDatabase) {
  */
 export function requestReminderSync(): Promise<void> {
   const database = syncDatabase;
-  if (!database) return Promise.resolve();
+  if (!database || syncPaused) return Promise.resolve();
   if (running) { rerun = true; return running; }
   running = (async () => {
     try {
-      do { rerun = false; await runSync(database); } while (rerun);
+      do { rerun = false; await runSync(database); } while (rerun && !syncPaused && syncDatabase === database);
     } catch (error) {
       console.warn('[reminders] sync failed', error);
     } finally {
@@ -221,7 +235,7 @@ export function reminderCardId(response: Notifications.NotificationResponse | nu
 export function observeReminderNotifications(openCard: (cardId: string) => void): () => void {
   const handle = (response: Notifications.NotificationResponse | null) => {
     const cardId = reminderCardId(response);
-    if (!cardId) return;
+    if (!cardId || isBackupOperationActive()) return;
     // Consume it so a later remount (e.g. after a restore) doesn't reopen the card.
     Notifications.clearLastNotificationResponse();
     openCard(cardId);

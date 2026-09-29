@@ -13,7 +13,24 @@
       "buildNumber": "4",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSPhotoLibraryAddUsageDescription": "Chits saves a copy of a photo or video to your photo library only when you choose Save to Photos."
+        "NSPhotoLibraryAddUsageDescription": "Chits saves a copy of a photo or video to your photo library only when you choose Save to Photos.",
+        "UTExportedTypeDeclarations": [
+          {
+            "UTTypeIdentifier": "com.larajulious.chits.backup",
+            "UTTypeDescription": "Chits Backup",
+            "UTTypeConformsTo": [
+              "public.zip-archive"
+            ],
+            "UTTypeTagSpecification": {
+              "public.filename-extension": [
+                "chitsbackup"
+              ],
+              "public.mime-type": [
+                "application/x-chits-backup"
+              ]
+            }
+          }
+        ]
       }
     },
     "android": {

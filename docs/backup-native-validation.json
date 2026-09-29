@@ -1,0 +1,36 @@
+{
+  "date": "2026-09-29",
+  "ios": "iOS 27 simulator",
+  "android": "Android emulator, isolated application ID",
+  "fixtures": "PNG, MP4, WAV, PDF, text file and a 32 MB binary; chat, board, column, card, ordering, pin, privacy, archive and settings",
+  "reports": [
+    {
+      "phase": "passed",
+      "platform": "ios",
+      "archiveSize": 34303841,
+      "image": true,
+      "audio": true,
+      "video": true,
+      "roundTrip": true,
+      "crossInstallation": true,
+      "crashRecovery": true,
+      "pdf": true
+    },
+    {
+      "phase": "passed",
+      "platform": "android",
+      "archiveSize": 34303841,
+      "image": true,
+      "audio": true,
+      "video": true,
+      "roundTrip": true,
+      "crossInstallation": true,
+      "crashRecovery": true,
+      "pdf": true
+    }
+  ],
+  "limitations": [
+    "Physical devices and cloud-backed file providers remain unverified.",
+    "Media loading and PDF rendering were checked; audible output on physical hardware was not checked."
+  ]
+}

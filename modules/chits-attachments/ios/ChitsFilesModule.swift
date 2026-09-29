@@ -1,4 +1,6 @@
 import ExpoModulesCore
+import CryptoKit
+import Darwin
 import Photos
 import UIKit
 import UniformTypeIdentifiers
@@ -34,6 +36,33 @@ public final class ChitsFilesModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("ChitsFiles")
+
+    AsyncFunction("atomicWriteFileAsync") { (uri: String, contents: String) in
+      guard let url = ChitsLocalFiles.fileURL(from: uri) else { throw FileUnavailableException() }
+      let temporary = url.appendingPathExtension("tmp")
+      try Data(contents.utf8).write(to: temporary)
+      let handle = try FileHandle(forWritingTo: temporary)
+      defer { try? handle.close() }
+      try handle.synchronize()
+      guard Darwin.rename(temporary.path, url.path) == 0 else {
+        throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+      }
+    }
+
+    AsyncFunction("hashFileAsync") { (uri: String) -> String in
+      let handle = try FileHandle(forReadingFrom: Self.readableURL(uri))
+      defer { try? handle.close() }
+      var hasher = SHA256()
+      while true {
+        let finished = try autoreleasepool {
+          guard let chunk = try handle.read(upToCount: 64 * 1024), !chunk.isEmpty else { return true }
+          hasher.update(data: chunk)
+          return false
+        }
+        if finished { break }
+      }
+      return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
 
     AsyncFunction("prepareNamedFileAsync") { (uri: String, fileName: String) -> String in
       try ChitsLocalFiles.namedLink(to: Self.readableURL(uri), fileName: fileName).absoluteString

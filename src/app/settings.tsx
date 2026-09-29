@@ -1,24 +1,17 @@
 import { useAppDrawer } from '@/components/navigation/app-drawer';
-import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme, type AppAppearance } from '@/components/theme-provider';
 import { IconButton } from '@/components/ui/primitives';
-import { ChitsLoaderOverlay } from '@/components/ui/chits-loader';
 import { EditNoteSpaceNameSheet } from '@/components/settings/edit-notespace-name-sheet';
 import { ChatAppearanceSettings } from '@/components/settings/chat-appearance-settings';
 import { type ChatThemeKey } from '@/constants/theme';
-// eslint-disable-next-line import/no-unresolved -- Expo resolves platform file suffixes at runtime.
-import { createBackup, discardValidatedBackup, RestoreError, restoreBackup, saveBackupFile, validateBackup } from '@/services/backup-service';
-import { triggerAppReset } from '@/services/app-reset';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Constants from 'expo-constants';
-import * as DocumentPicker from 'expo-document-picker';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type Sheet = 'appearance' | 'backup' | null;
+type Sheet = 'appearance' | null;
 const appearanceNames = { system: 'System', light: 'Light', dark: 'Dark' };
 
 function SettingsRow({ label, value, description, onPress, disabled }: { label: string; value?: string; description?: string; onPress?: () => void; disabled?: boolean }) {
@@ -37,13 +30,11 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 export default function SettingsScreen() {
   const { openDrawer } = useAppDrawer();
   const { appearance, setAppearance, themeKey, setThemeKey, themes, tokens } = useTheme();
-  const { confirm, alert } = useAppDialog();
   const database = useSQLiteContext();
   const [sheet, setSheet] = useState<Sheet>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastBackup, setLastBackup] = useState<string | null>(null);
-  const [backupBusy, setBackupBusy] = useState<'backup' | 'restore' | null>(null);
   // Same single source of truth as Chat's header, Boards' header, and the drawer —
   // all independently read this same app_settings key, refetched here on focus so
   // a rename made elsewhere is reflected without restarting the app.
@@ -74,80 +65,8 @@ export default function SettingsScreen() {
     catch { setError('That setting could not be saved. Please try again.'); }
     finally { setBusy(false); }
   };
-  const closeSheet = () => { if (!busy && !backupBusy) setSheet(null); };
+  const closeSheet = () => { if (!busy) setSheet(null); };
 
-  const createBackupFile = async () => {
-    if (backupBusy) return;
-    setBackupBusy('backup'); setError(null);
-    try {
-      const zipPath = await createBackup(database);
-      // The zip is only in a temporary folder until it's saved somewhere the
-      // user keeps it; a cancelled save means there is no backup to report.
-      const saved = await saveBackupFile(zipPath);
-      if (!saved.saved) { setToast('Backup not saved'); return; }
-      const now = Date.now();
-      await database.runAsync("INSERT INTO app_settings (key, value, updated_at) VALUES ('last_backup_at', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at", String(now), now);
-      setLastBackup(String(now));
-      setToast(saved.location ? `Backup saved to ${saved.location}` : 'Backup saved');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Chits could not create a backup. Please try again.');
-    } finally {
-      setBackupBusy(null);
-    }
-  };
-
-  // restoreBackup stages everything before touching current data, then closes
-  // this screen's database connection to swap files. From that point the app
-  // must remount right away (nothing may query the closed connection), and the
-  // outcome is shown by the fresh app once it has reopened the database.
-  const performRestore = async (extractedDir: string) => {
-    setBackupBusy('restore');
-    try {
-      await restoreBackup(extractedDir, database);
-      triggerAppReset({ type: 'success', title: 'Restore complete', message: 'Your Chits data has been restored.' });
-    } catch (cause) {
-      console.warn('[backup] restore failed', cause instanceof RestoreError ? { message: cause.message, dataChanged: cause.dataChanged, cause: cause.cause } : cause);
-      const failure = { type: 'warning' as const, title: 'Restore failed', message: cause instanceof RestoreError && cause.dataChanged ? cause.message : 'Your current data was not changed.' };
-      if (cause instanceof RestoreError && cause.liveClosed) { triggerAppReset(failure); return; }
-      setBackupBusy(null);
-      void discardValidatedBackup(extractedDir);
-      alert({ ...failure, icon: 'alert-circle-outline' });
-    }
-  };
-
-  const pickAndRestoreBackup = async () => {
-    if (backupBusy) return;
-    let picked: DocumentPicker.DocumentPickerResult;
-    try {
-      picked = await DocumentPicker.getDocumentAsync({ type: ['application/zip', 'application/x-zip-compressed', '*/*'], copyToCacheDirectory: true });
-    } catch {
-      setError('Chits could not open the file picker. Please try again.');
-      return;
-    }
-    if (picked.canceled) return; // Cancelling is not an error — current data is untouched either way.
-    const fileUri = picked.assets[0]?.uri;
-    if (!fileUri) return;
-    setBackupBusy('restore'); setError(null);
-    const validation = await validateBackup(fileUri);
-    setBackupBusy(null);
-    if (!validation.valid) {
-      alert({ type: 'warning', icon: 'alert-circle-outline', title: 'Invalid backup', message: validation.reason });
-      return;
-    }
-    confirm({
-      type: 'destructive',
-      icon: 'refresh-outline',
-      title: 'Restore this backup?',
-      message: 'Your current Chits data will be replaced by the data in this backup. This can’t be undone.',
-      confirmText: 'Restore backup',
-      onConfirm: () => performRestore(validation.extractedDir),
-      onCancel: () => discardValidatedBackup(validation.extractedDir),
-    });
-  };
-
-  const links = Constants.expoConfig?.extra ?? {};
-  const externalRows = [['Support', links.supportUrl], ['Privacy Policy', links.privacyPolicyUrl], ['Terms', links.termsUrl]] as const;
-  const validLink = (value: unknown): value is string => typeof value === 'string' && /^(https:\/\/|mailto:)/.test(value);
   return <SafeAreaView style={[styles.screen, { backgroundColor: tokens.background }]}>
     <View style={styles.header}><IconButton label="Open navigation" onPress={openDrawer}><Ionicons accessible={false} name="reorder-two-outline" size={24} color={tokens.textPrimary} /></IconButton><Text accessibilityRole="header" style={[styles.headerTitle, { color: tokens.textPrimary }]}>Settings</Text><IconButton label="Close settings" onPress={() => router.canGoBack() ? router.back() : router.navigate('/')}><Ionicons accessible={false} name="close" size={24} color={tokens.textPrimary} /></IconButton></View>
     <ScrollView contentContainerStyle={styles.content}>
@@ -172,39 +91,16 @@ export default function SettingsScreen() {
         </View>
       </Section>
       <ChatAppearanceSettings />
-      <Section title="DATA"><SettingsRow label="Backup & Restore" description={lastBackup && !Number.isNaN(new Date(Number(lastBackup)).getTime()) ? 'Last backup: ' + new Date(Number(lastBackup)).toLocaleDateString() : 'Last backup: Never'} onPress={() => setSheet('backup')} /></Section>
+      <Section title="DATA"><SettingsRow label="Backup & Restore" description={lastBackup && !Number.isNaN(new Date(Number(lastBackup)).getTime()) ? 'Last backup: ' + new Date(Number(lastBackup)).toLocaleDateString() : 'Last backup: Never'} onPress={() => router.push('/backup')} /></Section>
 
     </ScrollView>
     <Modal visible={sheet !== null} transparent animationType="slide" onRequestClose={closeSheet}>
       <View style={styles.backdrop}>
         <Pressable accessible={false} style={StyleSheet.absoluteFill} onPress={closeSheet} />
         <SafeAreaView edges={['bottom', 'left', 'right']} accessibilityViewIsModal style={[styles.sheet, { backgroundColor: tokens.surface }]}>
-          <View style={styles.sheetHeader}><Text accessibilityRole="header" style={[styles.sheetTitle, { color: tokens.textPrimary }]}>{sheet === 'appearance' ? 'App appearance' : 'Backup & Restore'}</Text><IconButton label="Close settings sheet" disabled={busy} onPress={closeSheet}><Ionicons name="close-outline" size={22} color={tokens.textSecondary} /></IconButton></View>
+          <View style={styles.sheetHeader}><Text accessibilityRole="header" style={[styles.sheetTitle, { color: tokens.textPrimary }]}>App appearance</Text><IconButton label="Close settings sheet" disabled={busy} onPress={closeSheet}><Ionicons name="close-outline" size={22} color={tokens.textSecondary} /></IconButton></View>
           <ScrollView contentContainerStyle={styles.sheetContent}>
             {sheet === 'appearance' ? (['system', 'light', 'dark'] as AppAppearance[]).map((mode) => <Pressable key={mode} accessibilityRole="radio" accessibilityState={{ selected: appearance === mode, disabled: busy }} disabled={busy} onPress={() => void change(() => setAppearance(mode), true)} style={styles.choice}><Text style={[styles.label, { color: tokens.textPrimary }]}>{appearanceNames[mode]}</Text>{appearance === mode ? <Ionicons name="checkmark" size={22} color={tokens.accent} /> : null}</Pressable>) : null}
-            {sheet === 'backup' ? <>
-              <Text style={[styles.body, { color: tokens.textSecondary }]}>Backups include your chats, boards, cards, comments, and attachments.</Text>
-              <SettingsRow label="Last backup" value={lastBackup && !Number.isNaN(new Date(Number(lastBackup)).getTime()) ? new Date(Number(lastBackup)).toLocaleString() : 'Never'} />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ disabled: backupBusy !== null }}
-                disabled={backupBusy !== null}
-                onPress={() => void createBackupFile()}
-                style={({ pressed }) => [styles.primaryButton, { backgroundColor: tokens.accent }, backupBusy !== null && styles.disabled, pressed && styles.pressed]}
-              >
-                {backupBusy === 'backup' ? <ActivityIndicator color={tokens.accentText} /> : <Text style={[styles.primaryButtonText, { color: tokens.accentText }]}>Create Backup</Text>}
-              </Pressable>
-              <Text style={[styles.body, { color: tokens.textSecondary }]}>Restore your chats, boards, and attachments from a previous backup.</Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ disabled: backupBusy !== null }}
-                disabled={backupBusy !== null}
-                onPress={() => void pickAndRestoreBackup()}
-                style={({ pressed }) => [styles.secondaryButton, { backgroundColor: tokens.background, borderColor: tokens.borderSubtle }, backupBusy !== null && styles.disabled, pressed && styles.pressed]}
-              >
-                {backupBusy === 'restore' ? <ActivityIndicator color={tokens.textPrimary} /> : <Text style={[styles.secondaryButtonText, { color: tokens.textPrimary }]}>Restore Backup</Text>}
-              </Pressable>
-            </> : null}
             {busy ? <ActivityIndicator accessibilityLabel="Saving setting" color={tokens.accent} /> : null}
             {error ? <Text accessibilityRole="alert" style={{ color: tokens.danger }}>{error}</Text> : null}
           </ScrollView>
@@ -213,7 +109,6 @@ export default function SettingsScreen() {
     </Modal>
     <EditNoteSpaceNameSheet visible={editNameOpen} currentName={noteSpaceName} onClose={() => setEditNameOpen(false)} onSave={saveNoteSpaceName} />
     {toast ? <View pointerEvents="none" accessibilityLiveRegion="polite" style={styles.toastWrap}><View style={[styles.toast, { backgroundColor: tokens.textPrimary }]}><Text style={[styles.toastText, { color: tokens.background }]}>{toast}</Text></View></View> : null}
-    {backupBusy ? <ChitsLoaderOverlay label={backupBusy === 'backup' ? 'Creating backup…' : 'Restoring backup…'} /> : null}
   </SafeAreaView>;
 }
 const styles = StyleSheet.create({
@@ -233,12 +128,6 @@ const styles = StyleSheet.create({
   sheetHeader: { flexDirection: 'row', alignItems: 'center', paddingLeft: 20, paddingRight: 12, paddingTop: 8 },
   sheetTitle: { flex: 1, fontSize: 18, fontWeight: '600' }, sheetContent: { paddingHorizontal: 20, paddingBottom: 20 },
   choice: { minHeight: 50, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  body: { fontSize: 15, lineHeight: 22, marginVertical: 8 },
-  primaryButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 12, marginTop: 6 },
-  primaryButtonText: { fontSize: 16, fontWeight: '700' },
-  secondaryButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 12, marginTop: 6, borderWidth: StyleSheet.hairlineWidth },
-  secondaryButtonText: { fontSize: 16, fontWeight: '600' },
-  disabled: { opacity: 0.5 },
   toastWrap: { position: 'absolute', right: 0, bottom: 32, left: 0, alignItems: 'center' },
   toast: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
   toastText: { fontSize: 14, fontWeight: '600' },

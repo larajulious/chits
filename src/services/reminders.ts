@@ -5,6 +5,8 @@ export type SetReminderResult = { ok: true } | { ok: false; reason: 'declined' |
 export function subscribeToReminderChanges(_: () => void): () => void { return () => undefined; }
 export function registerReminderDatabase(_: SQLiteDatabase | null) {}
 export function requestReminderSync(): Promise<void> { return Promise.resolve(); }
+export async function pauseReminderSync() {}
+export function resumeReminderSync() {}
 export async function hasNotificationPermission(): Promise<boolean> { return false; }
 export async function setCardReminder(_database: SQLiteDatabase, _cardId: string, _scheduledAt: number): Promise<SetReminderResult> { return { ok: false, reason: 'failed' }; }
 export async function removeCardReminder(_database: SQLiteDatabase, _cardId: string): Promise<void> {}

@@ -23,6 +23,10 @@ export const ChitsPdfView: ComponentType<ChitsPdfViewProps> = requireNativeView(
 export type NativeExportResult = { status: 'saved'; uri?: string; location?: string; fileName?: string } | { status: 'cancelled' };
 
 type ChitsFilesNativeModule = {
+  /** Reads in bounded native chunks, including large videos; no file bytes enter JS. */
+  hashFileAsync(uri: string): Promise<string>;
+  /** Atomically replaces a small recovery journal without a delete/rename gap. */
+  atomicWriteFileAsync(uri: string, contents: string): Promise<void>;
   /** Hard-links (or copies, if linking fails) the file into a cache folder under `fileName`, returning its file:// URI. */
   prepareNamedFileAsync(uri: string, fileName: string): Promise<string>;
   /** iOS: file:// URI, presents "Open in…". Android: content:// URI, presents an app chooser. Resolves false when no app can open it. */

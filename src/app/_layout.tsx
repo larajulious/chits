@@ -63,6 +63,7 @@ function ThemedApp() {
           <Stack screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: tokens.background } }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="settings" />
+            <Stack.Screen name="backup" />
             <Stack.Screen name="unorganized" />
             <Stack.Screen name="board/[id]" />
             <Stack.Screen name="card/[id]" />

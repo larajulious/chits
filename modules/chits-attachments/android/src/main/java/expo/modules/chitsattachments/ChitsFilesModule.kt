@@ -25,6 +25,7 @@ import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
+import java.security.MessageDigest
 import kotlin.concurrent.thread
 
 private const val TAG = "ChitsFiles"
@@ -43,6 +44,29 @@ class ChitsFilesModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("ChitsFiles")
+
+    AsyncFunction("atomicWriteFileAsync") { uri: String, contents: String ->
+      val destination = ChitsLocalFiles.fileFromSource(uri) ?: throw FileUnavailableException()
+      val temporary = File(destination.parentFile, "${destination.name}.tmp")
+      temporary.outputStream().use { output ->
+        output.write(contents.toByteArray(Charsets.UTF_8))
+        output.fd.sync()
+      }
+      Os.rename(temporary.absolutePath, destination.absolutePath)
+    }
+
+    AsyncFunction("hashFileAsync") { uri: String ->
+      val digest = MessageDigest.getInstance("SHA-256")
+      openSource(uri).use { input ->
+        val buffer = ByteArray(64 * 1024)
+        while (true) {
+          val count = input.read(buffer)
+          if (count < 0) break
+          digest.update(buffer, 0, count)
+        }
+      }
+      digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    }
 
     // A zero-byte hard link (a copy only if linking fails) in the cache, named
     // after the attachment's original filename, so Share / Open with show the
