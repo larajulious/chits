@@ -30,7 +30,15 @@ Deleting the active photo warns “This photo is currently your chat background.
 
 Native action-sheet callbacks run after dismissal completes so another preview or confirmation can present safely. The photo viewer and its preview share one native modal host.
 
+## Fixed chat wallpaper
+
+The live Chat screen renders its memoized `ChatWallpaper` beside the `KeyboardAvoidingView`, behind a transparent safe-area content surface. Previously, `ChatBackgroundLayer` filled the `Screen` inside that keyboard-adjusted view, so opening the keyboard changed the image's cover crop.
+
+The wallpaper uses full application-window bounds rather than the conversation's `onLayout` height. In the installed React Native 0.86 Android implementation, `DeviceInfoModule.getWindowDisplayMetrics()` reads `WindowMetricsCalculator` bounds and excludes IME insets. These dimensions remain stable through `adjustResize` and update for actual rotation or window resizing. Wallpaper geometry has no keyboard, message-list, or composer-height dependency. The shared background renderer, stored image/dim/blur settings, default themed surface, chat entrance transition, and content/composer keyboard handling are retained.
+
 ## Verification
+
+The keyboard regression was checked on September 29, 2026, using a disposable iPhone 17 / iOS 27 simulator and an Android 13 emulator. A patterned custom wallpaper retained identical pixels in unobstructed sample regions through keyboard opening, multiline typing, iOS emoji switching, and keyboard dismissal. Native checks kept the composer above the keyboard and returned it to the bottom after dismissal; Android also sent the multiline note successfully. The default background was checked on both platforms, including iOS's visible predictive-text bar. TypeScript, focused ESLint, all 91 Node tests, and both production exports passed. Physical-device keyboards and tablet/window-resize behavior remain unverified.
 
 The subsequent attachment-picker return to inline Chat Appearance passed TypeScript and changed-file ESLint checks. Device testing of that handoff is left for manual review.
 

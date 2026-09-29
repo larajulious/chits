@@ -22,7 +22,7 @@ import { CONTENT_RANGE, useChatTransition } from '@/components/navigation/chat-t
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { ChatComposerSurface } from '@/components/chat/chat-composer-surface';
 import { BackgroundReadabilityProvider } from '@/components/chat/background-readability';
-import { ChatBackgroundLayer } from '@/components/chat/background-layer';
+import { ChatWallpaper } from '@/components/chat/chat-wallpaper';
 import { useChatBackground } from '@/components/chat/chat-background-context';
 import { subscribeToAttachmentChanges } from '@/services/attachment-changes';
 import { EmptyState, Screen, Toast } from '@/components/ui/primitives';
@@ -858,9 +858,10 @@ export default function ChatScreen() {
   }, [animateComposerTransition]);
 
   return (
-    <Animated.View testID="chat-transition-container" style={[styles.flex, { backgroundColor: theme.background }, screenRevealStyle]}><BackgroundReadabilityProvider active={background !== null}><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: theme.background }}>
-        <ChatBackgroundLayer background={background} />
+    <Animated.View testID="chat-transition-container" style={[styles.flex, { backgroundColor: theme.background }, screenRevealStyle]}>
+      <ChatWallpaper background={background} />
+      <BackgroundReadabilityProvider active={background !== null}><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: 'transparent' }}>
         {background ? <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: theme.background }} /> : null}
         <View style={styles.timelineLayer} onLayout={() => { maybePerformInitialScroll(); if (hasPositionedRef.current && nearBottom.current) scrollToLatest(false); }}><View style={styles.flex}>{isInitialLoading ? (showInitialLoader ? <View style={styles.initialLoader}><ChitsLoader /></View> : null) : feed.length === 0 ? <View style={styles.initialLoader}><EmptyState title="What’s on your mind?" description="Send yourself anything. You can organize it later." style={background ? { flex: 0, alignSelf: 'stretch', marginHorizontal: spacing.md, paddingVertical: spacing.lg, borderRadius: radii.contentCard, backgroundColor: theme.surface } : undefined} /></View> : <FlatList
           ref={listRef} data={feed} keyExtractor={(item) => `${item.kind}-${item.kind === 'message' ? item.message.id : item.event.id}`}
