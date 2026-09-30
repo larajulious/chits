@@ -155,7 +155,7 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
           style={styles.chatButtonHit}
         >
           <Animated.View entering={enterButtonSettle} style={[styles.chatButton, { backgroundColor: theme.accent }, pressedStyle]}>
-            <Ionicons accessible={false} name="chatbox" size={23} color="#FFFFFF" />
+            <Ionicons accessible={false} name="chatbox" size={23} color={theme.accentText} />
           </Animated.View>
         </Pressable>
       </View>

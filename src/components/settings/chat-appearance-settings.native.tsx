@@ -8,7 +8,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { AppDialogProvider, useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
-import { AppHeader, IconButton, PrimaryButton, SecondaryButton } from '@/components/ui/primitives';
+import { AppHeader, IconButton, PrimaryButton, SecondaryButton, HeaderIcon } from '@/components/ui/primitives';
 import { QuickThoughtBubble } from '@/components/chat/message-note-cards';
 import { BackgroundStyleControls } from '@/components/chat/background-style-controls';
 import { ChatBackgroundLayer } from '@/components/chat/background-layer';
@@ -23,7 +23,7 @@ const noAction = () => undefined;
 
 function ChatAppearancePreview({ background, onError }: { background: ChatBackground | null; onError: () => void }) {
   const { tokens } = useTheme();
-  return <View testID="chat-appearance-preview" style={[styles.preview, { backgroundColor: tokens.background, borderColor: tokens.borderSubtle }]}>
+  return <View testID="chat-appearance-preview" style={[styles.preview, { backgroundColor: tokens.chatBackground, borderColor: tokens.borderSubtle }]}>
     <ChatBackgroundLayer background={background} onError={onError} />
     {!background ? <View style={styles.default}>
       <Ionicons accessible={false} name="image-outline" size={28} color={tokens.textMuted} />
@@ -120,7 +120,7 @@ function AppearanceContent({ close, initialSelection }: { close: (after?: () => 
   } });
   const previewImage = selected ?? background;
   return <SafeAreaView style={[styles.screen, { backgroundColor: tokens.background }]}>
-    <AppHeader title="Chat Appearance" leading={<IconButton label="Close chat appearance" disabled={busy} onPress={() => close()}><Ionicons accessible={false} name="close" size={24} color={tokens.textPrimary} /></IconButton>} />
+    <AppHeader title="Chat Appearance" leading={<IconButton label="Close chat appearance" disabled={busy} onPress={() => close()}><HeaderIcon name="close" size={24} /></IconButton>} />
     <ScrollView contentContainerStyle={styles.content}>
       <ChatAppearancePreview background={previewImage ? { ...previewImage, dim, blur } : null} onError={() => setImageFailed(true)} />
       <AppearanceOption label="Choose from Attachments" icon="images-outline" disabled={busy} onPress={() => close(() => router.push({ pathname: '/attachments', params: { chooseBackground: '1' } }))} />

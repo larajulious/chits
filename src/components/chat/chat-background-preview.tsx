@@ -3,7 +3,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, V
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/components/theme-provider';
-import { AppHeader, IconButton, PrimaryButton, SecondaryButton } from '@/components/ui/primitives';
+import { AppHeader, IconButton, PrimaryButton, SecondaryButton, HeaderIcon } from '@/components/ui/primitives';
 import { QuickThoughtBubble, StructuredNoteCard } from '@/components/chat/message-note-cards';
 import { ChatHeaderSurface } from './chat-header';
 import { ChatComposerSurface } from './chat-composer-surface';
@@ -38,7 +38,7 @@ export function ChatBackgroundPreview({ image, onCancel, onApplied }: { image: C
     finally { setBusy(false); }
   };
   return <SafeAreaView style={[styles.screen, { backgroundColor: tokens.background }]}>
-    <AppHeader title="Chat Background Preview" leading={<IconButton label="Cancel preview" disabled={busy} onPress={onCancel}><Ionicons accessible={false} name="close" size={23} color={tokens.textPrimary} /></IconButton>} />
+    <AppHeader title="Chat Background Preview" leading={<IconButton label="Cancel preview" disabled={busy} onPress={onCancel}><HeaderIcon name="close" size={23} /></IconButton>} />
     <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={[styles.chat, { height: Math.max(250, Math.min(400, height * 0.42)), backgroundColor: tokens.background, borderColor: tokens.borderSubtle }]}>
         <ChatBackgroundLayer background={{ ...image, dim, blur }} onError={() => setImageFailed(true)} />

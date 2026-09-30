@@ -1,5 +1,7 @@
 import { Platform, type ColorSchemeName } from 'react-native';
 
+import { CHITS_THEMES, type AppPalette, type ChitsThemeIdentity } from '@/constants/chits-themes';
+
 const lightTokens = {
   background: '#FFFFFF', surface: '#F9F9F9', surfaceElevated: '#F0F0F0',
   textPrimary: '#0D0D0D', textSecondary: '#5D5D5D', textMuted: '#6E6E6E',
@@ -28,8 +30,28 @@ export const chatThemes = {
   midnight: { name: 'Midnight', light: { accent: '#3F4E6B', accentSoft: '#E7EAF1', accentStrong: '#2E3A52', accentText: '#FFFFFF', accentBorder: '#A6AFC2' }, dark: { accent: '#56678C', accentSoft: '#232A38', accentStrong: '#AEB9D4', accentText: '#FFFFFF', accentBorder: '#56617C' } },
 } as const;
 export type ChatThemeKey = keyof typeof chatThemes;
-export type ThemeTokens = Record<keyof typeof lightTokens, string> & { accentSoft: string; accentStrong: string; accentText: string; accentBorder: string };
-export function getThemeTokens(key: ChatThemeKey, scheme: ColorSchemeName): ThemeTokens { return { ...(scheme === 'dark' ? darkTokens : lightTokens), ...chatThemes[key][scheme === 'dark' ? 'dark' : 'light'] }; }
+export type ThemeTokens = AppPalette;
+
+/**
+ * The tokens every screen draws with. Default is the classic Chits palette in
+ * the user's accent color (`accentKey`, the "Accent color" setting); every other
+ * theme brings its own complete palette for light and dark, so the accent
+ * setting only applies to Default.
+ */
+export function getThemeTokens(identity: ChitsThemeIdentity, accentKey: ChatThemeKey, scheme: ColorSchemeName): ThemeTokens {
+  const mode = scheme === 'dark' ? 'dark' : 'light';
+  const palette = CHITS_THEMES[identity].palette;
+  if (palette) return palette[mode];
+  const base = { ...(mode === 'dark' ? darkTokens : lightTokens), ...chatThemes[accentKey][mode] };
+  // The neutral "Light" accent draws your thoughts on a soft tint; a colored accent fills them.
+  const tinted = accentKey === 'light';
+  return {
+    ...base,
+    bubble: tinted ? base.accentSoft : base.accent, bubbleText: tinted ? base.textPrimary : base.accentText,
+    chatBackground: base.background,
+    cardPaper: mode === 'dark' ? base.surface : '#FBFAF6', cardBase: mode === 'dark' ? base.surface : '#FFFFFF',
+  };
+}
 
 export type SemanticColor = keyof typeof tokens;
 

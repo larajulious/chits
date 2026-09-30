@@ -6,7 +6,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
-import { AppHeader, IconButton, Screen } from '@/components/ui/primitives';
+import { AppHeader, IconButton, Screen, HeaderIcon, useHeaderInk } from '@/components/ui/primitives';
 import { spacing } from '@/constants/theme';
 import { createMessageRepository } from '@/db/repositories';
 
@@ -23,6 +23,7 @@ export default function EditContentScreen() {
   const { messageId } = useLocalSearchParams<{ messageId: string }>();
   const messageRepository = useMemo(() => createMessageRepository(database), [database]);
   const { tokens: theme } = useTheme();
+  const headerInk = useHeaderInk();
   const { confirm } = useAppDialog();
   const navigation = useNavigation();
   const inputRef = useRef<TextInput>(null);
@@ -94,8 +95,8 @@ export default function EditContentScreen() {
     <Screen edges={['top', 'left', 'right']}>
       <AppHeader
         title="Edit Note"
-        leading={<IconButton label="Cancel" onPress={() => router.back()}><Ionicons accessible={false} name="close" size={24} color={theme.textPrimary} /></IconButton>}
-        trailing={<IconButton label="Save" disabled={!canSave} onPress={() => void save()}><Ionicons accessible={false} name={saving ? 'ellipsis-horizontal' : 'checkmark'} size={24} color={canSave ? theme.accent : theme.textMuted} /></IconButton>}
+        leading={<IconButton label="Cancel" onPress={() => router.back()}><HeaderIcon name="close" size={24} /></IconButton>}
+        trailing={<IconButton label="Save" disabled={!canSave} onPress={() => void save()}><Ionicons accessible={false} name={saving ? 'ellipsis-horizontal' : 'checkmark'} size={24} color={canSave ? (headerInk.banded ? headerInk.ink : theme.accent) : headerInk.inkMuted} /></IconButton>}
       />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { borderColor: theme.danger }]}><Text style={[styles.errorText, { color: theme.danger }]}>{error}</Text></View> : null}

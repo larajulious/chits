@@ -258,3 +258,27 @@ test('failure to mark a commit durable rolls back the original installation', as
   const restored = new DatabaseSync(join(env.documents,'SQLite/chits.db'));
   assert.equal(restored.prepare('SELECT text FROM messages').get().text,'Safety version'); restored.close();
 });
+
+test('the app theme travels with the backup, and backups made before themes restore as Default', async (t) => {
+  const { resolveThemeIdentity, THEME_SETTING_KEY } = await import('../src/constants/chits-themes.ts');
+  const themeIn = (env) => {
+    const restored = new DatabaseSync(join(env.documents, 'SQLite/chits.db'));
+    const row = restored.prepare('SELECT value FROM app_settings WHERE key = ?').get(THEME_SETTING_KEY);
+    restored.close();
+    return resolveThemeIdentity(row?.value);
+  };
+
+  const themed = await fixture(t);
+  await themed.db.runAsync('INSERT INTO app_settings VALUES (?, ?, ?)', THEME_SETTING_KEY, 'calm', 123);
+  const withTheme = await validateCreated(themed.db);
+  await themed.db.runAsync('UPDATE app_settings SET value = ? WHERE key = ?', 'boss', THEME_SETTING_KEY);
+  await service.restoreBackup(withTheme.checked, themed.db);
+  assert.equal(themeIn(themed.env), 'calm');
+
+  // An older backup has no theme row at all: restore still succeeds and replaces the current theme with Default.
+  const legacy = await fixture(t);
+  const withoutTheme = await validateCreated(legacy.db);
+  await legacy.db.runAsync('INSERT INTO app_settings VALUES (?, ?, ?)', THEME_SETTING_KEY, 'boss', 123);
+  await service.restoreBackup(withoutTheme.checked, legacy.db);
+  assert.equal(themeIn(legacy.env), 'default');
+});

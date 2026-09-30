@@ -138,9 +138,9 @@ export function ChatTransitionProvider({ children }: PropsWithChildren) {
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
       {children}
       {overlayVisible ? <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }, maskStyle]} />
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: theme.chatBackground }, maskStyle]} />
         {origin ? <Animated.View style={[styles.travelButton, { left: origin.x - origin.size / 2, top: origin.y - origin.size / 2, width: origin.size, height: origin.size, borderRadius: origin.size / 2, backgroundColor: theme.accent }, buttonStyle]}>
-          <Ionicons accessible={false} name="chatbox" size={23} color="#FFFFFF" />
+          <Ionicons accessible={false} name="chatbox" size={23} color={theme.accentText} />
         </Animated.View> : null}
       </View> : null}
     </View>

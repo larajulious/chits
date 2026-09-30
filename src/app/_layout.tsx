@@ -53,16 +53,19 @@ function ReminderCoordinator() {
 }
 
 function ThemedApp() {
-  const { scheme, tokens } = useTheme();
+  const { scheme, tokens, topBar } = useTheme();
+  // Status-bar icons sit on the theme's top bar when there is one, otherwise on the page.
+  const statusBarStyle = topBar ? (topBar.dark ? 'light' : 'dark') : scheme === 'dark' ? 'light' : 'dark';
   return (
     <AppDialogProvider>
       <View style={{ flex: 1, backgroundColor: tokens.background }}>
         <ResetNotice />
         <ReminderCoordinator />
-        <AppDrawerProvider><StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+        <AppDrawerProvider><StatusBar style={statusBarStyle} />
           <Stack screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: tokens.background } }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="settings" />
+            <Stack.Screen name="appearance-theme" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="backup" />
             <Stack.Screen name="unorganized" />
             <Stack.Screen name="board/[id]" />

@@ -19,7 +19,7 @@ import { MessageContentRenderer } from '@/components/chat/message-note-cards';
 import { AddCardAttachmentSheet } from '@/components/boards/add-card-attachment-sheet';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
-import { AppHeader, EmptyState, IconButton, Screen, Toast } from '@/components/ui/primitives';
+import { AppHeader, EmptyState, IconButton, Screen, Toast, HeaderIcon } from '@/components/ui/primitives';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { radii, spacing, type ThemeTokens } from '@/constants/theme';
 import { createBoardRepository } from '@/db/repositories';
@@ -414,7 +414,7 @@ export default function CardDetailScreen() {
 
   if (detail === undefined) return <Screen>{showCardLoader ? <View style={styles.cardLoader}><ChitsLoader label="Loading card…" /></View> : null}</Screen>;
   if (!detail) return <Screen>
-    <AppHeader title="Card details" leading={<IconButton label="Go back" onPress={() => router.back()}><Ionicons accessible={false} name="chevron-back" size={24} color={theme.textPrimary} /></IconButton>} />
+    <AppHeader title="Card details" leading={<IconButton label="Go back" onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
     <EmptyState title="Card unavailable" description="It may have been archived or deleted." />
   </Screen>;
 
@@ -447,8 +447,8 @@ export default function CardDetailScreen() {
   return <Screen edges={['top', 'left', 'right']}>
     <AppHeader
       title="Card details"
-      leading={<IconButton label="Go back" onPress={() => router.back()}><Ionicons accessible={false} name="chevron-back" size={24} color={theme.textPrimary} /></IconButton>}
-      trailing={<IconButton label="Open in Chat" onPress={() => router.push(messages[0] ? `/chat?messageId=${messages[0].id}` : '/chat')}><Ionicons accessible={false} name="chatbubble-outline" size={22} color={theme.textPrimary} /></IconButton>}
+      leading={<IconButton label="Go back" onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>}
+      trailing={<IconButton label="Open in Chat" onPress={() => router.push(messages[0] ? `/chat?messageId=${messages[0].id}` : '/chat')}><HeaderIcon name="chatbubble-outline" size={22} /></IconButton>}
     />
     {viewingPhoto ? <PhotoAttachmentViewer attachment={viewingPhoto} onDismiss={() => setViewingPhoto(null)} /> : null}
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>

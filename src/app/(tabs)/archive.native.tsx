@@ -1,11 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
 
-import { AppHeader, EmptyState, IconButton, Screen } from '@/components/ui/primitives';
+import { AppHeader, EmptyState, IconButton, Screen, HeaderIcon, MenuIcon } from '@/components/ui/primitives';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useAppDrawer } from '@/components/navigation/app-drawer';
@@ -60,8 +59,8 @@ export default function ArchiveScreen() {
   return <Screen edges={['top', 'left', 'right']}>
     <AppHeader
       title="Archive"
-      leading={<IconButton label="Open navigation" onPress={openDrawer}><Ionicons accessible={false} name="reorder-two-outline" size={24} color={theme.textPrimary} /></IconButton>}
-      trailing={<IconButton label="Close archive" onPress={() => router.canGoBack() ? router.back() : router.navigate('/')}><Ionicons accessible={false} name="close" size={24} color={theme.textPrimary} /></IconButton>}
+      leading={<IconButton label="Open navigation" onPress={openDrawer}><MenuIcon /></IconButton>}
+      trailing={<IconButton label="Close archive" onPress={() => router.canGoBack() ? router.back() : router.navigate('/')}><HeaderIcon name="close" size={24} /></IconButton>}
     />
     {restoreError ? <Text accessibilityRole="alert" style={[styles.errorBanner, { color: theme.danger }]}>{restoreError}</Text> : null}
     {!ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : items.length ? <ScrollView contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + spacing.md }]}>

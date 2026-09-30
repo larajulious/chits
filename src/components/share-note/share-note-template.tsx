@@ -4,7 +4,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { SHARE_NOTE_FONT_METRICS, type ShareNoteFontStyle, type ShareNoteTheme } from '@/constants/share-note-themes';
+import { SHARE_NOTE_FONT_METRICS, type ShareNoteFontStyle, type ShareNoteTheme } from '@/constants/chits-themes';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
 import { fitShareNoteText, shareNoteLayout, SHARE_NOTE_DESIGN_WIDTH, type ShareNoteFormat, type ShareNoteImage, type ShareNoteLayout, type ShareNoteMode, type ShareNoteTextFit } from '@/services/share-note';
 
@@ -52,7 +52,7 @@ export type ShareNoteTemplateProps = {
 export function measureShareNote({ content, theme, format, mode, showBranding }: Omit<ShareNoteTemplateProps, 'width' | 'onImageLoad'>): { layout: ShareNoteLayout; fit: ShareNoteTextFit | null } {
   const layout = shareNoteLayout({
     format, mode, imageCount: content.images.length, hasTitle: mode !== 'image' && Boolean(content.title),
-    showMark: theme.mark === 'quote' || theme.mark === 'bar', showBranding,
+    showMark: theme.mark === 'quote' || theme.mark === 'bar' || theme.mark === 'cross', showBranding,
   });
   const fit = layout.text && content.text && mode !== 'image'
     ? fitShareNoteText(content.text, layout.text, { mode, format, metrics: SHARE_NOTE_FONT_METRICS[theme.fontStyle] })
@@ -101,7 +101,13 @@ export const ShareNoteTemplate = memo(function ShareNoteTemplate({ content, them
           {layout.mark ? <View style={{ height: layout.mark.height * u, justifyContent: 'flex-start', alignItems: center ? 'center' : 'flex-start' }}>
             {theme.mark === 'quote'
               ? <Text style={[QUOTE_FONT, styles.quote, { fontSize: 58 * u, lineHeight: 62 * u, height: layout.mark.height * u, color: colors.accent }]}>“</Text>
-              : <View style={{ marginTop: 4 * u, width: 30 * u, height: 4 * u, borderRadius: 2 * u, backgroundColor: colors.accent }} />}
+              : theme.mark === 'cross'
+                // A simple Latin cross drawn from two bars (no icon font has one).
+                ? <View style={{ width: 16 * u, height: 24 * u }}>
+                  <View style={[styles.absolute, { left: 6.5 * u, top: 0, width: 3 * u, height: 24 * u, borderRadius: 1 * u, backgroundColor: colors.accent }]} />
+                  <View style={[styles.absolute, { left: 0, top: 6 * u, width: 16 * u, height: 3 * u, borderRadius: 1 * u, backgroundColor: colors.accent }]} />
+                </View>
+                : <View style={{ marginTop: 4 * u, width: 30 * u, height: 4 * u, borderRadius: 2 * u, backgroundColor: colors.accent }} />}
           </View> : null}
           {layout.title && content.title ? <Text numberOfLines={1} style={[styles.title, { width: box.width * u, height: layout.title.height * u, fontSize: 11 * u, lineHeight: 16 * u, letterSpacing: 1.2 * u, color: colors.accent, textAlign }]}>{content.title.toUpperCase()}</Text> : null}
           {fit && content.text ? <Text
@@ -137,7 +143,7 @@ const scatter = (index: number, salt: number) => {
   return value - Math.floor(value);
 };
 
-function Decorations({ theme, u, canvas }: { theme: ShareNoteTheme; u: number; canvas: Canvas }) {
+export function Decorations({ theme, u, canvas }: { theme: ShareNoteTheme; u: number; canvas: Canvas }) {
   const ink = theme.colors.decoration;
   const { width, height } = canvas;
   switch (theme.decorationStyle) {
@@ -180,6 +186,24 @@ function Decorations({ theme, u, canvas }: { theme: ShareNoteTheme; u: number; c
             transform: [{ rotate: `${Math.round(scatter(index, 12) * 180)}deg` }],
           }]} />;
         })}
+      </View>;
+    }
+    case 'cross': {
+      // A Latin cross of light. On a note it stands behind the card, its arms
+      // reaching out past every edge; in a wide header band it stands slender
+      // to one side, clear of the centered title.
+      const band = height < width * 0.6;
+      const beam = band ? 5 : 18;
+      const vertical = band ? { top: height * 0.1, length: height * 0.8 } : { top: 6, length: height - 12 };
+      const centerX = band ? width * 0.8 : width / 2;
+      const armLength = band ? vertical.length * 0.62 : width - 16;
+      const crossbarY = vertical.top + vertical.length * (band ? 0.3 : 0.28);
+      return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <View style={[styles.absolute, { left: (centerX - 60) * u, top: (crossbarY - 60) * u, width: 120 * u, height: 120 * u, borderRadius: 60 * u, backgroundColor: ink, opacity: 0.35 }]} />
+        <View style={[StyleSheet.absoluteFill, { opacity: 0.8 }]}>
+          <View style={[styles.absolute, { left: (centerX - beam / 2) * u, top: vertical.top * u, width: beam * u, height: vertical.length * u, borderRadius: beam / 3 * u, backgroundColor: ink }]} />
+          <View style={[styles.absolute, { left: (centerX - armLength / 2) * u, top: (crossbarY - beam / 2) * u, width: armLength * u, height: beam * u, borderRadius: beam / 3 * u, backgroundColor: ink }]} />
+        </View>
       </View>;
     }
     default:

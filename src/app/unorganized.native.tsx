@@ -7,7 +7,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
 
-import { AppHeader, EmptyState, IconButton, Screen } from '@/components/ui/primitives';
+import { AppHeader, EmptyState, IconButton, Screen, useHeaderInk } from '@/components/ui/primitives';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { useTheme } from '@/components/theme-provider';
@@ -274,6 +274,7 @@ function ColumnRow({ name, disabled, onPress }: { name: string; disabled: boolea
 export default function UnorganizedScreen() {
   const database = useSQLiteContext();
   const { tokens: theme } = useTheme();
+  const headerInk = useHeaderInk();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { addToCard, messageId, boardId } = useLocalSearchParams<{ addToCard?: string; messageId?: string; boardId?: string }>();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -412,7 +413,7 @@ export default function UnorganizedScreen() {
   };
 
   return <Screen>
-    <AppHeader title="Unorganized" leading={<IconButton label="Go back" onPress={() => router.back()}><Text style={styles.back}>‹</Text></IconButton>} />
+    <AppHeader title="Unorganized" leading={<IconButton label="Go back" onPress={() => router.back()}><Text style={[styles.back, { color: headerInk.ink }]}>‹</Text></IconButton>} />
     {selectionMode ? (
       <View style={[styles.header, { borderBottomColor: theme.borderSubtle }]}>
         <IconButton label="Exit selection" onPress={() => setSelected([])}><Ionicons accessible={false} name="close" size={22} color={theme.textPrimary} /></IconButton>

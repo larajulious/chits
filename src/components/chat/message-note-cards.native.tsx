@@ -48,9 +48,9 @@ export function MessageMetadata({ message, inside = false, onActions, onHideAgai
 }
 
 export function QuickThoughtBubble({ message, focused, onActions, onHideAgain, preview = false }: NoteProps & { preview?: boolean }) {
-  const { tokens, themeKey } = useTheme();
-  const bubbleStyle = [styles.quickThought, { backgroundColor: themeKey === 'light' ? tokens.accentSoft : tokens.accent, borderColor: focused ? tokens.accentStrong : 'transparent' }, focused && styles.focused];
-  const content = <PlainTextContent text={message.text ?? ''} mode="compact" color={themeKey === 'light' ? tokens.textPrimary : tokens.accentText} />;
+  const { tokens } = useTheme();
+  const bubbleStyle = [styles.quickThought, { backgroundColor: tokens.bubble, borderColor: focused ? tokens.accentStrong : 'transparent' }, focused && styles.focused];
+  const content = <PlainTextContent text={message.text ?? ''} mode="compact" color={tokens.bubbleText} />;
   return <>
     {preview ? <View style={bubbleStyle}>{content}</View> : <Pressable
       accessibilityRole="button"

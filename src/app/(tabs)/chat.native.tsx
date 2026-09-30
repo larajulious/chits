@@ -24,9 +24,10 @@ import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { ChatComposerSurface } from '@/components/chat/chat-composer-surface';
 import { BackgroundReadabilityProvider } from '@/components/chat/background-readability';
 import { ChatWallpaper } from '@/components/chat/chat-wallpaper';
+import { ChatThemeBackdrop } from '@/components/chat/chat-theme-backdrop';
 import { useChatBackground } from '@/components/chat/chat-background-context';
 import { subscribeToAttachmentChanges } from '@/services/attachment-changes';
-import { EmptyState, Screen, Toast } from '@/components/ui/primitives';
+import { EmptyState, Screen, Toast, TopBarBackground } from '@/components/ui/primitives';
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
 import { radii, spacing } from '@/constants/theme';
 import { createMessageRepository } from '@/db/repositories';
@@ -231,7 +232,7 @@ export default function ChatScreen() {
   const repository = useMemo(() => createMessageRepository(database), [database]);
   const { messageId } = useLocalSearchParams<{ messageId?: string }>();
   const router = useRouter();
-  const { tokens: theme } = useTheme();
+  const { tokens: theme, topBar } = useTheme();
   const { confirm } = useAppDialog();
   const { background, isCurrentBackground } = useChatBackground();
   // Background, timeline, header and composer form one visual unit. After the
@@ -859,11 +860,12 @@ export default function ChatScreen() {
   }, [animateComposerTransition]);
 
   return (
-    <Animated.View testID="chat-transition-container" style={[styles.flex, { backgroundColor: theme.background }, screenRevealStyle]}>
-      <ChatWallpaper background={background} />
+    <Animated.View testID="chat-transition-container" style={[styles.flex, { backgroundColor: theme.chatBackground }, screenRevealStyle]}>
+      {/* A chosen Chat photo always wins over the theme's own backdrop. */}
+      {background ? <ChatWallpaper background={background} /> : <ChatThemeBackdrop />}
       <BackgroundReadabilityProvider active={background !== null}><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: 'transparent' }}>
-        {background ? <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: theme.background }} /> : null}
+        {background ? <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: theme.chatBackground }} /> : null}
         <View style={styles.timelineLayer} onLayout={() => { maybePerformInitialScroll(); if (hasPositionedRef.current && nearBottom.current) scrollToLatest(false); }}><View style={styles.flex}>{isInitialLoading ? (showInitialLoader ? <View style={styles.initialLoader}><ChitsLoader /></View> : null) : feed.length === 0 ? <View style={styles.initialLoader}><EmptyState title="What’s on your mind?" description="Send yourself anything. You can organize it later." style={background ? { flex: 0, alignSelf: 'stretch', marginHorizontal: spacing.md, paddingVertical: spacing.lg, borderRadius: radii.contentCard, backgroundColor: theme.surface } : undefined} /></View> : <FlatList
           ref={listRef} data={feed} keyExtractor={(item) => `${item.kind}-${item.kind === 'message' ? item.message.id : item.event.id}`}
           renderItem={renderFeedItem}
@@ -903,14 +905,14 @@ export default function ChatScreen() {
             if (hasPositionedRef.current && nearBottom.current) listRef.current?.scrollToEnd({ animated: false });
           }}
         />}</View>
-        {searchOpen && searchQuery.trim() ? <View style={[styles.searchOverlay, { backgroundColor: theme.background }]}>
+        {searchOpen && searchQuery.trim() ? <View style={[styles.searchOverlay, { backgroundColor: theme.chatBackground }]}>
           {showSearchLoader ? <View style={styles.initialLoader}><ChitsLoader size="small" /></View>
           : searchResults.length === 0 ? <View style={[styles.noResults, { paddingTop: headerHeight }]}><Text style={[styles.noResultsText, { color: theme.textSecondary }]}>No matching Chits.</Text></View>
           : <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.searchResultsList, { paddingTop: headerHeight, paddingBottom: spacing.lg + (keyboardVisible ? 0 : insets.bottom) }]}>
               {searchResults.map((item) => <SearchResultRow key={timelineKey(item)} item={item} onPress={() => openSearchResult(item)} />)}
             </ScrollView>}
         </View> : null}
-        {!searchOpen ? <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.background}00`, `${theme.background}10`, `${theme.background}80`, `${theme.background}EF`, theme.background]} locations={[0, 0.2, 0.5, 0.8, 1]} style={[styles.bottomFade, { height: Math.min(composerHeight, MIN_COMPOSER_INPUT_HEIGHT + spacing.sm + composerBottomPadding) }]} /> : null}
+        {!searchOpen ? <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.chatBackground}00`, `${theme.chatBackground}10`, `${theme.chatBackground}80`, `${theme.chatBackground}EF`, theme.chatBackground]} locations={[0, 0.2, 0.5, 0.8, 1]} style={[styles.bottomFade, { height: Math.min(composerHeight, MIN_COMPOSER_INPUT_HEIGHT + spacing.sm + composerBottomPadding) }]} /> : null}
         {!searchOpen && showJumpToLatest ? <Pressable accessibilityRole="button" accessibilityLabel="Jump to latest message" onPress={jumpToLatest} style={({ pressed }) => [styles.jumpToLatest, { bottom: composerHeight + (editing ? 52 : spacing.md), backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, pressed && styles.sendPressed]}><Ionicons accessible={false} name="arrow-down" size={20} color={theme.textPrimary} /></Pressable> : null}
         {!searchOpen && editing && <View style={[styles.editing, { bottom: composerHeight + spacing.xs, backgroundColor: theme.surfaceElevated }]}><Text style={[styles.editingText, { color: theme.textSecondary }]}>{editing.attachments.length ? 'Editing description' : 'Editing thought'}</Text><Pressable accessibilityRole="button" onPress={cancelEditing}><Text style={[styles.cancel, { color: theme.accent }]}>Cancel</Text></Pressable></View>}
         {!searchOpen ? <View onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setComposerHeight((current) => (current === next ? current : next)); composerMeasuredRef.current = true; maybePerformInitialScroll(); }} style={[styles.composerDock, { paddingBottom: composerBottomPadding }]}>
@@ -922,8 +924,10 @@ export default function ChatScreen() {
           </ChatComposerSurface>
         </View> : null}
         <View style={styles.headerWrap} pointerEvents="box-none">
-          <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.background}F2`, `${theme.background}B3`, `${theme.background}00`]} locations={[0, 0.65, 1]} style={[styles.headerFade, { height: headerHeight + spacing.xl }]} />
+          {/* Default fades the conversation out under the header; a theme puts its Share Note band there instead. */}
+          {topBar ? null : <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.chatBackground}F2`, `${theme.chatBackground}B3`, `${theme.chatBackground}00`]} locations={[0, 0.65, 1]} style={[styles.headerFade, { height: headerHeight + spacing.xl }]} />}
           <View style={styles.headerBlock} onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setHeaderHeight((current) => (current === next ? current : next)); headerMeasuredRef.current = true; maybePerformInitialScroll(); }}>
+            <TopBarBackground />
             <ChatHeader
               ref={searchInputRef}
               searchOpen={searchOpen}

@@ -4,7 +4,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { AttachmentContent } from '@/components/chat/message-row';
 import { useTheme } from '@/components/theme-provider';
-import { radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeTokens } from '@/constants/theme';
 import { tintWithAccent } from '@/constants/board-appearance';
 import { formatReminder } from '@/services/reminder-time';
 import type { AttachmentLike, CardListItem } from '@/db/types';
@@ -102,13 +102,12 @@ function fileKindLabel(name: string, count: number) {
   return extension ? `${extension.toUpperCase()} document` : 'Document';
 }
 
-// Unorganized notes sit on a warm, neutral paper; board notes take a soft
+// Unorganized notes sit on the theme's neutral paper; board notes take a soft
 // tint of their board's color, like sticky notes, so a glance at the grid
 // shows which notes belong together.
-const WARM_PAPER = '#FBFAF6';
-function paperColors(accent: string | null, dark: boolean, surface: string, border: string) {
-  if (dark) return { paper: accent ? tintWithAccent(surface, accent, 0.16) : surface, edge: accent ? tintWithAccent(border, accent, 0.3) : border };
-  return { paper: accent ? tintWithAccent('#FFFFFF', accent, 0.1) : WARM_PAPER, edge: accent ? tintWithAccent(border, accent, 0.35) : border };
+function paperColors(accent: string | null, dark: boolean, theme: Pick<ThemeTokens, 'cardPaper' | 'cardBase' | 'borderSubtle'>) {
+  if (!accent) return { paper: theme.cardPaper, edge: theme.borderSubtle };
+  return { paper: tintWithAccent(theme.cardBase, accent, dark ? 0.16 : 0.1), edge: tintWithAccent(theme.borderSubtle, accent, dark ? 0.3 : 0.35) };
 }
 
 // One note in the Cards grid, designed as a *note* rather than a list item: a
@@ -119,7 +118,7 @@ function paperColors(accent: string | null, dark: boolean, surface: string, bord
 // padding and footer so the grid keeps one rhythm. Memoized since this list
 // can grow into the hundreds.
 export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: { item: CardListItem; onPress: () => void; onMore: () => void }) {
-  const { scheme, tokens: theme } = useTheme();
+  const { scheme, tokens: theme, look } = useTheme();
   const dark = scheme === 'dark';
   const media = item.hidden ? null : getCardPreviewMedia(item);
   const picture = media && media.type !== 'audio' ? media : null;
@@ -128,7 +127,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
   const content = noteContent(item, Boolean(media));
   const showFileBadge = item.fileCount > 0 && content.kind !== 'file' && !item.hidden;
 
-  const paper = paperColors(item.hidden ? null : item.boardAccent, dark, theme.surface, theme.borderSubtle);
+  const paper = paperColors(item.hidden ? null : item.boardAccent, dark, theme);
   // Half-width notes: the board name alone reads cleanly; the column is in the label for screen readers.
   const location = item.boardName ?? 'Unorganized';
   const mediaPhrase = mediaAccessibilityPhrase(item);
@@ -145,7 +144,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
       style={({ pressed }) => [
         styles.note,
         { backgroundColor: paper.paper, borderColor: paper.edge },
-        !dark && styles.paperShadow,
+        !dark && [styles.paperShadow, { shadowOpacity: look.cardShadowOpacity }],
         pressed && styles.pressed,
       ]}
     >

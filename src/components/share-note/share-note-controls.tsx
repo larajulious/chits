@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { useTheme } from '@/components/theme-provider';
 import { radii, spacing } from '@/constants/theme';
-import { SHARE_NOTE_THEMES, type ShareNoteTheme } from '@/constants/share-note-themes';
+import { SHARE_NOTE_THEMES, type ShareNoteTheme } from '@/constants/chits-themes';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
 import type { ShareNoteImage } from '@/services/share-note';
 

@@ -1,4 +1,3 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePreventRemove } from 'expo-router/react-navigation';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FS from 'expo-file-system/legacy';
@@ -11,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
 import { ChitsLoaderOverlay } from '@/components/ui/chits-loader';
-import { IconButton } from '@/components/ui/primitives';
+import { HeaderIcon, IconButton, TopBarBackground, useHeaderInk } from '@/components/ui/primitives';
 import { triggerAppReset } from '@/services/app-reset';
 import type { BackupProgress } from '@/services/backup-operation';
 // eslint-disable-next-line import/no-unresolved -- Expo selects the native service on iOS/Android.
@@ -22,6 +21,7 @@ function quantity(count: number, noun: string) { return `${count} ${noun}${count
 export default function BackupScreen() {
   const database = useSQLiteContext();
   const { tokens } = useTheme();
+  const headerInk = useHeaderInk();
   const { confirm } = useAppDialog();
   const [progress, setProgress] = useState<BackupProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +135,7 @@ export default function BackupScreen() {
   };
   const disabled = progress !== null || pending !== null;
   return <SafeAreaView style={[styles.screen, { backgroundColor: tokens.background }]}>
-    <View style={styles.header}><IconButton label="Back to settings" disabled={disabled} onPress={() => router.back()}><Ionicons name="arrow-back-outline" size={23} color={tokens.textPrimary} /></IconButton><Text accessibilityRole="header" style={[styles.title, { color: tokens.textPrimary }]}>Backup & Restore</Text><View style={{ width: 44 }} /></View>
+    <View style={styles.header}><TopBarBackground /><IconButton label="Back to settings" disabled={disabled} onPress={() => router.back()}><HeaderIcon name="arrow-back-outline" size={23} /></IconButton><Text accessibilityRole="header" style={[styles.title, { color: headerInk.ink }]}>Backup & Restore</Text><View style={{ width: 44 }} /></View>
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.section}>
         <Text accessibilityRole="header" style={[styles.heading, { color: tokens.textPrimary }]}>Backup your Chits</Text>

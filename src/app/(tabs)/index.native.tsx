@@ -22,7 +22,7 @@ import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
-import { AppHeader, EmptyState, IconButton, Screen, Toast } from '@/components/ui/primitives';
+import { AppHeader, EmptyState, IconButton, Screen, Toast, HeaderIcon, MenuIcon } from '@/components/ui/primitives';
 import { AddNoteSheet, type NoteSubmission } from '@/components/boards/add-note-sheet';
 import { groupByMonth } from '@/services/card-grouping';
 import { detachConfirmationMessage } from '@/services/detach-card';
@@ -463,16 +463,16 @@ export default function BoardsScreen() {
         subtitle={viewMode === 'boards' ? pluralize(boards.length, 'board') : pluralize(cards.length + unorganizedThoughts.length, 'card')}
         leading={(
           <IconButton label="Open navigation" onPress={openDrawer}>
-            <Ionicons accessible={false} name="reorder-two-outline" size={24} color={theme.textPrimary} />
+            <MenuIcon />
           </IconButton>
         )}
         trailing={viewMode === 'boards' ? (
           <IconButton label="Create board" onPress={openCreate}>
-            <Ionicons accessible={false} name="add" size={26} color={theme.textPrimary} />
+            <HeaderIcon name="add" size={26} />
           </IconButton>
         ) : (
           <IconButton label="Add note" onPress={() => setAddNoteOpen(true)}>
-            <Ionicons accessible={false} name="add" size={26} color={theme.textPrimary} />
+            <HeaderIcon name="add" size={26} />
           </IconButton>
         )}
       />

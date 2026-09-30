@@ -7,7 +7,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppHeader, EmptyState, IconButton, Screen } from '@/components/ui/primitives';
+import { AppHeader, EmptyState, IconButton, Screen, useHeaderInk, TopBarBackground } from '@/components/ui/primitives';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { AttachmentContent } from '@/components/chat/message-row';
@@ -333,7 +333,7 @@ function reorder(items: Card[], from: number, to: number) { const next = [...ite
 
 export default function BoardScreen() {
   'use no memo';
-  const database = useSQLiteContext(); const { id, highlightColumnId, highlightCardId } = useLocalSearchParams<{ id: string; highlightColumnId?: string; highlightCardId?: string }>(); const repository = useMemo(() => createBoardRepository(database), [database]); const { tokens: theme } = useTheme();
+  const database = useSQLiteContext(); const { id, highlightColumnId, highlightCardId } = useLocalSearchParams<{ id: string; highlightColumnId?: string; highlightCardId?: string }>(); const repository = useMemo(() => createBoardRepository(database), [database]); const { tokens: theme } = useTheme(); const headerInk = useHeaderInk();
   // The ONE source of truth for the column navigator dock's bottom clearance
   // (see below) — Screen must not ALSO reserve its own bottom safe-area inset
   // here, or the two stack into an oversized gap under the dock.
@@ -666,9 +666,9 @@ export default function BoardScreen() {
   // One board-level error rather than per-column ones: a failed initial load means
   // there's no board/columns/cards to show at all, so there's nothing column-specific
   // to localize the error to.
-  if (boardStatus === 'error') return <Screen><AppHeader title="Board" leading={<IconButton label="Go back" onPress={() => router.back()}><Text style={[styles.back, { color: theme.textPrimary }]}>‹</Text></IconButton>} /><EmptyState title="Couldn’t load this board" description="Something went wrong loading it." /><Pressable accessibilityRole="button" accessibilityLabel="Try again" onPress={() => void load()} style={({ pressed }) => [styles.retryButton, { backgroundColor: theme.accent }, pressed && styles.addPressed]}><Text style={[styles.retryButtonText, { color: theme.accentText }]}>Try again</Text></Pressable></Screen>;
+  if (boardStatus === 'error') return <Screen><AppHeader title="Board" leading={<IconButton label="Go back" onPress={() => router.back()}><Text style={[styles.back, { color: headerInk.ink }]}>‹</Text></IconButton>} /><EmptyState title="Couldn’t load this board" description="Something went wrong loading it." /><Pressable accessibilityRole="button" accessibilityLabel="Try again" onPress={() => void load()} style={({ pressed }) => [styles.retryButton, { backgroundColor: theme.accent }, pressed && styles.addPressed]}><Text style={[styles.retryButtonText, { color: theme.accentText }]}>Try again</Text></Pressable></Screen>;
   if (board === undefined) return <Screen>{showBoardLoader ? <View style={styles.boardLoader}><ChitsLoader label="Loading board…" /></View> : null}</Screen>;
-  if (!board) return <Screen><AppHeader title="Board" leading={<IconButton label="Go back" onPress={() => router.back()}><Text style={[styles.back, { color: theme.textPrimary }]}>‹</Text></IconButton>} /><EmptyState title="Board unavailable" description="It may have been archived." /></Screen>;
+  if (!board) return <Screen><AppHeader title="Board" leading={<IconButton label="Go back" onPress={() => router.back()}><Text style={[styles.back, { color: headerInk.ink }]}>‹</Text></IconButton>} /><EmptyState title="Board unavailable" description="It may have been archived." /></Screen>;
   // Instant count for a column: prefer the live loaded array once it's actually been
   // fetched, otherwise the lightweight board-open summary — never waits on card
   // hydration just to show "N cards".
@@ -724,9 +724,10 @@ export default function BoardScreen() {
     return rows;
   };
   return <Screen edges={['top', 'left', 'right']}><View style={styles.header}>
+      <TopBarBackground />
       <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={({ pressed }) => [styles.headerButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.headerButtonPressed]}><Ionicons accessible={false} name="chevron-back" size={24} color={theme.textPrimary} /></Pressable>
       <View accessible={false} style={[styles.boardMark, { backgroundColor: board.accent ?? theme.accentSoft }]}><Ionicons accessible={false} name={resolveBoardIcon(board.icon)} size={19} color={board.accent ? '#FFFFFF' : theme.accentStrong} /></View>
-      <View style={styles.headerCopy}><Text numberOfLines={1} accessibilityRole="header" style={[styles.boardTitle, { color: theme.textPrimary }]}>{board.name}</Text><Text numberOfLines={1} style={[styles.boardSubtitle, { color: theme.textSecondary }]}>{metadata}</Text></View>
+      <View style={styles.headerCopy}><Text numberOfLines={1} accessibilityRole="header" style={[styles.boardTitle, { color: headerInk.ink }]}>{board.name}</Text><Text numberOfLines={1} style={[styles.boardSubtitle, { color: headerInk.inkMuted }]}>{metadata}</Text></View>
       <Pressable accessibilityRole="button" accessibilityLabel="Search" onPress={() => router.push('/search')} style={({ pressed }) => [styles.headerButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.headerButtonPressed]}><Ionicons accessible={false} name="search-outline" size={21} color={theme.textPrimary} /></Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel="Edit board" onPress={() => setRenameOpen(true)} style={({ pressed }) => [styles.headerButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.headerButtonPressed]}><Ionicons accessible={false} name="pencil-outline" size={21} color={theme.textPrimary} /></Pressable>
     </View>

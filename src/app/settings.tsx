@@ -1,9 +1,10 @@
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { useTheme, type AppAppearance } from '@/components/theme-provider';
-import { IconButton } from '@/components/ui/primitives';
+import { HeaderIcon, IconButton, TopBarBackground, useHeaderInk, MenuIcon } from '@/components/ui/primitives';
 import { EditNoteSpaceNameSheet } from '@/components/settings/edit-notespace-name-sheet';
 import { ChatAppearanceSettings } from '@/components/settings/chat-appearance-settings';
 import { type ChatThemeKey } from '@/constants/theme';
+import { CHITS_THEMES } from '@/constants/chits-themes';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -29,7 +30,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 export default function SettingsScreen() {
   const { openDrawer } = useAppDrawer();
-  const { appearance, setAppearance, themeKey, setThemeKey, themes, tokens } = useTheme();
+  const { appearance, setAppearance, identity, themeKey, setThemeKey, themes, tokens, look } = useTheme();
+  const headerInk = useHeaderInk();
   const database = useSQLiteContext();
   const [sheet, setSheet] = useState<Sheet>(null);
   const [busy, setBusy] = useState(false);
@@ -68,18 +70,24 @@ export default function SettingsScreen() {
   const closeSheet = () => { if (!busy) setSheet(null); };
 
   return <SafeAreaView style={[styles.screen, { backgroundColor: tokens.background }]}>
-    <View style={styles.header}><IconButton label="Open navigation" onPress={openDrawer}><Ionicons accessible={false} name="reorder-two-outline" size={24} color={tokens.textPrimary} /></IconButton><Text accessibilityRole="header" style={[styles.headerTitle, { color: tokens.textPrimary }]}>Settings</Text><IconButton label="Close settings" onPress={() => router.canGoBack() ? router.back() : router.navigate('/')}><Ionicons accessible={false} name="close" size={24} color={tokens.textPrimary} /></IconButton></View>
+    <View style={styles.header}><TopBarBackground /><IconButton label="Open navigation" onPress={openDrawer}><MenuIcon /></IconButton><Text accessibilityRole="header" style={[styles.headerTitle, { color: headerInk.ink, fontWeight: look.headingWeight }]}>Settings</Text><IconButton label="Close settings" onPress={() => router.canGoBack() ? router.back() : router.navigate('/')}><HeaderIcon name="close" size={24} /></IconButton></View>
     <ScrollView contentContainerStyle={styles.content}>
       {error && !sheet ? <Text accessibilityRole="alert" style={{ color: tokens.danger }}>{error}</Text> : null}
       <Section title="NOTESPACE">
         <SettingsRow label="Edit NoteSpace name" description="Change the name shown across your NoteSpace" onPress={() => setEditNameOpen(true)} />
       </Section>
       <Section title="APPEARANCE">
+        <Pressable accessibilityRole="button" accessibilityLabel={`Theme, ${CHITS_THEMES[identity].name}`} onPress={() => router.push('/appearance-theme')} style={({ pressed }) => [styles.row, { borderBottomColor: tokens.borderSubtle }, pressed && styles.pressed]}>
+          <View style={styles.rowCopy}><Text style={[styles.label, { color: tokens.textPrimary }]}>Theme</Text><Text style={[styles.description, { color: tokens.textSecondary }]}>The personality Chits wears</Text></View>
+          <View accessible={false} style={styles.themeSwatches}>{[tokens.chatBackground, tokens.bubble, tokens.accent].map((color, index) => <View key={index} style={[styles.themeSwatch, { backgroundColor: color, borderColor: tokens.borderSubtle }]} />)}</View>
+          <Text style={[styles.value, { color: tokens.textSecondary }]}>{CHITS_THEMES[identity].name}</Text>
+          <Ionicons accessible={false} name="chevron-forward" size={17} color={tokens.textMuted} />
+        </Pressable>
         <SettingsRow label="App appearance" value={appearanceNames[appearance]} onPress={() => setSheet('appearance')} />
-        <View style={styles.paletteBlock}>
-          <Text style={[styles.label, { color: tokens.textPrimary }]}>App color theme</Text>
-          <Text style={[styles.description, { color: tokens.textSecondary }]}>Used for controls and accents throughout Chits.</Text>
-          <View style={[styles.preview, { backgroundColor: themeKey === 'light' ? tokens.accentSoft : tokens.accent }]}><Text style={{ color: themeKey === 'light' ? tokens.textPrimary : tokens.accentText }}>My thought</Text></View>
+        {identity === 'default' ? <View style={styles.paletteBlock}>
+          <Text style={[styles.label, { color: tokens.textPrimary }]}>Accent color</Text>
+          <Text style={[styles.description, { color: tokens.textSecondary }]}>Used for controls and accents in the Default theme.</Text>
+          <View style={[styles.preview, { backgroundColor: tokens.bubble }]}><Text style={{ color: tokens.bubbleText }}>My thought</Text></View>
           <View style={styles.palette}>{(Object.keys(themes) as ChatThemeKey[]).map((key) => {
             const selected = themeKey === key;
             const color = key === 'light' ? '#E9E9E9' : themes[key].light.accent;
@@ -88,7 +96,7 @@ export default function SettingsScreen() {
             </Pressable>;
           })}</View>
           <Text accessibilityLiveRegion="polite" style={[styles.description, { color: tokens.textSecondary }]}>{themes[themeKey].name}</Text>
-        </View>
+        </View> : null}
       </Section>
       <ChatAppearanceSettings />
       <Section title="DATA"><SettingsRow label="Backup & Restore" description={lastBackup && !Number.isNaN(new Date(Number(lastBackup)).getTime()) ? 'Last backup: ' + new Date(Number(lastBackup)).toLocaleDateString() : 'Last backup: Never'} onPress={() => router.push('/backup')} /></Section>
@@ -119,6 +127,7 @@ const styles = StyleSheet.create({
   row: { minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   rowCopy: { flex: 1 }, label: { fontSize: 16 }, description: { fontSize: 13, lineHeight: 19, marginTop: 3 },
   value: { fontSize: 14, flexShrink: 1, maxWidth: '45%', textAlign: 'right' },
+  themeSwatches: { flexDirection: 'row' }, themeSwatch: { width: 14, height: 14, borderRadius: 7, marginLeft: -4, borderWidth: StyleSheet.hairlineWidth },
   paletteBlock: { paddingTop: 12, paddingBottom: 2 }, palette: { flexDirection: 'row', flexWrap: 'wrap', gap: 2 },
   swatchTarget: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   swatch: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },

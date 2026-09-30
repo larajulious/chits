@@ -23,7 +23,7 @@ import { PhotoAttachmentViewer } from '@/components/attachments/photo-attachment
 import { subscribeToAttachmentChanges } from '@/services/attachment-changes';
 import { AttachmentContent } from '@/components/chat/message-row';
 import { isPdfAttachment } from '@/services/pdf-attachment';
-import { AppHeader, EmptyState, IconButton, PrimaryButton, Screen, SecondaryButton, Toast } from '@/components/ui/primitives';
+import { AppHeader, EmptyState, IconButton, PrimaryButton, Screen, SecondaryButton, Toast, HeaderIcon, MenuIcon } from '@/components/ui/primitives';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
 import { exportActionLabel, shareAttachment } from '@/services/attachment-export';
@@ -170,8 +170,8 @@ function AttachmentDetailModal({ item, onClose, onViewCard }: { item: Attachment
         <SafeAreaView edges={['top', 'right', 'bottom', 'left']} style={[styles.detailScreen, { backgroundColor: theme.background }]}>
           <AppHeader
             title={item.cardTitle ?? (item.type === 'photo' ? 'Photo' : item.type === 'video' ? 'Video' : item.type === 'audio' ? 'Audio note' : 'File')}
-            leading={<IconButton label="Close" onPress={onClose}><Ionicons accessible={false} name="close" size={24} color={theme.textPrimary} /></IconButton>}
-            trailing={<IconButton label={exportActionLabel(attachment)} disabled={download.busy} onPress={() => void download.exportAttachment(attachment)}><Ionicons accessible={false} name="download-outline" size={22} color={theme.textPrimary} /></IconButton>}
+            leading={<IconButton label="Close" onPress={onClose}><HeaderIcon name="close" size={24} /></IconButton>}
+            trailing={<IconButton label={exportActionLabel(attachment)} disabled={download.busy} onPress={() => void download.exportAttachment(attachment)}><HeaderIcon name="download-outline" size={22} /></IconButton>}
           />
           <ScrollView contentContainerStyle={styles.detailContent}>
             <Text style={[styles.detailContext, { color: theme.textMuted }]}>{contextLine}</Text>
@@ -308,7 +308,7 @@ export default function AttachmentsScreen() {
       <AppHeader
         title={choosingBackground ? 'Choose a Background' : 'Attachments'}
         subtitle={ready ? pluralize(totalCount, 'item') : undefined}
-        leading={<IconButton label={choosingBackground ? 'Cancel background selection' : 'Open navigation'} onPress={() => { if (choosingBackground) returnToAppearance('current'); else openDrawer(); }}><Ionicons accessible={false} name={choosingBackground ? 'close' : 'reorder-two-outline'} size={24} color={theme.textPrimary} /></IconButton>}
+        leading={<IconButton label={choosingBackground ? 'Cancel background selection' : 'Open navigation'} onPress={() => { if (choosingBackground) returnToAppearance('current'); else openDrawer(); }}>{choosingBackground ? <HeaderIcon name="close" size={24} /> : <MenuIcon />}</IconButton>}
       />
       <FlatList
         data={items}

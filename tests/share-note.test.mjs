@@ -5,7 +5,7 @@ import {
   availableShareNoteModes, buildShareNoteSource, defaultShareNoteMode, fitShareNoteText, initialShareNoteImages, MAX_SHARE_NOTE_IMAGES,
   SHARE_NOTE_COPY, SHARE_NOTE_FORMATS, shareNoteAvailability, shareNoteFileName, shareNoteLayout, toggleShareNoteImage,
 } from '../src/services/share-note.ts';
-import { SHARE_NOTE_FONT_METRICS, SHARE_NOTE_THEMES, getShareNoteTheme } from '../src/constants/share-note-themes.ts';
+import { SHARE_NOTE_FONT_METRICS, SHARE_NOTE_THEMES, getShareNoteTheme } from '../src/constants/chits-themes.ts';
 
 const photo = (id) => ({ id, type: 'photo', storagePath: `attachments/${id}.jpg`, width: 1200, height: 900 });
 const file = (id, type = 'file') => ({ id, type, storagePath: `attachments/${id}.bin`, width: null, height: null });

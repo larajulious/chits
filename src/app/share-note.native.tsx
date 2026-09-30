@@ -10,10 +10,10 @@ import { ControlSection, ImageSelector, InfoLine, SegmentedControl, ThemePicker,
 import { measureShareNote, ShareNoteTemplate, type ShareNoteContent } from '@/components/share-note/share-note-template';
 import { showPermissionSettingsPrompt } from '@/components/permissions/permission-settings-prompt';
 import { useTheme } from '@/components/theme-provider';
-import { AppHeader, IconButton, Screen, Toast } from '@/components/ui/primitives';
+import { AppHeader, IconButton, Screen, Toast, HeaderIcon } from '@/components/ui/primitives';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { layout as layoutTokens, radii, spacing } from '@/constants/theme';
-import { DEFAULT_SHARE_NOTE_THEME_ID, getShareNoteTheme } from '@/constants/share-note-themes';
+import { getShareNoteTheme, shareNoteThemeForIdentity } from '@/constants/chits-themes';
 import {
   availableShareNoteModes, DEFAULT_SHARE_NOTE_FORMAT, defaultShareNoteMode, initialShareNoteImages, SHARE_NOTE_COPY, SHARE_NOTE_FORMATS,
   SHARE_NOTE_MODES, shareNoteAvailability, toggleShareNoteImage, type ShareNoteFormat, type ShareNoteMode, type ShareNoteSource,
@@ -38,14 +38,15 @@ const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() 
 export default function ShareNoteScreen() {
   const database = useSQLiteContext();
   const { messageId, cardId } = useLocalSearchParams<{ messageId?: string; cardId?: string }>();
-  const { tokens: theme } = useTheme();
+  const { tokens: theme, identity } = useTheme();
   const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
 
   const [source, setSource] = useState<ShareNoteSource | null | undefined>();
   const showLoader = useChitsLoading(source === undefined);
   const [mode, setMode] = useState<ShareNoteMode>('text');
-  const [themeId, setThemeId] = useState(DEFAULT_SHARE_NOTE_THEME_ID);
+  // Starts on the design matching the app's theme; any other design is one tap away.
+  const [themeId, setThemeId] = useState(() => shareNoteThemeForIdentity(identity));
   const [format, setFormat] = useState<ShareNoteFormat>(DEFAULT_SHARE_NOTE_FORMAT);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showBranding, setShowBranding] = useState(true);
@@ -135,7 +136,7 @@ export default function ShareNoteScreen() {
   };
 
   const close = () => { if (router.canGoBack()) router.back(); else router.replace('/chat'); };
-  const header = <AppHeader title="Create Share Note" leading={<IconButton label="Close" onPress={close}><Ionicons accessible={false} name="close" size={24} color={theme.textPrimary} /></IconButton>} />;
+  const header = <AppHeader title="Create Share Note" leading={<IconButton label="Close" onPress={close}><HeaderIcon name="close" size={24} /></IconButton>} />;
 
   if (source === undefined) return <Screen>{header}<View style={styles.center}>{showLoader ? <ChitsLoader label="Preparing preview…" /> : null}</View></Screen>;
 

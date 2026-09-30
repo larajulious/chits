@@ -8,6 +8,7 @@ import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-
 import { ChitsFiles, ChitsPdfView, type PdfErrorEvent } from '../../../modules/chits-attachments';
 import { useTheme } from '@/components/theme-provider';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
+import { HeaderIcon, TopBarBackground, useHeaderInk } from '@/components/ui/top-bar';
 import { radii, spacing, type ThemeTokens } from '@/constants/theme';
 import type { AttachmentLike } from '@/db/types';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
@@ -48,6 +49,7 @@ export function PdfViewer({ attachment, onDismiss }: { attachment: AttachmentLik
 
 function PdfViewerContent({ attachment, onDismiss, theme, dark }: { attachment: AttachmentLike; onDismiss: () => void; theme: ThemeTokens; dark: boolean }) {
   const insets = useSafeAreaInsets();
+  const headerInk = useHeaderInk();
   const uri = resolveAttachmentUri(attachment.storagePath) ?? '';
   const name = pdfDisplayName(attachment);
   const [attempt, setAttempt] = useState(0);
@@ -100,16 +102,17 @@ function PdfViewerContent({ attachment, onDismiss, theme, dark }: { attachment: 
   }, [attachment.id, busy, name, uri]);
 
   return <View style={styles.flex}>
-    <View style={[styles.header, { borderBottomColor: theme.borderSubtle }]}>
+    <View style={[styles.header, { borderBottomColor: headerInk.border }]}>
+      <TopBarBackground />
       <Pressable accessibilityRole="button" accessibilityLabel="Close PDF" hitSlop={8} onPress={onDismiss} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
-        <Ionicons accessible={false} name="chevron-back" size={24} color={theme.textPrimary} />
+        <HeaderIcon name="chevron-back" size={24} />
       </Pressable>
       <View style={styles.headerCopy}>
-        <Text accessibilityRole="header" numberOfLines={1} ellipsizeMode="middle" style={[styles.title, { color: theme.textPrimary }]}>{name}</Text>
-        <Text numberOfLines={1} style={[styles.subtitle, { color: theme.textMuted }]}>{status === 'ready' && pageCount ? `PDF · ${pageCount} ${pageCount === 1 ? 'page' : 'pages'}` : 'PDF'}</Text>
+        <Text accessibilityRole="header" numberOfLines={1} ellipsizeMode="middle" style={[styles.title, { color: headerInk.ink }]}>{name}</Text>
+        <Text numberOfLines={1} style={[styles.subtitle, { color: headerInk.inkMuted }]}>{status === 'ready' && pageCount ? `PDF · ${pageCount} ${pageCount === 1 ? 'page' : 'pages'}` : 'PDF'}</Text>
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel="PDF actions" accessibilityState={{ expanded: menuOpen }} hitSlop={8} onPress={() => setMenuOpen((open) => !open)} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
-        <Ionicons accessible={false} name="ellipsis-horizontal" size={22} color={theme.textPrimary} />
+        <HeaderIcon name="ellipsis-horizontal" size={22} />
       </Pressable>
     </View>
 
