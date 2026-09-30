@@ -14,6 +14,7 @@ import { ChatBackgroundProvider } from '@/components/chat/chat-background-provid
 import { DatabaseProvider } from '@/db/provider';
 import { consumeResetNotice, subscribeToAppReset } from '@/services/app-reset';
 import { observeReminderNotifications, registerReminderDatabase, requestReminderSync } from '@/services/reminders';
+import { OnboardingLayer } from '@/features/onboarding/onboarding-layer';
 
 // Shows the message a reset asked for (e.g. "Restore complete") once the fresh
 // tree — with its reopened database — has mounted.
@@ -77,6 +78,7 @@ function ThemedApp() {
             <Stack.Screen name="spaces/share" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
             <Stack.Screen name="pinned" />
           </Stack>
+          <OnboardingLayer />
         </AppDrawerProvider>
       </View>
     </AppDialogProvider>
