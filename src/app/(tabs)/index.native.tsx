@@ -35,6 +35,7 @@ import { radii, spacing } from '@/constants/theme';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
 import type { Board, CardListItem, MessageType } from '@/db/types';
 import { removeCardAttachmentFile } from '@/services/card-attachment-storage';
+import { spaceNoteAction } from '@/components/spaces/space-note-action';
 
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 type ViewMode = 'boards' | 'cards';
@@ -356,13 +357,17 @@ export default function BoardsScreen() {
     });
   }, [boardRepository, cardSearch, confirm, loadCards]);
 
-  const openCardActions = useCallback((item: CardListItem) => {
+  const openCardActions = useCallback(async (item: CardListItem) => {
+    // "Stick to Fridge" / "Remove from Fridge", looked up as the menu opens.
+    const space = await spaceNoteAction(database, item.kind, item.id).catch(() => null);
+    const spaceOption = space ? [{ label: space.label, icon: space.icon, onPress: () => void space.run().then(setCardToast, () => setCardToast('That couldn’t be saved. Please try again.')) }] : [];
     if (item.kind === 'thought') {
       actionSheet({
         title: item.title,
         options: [
           ...(item.hidden ? [] : [{ label: 'Share Note', icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ messageId: item.id })) }]),
           { label: item.pinned ? 'Unpin' : 'Pin', icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void messageRepository.setPinned(item.id, !item.pinned).then(() => loadCards(cardSearch)) },
+          ...spaceOption,
           {
             label: 'Archive thought', icon: 'archive-outline', onPress: () => confirm({
               type: 'default', icon: 'archive-outline', title: 'Archive thought?',
@@ -388,6 +393,7 @@ export default function BoardsScreen() {
       options: [
         ...(item.hidden ? [] : [{ label: 'Share Note', icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ cardId: item.id })) }]),
         { label: item.pinned ? 'Unpin' : 'Pin', icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void boardRepository.setPinned('card', item.id, !item.pinned).then(() => loadCards(cardSearch)) },
+        ...spaceOption,
         { label: 'Move back to Unorganized', icon: 'arrow-undo-outline', onPress: () => void moveCardBackToUnorganized(item) },
         {
           label: 'Archive card', icon: 'archive-outline', onPress: () => confirm({
@@ -412,7 +418,7 @@ export default function BoardsScreen() {
         },
       ],
     });
-  }, [actionSheet, boardRepository, messageRepository, cardSearch, confirm, loadCards, moveCardBackToUnorganized]);
+  }, [actionSheet, boardRepository, messageRepository, cardSearch, confirm, database, loadCards, moveCardBackToUnorganized]);
 
   const openCreate = () => {
     setName('');
@@ -522,7 +528,7 @@ export default function BoardsScreen() {
                           key={item.id}
                           item={item}
                           onPress={() => router.push(item.kind === 'thought' ? `/chat?messageId=${item.id}` : `/card/${item.id}`)}
-                          onMore={() => openCardActions(item)}
+                          onMore={() => void openCardActions(item)}
                         />
                       ))}
                       {row.length === 1 ? <View style={styles.noteSpacer} /> : null}

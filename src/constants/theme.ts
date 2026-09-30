@@ -1,6 +1,6 @@
 import { Platform, type ColorSchemeName } from 'react-native';
 
-import { CHITS_THEMES, type AppPalette, type ChitsThemeIdentity } from '@/constants/chits-themes';
+import { CHITS_THEMES, type AppPalette, type ChitsThemeIdentity, type HeadingFont } from '@/constants/chits-themes';
 
 const lightTokens = {
   background: '#FFFFFF', surface: '#F9F9F9', surfaceElevated: '#F0F0F0',
@@ -56,10 +56,15 @@ export function getThemeTokens(identity: ChitsThemeIdentity, accentKey: ChatThem
 export type SemanticColor = keyof typeof tokens;
 
 export const Fonts = Platform.select({
-  ios: { sans: 'system-ui', rounded: 'ui-rounded', mono: 'ui-monospace' },
-  default: { sans: 'normal', rounded: 'normal', mono: 'monospace' },
-  web: { sans: 'system-ui', rounded: 'system-ui', mono: 'monospace' },
+  ios: { sans: 'system-ui', rounded: 'ui-rounded', mono: 'ui-monospace', serif: 'ui-serif' },
+  default: { sans: 'normal', rounded: 'normal', mono: 'monospace', serif: 'serif' },
+  web: { sans: 'system-ui', rounded: 'system-ui', mono: 'monospace', serif: 'Georgia, serif' },
 });
+
+/** A theme's heading face as a fontFamily; undefined keeps the platform default. */
+export function headingFontFamily(font: HeadingFont = 'system'): string | undefined {
+  return font === 'system' ? undefined : Fonts[font];
+}
 
 export const spacing = { xxs: 4, xs: 8, sm: 12, md: 16, lg: 24, xl: 32 } as const;
 export const radii = { control: 12, compactCard: 16, contentCard: 18, pill: 999 } as const;

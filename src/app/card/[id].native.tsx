@@ -18,6 +18,8 @@ import { AttachmentContent } from '@/components/chat/message-row';
 import { MessageContentRenderer } from '@/components/chat/message-note-cards';
 import { AddCardAttachmentSheet } from '@/components/boards/add-card-attachment-sheet';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
+import { spaceNoteAction, type SpaceNoteAction } from '@/components/spaces/space-note-action';
+import { subscribeToSpaceChanges } from '@/services/space-changes';
 import { useTheme } from '@/components/theme-provider';
 import { AppHeader, EmptyState, IconButton, Screen, Toast, HeaderIcon } from '@/components/ui/primitives';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
@@ -106,6 +108,16 @@ export default function CardDetailScreen() {
   const commentInputRef = useRef<TextInput>(null);
 
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 1800); return () => clearTimeout(timer); }, [toast]);
+  // "Stick to Fridge" / "Remove from Fridge": kept current on focus and whenever a space changes.
+  const [spaceAction, setSpaceAction] = useState<SpaceNoteAction | null>(null);
+  useFocusEffect(useCallback(() => {
+    if (!id) return;
+    let active = true;
+    const read = () => { void spaceNoteAction(database, 'card', id).then((action) => { if (active) setSpaceAction(action); }, () => undefined); };
+    read();
+    const unsubscribe = subscribeToSpaceChanges(read);
+    return () => { active = false; unsubscribe(); };
+  }, [database, id]));
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -584,6 +596,13 @@ export default function CardDetailScreen() {
             <Pressable accessibilityRole="button" accessibilityHint="Turn this card into an image you can share or save." onPress={openShareNote} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
               <Ionicons accessible={false} name="images-outline" size={18} color={theme.textSecondary} />
               <View style={styles.flexCopy}><Text style={styles.actionTitle}>Share Note</Text><Text style={styles.actionCopy}>Turn this card into an image you can share or save.</Text></View>
+            </Pressable>
+            <View style={styles.actionDivider} />
+          </> : null}
+          {spaceAction ? <>
+            <Pressable accessibilityRole="button" onPress={() => void spaceAction.run().then(setToast, () => setToast('That couldn’t be saved. Please try again.'))} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
+              <Ionicons accessible={false} name={spaceAction.icon} size={18} color={theme.textSecondary} />
+              <View style={styles.flexCopy}><Text style={styles.actionTitle}>{spaceAction.label}</Text><Text style={styles.actionCopy}>{spaceAction.icon === 'magnet-outline' ? 'Put this card on a space as a sticky note you can move around.' : 'Take this card’s sticky note off its space.'}</Text></View>
             </Pressable>
             <View style={styles.actionDivider} />
           </> : null}

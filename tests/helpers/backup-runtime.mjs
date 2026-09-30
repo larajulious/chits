@@ -43,6 +43,8 @@ export const service = await import(moduleUrl(resolve(root, 'src/services/backup
 export const recovery = await import(moduleUrl(resolve(root, 'src/services/backup-recovery.native.ts')));
 export const migration = await import(moduleUrl(resolve(root, 'src/db/migrations.ts')));
 export const format = await import(moduleUrl(resolve(root, 'src/services/backup-format.ts')));
+/** Any app module (e.g. 'src/db/repositories'), loaded through the same stubs as the backup service. */
+export const loadModule = (path) => import(moduleUrl(resolve(root, path)));
 
 export function runtime() {
   const location = mkdtempSync(join(tmpdir(), 'chits-backup-test-'));

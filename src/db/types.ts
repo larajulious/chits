@@ -1,3 +1,5 @@
+import type { SpaceId } from '../constants/spaces';
+
 export type MessageType = 'text' | 'photo' | 'video' | 'audio' | 'file';
 
 export interface Message {
@@ -97,3 +99,18 @@ export type TimelineEventType = typeof CHAT_TIMELINE_EVENT_TYPES[number];
 export interface TimelineEvent { id: string; type: TimelineEventType; createdAt: number; relatedMessageId: string | null; relatedCardId: string | null; relatedBoardId: string | null; metadata: Record<string, unknown> | null; }
 export type TimelineItem = { kind: 'message'; message: Message; createdAt: number } | { kind: 'event'; event: TimelineEvent; createdAt: number };
 export interface TimelinePage { items: TimelineItem[]; hasMore: boolean; nextCursor: TimelineCursor | null; }
+
+// A note stuck on a space (Fridge, Desk…). `kind` says which table `noteId`
+// is in — a Chat thought or a board card, the same two kinds the Cards view
+// shows. x/y are fractions of the room the sticky can move in (see spaces.ts).
+export type SpaceNoteKind = 'thought' | 'card';
+export interface SpacePlacement {
+  id: string; kind: SpaceNoteKind; noteId: string; spaceId: SpaceId;
+  x: number; y: number; rotation: number; color: string; zIndex: number; pinnedAt: number;
+}
+// What a sticky draws. `text` is null while the note is hidden in Chat, so
+// neither the board nor a shared image can ever show it; `title` is a card's
+// own title, when it has one. `boardId` opens a card's details.
+export interface PinnedNote extends SpacePlacement { title: string | null; text: string | null; hidden: boolean; boardId: string | null; }
+// A note that can be stuck on a space: a card or an unorganized thought.
+export interface SpaceCandidate { kind: SpaceNoteKind; id: string; title: string; context: string | null; hidden: boolean; updatedAt: number; }

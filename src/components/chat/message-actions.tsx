@@ -8,6 +8,7 @@ import { useTheme } from '@/components/theme-provider';
 import { spacing } from '@/constants/theme';
 import type { Message } from '@/db/types';
 import { exportActionLabel } from '@/services/attachment-export';
+import type { SpaceNoteAction } from '@/components/spaces/space-note-action';
 
 // Centralizes what "Copy chat" is allowed to put on the clipboard: only the
 // human-authored text of the message, never a file URI, ID, or other internal
@@ -26,6 +27,9 @@ type Props = {
   onCopy: (message: Message) => void;
   onEdit: () => void;
   onPin: (message: Message) => void;
+  /** "Stick to Fridge" / "Remove from Fridge" for this thought, once looked up. */
+  spaceAction?: SpaceNoteAction | null;
+  onSpaceAction?: (action: SpaceNoteAction) => void;
   onAddToBoard: () => void;
   onDownload: (message: Message) => void;
   onShareNote: (message: Message) => void;
@@ -46,7 +50,7 @@ function ActionRow({ icon, label, onPress, destructive = false }: { icon: Compon
   </Pressable>;
 }
 
-export function MessageActions({ message: current, temporarilyRevealed, onDismiss, onClosed, onCopy, onEdit, onPin, onAddToBoard, onDownload, onShareNote, onReveal, onHideAgain, onHideContent, onShowContent, onArchive, onDelete }: Props) {
+export function MessageActions({ message: current, temporarilyRevealed, onDismiss, onClosed, onCopy, onEdit, onPin, spaceAction, onSpaceAction, onAddToBoard, onDownload, onShareNote, onReveal, onHideAgain, onHideContent, onShowContent, onArchive, onDelete }: Props) {
   const { tokens: theme } = useTheme();
   // Stays mounted (showing the last message) until the native modal has really
   // closed, like AppDialog: iOS can't present another modal (e.g. the delete
@@ -86,6 +90,7 @@ export function MessageActions({ message: current, temporarilyRevealed, onDismis
 
           <View style={[styles.group, styles.groupDivider, { borderTopColor: theme.borderSubtle }]}>
             {!covered ? <ActionRow icon={message.pinned ? 'pin' : 'pin-outline'} label={message.pinned ? 'Unpin' : 'Pin'} onPress={() => onPin(message)} /> : null}
+            {spaceAction?.noteId === message.id && onSpaceAction ? <ActionRow icon={spaceAction.icon} label={spaceAction.label} onPress={() => onSpaceAction(spaceAction)} /> : null}
             {message.isHiddenContent && temporarilyRevealed ? <ActionRow icon="eye-off-outline" label="Hide again" onPress={() => onHideAgain(message)} /> : null}
             {message.isHiddenContent
               ? <ActionRow icon="eye-outline" label="Show content" onPress={() => onShowContent(message)} />

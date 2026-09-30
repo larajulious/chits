@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
+import { headingFontFamily } from '@/constants/theme';
 import { ChitsLoaderOverlay } from '@/components/ui/chits-loader';
 import { HeaderIcon, IconButton, TopBarBackground, useHeaderInk } from '@/components/ui/primitives';
 import { triggerAppReset } from '@/services/app-reset';
@@ -20,7 +21,7 @@ function sizeLabel(bytes: number) { return bytes < 1024 * 1024 ? `${Math.max(1, 
 function quantity(count: number, noun: string) { return `${count} ${noun}${count === 1 ? '' : 's'}`; }
 export default function BackupScreen() {
   const database = useSQLiteContext();
-  const { tokens } = useTheme();
+  const { tokens, look } = useTheme();
   const headerInk = useHeaderInk();
   const { confirm } = useAppDialog();
   const [progress, setProgress] = useState<BackupProgress | null>(null);
@@ -135,7 +136,7 @@ export default function BackupScreen() {
   };
   const disabled = progress !== null || pending !== null;
   return <SafeAreaView style={[styles.screen, { backgroundColor: tokens.background }]}>
-    <View style={styles.header}><TopBarBackground /><IconButton label="Back to settings" disabled={disabled} onPress={() => router.back()}><HeaderIcon name="arrow-back-outline" size={23} /></IconButton><Text accessibilityRole="header" style={[styles.title, { color: headerInk.ink }]}>Backup & Restore</Text><View style={{ width: 44 }} /></View>
+    <View style={styles.header}><TopBarBackground /><IconButton label="Back to settings" disabled={disabled} onPress={() => router.back()}><HeaderIcon name="arrow-back-outline" size={23} /></IconButton><Text accessibilityRole="header" style={[styles.title, { color: headerInk.ink, fontFamily: headingFontFamily(look.headingFont) }]}>Backup & Restore</Text><View style={{ width: 44 }} /></View>
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.section}>
         <Text accessibilityRole="header" style={[styles.heading, { color: tokens.textPrimary }]}>Backup your Chits</Text>

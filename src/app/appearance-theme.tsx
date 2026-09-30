@@ -1,20 +1,26 @@
 import { memo, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '@/components/theme-provider';
 import { AppHeader, IconButton, Screen, Toast, HeaderIcon } from '@/components/ui/primitives';
-import { CHITS_THEME_LIST, type ChitsTheme } from '@/constants/chits-themes';
-import { getThemeTokens, radii, spacing } from '@/constants/theme';
+import { CHITS_THEME_COLLECTIONS, topBarForIdentity, type ChitsTheme } from '@/constants/chits-themes';
+import { getThemeTokens, headingFontFamily, radii, spacing } from '@/constants/theme';
 
 const COLUMNS = 2;
 
-/** A thumbnail of Chits in this theme: a header, a card, your thought and a button — same layout for every theme. */
+/**
+ * A thumbnail of Chits in this theme: its header band and title face, a card,
+ * your thought, an accent chip and a button — same layout for every theme.
+ */
 const ThemePreviewCard = memo(function ThemePreviewCard({ theme, selected, width, onPress }: { theme: ChitsTheme; selected: boolean; width: number; onPress: () => void }) {
   const { tokens: current, themeKey, scheme } = useTheme();
   const t = getThemeTokens(theme.id, themeKey, scheme);
+  const bar = topBarForIdentity(theme.id);
+  const markColor = bar ? bar.share.colors.accent : t.accent;
   return <Pressable
     accessibilityRole="radio"
     accessibilityLabel={`${theme.name} theme. ${theme.description}`}
@@ -23,22 +29,25 @@ const ThemePreviewCard = memo(function ThemePreviewCard({ theme, selected, width
     style={({ pressed }) => [styles.card, { width, borderColor: selected ? current.accent : current.borderSubtle, borderWidth: selected ? 2 : StyleSheet.hairlineWidth, backgroundColor: current.surface }, pressed && styles.pressed]}
   >
     <View style={[styles.mock, { backgroundColor: t.chatBackground }]}>
-      <View style={styles.mockHeader}>
-        <View style={[styles.mockLine, { width: '38%', backgroundColor: t.textPrimary, opacity: 0.85, height: 5 }]} />
+      <View style={[styles.mockHeader, bar ? { backgroundColor: bar.colors[0] } : { borderBottomColor: t.borderSubtle, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+        {bar?.share.backgroundType === 'gradient' ? <LinearGradient colors={bar.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} /> : null}
+        <Text numberOfLines={1} style={[styles.mockTitle, { color: bar ? bar.ink : t.textPrimary, fontWeight: theme.look.headingWeight, fontFamily: headingFontFamily(theme.look.headingFont) }]}>Chits</Text>
         {theme.shareNote.mark === 'cross'
-          ? <View style={styles.mockCross}><View style={[styles.mockCrossBeam, { backgroundColor: t.accent }]} /><View style={[styles.mockCrossArm, { backgroundColor: t.accent }]} /></View>
-          : <View style={[styles.mockDot, { backgroundColor: t.accent }]} />}
+          ? <View style={styles.mockCross}><View style={[styles.mockCrossBeam, { backgroundColor: markColor }]} /><View style={[styles.mockCrossArm, { backgroundColor: markColor }]} /></View>
+          : <View style={[styles.mockDot, { backgroundColor: markColor }]} />}
       </View>
-      <View style={[styles.mockCard, { backgroundColor: t.cardPaper, borderColor: t.borderSubtle }]}>
-        <View style={[styles.mockLine, { width: '72%', backgroundColor: t.textPrimary }]} />
-        <View style={[styles.mockLine, { width: '48%', backgroundColor: t.textMuted, marginTop: 4 }]} />
-      </View>
-      <View style={[styles.mockBubble, { backgroundColor: t.bubble }]}>
-        <View style={[styles.mockLine, { width: 44, backgroundColor: t.bubbleText, opacity: 0.8 }]} />
-      </View>
-      <View style={styles.mockFooter}>
-        <View style={[styles.mockChip, { backgroundColor: t.accentSoft }]}><View style={[styles.mockLine, { width: 18, backgroundColor: t.accentStrong }]} /></View>
-        <View style={[styles.mockButton, { backgroundColor: t.accent }]}><View style={[styles.mockLine, { width: 20, backgroundColor: t.accentText }]} /></View>
+      <View style={styles.mockBody}>
+        <View style={[styles.mockCard, { backgroundColor: t.cardPaper, borderColor: t.borderSubtle }]}>
+          <View style={[styles.mockLine, { width: '72%', backgroundColor: t.textPrimary }]} />
+          <View style={[styles.mockLine, { width: '48%', backgroundColor: t.textMuted, marginTop: 4 }]} />
+        </View>
+        <View style={[styles.mockBubble, { backgroundColor: t.bubble }]}>
+          <View style={[styles.mockLine, { width: 44, backgroundColor: t.bubbleText, opacity: 0.8 }]} />
+        </View>
+        <View style={styles.mockFooter}>
+          <View style={[styles.mockChip, { backgroundColor: t.accentSoft }]}><View style={[styles.mockLine, { width: 18, backgroundColor: t.accentStrong }]} /></View>
+          <View style={[styles.mockButton, { backgroundColor: t.accent }]}><View style={[styles.mockLine, { width: 20, backgroundColor: t.accentText }]} /></View>
+        </View>
       </View>
     </View>
     <View style={styles.cardCopy}>
@@ -71,9 +80,13 @@ export default function AppearanceThemeScreen() {
     <AppHeader title="Theme" leading={<IconButton label="Go back" onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
     <ScrollView contentContainerStyle={styles.content}>
       <Text style={[styles.intro, { color: tokens.textSecondary }]}>Choose the personality Chits wears. Your notes, boards and layout stay exactly the same.</Text>
-      <View accessibilityRole="radiogroup" accessibilityLabel="Theme" style={styles.grid}>
-        {CHITS_THEME_LIST.map((theme) => <ThemePreviewCard key={theme.id} theme={theme} selected={theme.id === identity} width={cardWidth} onPress={() => choose(theme)} />)}
-      </View>
+      {CHITS_THEME_COLLECTIONS.map((collection) => <View key={collection.id} style={styles.collection}>
+        <Text accessibilityRole="header" style={[styles.collectionTitle, { color: tokens.textPrimary }]}>{collection.name}</Text>
+        {collection.id === 'generations' ? <Text style={[styles.collectionDetail, { color: tokens.textMuted }]}>Five design eras, told through type, color and texture.</Text> : null}
+        <View accessibilityRole="radiogroup" accessibilityLabel={`${collection.name} themes`} style={styles.grid}>
+          {collection.themes.map((theme) => <ThemePreviewCard key={theme.id} theme={theme} selected={theme.id === identity} width={cardWidth} onPress={() => choose(theme)} />)}
+        </View>
+      </View>)}
       <Text style={[styles.footnote, { color: tokens.textMuted }]}>Light and dark follow App appearance. A Chat background photo stays in place whichever theme you choose.</Text>
     </ScrollView>
     <Toast message={toast} />
@@ -82,12 +95,17 @@ export default function AppearanceThemeScreen() {
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.xl, alignSelf: 'center', width: '100%', maxWidth: 720 },
-  intro: { fontSize: 14, lineHeight: 20, marginBottom: spacing.md },
+  intro: { fontSize: 14, lineHeight: 20 },
+  collection: { marginTop: spacing.lg },
+  collectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: spacing.xs },
+  collectionDetail: { fontSize: 12, lineHeight: 17, marginTop: -2, marginBottom: spacing.sm },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   card: { overflow: 'hidden', borderRadius: radii.compactCard },
   pressed: { opacity: 0.75 },
-  mock: { height: 132, padding: 10, gap: 7 },
-  mockHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 1 },
+  mock: { height: 150 },
+  mockHeader: { height: 26, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10 },
+  mockTitle: { fontSize: 11, lineHeight: 14, includeFontPadding: false },
+  mockBody: { flex: 1, padding: 10, paddingTop: 9, gap: 7 },
   mockLine: { height: 4, borderRadius: 2 },
   mockDot: { width: 9, height: 9, borderRadius: 4.5 },
   mockCross: { width: 9, height: 13 },

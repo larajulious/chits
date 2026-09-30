@@ -4,6 +4,13 @@ import { normalizeStoredAttachmentPath } from '@/services/attachment-path';
 
 type Migration = { version: number; up: (database: SQLiteDatabase) => Promise<void> };
 
+export const SPACE_PLACEMENTS_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS space_placements (id TEXT PRIMARY KEY NOT NULL, message_id TEXT, card_id TEXT, space_id TEXT NOT NULL, x REAL NOT NULL, y REAL NOT NULL, rotation REAL NOT NULL, color TEXT NOT NULL, z_index INTEGER NOT NULL, pinned_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, CHECK ((message_id IS NULL) != (card_id IS NULL)), FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE, FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_space_placements_message ON space_placements(message_id) WHERE message_id IS NOT NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_space_placements_card ON space_placements(card_id) WHERE card_id IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_space_placements_space ON space_placements(space_id, z_index);
+`;
+
 export const CARD_REMINDERS_SCHEMA = 'CREATE TABLE IF NOT EXISTS card_reminders (card_id TEXT PRIMARY KEY NOT NULL, scheduled_at INTEGER NOT NULL, notification_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS idx_card_reminders_scheduled ON card_reminders(scheduled_at);';
 
 export const RETIRED_SCHEDULING_DATA_MIGRATION = "DROP TABLE IF EXISTS reminders; DELETE FROM app_settings WHERE key = 'reminder_default_minutes';";
@@ -175,6 +182,16 @@ const migrations: Migration[] = [{
     // removed by the reminder sync. notification_id is the local notification
     // scheduled on this device (NULL until scheduled, e.g. right after a restore).
     await database.execAsync(CARD_REMINDERS_SCHEMA);
+  },
+}, {
+  version: 21,
+  up: async (database) => {
+    // Spaces: where a note is stuck on the fridge, desk, cork board or wall.
+    // A note is either a Chat thought or a card — exactly one of message_id /
+    // card_id is set — and is on at most one space. Both keys cascade, so a
+    // placement can never outlive its note, however the note is removed.
+    // x/y are fractions (0–1) of the room the sticky can move in.
+    await database.execAsync(SPACE_PLACEMENTS_SCHEMA);
   },
 }];
 

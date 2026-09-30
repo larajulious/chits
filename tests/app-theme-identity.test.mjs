@@ -4,7 +4,7 @@ import test from 'node:test';
 import ts from 'typescript';
 
 import {
-  CHITS_THEME_IDS, CHITS_THEME_LIST, CHITS_THEMES, DEFAULT_THEME_IDENTITY, SHARE_NOTE_THEMES, THEME_SETTING_KEY,
+  CHITS_THEME_COLLECTIONS, CHITS_THEME_IDS, CHITS_THEME_LIST, CHITS_THEMES, DEFAULT_THEME_IDENTITY, SHARE_NOTE_COLLECTIONS, SHARE_NOTE_THEMES, THEME_SETTING_KEY,
   resolveThemeIdentity, shareNoteThemeForIdentity,
 } from '../src/constants/chits-themes.ts';
 
@@ -22,7 +22,7 @@ const lum = (hex) => {
 const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
 
 test('Settings offers Default plus every personality, in order', () => {
-  assert.deepEqual(CHITS_THEME_LIST.map((theme) => theme.name), ['Default', 'Faith', 'Casual', 'Corporate', 'Love', 'Friends', 'Boss', 'Stranger', 'Motivation', 'Calm', 'Creative', 'Cute', 'Christmas', 'Spooky', 'New Year', 'Midnight']);
+  assert.deepEqual(CHITS_THEME_LIST.map((theme) => theme.name), ['Default', 'Faith', 'Casual', 'Corporate', 'Love', 'Friends', 'Boss', 'Stranger', 'Motivation', 'Calm', 'Creative', 'Cute', 'Christmas', 'Spooky', 'New Year', 'Midnight', 'Boomers', 'Gen X', 'Millennials', 'Gen Z', 'Gen Alpha']);
   assert.deepEqual(CHITS_THEME_LIST.map((theme) => theme.id), [...CHITS_THEME_IDS]);
   assert.equal(DEFAULT_THEME_IDENTITY, 'default');
   assert.equal(THEME_SETTING_KEY, 'app_theme');
@@ -118,4 +118,30 @@ test('Faith carries the cross of Jesus Christ through the app and every Share No
   assert.equal(faith.shareNote.mark, 'cross', 'a cross opens a text note');
   assert.equal(faith.shareNote.decorationStyle, 'cross', 'a cross of light stands behind every note and in the top bar');
   assert.equal(faith.look.chatPattern, 'cross', 'a quiet cross stands behind Chat');
+});
+
+test('Settings and Share Note group themes into Personalities, then Generations', () => {
+  for (const collections of [CHITS_THEME_COLLECTIONS, SHARE_NOTE_COLLECTIONS]) {
+    assert.deepEqual(collections.map((collection) => collection.name), ['Personalities', 'Generations']);
+    assert.deepEqual(collections[1].themes.map((theme) => theme.name), ['Boomers', 'Gen X', 'Millennials', 'Gen Z', 'Gen Alpha']);
+  }
+  // Every theme appears exactly once, in its own collection.
+  assert.deepEqual(CHITS_THEME_COLLECTIONS.flatMap((collection) => collection.themes), CHITS_THEME_LIST);
+  for (const collection of CHITS_THEME_COLLECTIONS) for (const theme of collection.themes) assert.equal(theme.category, collection.id, theme.id);
+  assert.deepEqual(SHARE_NOTE_COLLECTIONS.flatMap((collection) => collection.themes.map((theme) => theme.id)).sort(), SHARE_NOTE_THEMES.map((theme) => theme.id).sort());
+});
+
+test('each generation keeps its brief’s palette in its native mode, and a distinct voice', () => {
+  const native = {
+    boomers: ['light', { background: '#F6F0E4', surface: '#FFFDF8', accent: '#7B2D3E', textPrimary: '#292521', borderSubtle: '#D8CEBF' }],
+    'gen-x': ['dark', { background: '#171717', surface: '#242424', accent: '#D8A84E', textPrimary: '#F2EFE9', textMuted: '#AAA59D', borderSubtle: '#3A3A3A' }],
+    millennials: ['light', { background: '#F7F4F0', surface: '#FFFFFF', textPrimary: '#30343B', borderSubtle: '#E7E0DA' }],
+    'gen-z': ['dark', { background: '#121212', surface: '#1C1C1E', accent: '#B7FF3C', textPrimary: '#FFFFFF', textMuted: '#B5B5B5', borderSubtle: '#343434' }],
+    'gen-alpha': ['light', { background: '#EEF7FF', surface: '#FFFFFF', textPrimary: '#1C2440', borderSubtle: '#DCE6F5' }],
+  };
+  for (const [id, [scheme, colors]] of Object.entries(native)) {
+    for (const [key, value] of Object.entries(colors)) assert.equal(CHITS_THEMES[id].palette[scheme][key], value, `${id} ${scheme} ${key}`);
+  }
+  const voices = Object.keys(native).map((id) => { const { look, shareNote } = CHITS_THEMES[id]; return `${look.headingFont ?? 'system'}/${look.chatPattern}/${shareNote.fontStyle}/${shareNote.decorationStyle}`; });
+  assert.equal(new Set(voices).size, voices.length, 'no two generations share a type voice and texture');
 });

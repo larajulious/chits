@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { useTheme } from '@/components/theme-provider';
 import { radii, spacing } from '@/constants/theme';
-import { SHARE_NOTE_THEMES, type ShareNoteTheme } from '@/constants/chits-themes';
+import { SHARE_NOTE_COLLECTIONS, type ShareNoteFontStyle, type ShareNoteTheme } from '@/constants/chits-themes';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
 import type { ShareNoteImage } from '@/services/share-note';
 
@@ -42,16 +42,19 @@ export function SegmentedControl<Key extends string>({ options, value, onChange,
   </View>;
 }
 
+const SERIF = Platform.select({ ios: 'ui-serif', default: 'serif' });
+// The swatch's "Aa" in each voice's face (undefined = the system face).
+const SWATCH_FACE: Partial<Record<ShareNoteFontStyle, string>> = { elegant: SERIF, expressive: SERIF, classic: SERIF, mono: Platform.select({ ios: 'ui-monospace', default: 'monospace' }) };
+
 const ThemeSwatch = memo(function ThemeSwatch({ item, selected, onPress }: { item: ShareNoteTheme; selected: boolean; onPress: () => void }) {
   const { tokens: theme } = useTheme();
   const { colors } = item;
-  const serif = item.fontStyle === 'elegant' || item.fontStyle === 'expressive';
   return <Pressable accessibilityRole="radio" accessibilityLabel={`${item.name} theme. ${item.mood}`} accessibilityState={{ selected }} onPress={onPress} style={({ pressed }) => [styles.swatch, pressed && styles.pressed]}>
     <View style={[styles.swatchFrame, { borderColor: selected ? theme.accent : 'transparent' }]}>
       <View style={[styles.swatchCanvas, { backgroundColor: colors.background }]}>
         {item.backgroundType === 'gradient' ? <LinearGradient colors={[colors.background, colors.backgroundEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} /> : null}
         <View style={[styles.swatchCard, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.swatchGlyph, { color: colors.textPrimary, fontStyle: item.fontStyle === 'elegant' ? 'italic' : 'normal', fontWeight: item.fontStyle === 'bold' ? '900' : '700', fontFamily: serif ? Platform.select({ ios: 'ui-serif', default: 'serif' }) : undefined }]}>Aa</Text>
+          <Text style={[styles.swatchGlyph, { color: colors.textPrimary, fontStyle: item.fontStyle === 'elegant' ? 'italic' : 'normal', fontWeight: item.fontStyle === 'bold' ? '900' : '700', fontFamily: SWATCH_FACE[item.fontStyle] }]}>Aa</Text>
           <View style={[styles.swatchAccent, { backgroundColor: colors.accent }]} />
         </View>
       </View>
@@ -60,10 +63,17 @@ const ThemeSwatch = memo(function ThemeSwatch({ item, selected, onPress }: { ite
   </Pressable>;
 });
 
+/** Share Note → Theme: one scrolling row per collection (Personalities, Generations). */
 export function ThemePicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
-  return <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityRole="radiogroup" accessibilityLabel="Theme" contentContainerStyle={styles.themeRow} style={styles.bleed}>
-    {SHARE_NOTE_THEMES.map((item) => <ThemeSwatch key={item.id} item={item} selected={item.id === value} onPress={() => onChange(item.id)} />)}
-  </ScrollView>;
+  const { tokens: theme } = useTheme();
+  return <View accessibilityRole="radiogroup" accessibilityLabel="Theme" style={styles.collections}>
+    {SHARE_NOTE_COLLECTIONS.map((collection) => <View key={collection.id}>
+      <Text accessibilityRole="header" style={[styles.collectionTitle, { color: theme.textSecondary }]}>{collection.name}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityLabel={`${collection.name} themes`} contentContainerStyle={styles.themeRow} style={styles.bleed}>
+        {collection.themes.map((item) => <ThemeSwatch key={item.id} item={item} selected={item.id === value} onPress={() => onChange(item.id)} />)}
+      </ScrollView>
+    </View>)}
+  </View>;
 }
 
 export function ImageSelector({ images, selected, onToggle }: { images: ShareNoteImage[]; selected: string[]; onToggle: (id: string) => void }) {
@@ -115,6 +125,8 @@ const styles = StyleSheet.create({
   segmentDetail: { fontSize: 10, marginTop: 1, fontVariant: ['tabular-nums'] },
   disabled: { opacity: 0.35 },
   pressed: { opacity: 0.7 },
+  collections: { gap: spacing.md },
+  collectionTitle: { fontSize: 13, fontWeight: '600', marginBottom: spacing.xs },
   themeRow: { gap: spacing.sm, paddingHorizontal: spacing.lg },
   swatch: { width: 66, alignItems: 'center' },
   swatchFrame: { padding: 2, borderRadius: 16, borderWidth: 2 },

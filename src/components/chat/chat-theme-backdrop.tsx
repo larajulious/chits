@@ -41,8 +41,27 @@ export const ChatThemeBackdrop = memo(function ChatThemeBackdrop() {
       <View style={[styles.shape, { left: (width - beam) / 2, top, width: beam, height: length, borderRadius: beam / 3, backgroundColor: ink }]} />
       <View style={[styles.shape, { left: (width - length * 0.62) / 2, top: top + length * 0.28 - beam / 2, width: length * 0.62, height: beam, borderRadius: beam / 3, backgroundColor: ink }]} />
     </View>;
+  } else if (look.chatPattern === 'grain') {
+    // Fine analog grain: many tiny specks in the text color, barely there.
+    shapes = Array.from({ length: 90 }, (_, index) => {
+      const size = 1.5 + scatter(index, 13) * 1.5;
+      return <View key={index} style={[styles.shape, { left: scatter(index, 14) * width, top: scatter(index, 15) * height, width: size, height: size, borderRadius: size / 2, backgroundColor: tokens.textPrimary, opacity: 0.07 + scatter(index, 16) * 0.05 }]} />;
+    });
+  } else if (look.chatPattern === 'geometric') {
+    // A few floating rings, tiles and dots — soft depth, never busy.
+    const colors = look.patternColors ?? [tokens.accent, tokens.accentBorder];
+    shapes = Array.from({ length: 9 }, (_, index) => {
+      const kind = index % 3;
+      const size = kind === 2 ? 10 + scatter(index, 17) * 10 : 34 + scatter(index, 17) * 46;
+      return <View key={index} style={[styles.shape, {
+        left: scatter(index, 18) * (width - size / 2), top: scatter(index, 19) * height, width: size, height: size,
+        borderRadius: kind === 1 ? size * 0.28 : size / 2,
+        ...(kind === 0 ? { borderWidth: Math.max(3, size * 0.12), borderColor: colors[index % colors.length] } : { backgroundColor: colors[index % colors.length] }),
+        opacity: 0.12, transform: [{ rotate: `${Math.round(scatter(index, 20) * 40 - 20)}deg` }],
+      }]} />;
+    });
   } else if (look.chatPattern === 'confetti') {
-    const colors = [tokens.accent, tokens.accentBorder, tokens.accentStrong];
+    const colors = look.patternColors ?? [tokens.accent, tokens.accentBorder, tokens.accentStrong];
     shapes = Array.from({ length: 22 }, (_, index) => {
       const bar = index % 3 === 2;
       const size = 6 + scatter(index, 5) * 7;

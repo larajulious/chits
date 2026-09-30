@@ -2,7 +2,9 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { clearChatBackgroundForPaths, unreferencedAttachmentPaths } from './chat-background';
 import { notifyChatBackgroundChanged } from '../services/chat-background';
 import { notifyAttachmentsChanged } from '../services/attachment-changes';
-import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type AttachmentFilterType, type AttachmentLike, type AttachmentPage, type AttachmentPageOptions, type AttachmentSummary, type Board, type Message, type MessageType, type PageOptions, type TimelineEvent, type TimelineEventType, type TimelineItem, type TimelinePage, type TimelinePageOptions } from './types';
+import { notifySpacesChanged } from '../services/space-changes';
+import { autoPlace, clampUnit, DEFAULT_STICKY_COLOR, randomRotation, resolveSpaceId, SELECTED_SPACE_SETTING_KEY, SPACE_CAPACITY, SPACE_IDS, STICKY_COLORS, type SpaceId, type SpacePoint } from '../constants/spaces';
+import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type AttachmentFilterType, type AttachmentLike, type AttachmentPage, type AttachmentPageOptions, type AttachmentSummary, type Board, type Message, type MessageType, type PageOptions, type TimelineEvent, type TimelineEventType, type TimelineItem, type TimelinePage, type TimelinePageOptions , type PinnedNote, type SpaceCandidate, type SpaceNoteKind, type SpacePlacement } from './types';
 
 const DEFAULT_PAGE_SIZE = 50;
 type MessageRow = { id: string; text: string | null; type: Message['type']; created_at: number; updated_at: number; archived_at: number | null; pinned: number; is_hidden_content: number; deleted_at: number | null };
@@ -332,6 +334,8 @@ export function createMessageRepository(database: SQLiteDatabase) {
     async softDelete(id: string) {
       const result = await database.runAsync('UPDATE messages SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL', Date.now(), Date.now(), id);
       if (result.changes !== 1) throw new Error('That thought is no longer available.');
+      // A deleted note comes off its space for good (archiving only hides it).
+      if ((await database.runAsync('DELETE FROM space_placements WHERE message_id = ?', id)).changes) notifySpacesChanged();
     },
     async deletePermanently(id: string) {
       const removableUris: string[] = [];
@@ -890,6 +894,135 @@ export function createReminderRepository(database: SQLiteDatabase) {
     deleteMany: async (cardIds: string[]) => {
       if (!cardIds.length) return;
       await database.runAsync(`DELETE FROM card_reminders WHERE card_id IN (${cardIds.map(() => '?').join(', ')})`, ...cardIds);
+    },
+  };
+}
+
+// ── Spaces ───────────────────────────────────────────────────────────────────
+
+type PlacementRow = { id: string; message_id: string | null; card_id: string | null; space_id: SpaceId; x: number; y: number; rotation: number; color: string; z_index: number; pinned_at: number };
+const placementFromRow = (row: PlacementRow): SpacePlacement => ({
+  id: row.id, kind: row.card_id ? 'card' : 'thought', noteId: row.card_id ?? row.message_id ?? '', spaceId: row.space_id,
+  x: row.x, y: row.y, rotation: row.rotation, color: row.color, zIndex: row.z_index, pinnedAt: row.pinned_at,
+});
+// A thought's text, or a label for what it holds when it has none.
+const MESSAGE_TEXT_SQL = (alias: string) => `COALESCE(NULLIF(TRIM(${alias}.text), ''), (SELECT CASE a.type WHEN 'file' THEN COALESCE(NULLIF(TRIM(a.original_name), ''), 'Attachment') WHEN 'photo' THEN 'Photo' WHEN 'video' THEN 'Video' WHEN 'audio' THEN 'Audio note' ELSE 'Attachment' END FROM attachments a WHERE a.message_id = ${alias}.id ORDER BY a.created_at ASC LIMIT 1), 'Attachment')`;
+// Placements whose note is live. An archived note keeps its spot and reappears
+// if restored; a deleted one takes its placement with it (see softDelete and
+// the table's cascading keys).
+const LIVE_PLACEMENTS_SQL = `
+  FROM space_placements p
+  LEFT JOIN messages m ON m.id = p.message_id
+  LEFT JOIN cards c ON c.id = p.card_id
+  LEFT JOIN boards b ON b.id = c.board_id
+  WHERE ((m.id IS NOT NULL AND m.deleted_at IS NULL AND m.archived_at IS NULL) OR (c.id IS NOT NULL AND c.archived_at IS NULL AND b.archived_at IS NULL))`;
+// The top of a placement's space, or one above it — so re-raising the top sticky doesn't climb forever.
+const FRONT_Z_SQL = `(SELECT CASE WHEN MAX(o.z_index) = space_placements.z_index AND COUNT(*) FILTER (WHERE o.z_index = space_placements.z_index) = 1 THEN MAX(o.z_index) ELSE MAX(o.z_index) + 1 END FROM space_placements o WHERE o.space_id = space_placements.space_id)`;
+const NOT_ORGANIZED_SQL = 'NOT EXISTS (SELECT 1 FROM card_messages cm INNER JOIN cards oc ON oc.id = cm.card_id INNER JOIN boards ob ON ob.id = oc.board_id WHERE cm.message_id = m.id AND oc.archived_at IS NULL AND ob.archived_at IS NULL)';
+
+export type StickResult = { status: 'stuck'; placement: SpacePlacement } | { status: 'full' };
+
+export function createSpaceRepository(database: SQLiteDatabase) {
+  const noteColumn = (kind: SpaceNoteKind) => (kind === 'card' ? 'card_id' : 'message_id');
+  const getPlacement = async (executor: Pick<SQLiteDatabase, 'getFirstAsync'>, where: string, value: string) => {
+    const row = await executor.getFirstAsync<PlacementRow>(`SELECT * FROM space_placements WHERE ${where} = ?`, value);
+    return row ? placementFromRow(row) : null;
+  };
+  const changed = async (write: Promise<{ changes: number }>) => { const result = await write; if (result.changes) notifySpacesChanged(); return result.changes > 0; };
+  /**
+   * Sticks a note on a space in the next open spot, tilted a little. A note
+   * already on another space moves there, keeping its color and tilt; one
+   * already on this space stays put. A full space refuses.
+   */
+  const stick = async (kind: SpaceNoteKind, noteId: string, spaceId: SpaceId, random: () => number = Math.random): Promise<StickResult> => {
+    let result = { status: 'full' } as StickResult;
+    await database.withExclusiveTransactionAsync(async (transaction) => {
+      const existing = await getPlacement(transaction, noteColumn(kind), noteId);
+      if (existing?.spaceId === spaceId) { result = { status: 'stuck', placement: existing }; return; }
+      const taken = await transaction.getAllAsync<SpacePoint>(`SELECT p.x, p.y ${LIVE_PLACEMENTS_SQL} AND p.space_id = ?`, spaceId);
+      if (taken.length >= SPACE_CAPACITY) return;
+      const { x, y } = autoPlace(taken, random);
+      const zIndex = ((await transaction.getFirstAsync<{ z: number | null }>('SELECT MAX(z_index) AS z FROM space_placements WHERE space_id = ?', spaceId))?.z ?? 0) + 1;
+      const now = Date.now();
+      if (existing) {
+        await transaction.runAsync('UPDATE space_placements SET space_id = ?, x = ?, y = ?, z_index = ?, pinned_at = ?, updated_at = ? WHERE id = ?', spaceId, x, y, zIndex, now, now, existing.id);
+        result = { status: 'stuck', placement: { ...existing, spaceId, x, y, zIndex, pinnedAt: now } };
+      } else {
+        const placement: SpacePlacement = { id: newId(), kind, noteId, spaceId, x, y, rotation: randomRotation(random), color: DEFAULT_STICKY_COLOR, zIndex, pinnedAt: now };
+        await transaction.runAsync(`INSERT INTO space_placements (id, ${noteColumn(kind)}, space_id, x, y, rotation, color, z_index, pinned_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, placement.id, noteId, spaceId, x, y, placement.rotation, placement.color, zIndex, now, now);
+        result = { status: 'stuck', placement };
+      }
+    });
+    if (result.status === 'stuck') notifySpacesChanged();
+    return result;
+  };
+  return {
+    stick,
+    /** The space Spaces opens on; null until the user has picked one. */
+    async getSelectedSpace() {
+      const row = await database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', SELECTED_SPACE_SETTING_KEY);
+      return resolveSpaceId(row?.value);
+    },
+    /** The same, read before a screen's first frame so it never flashes the wrong screen. */
+    getSelectedSpaceSync() {
+      try { return resolveSpaceId(database.getFirstSync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', SELECTED_SPACE_SETTING_KEY)?.value); } catch { return null; }
+    },
+    setSelectedSpace: (spaceId: SpaceId) => database.runAsync('INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at', SELECTED_SPACE_SETTING_KEY, spaceId, Date.now()),
+    /** A space's stickies, back to front. */
+    async list(spaceId: SpaceId): Promise<PinnedNote[]> {
+      const rows = await database.getAllAsync<PlacementRow & { title: string | null; text: string | null; hidden: number; board_id: string | null }>(`
+        SELECT p.*,
+          CASE WHEN p.card_id IS NOT NULL THEN NULLIF(TRIM(c.title), '') END AS title,
+          CASE WHEN p.card_id IS NOT NULL THEN (SELECT ${MESSAGE_TEXT_SQL('fm')} FROM card_messages fcm INNER JOIN messages fm ON fm.id = fcm.message_id WHERE fcm.card_id = c.id ORDER BY fcm.position ASC LIMIT 1) ELSE ${MESSAGE_TEXT_SQL('m')} END AS text,
+          CASE WHEN p.card_id IS NOT NULL THEN EXISTS (SELECT 1 FROM card_messages hcm INNER JOIN messages hm ON hm.id = hcm.message_id WHERE hcm.card_id = c.id AND hm.is_hidden_content = 1) ELSE m.is_hidden_content = 1 END AS hidden,
+          c.board_id
+        ${LIVE_PLACEMENTS_SQL} AND p.space_id = ?
+        ORDER BY p.z_index ASC, p.pinned_at ASC`, spaceId);
+      return rows.map((row) => {
+        const hidden = row.hidden === 1;
+        return { ...placementFromRow(row), hidden, title: hidden ? null : row.title, text: hidden ? null : row.text ?? '', boardId: row.board_id };
+      });
+    },
+    /** Live stickies per space, for the nav badge and "X of 12". */
+    async counts(): Promise<Record<SpaceId, number>> {
+      const rows = await database.getAllAsync<{ spaceId: SpaceId; count: number }>(`SELECT p.space_id AS spaceId, COUNT(*) AS count ${LIVE_PLACEMENTS_SQL} GROUP BY p.space_id`);
+      return Object.fromEntries(SPACE_IDS.map((id) => [id, rows.find((row) => row.spaceId === id)?.count ?? 0])) as Record<SpaceId, number>;
+    },
+    /** Where a note is stuck, if anywhere — for "Stick to space" / "Remove from space". */
+    placementFor: (kind: SpaceNoteKind, noteId: string) => getPlacement(database, noteColumn(kind), noteId),
+    /** Moves a sticky to another space (the options sheet's "Move to another space"). */
+    async moveToSpace(id: string, spaceId: SpaceId): Promise<StickResult | null> {
+      const placement = await getPlacement(database, 'id', id);
+      return placement ? stick(placement.kind, placement.noteId, spaceId) : null;
+    },
+    /** Saves where a sticky was dropped (on drag end only) and keeps it in front. */
+    savePosition: (id: string, point: SpacePoint) => changed(database.runAsync(`UPDATE space_placements SET x = ?, y = ?, z_index = ${FRONT_Z_SQL}, updated_at = ? WHERE id = ?`, clampUnit(point.x), clampUnit(point.y), Date.now(), id)),
+    bringToFront: (id: string) => changed(database.runAsync(`UPDATE space_placements SET z_index = ${FRONT_Z_SQL}, updated_at = ? WHERE id = ?`, Date.now(), id)),
+    setColor: (id: string, color: string) => {
+      if (!STICKY_COLORS.some((option) => option.hex === color)) throw new Error('That sticky color isn’t available.');
+      return changed(database.runAsync('UPDATE space_placements SET color = ?, updated_at = ? WHERE id = ?', color, Date.now(), id));
+    },
+    remove: (id: string) => changed(database.runAsync('DELETE FROM space_placements WHERE id = ?', id)),
+    removeNote: (kind: SpaceNoteKind, noteId: string) => changed(database.runAsync(`DELETE FROM space_placements WHERE ${noteColumn(kind)} = ?`, noteId)),
+    /** Notes that can be stuck on: live cards and unorganized thoughts that aren't on any space, newest first. */
+    async listCandidates(searchTerm?: string): Promise<SpaceCandidate[]> {
+      const term = searchTerm?.trim();
+      const like = term ? `%${term.replace(/[%_]/g, '\\$&')}%` : null;
+      const rows = await database.getAllAsync<{ kind: SpaceNoteKind; id: string; title: string; context: string | null; hidden: number; updatedAt: number }>(`
+        SELECT * FROM (
+          SELECT 'card' AS kind, c.id, ${CARD_TITLE_SQL} AS title, b.name || ' · ' || bc.name AS context,
+            EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages hm ON hm.id = cm.message_id WHERE cm.card_id = c.id AND hm.is_hidden_content = 1) AS hidden, c.updated_at AS updatedAt
+          FROM cards c INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id
+          WHERE c.archived_at IS NULL AND b.archived_at IS NULL AND NOT EXISTS (SELECT 1 FROM space_placements p WHERE p.card_id = c.id)
+          UNION ALL
+          SELECT 'thought' AS kind, m.id, ${MESSAGE_TEXT_SQL('m')} AS title, NULL AS context, m.is_hidden_content = 1 AS hidden, m.updated_at AS updatedAt
+          FROM messages m
+          WHERE m.deleted_at IS NULL AND m.archived_at IS NULL AND ${NOT_ORGANIZED_SQL} AND NOT EXISTS (SELECT 1 FROM space_placements p WHERE p.message_id = m.id)
+        )
+        ${like ? "WHERE hidden = 0 AND (title LIKE ? ESCAPE '\\' OR context LIKE ? ESCAPE '\\')" : ''}
+        ORDER BY updatedAt DESC LIMIT 200`, ...(like ? [like, like] : []));
+      // A hidden note stays hidden here too: listed, but never by its words.
+      return rows.map((row) => ({ ...row, hidden: row.hidden === 1, title: row.hidden === 1 ? 'Hidden Chit' : row.title }));
     },
   };
 }

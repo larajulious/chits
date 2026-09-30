@@ -32,9 +32,11 @@ import * as Haptics from 'expo-haptics';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
+import { LabelTape } from '@/components/spaces/label-tape';
 import { Toast } from '@/components/ui/primitives';
 import { spacing } from '@/constants/theme';
-import { createBoardRepository } from '@/db/repositories';
+import { createBoardRepository, createSpaceRepository } from '@/db/repositories';
+import { subscribeToSpaceChanges } from '@/services/space-changes';
 
 // Short, restrained transition — no bounce — reused for both the Pinned header's
 // search/close swap and a row's fade+collapse on unpin.
@@ -50,7 +52,7 @@ type ContextItem = {
   accessibilityContext: string | null;
 };
 type IconName = ComponentProps<typeof Ionicons>['name'];
-type Destination = { label: string; path: '/' | '/archive' | '/settings'; icon: IconName };
+type Destination = { label: string; path: '/' | '/spaces' | '/archive' | '/settings'; icon: IconName };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
 // Boards, Chat, and Attachments are the 3 items in the bottom navigation (see
@@ -60,6 +62,9 @@ const DrawerContext = createContext<DrawerContextValue | null>(null);
 // just Boards itself. Search stays its own top-corner action rather than a
 // third list row, matching its existing placement.
 const boardsDestination: Destination = { label: 'Notes', path: '/', icon: 'reader-outline' };
+// Spaces: notes stuck on a fridge, desk, cork board or wall. Its own word (and a
+// magnet, not a pin) so it's never confused with the PINNED shortcuts below.
+const spacesDestination: Destination = { label: 'Spaces', path: '/spaces', icon: 'magnet-outline' };
 const archiveDestination: Destination = { label: 'Archive', path: '/archive', icon: 'archive-outline' };
 const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
 
@@ -70,6 +75,8 @@ export function useAppDrawer() {
 }
 
 function isDestinationActive(pathname: string, destination: Destination) {
+  // Spaces is two screens (the board and Pick a Space); either one is "here".
+  if (destination.path === '/spaces') return pathname === '/spaces' || pathname.startsWith('/spaces/');
   return pathname === destination.path;
 }
 
@@ -81,14 +88,14 @@ function DrawerIcon({ name, color }: { name: IconName; color: string }) {
   );
 }
 
-function NavigationRow({ destination, pathname, close }: { destination: Destination; pathname: string; close: () => void }) {
+function NavigationRow({ destination, pathname, close, badge = 0 }: { destination: Destination; pathname: string; close: () => void; badge?: number }) {
   const router = useRouter();
   const { tokens } = useTheme();
   const active = isDestinationActive(pathname, destination);
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${destination.label}${active ? '. Current screen.' : ''}`}
+      accessibilityLabel={`${destination.label}${badge ? `, ${badge} ${badge === 1 ? 'note' : 'notes'}` : ''}${active ? '. Current screen.' : ''}`}
       accessibilityState={{ selected: active }}
       onPress={() => {
         close();
@@ -101,6 +108,8 @@ function NavigationRow({ destination, pathname, close }: { destination: Destinat
       ]}>
       <DrawerIcon name={destination.icon} color={active ? tokens.accentStrong : tokens.textPrimary} />
       <Text style={[styles.itemText, { color: tokens.textPrimary }, active && styles.itemTextSelected]}>{destination.label}</Text>
+      {/* A tiny red label-maker tape, like the ones in Spaces; the count is in the row's label. */}
+      {badge > 0 ? <LabelTape text={String(badge)} variant="red" size="sm" rotation={-3} decorative style={styles.badge} /> : null}
     </Pressable>
   );
 }
@@ -263,24 +272,30 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   // the Boards header — the drawer must show that title too, not its own hardcoded
   // "Chits" that would drift the moment it's renamed.
   const [appTitle, setAppTitle] = useState('Chits');
+  const spaces = useMemo(() => createSpaceRepository(database), [database]);
+  const [stuckCount, setStuckCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [nextPinned, nextRecent, titleRow] = await Promise.all([
+    const [nextPinned, nextRecent, titleRow, spaceCounts] = await Promise.all([
       repository.listPinned(),
       repository.listRecent(),
       database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', 'chat_title'),
+      spaces.counts(),
     ]);
     setPinned(nextPinned);
+    setStuckCount(Object.values(spaceCounts).reduce((sum, count) => sum + count, 0));
     setRecent(nextRecent);
     setAppTitle(titleRow?.value.trim() || 'Chits');
-  }, [database, repository]);
+  }, [database, repository, spaces]);
 
   useEffect(() => {
     if (!isOpen) return;
     const frame = requestAnimationFrame(() => { void load(); });
     return () => cancelAnimationFrame(frame);
   }, [isOpen, load]);
+  // A note stuck on or taken off a space while the drawer is open updates the badge.
+  useEffect(() => (isOpen ? subscribeToSpaceChanges(() => { void load(); }) : undefined), [isOpen, load]);
 
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 1800); return () => clearTimeout(timer); }, [toast]);
 
@@ -313,6 +328,7 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
         <NavigationRow destination={boardsDestination} pathname={pathname} close={close} />
+        <NavigationRow destination={spacesDestination} pathname={pathname} close={close} badge={stuckCount} />
         <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
         <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
         {hasShortcuts ? <View style={[styles.divider, { backgroundColor: tokens.borderSubtle }]} /> : null}
@@ -422,6 +438,7 @@ const styles = StyleSheet.create({
   },
   itemText: { fontSize: 16 },
   itemTextSelected: { fontWeight: '700' },
+  badge: { marginLeft: 'auto', alignSelf: 'center' },
   iconSlot: { width: 24, alignItems: 'center', justifyContent: 'center' },
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.lg, marginTop: spacing.md },
   section: { paddingTop: spacing.lg },

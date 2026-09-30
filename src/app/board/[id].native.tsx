@@ -15,7 +15,7 @@ import { AddNoteSheet, type NoteSubmission } from '@/components/boards/add-note-
 import { ColumnManagementSheet } from '@/components/boards/column-management-sheet';
 import { EditBoardSheet } from '@/components/boards/edit-board-sheet';
 import { resolveBoardIcon, tintWithAccent, type BoardIconName } from '@/constants/board-appearance';
-import { spacing } from '@/constants/theme';
+import { headingFontFamily, spacing } from '@/constants/theme';
 import { createBoardRepository } from '@/db/repositories';
 import { formatReminder } from '@/services/reminder-time';
 import { requestReminderSync, subscribeToReminderChanges } from '@/services/reminders';
@@ -333,7 +333,7 @@ function reorder(items: Card[], from: number, to: number) { const next = [...ite
 
 export default function BoardScreen() {
   'use no memo';
-  const database = useSQLiteContext(); const { id, highlightColumnId, highlightCardId } = useLocalSearchParams<{ id: string; highlightColumnId?: string; highlightCardId?: string }>(); const repository = useMemo(() => createBoardRepository(database), [database]); const { tokens: theme } = useTheme(); const headerInk = useHeaderInk();
+  const database = useSQLiteContext(); const { id, highlightColumnId, highlightCardId } = useLocalSearchParams<{ id: string; highlightColumnId?: string; highlightCardId?: string }>(); const repository = useMemo(() => createBoardRepository(database), [database]); const { tokens: theme, look } = useTheme(); const headerInk = useHeaderInk();
   // The ONE source of truth for the column navigator dock's bottom clearance
   // (see below) — Screen must not ALSO reserve its own bottom safe-area inset
   // here, or the two stack into an oversized gap under the dock.
@@ -727,7 +727,7 @@ export default function BoardScreen() {
       <TopBarBackground />
       <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={({ pressed }) => [styles.headerButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.headerButtonPressed]}><Ionicons accessible={false} name="chevron-back" size={24} color={theme.textPrimary} /></Pressable>
       <View accessible={false} style={[styles.boardMark, { backgroundColor: board.accent ?? theme.accentSoft }]}><Ionicons accessible={false} name={resolveBoardIcon(board.icon)} size={19} color={board.accent ? '#FFFFFF' : theme.accentStrong} /></View>
-      <View style={styles.headerCopy}><Text numberOfLines={1} accessibilityRole="header" style={[styles.boardTitle, { color: headerInk.ink }]}>{board.name}</Text><Text numberOfLines={1} style={[styles.boardSubtitle, { color: headerInk.inkMuted }]}>{metadata}</Text></View>
+      <View style={styles.headerCopy}><Text numberOfLines={1} accessibilityRole="header" style={[styles.boardTitle, { color: headerInk.ink, fontFamily: headingFontFamily(look.headingFont) }]}>{board.name}</Text><Text numberOfLines={1} style={[styles.boardSubtitle, { color: headerInk.inkMuted }]}>{metadata}</Text></View>
       <Pressable accessibilityRole="button" accessibilityLabel="Search" onPress={() => router.push('/search')} style={({ pressed }) => [styles.headerButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.headerButtonPressed]}><Ionicons accessible={false} name="search-outline" size={21} color={theme.textPrimary} /></Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel="Edit board" onPress={() => setRenameOpen(true)} style={({ pressed }) => [styles.headerButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.headerButtonPressed]}><Ionicons accessible={false} name="pencil-outline" size={21} color={theme.textPrimary} /></Pressable>
     </View>

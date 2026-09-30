@@ -216,6 +216,6 @@ export function fitShareNoteText(text: string, box: Rect, { mode, format, metric
 const pad = (value: number) => String(value).padStart(2, '0');
 
 /** "Chits Note 2026-09-29 14.03.12.png" — what the file is called in the share sheet, Photos and Downloads. */
-export function shareNoteFileName(at: Date, extension: 'png' | 'jpg'): string {
-  return `Chits Note ${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}.${pad(at.getMinutes())}.${pad(at.getSeconds())}.${extension}`;
+export function shareNoteFileName(at: Date, extension: 'png' | 'jpg', name = 'Chits Note'): string {
+  return `${name} ${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}.${pad(at.getMinutes())}.${pad(at.getSeconds())}.${extension}`;
 }

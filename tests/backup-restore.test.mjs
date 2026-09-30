@@ -19,6 +19,7 @@ async function fixture(t, populated = true) {
       INSERT INTO card_comments VALUES ('comment','card','Keep comment',123,456,NULL);
       INSERT INTO timeline_events VALUES ('event','card_created',123,'message','card','board','{}','unique');
       INSERT INTO card_reminders VALUES ('card',4102444800000,'OLD-DEVICE-ID',123,456);
+      INSERT INTO space_placements VALUES ('on-fridge','message',NULL,'fridge',0.1,0.2,-2.5,'#FFC7CC',3,123,456),('on-desk',NULL,'card','desk',0.9,0.4,1.5,'#FFE58A',1,123,456);
       INSERT INTO app_settings VALUES ('chat_title','My NoteSpace',123),('app_appearance','dark',123),('chat_color_theme','teal',123),('chat_draft_text','unfinished words',123),('chat_background','{"storagePath":"chits-attachments/backgrounds/photo.jpg","source":"device","deviceAssetId":"OLD-DEVICE","dim":0.6,"blur":true}',123);
     `);
     for (const [id, type, name] of [['photo','photo','photo.jpg'],['video','video','video.mp4'],['audio','audio','audio.m4a'],['pdf','file','document.pdf'],['file','file','file.bin']]) {
@@ -40,7 +41,7 @@ async function validateCreated(db) {
   return { created, checked };
 }
 function content(db) {
-  return Object.fromEntries(['messages','boards','board_columns','cards','card_messages','card_comments','timeline_events','attachments','card_attachments','app_settings'].map((table) => [table, db.prepare(`SELECT * FROM ${table} ORDER BY 1`).all()]));
+  return Object.fromEntries(['messages','boards','board_columns','cards','card_messages','card_comments','timeline_events','attachments','card_attachments','app_settings','space_placements'].map((table) => [table, db.prepare(`SELECT * FROM ${table} ORDER BY 1`).all()]));
 }
 
 test('fresh installation creates one validated backup and restores an empty database', async (t) => {

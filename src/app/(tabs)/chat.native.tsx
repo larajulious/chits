@@ -16,6 +16,7 @@ import { AttachmentPicker, type AttachmentDraft, type AttachmentPickerHandle } f
 import { ChatHeader } from '@/components/chat/chat-header';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { MessageActions, getCopyableMessageText } from '@/components/chat/message-actions';
+import { spaceNoteAction, type SpaceNoteAction } from '@/components/spaces/space-note-action';
 import { shareNoteHref } from '@/services/share-note-source';
 import { MessageRow } from '@/components/chat/message-row';
 import { useTheme } from '@/components/theme-provider';
@@ -284,6 +285,14 @@ export default function ChatScreen() {
   const [selected, setSelected] = useState<Message | null>(null);
   const [temporarilyRevealedIds, setTemporarilyRevealedIds] = useState<Set<string>>(() => new Set());
   const [toast, setToast] = useState<string | null>(null);
+  // Whether the selected thought is on a space, looked up as its actions open.
+  const [spaceAction, setSpaceAction] = useState<SpaceNoteAction | null>(null);
+  useEffect(() => {
+    if (!selected) return;
+    let cancelled = false;
+    void spaceNoteAction(database, 'thought', selected.id).then((action) => { if (!cancelled) setSpaceAction(action); }, () => undefined);
+    return () => { cancelled = true; };
+  }, [database, selected]);
   const download = useAttachmentExport();
   const [pinnedMessages, setPinnedMessages] = useState<Message[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -780,6 +789,11 @@ export default function ChatScreen() {
   // Set by an action that opens another modal; run by MessageActions once its
   // sheet has fully closed, since iOS can't show the two at once.
   const afterActionsClosed = useRef<(() => void) | null>(null);
+  const runSpaceAction = (action: SpaceNoteAction) => {
+    afterActionsClosed.current = null;
+    setSelected(null);
+    void action.run().then(setToast, () => setToast('That couldn’t be saved. Please try again.'));
+  };
   const runAfterActionsClosed = useCallback(() => {
     const action = afterActionsClosed.current;
     afterActionsClosed.current = null;
@@ -941,7 +955,7 @@ export default function ChatScreen() {
           </View>
         </View>
         </View>
-      <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => { afterActionsClosed.current = null; setSelected(null); }} onClosed={runAfterActionsClosed} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} onAddToBoard={addToBoard} onDownload={(message) => { setSelected(null); if (message.attachments[0]) void download.exportAttachment(message.attachments[0]); }} onShareNote={(message) => { afterActionsClosed.current = () => router.push(shareNoteHref({ messageId: message.id })); setSelected(null); }} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
+      <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => { afterActionsClosed.current = null; setSelected(null); }} onClosed={runAfterActionsClosed} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} spaceAction={spaceAction} onSpaceAction={runSpaceAction} onAddToBoard={addToBoard} onDownload={(message) => { setSelected(null); if (message.attachments[0]) void download.exportAttachment(message.attachments[0]); }} onShareNote={(message) => { afterActionsClosed.current = () => router.push(shareNoteHref({ messageId: message.id })); setSelected(null); }} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
       <Toast message={toast ?? download.status} />
       </Screen>
     </KeyboardAvoidingView></BackgroundReadabilityProvider></Animated.View>

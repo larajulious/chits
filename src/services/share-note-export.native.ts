@@ -27,7 +27,7 @@ export function shareNoteExportWidth(format: ShareNoteFormat): number {
  * friendly name. Text-only notes are lossless PNG; with photos, a high-quality
  * JPEG keeps the file a sensible size.
  */
-export async function captureShareNote(view: View, format: ShareNoteFormat, hasPhotos: boolean): Promise<ShareNoteImageFile> {
+export async function captureShareNote(view: View, format: ShareNoteFormat, hasPhotos: boolean, name?: string): Promise<ShareNoteImageFile> {
   const { width, height } = SHARE_NOTE_FORMATS[format];
   const scale = PixelRatio.get();
   const extension = hasPhotos ? 'jpg' : 'png';
@@ -36,7 +36,7 @@ export async function captureShareNote(view: View, format: ShareNoteFormat, hasP
     // iOS sizes the capture in points (rendered at screen scale); Android in pixels.
     ...(Platform.OS === 'ios' ? { width: width / scale, height: height / scale } : { width, height }),
   });
-  const fileName = shareNoteFileName(new Date(), extension);
+  const fileName = shareNoteFileName(new Date(), extension, name);
   const named = await ChitsFiles.prepareNamedFileAsync(raw, fileName).catch(() => raw);
   if (named !== raw) releaseCapture(raw);
   return { uri: named, fileName, mimeType: hasPhotos ? 'image/jpeg' : 'image/png' };

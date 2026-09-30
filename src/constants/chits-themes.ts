@@ -9,9 +9,22 @@ import type { ShareNoteFontMetrics } from '../services/share-note';
 // contrast in both light and dark. theme.ts turns a palette into the tokens
 // every component reads through useTheme().
 
-export const CHITS_THEME_IDS = ['default', 'faith', 'casual', 'corporate', 'love', 'friends', 'boss', 'stranger', 'motivation', 'calm', 'creative', 'cute', 'christmas', 'spooky', 'new-year', 'midnight'] as const;
+export const CHITS_THEME_IDS = [
+  'default', 'faith', 'casual', 'corporate', 'love', 'friends', 'boss', 'stranger', 'motivation', 'calm', 'creative', 'cute', 'christmas', 'spooky', 'new-year', 'midnight',
+  'boomers', 'gen-x', 'millennials', 'gen-z', 'gen-alpha',
+] as const;
 export type ChitsThemeIdentity = typeof CHITS_THEME_IDS[number];
 export const DEFAULT_THEME_IDENTITY: ChitsThemeIdentity = 'default';
+
+/**
+ * How the pickers group themes. Generations are design eras — told apart by
+ * type, palette, texture and spacing, never by jokes or stereotypes.
+ */
+export const THEME_COLLECTIONS = [
+  { id: 'personalities', name: 'Personalities' },
+  { id: 'generations', name: 'Generations' },
+] as const;
+export type ThemeCollectionId = typeof THEME_COLLECTIONS[number]['id'];
 
 /** The one stored setting: just the identity, never the palette. */
 export const THEME_SETTING_KEY = 'app_theme';
@@ -42,19 +55,26 @@ export type AppPalette = {
   cardPaper: string; cardBase: string;
 };
 
-export type ChatPattern = 'none' | 'dots' | 'soft-shapes' | 'confetti' | 'cross';
+export type ChatPattern = 'none' | 'dots' | 'soft-shapes' | 'confetti' | 'cross' | 'grain' | 'geometric';
+/** The face screen titles are set in; 'system' is the platform default. */
+export type HeadingFont = 'system' | 'serif' | 'mono' | 'rounded';
 
 /** The non-color part of a personality — kept small on purpose. */
 export type ChitsLook = {
   headingWeight: '600' | '700' | '800';
+  /** Screen titles' typeface; omitted means 'system'. */
+  headingFont?: HeadingFont;
   /** Lift under paper-like cards (0 = flat). */
   cardShadowOpacity: number;
   /** A very quiet decoration behind Chat when there's no custom photo. */
   chatPattern: ChatPattern;
+  /** Colors for the confetti/geometric chat patterns; omitted means the accent family. */
+  patternColors?: string[];
 };
 
 export type ChitsTheme = {
   id: ChitsThemeIdentity;
+  category: ThemeCollectionId;
   name: string;
   description: string;
   /** null for Default: its palette is the classic Chits one, tinted by the user's accent color. */
@@ -65,9 +85,11 @@ export type ChitsTheme = {
 
 // ── Share Note ───────────────────────────────────────────────────────────────
 
-export type ShareNoteFontStyle = 'formal' | 'casual' | 'playful' | 'elegant' | 'bold' | 'expressive';
-// Background treatments, drawn behind the card.
-export type ShareNoteDecoration = 'none' | 'soft-shapes' | 'lines' | 'stickers' | 'dots' | 'confetti' | 'cross';
+export type ShareNoteFontStyle = 'formal' | 'casual' | 'playful' | 'elegant' | 'bold' | 'expressive' | 'classic' | 'mono';
+// Background treatments, drawn behind the card: 'ruled' is stationery with a
+// margin, 'cassette' a stack of retro stripes, 'dot-grid' a planner page and
+// 'geometric' a few floating rings and tiles.
+export type ShareNoteDecoration = 'none' | 'soft-shapes' | 'lines' | 'stickers' | 'dots' | 'confetti' | 'cross' | 'ruled' | 'cassette' | 'dot-grid' | 'geometric';
 // The small flourish that opens a text note, or sits on the card's edge.
 export type ShareNoteMark = 'none' | 'quote' | 'bar' | 'tape' | 'cross';
 
@@ -98,7 +120,7 @@ export type ShareNoteTheme = {
   align: 'left' | 'center';
   /** Ionicons glyphs for the 'stickers' decoration. */
   stickers?: string[];
-  /** Extra colors for the 'confetti' decoration. */
+  /** Extra colors for the 'confetti', 'cassette' and 'geometric' decorations. */
   confetti?: string[];
 };
 
@@ -111,6 +133,9 @@ export const SHARE_NOTE_FONT_METRICS: Record<ShareNoteFontStyle, ShareNoteFontMe
   elegant: { averageCharWidth: 0.52, lineHeight: 1.36 },
   bold: { averageCharWidth: 0.6, lineHeight: 1.18 },
   expressive: { averageCharWidth: 0.56, lineHeight: 1.26 },
+  classic: { averageCharWidth: 0.54, lineHeight: 1.38 },
+  // Every glyph is ~0.6em in a monospace face.
+  mono: { averageCharWidth: 0.63, lineHeight: 1.34 },
 };
 
 // ── The themes ───────────────────────────────────────────────────────────────
@@ -119,7 +144,7 @@ const BASE_LOOK: ChitsLook = { headingWeight: '600', cardShadowOpacity: 0.07, ch
 
 export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
   default: {
-    id: 'default', name: 'Default', description: 'The classic Chits look', palette: null, look: BASE_LOOK,
+    id: 'default', category: 'personalities', name: 'Default', description: 'The classic Chits look', palette: null, look: BASE_LOOK,
     shareNote: {
       id: 'default', name: 'Chits', mood: 'Classic sticky note', backgroundType: 'solid',
       colors: { background: '#E3EEE7', backgroundEnd: '#E3EEE7', surface: '#FFFDF6', textPrimary: '#1D2B24', textSecondary: '#5C6B63', accent: '#3D6E5C', decoration: '#C9DDD0' },
@@ -127,7 +152,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
   },
   casual: {
-    id: 'casual', name: 'Casual', description: 'Relaxed, warm and paper-like',
+    id: 'casual', category: 'personalities', name: 'Casual', description: 'Relaxed, warm and paper-like',
     palette: {
       light: {
         background: '#FAF7F0', surface: '#F3EEE3', surfaceElevated: '#EAE3D5', textPrimary: '#2A241C', textSecondary: '#5A5144', textMuted: '#6A6152', borderSubtle: '#E2DACB',
@@ -148,7 +173,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
   },
   corporate: {
-    id: 'corporate', name: 'Corporate', description: 'Clean, structured and professional',
+    id: 'corporate', category: 'personalities', name: 'Corporate', description: 'Clean, structured and professional',
     palette: {
       light: {
         background: '#F7F8FA', surface: '#FFFFFF', surfaceElevated: '#EEF1F5', textPrimary: '#111827', textSecondary: '#4B5563', textMuted: '#636B78', borderSubtle: '#E1E5EB',
@@ -169,7 +194,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
   },
   love: {
-    id: 'love', name: 'Love', description: 'Warm, personal and gentle',
+    id: 'love', category: 'personalities', name: 'Love', description: 'Warm, personal and gentle',
     palette: {
       light: {
         background: '#FCF7F6', surface: '#F9EEEE', surfaceElevated: '#F3E2E3', textPrimary: '#2E1A20', textSecondary: '#62454D', textMuted: '#74565E', borderSubtle: '#EDDCDE',
@@ -190,7 +215,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
   },
   friends: {
-    id: 'friends', name: 'Friends', description: 'Social, bright and relaxed',
+    id: 'friends', category: 'personalities', name: 'Friends', description: 'Social, bright and relaxed',
     palette: {
       light: {
         background: '#F7FAF9', surface: '#EEF6F3', surfaceElevated: '#E2EEEA', textPrimary: '#16211F', textSecondary: '#445652', textMuted: '#566864', borderSubtle: '#DAE7E3',
@@ -211,7 +236,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
   },
   boss: {
-    id: 'boss', name: 'Boss', description: 'Confident, premium and focused',
+    id: 'boss', category: 'personalities', name: 'Boss', description: 'Confident, premium and focused',
     palette: {
       light: {
         background: '#F5F4F1', surface: '#FFFFFF', surfaceElevated: '#ECEAE5', textPrimary: '#16171A', textSecondary: '#46464B', textMuted: '#5E5E63', borderSubtle: '#DFDCD5',
@@ -232,7 +257,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
   },
   stranger: {
-    id: 'stranger', name: 'Stranger', description: 'Neutral and universally calm',
+    id: 'stranger', category: 'personalities', name: 'Stranger', description: 'Neutral and universally calm',
     palette: {
       light: {
         background: '#FAFAF8', surface: '#F3F3F0', surfaceElevated: '#EAEAE6', textPrimary: '#1A1A1A', textSecondary: '#525252', textMuted: '#666666', borderSubtle: '#E2E2DE',
@@ -253,7 +278,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
   },
   motivation: {
-    id: 'motivation', name: 'Motivation', description: 'Energetic, bold and purposeful',
+    id: 'motivation', category: 'personalities', name: 'Motivation', description: 'Energetic, bold and purposeful',
     palette: {
       light: {
         background: '#FFFFFF', surface: '#FAF7F5', surfaceElevated: '#F2EDE9', textPrimary: '#141416', textSecondary: '#4E4E55', textMuted: '#63636A', borderSubtle: '#ECE6E1',
@@ -274,7 +299,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
   },
   calm: {
-    id: 'calm', name: 'Calm', description: 'Peaceful, soft and spacious',
+    id: 'calm', category: 'personalities', name: 'Calm', description: 'Peaceful, soft and spacious',
     palette: {
       light: {
         background: '#F6F8F7', surface: '#EEF3F2', surfaceElevated: '#E3EBEA', textPrimary: '#22302F', textSecondary: '#4A5C5A', textMuted: '#5B6C6A', borderSubtle: '#DCE5E3',
@@ -295,7 +320,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
   },
   creative: {
-    id: 'creative', name: 'Creative', description: 'Expressive and editorial',
+    id: 'creative', category: 'personalities', name: 'Creative', description: 'Expressive and editorial',
     palette: {
       light: {
         background: '#FBF9F4', surface: '#F4F0E7', surfaceElevated: '#EAE4D8', textPrimary: '#1E1A2B', textSecondary: '#4F4860', textMuted: '#625A74', borderSubtle: '#E3DCCF',
@@ -316,7 +341,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
   },
   cute: {
-    id: 'cute', name: 'Cute', description: 'Soft, friendly and charming',
+    id: 'cute', category: 'personalities', name: 'Cute', description: 'Soft, friendly and charming',
     palette: {
       light: {
         background: '#FFF9FB', surface: '#FCF0F5', surfaceElevated: '#F7E3EC', textPrimary: '#3A2434', textSecondary: '#664A5E', textMuted: '#785A70', borderSubtle: '#F2DCE6',
@@ -337,7 +362,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
   },
   christmas: {
-    id: 'christmas', name: 'Christmas', description: 'Festive pine, red and snow',
+    id: 'christmas', category: 'personalities', name: 'Christmas', description: 'Festive pine, red and snow',
     palette: {
       light: {
         background: '#FBF8F3', surface: '#F4EEE4', surfaceElevated: '#EAE2D4', textPrimary: '#1F2A24', textSecondary: '#4E5A52', textMuted: '#5A655D', borderSubtle: '#E4DBCC',
@@ -358,7 +383,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
   },
   spooky: {
-    id: 'spooky', name: 'Spooky', description: 'Moonlit purple and pumpkin',
+    id: 'spooky', category: 'personalities', name: 'Spooky', description: 'Moonlit purple and pumpkin',
     palette: {
       light: {
         background: '#FBF7F2', surface: '#F3ECE4', surfaceElevated: '#E9E0D5', textPrimary: '#231A2B', textSecondary: '#554A5E', textMuted: '#675C70', borderSubtle: '#E4DACE',
@@ -379,7 +404,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
   },
   'new-year': {
-    id: 'new-year', name: 'New Year', description: 'Midnight blue and champagne gold',
+    id: 'new-year', category: 'personalities', name: 'New Year', description: 'Midnight blue and champagne gold',
     palette: {
       light: {
         background: '#FAF8F3', surface: '#F2EEE4', surfaceElevated: '#E8E2D5', textPrimary: '#161427', textSecondary: '#4A4760', textMuted: '#5C5973', borderSubtle: '#E2DCCD',
@@ -400,7 +425,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
   },
   faith: {
-    id: 'faith', name: 'Faith', description: 'The cross of Jesus Christ, in warm light',
+    id: 'faith', category: 'personalities', name: 'Faith', description: 'The cross of Jesus Christ, in warm light',
     palette: {
       light: {
         background: '#FCFAF5', surface: '#F5F0E6', surfaceElevated: '#ECE5D7', textPrimary: '#2B2418', textSecondary: '#5A4F3D', textMuted: '#6B604D', borderSubtle: '#E6DECF',
@@ -421,7 +446,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
   },
   midnight: {
-    id: 'midnight', name: 'Midnight', description: 'Quiet, starry and late-night',
+    id: 'midnight', category: 'personalities', name: 'Midnight', description: 'Quiet, starry and late-night',
     palette: {
       light: {
         background: '#F6F7FB', surface: '#EEF0F8', surfaceElevated: '#E3E6F2', textPrimary: '#141A33', textSecondary: '#454C6B', textMuted: '#585F7E', borderSubtle: '#DDE1EE',
@@ -441,6 +466,118 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
       fontStyle: 'elegant', decorationStyle: 'dots', mark: 'quote', align: 'center',
     },
   },
+
+  // ── Generations ──
+  // Each era speaks through type, palette, texture and spacing only. The
+  // brief's colors are kept wherever they meet the contrast rules; where one
+  // didn't (a button fill under white text, say), the hue stays and only the
+  // shade moves.
+  boomers: {
+    id: 'boomers', category: 'generations', name: 'Boomers', description: 'Warm, classic and trustworthy',
+    palette: {
+      light: {
+        background: '#F6F0E4', surface: '#FFFDF8', surfaceElevated: '#EFE7D8', textPrimary: '#292521', textSecondary: '#554D44', textMuted: '#645C52', borderSubtle: '#D8CEBF',
+        accent: '#7B2D3E', accentSoft: '#F4E4E4', accentStrong: '#6A2535', accentText: '#FFFFFF', accentBorder: '#C99AA4', danger: '#A8321F', success: '#465B45',
+        bubble: '#E3EADD', bubbleText: '#292521', chatBackground: '#F3ECDF', cardPaper: '#FFFDF8', cardBase: '#FFFFFF',
+      },
+      dark: {
+        background: '#1A1714', surface: '#231F1B', surfaceElevated: '#2E2924', textPrimary: '#F4EEE4', textSecondary: '#D0C7B9', textMuted: '#A59C8E', borderSubtle: '#443C34',
+        accent: '#A8475C', accentSoft: '#3A2228', accentStrong: '#E9A7B4', accentText: '#FFFFFF', accentBorder: '#7D3B4A', danger: '#EE8B82', success: '#8FB08C',
+        bubble: '#2D3A2C', bubbleText: '#F4EEE4', chatBackground: '#1A1714', cardPaper: '#231F1B', cardBase: '#231F1B',
+      },
+    },
+    look: { headingWeight: '700', headingFont: 'serif', cardShadowOpacity: 0.06, chatPattern: 'none' },
+    shareNote: {
+      id: 'boomers', name: 'Boomers', mood: 'Classic stationery, like a written letter', backgroundType: 'pattern',
+      colors: { background: '#F1E8D6', backgroundEnd: '#F1E8D6', surface: '#FFFDF8', textPrimary: '#292521', textSecondary: '#645C52', accent: '#7B2D3E', decoration: '#DDD0BA' },
+      fontStyle: 'classic', decorationStyle: 'ruled', mark: 'quote', align: 'left',
+    },
+  },
+  'gen-x': {
+    id: 'gen-x', category: 'generations', name: 'Gen X', description: 'Dark, understated and retro-modern',
+    palette: {
+      light: {
+        background: '#F2F0EB', surface: '#FAF9F6', surfaceElevated: '#E6E3DC', textPrimary: '#1B1B1B', textSecondary: '#46443F', textMuted: '#5A5751', borderSubtle: '#D3CFC6',
+        accent: '#7A5A14', accentSoft: '#F1E7CE', accentStrong: '#664B10', accentText: '#FFFFFF', accentBorder: '#CDB37A', danger: '#A8321F', success: '#4E6159',
+        bubble: '#242424', bubbleText: '#F2EFE9', chatBackground: '#EEEBE5', cardPaper: '#FFFFFF', cardBase: '#FFFFFF',
+      },
+      dark: {
+        background: '#171717', surface: '#242424', surfaceElevated: '#2E2E2E', textPrimary: '#F2EFE9', textSecondary: '#CFCAC1', textMuted: '#AAA59D', borderSubtle: '#3A3A3A',
+        accent: '#D8A84E', accentSoft: '#2E2718', accentStrong: '#E6BE6E', accentText: '#171717', accentBorder: '#7A6231', danger: '#F28B82', success: '#93AA9F',
+        bubble: '#313B37', bubbleText: '#F2EFE9', chatBackground: '#171717', cardPaper: '#242424', cardBase: '#242424',
+      },
+    },
+    look: { headingWeight: '700', headingFont: 'mono', cardShadowOpacity: 0.03, chatPattern: 'grain' },
+    shareNote: {
+      id: 'gen-x', name: 'Gen X', mood: 'A cassette label on a dark shell', backgroundType: 'pattern',
+      colors: { background: '#171717', backgroundEnd: '#171717', surface: '#F2EFE9', textPrimary: '#1B1B1B', textSecondary: '#57534C', accent: '#8A6212', decoration: '#2A2A2A' },
+      fontStyle: 'mono', decorationStyle: 'cassette', mark: 'bar', align: 'left', confetti: ['#D8A84E', '#C2693E', '#6F7F78'],
+    },
+  },
+  millennials: {
+    id: 'millennials', category: 'generations', name: 'Millennials', description: 'Clean, soft and polished',
+    palette: {
+      light: {
+        background: '#F7F4F0', surface: '#FFFFFF', surfaceElevated: '#EFEAE4', textPrimary: '#30343B', textSecondary: '#52575F', textMuted: '#61666E', borderSubtle: '#E7E0DA',
+        accent: '#5E6F88', accentSoft: '#E9EDF3', accentStrong: '#4B5A71', accentText: '#FFFFFF', accentBorder: '#B3BFD0', danger: '#A8321F', success: '#4E6B49',
+        bubble: '#F2E4E1', bubbleText: '#30343B', chatBackground: '#F5F1EC', cardPaper: '#FFFFFF', cardBase: '#FFFFFF',
+      },
+      dark: {
+        background: '#16181C', surface: '#1E2126', surfaceElevated: '#282C32', textPrimary: '#EEEFF1', textSecondary: '#C4C7CD', textMuted: '#9A9EA6', borderSubtle: '#33373E',
+        accent: '#61728C', accentSoft: '#252C37', accentStrong: '#B0BED3', accentText: '#FFFFFF', accentBorder: '#4E5B6F', danger: '#EE8B82', success: '#A3B89E',
+        bubble: '#3B3032', bubbleText: '#F3ECEA', chatBackground: '#16181C', cardPaper: '#1E2126', cardBase: '#1E2126',
+      },
+    },
+    look: { headingWeight: '600', cardShadowOpacity: 0.08, chatPattern: 'soft-shapes' },
+    shareNote: {
+      id: 'millennials', name: 'Millennials', mood: 'A tidy planner page in soft pastels', backgroundType: 'gradient',
+      colors: { background: '#F6E9E4', backgroundEnd: '#E4EAF2', surface: '#FFFFFF', textPrimary: '#30343B', textSecondary: '#61666E', accent: '#9C6F68', decoration: '#D5C9C2' },
+      fontStyle: 'casual', decorationStyle: 'dot-grid', mark: 'tape', align: 'left',
+    },
+  },
+  'gen-z': {
+    id: 'gen-z', category: 'generations', name: 'Gen Z', description: 'Bold, expressive and social',
+    palette: {
+      light: {
+        background: '#FAFAFA', surface: '#FFFFFF', surfaceElevated: '#F0F0F2', textPrimary: '#121212', textSecondary: '#48484D', textMuted: '#5E5E65', borderSubtle: '#E2E2E6',
+        // Lime can't carry text on white, so in light mode it rides on near-black buttons.
+        accent: '#121212', accentSoft: '#EEFFD4', accentStrong: '#3B6300', accentText: '#B7FF3C', accentBorder: '#A6E04A', danger: '#B3261E', success: '#2E7D4F',
+        bubble: '#9B7BFF', bubbleText: '#121212', chatBackground: '#F7F7F8', cardPaper: '#FFFFFF', cardBase: '#FFFFFF',
+      },
+      dark: {
+        background: '#121212', surface: '#1C1C1E', surfaceElevated: '#26262A', textPrimary: '#FFFFFF', textSecondary: '#D2D2D2', textMuted: '#B5B5B5', borderSubtle: '#343434',
+        accent: '#B7FF3C', accentSoft: '#26330F', accentStrong: '#C9FF6E', accentText: '#121212', accentBorder: '#6A9A20', danger: '#FF8A8A', success: '#7BE0A0',
+        bubble: '#9B7BFF', bubbleText: '#121212', chatBackground: '#121212', cardPaper: '#1C1C1E', cardBase: '#1C1C1E',
+      },
+    },
+    look: { headingWeight: '800', cardShadowOpacity: 0.08, chatPattern: 'confetti', patternColors: ['#B7FF3C', '#9B7BFF', '#FF6EC7'] },
+    shareNote: {
+      id: 'gen-z', name: 'Gen Z', mood: 'A bold social card with stickers', backgroundType: 'gradient',
+      colors: { background: '#9B7BFF', backgroundEnd: '#FF6EC7', surface: '#1C1C1E', textPrimary: '#FFFFFF', textSecondary: '#B5B5B5', accent: '#B7FF3C', decoration: '#FFFFFF' },
+      fontStyle: 'bold', decorationStyle: 'stickers', mark: 'tape', align: 'left', stickers: ['flash', 'star', 'sparkles', 'heart'],
+    },
+  },
+  'gen-alpha': {
+    id: 'gen-alpha', category: 'generations', name: 'Gen Alpha', description: 'Bright, futuristic and playful',
+    palette: {
+      light: {
+        background: '#EEF7FF', surface: '#FFFFFF', surfaceElevated: '#E3EDFA', textPrimary: '#1C2440', textSecondary: '#434C69', textMuted: '#555D7B', borderSubtle: '#DCE6F5',
+        accent: '#3F57E8', accentSoft: '#E4E9FF', accentStrong: '#3043C4', accentText: '#FFFFFF', accentBorder: '#A8B5FF', danger: '#B3261E', success: '#00796B',
+        bubble: '#3F57E8', bubbleText: '#FFFFFF', chatBackground: '#EAF4FF', cardPaper: '#FFFFFF', cardBase: '#FFFFFF',
+      },
+      dark: {
+        background: '#0E1224', surface: '#161B33', surfaceElevated: '#1F2542', textPrimary: '#EEF2FF', textSecondary: '#BCC3E0', textMuted: '#9199BB', borderSubtle: '#2A3257',
+        accent: '#4A62F2', accentSoft: '#1F2754', accentStrong: '#AAB7FF', accentText: '#FFFFFF', accentBorder: '#4A58B0', danger: '#FF8A8A', success: '#4FD1C5',
+        bubble: '#2C3A8C', bubbleText: '#EEF2FF', chatBackground: '#0E1224', cardPaper: '#161B33', cardBase: '#161B33',
+      },
+    },
+    look: { headingWeight: '700', headingFont: 'rounded', cardShadowOpacity: 0.07, chatPattern: 'geometric', patternColors: ['#536DFE', '#00C8C8', '#FFB84D', '#FF70A6'] },
+    shareNote: {
+      id: 'gen-alpha', name: 'Gen Alpha', mood: 'A futuristic card with floating shapes', backgroundType: 'gradient',
+      colors: { background: '#DDEFFF', backgroundEnd: '#EADFFF', surface: '#FFFFFF', textPrimary: '#1C2440', textSecondary: '#555D7B', accent: '#3F57E8', decoration: '#FFFFFF' },
+      fontStyle: 'playful', decorationStyle: 'geometric', mark: 'bar', align: 'left', confetti: ['#536DFE', '#00C8C8', '#FFB84D', '#FF70A6'],
+    },
+  },
 };
 
 export const CHITS_THEME_LIST: ChitsTheme[] = CHITS_THEME_IDS.map((id) => CHITS_THEMES[id]);
@@ -450,6 +587,17 @@ export const CHITS_THEME_LIST: ChitsTheme[] = CHITS_THEME_IDS.map((id) => CHITS_
 const SHARE_NOTE_EXTRAS: ShareNoteTheme[] = [];
 
 export const SHARE_NOTE_THEMES: ShareNoteTheme[] = [...CHITS_THEME_LIST.map((theme) => theme.shareNote), ...SHARE_NOTE_EXTRAS];
+
+/** Settings → Theme, grouped: Personalities first, then Generations. */
+export const CHITS_THEME_COLLECTIONS = THEME_COLLECTIONS.map((collection) => ({
+  ...collection, themes: CHITS_THEME_LIST.filter((theme) => theme.category === collection.id),
+}));
+
+/** Share Note → Theme, grouped the same way; sharing-only extras join Personalities. */
+export const SHARE_NOTE_COLLECTIONS = CHITS_THEME_COLLECTIONS.map((collection) => ({
+  id: collection.id, name: collection.name,
+  themes: [...collection.themes.map((theme) => theme.shareNote), ...(collection.id === 'personalities' ? SHARE_NOTE_EXTRAS : [])],
+}));
 
 export function getShareNoteTheme(id: string): ShareNoteTheme {
   return SHARE_NOTE_THEMES.find((theme) => theme.id === id) ?? SHARE_NOTE_THEMES[0];

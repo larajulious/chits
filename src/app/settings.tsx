@@ -3,7 +3,7 @@ import { useTheme, type AppAppearance } from '@/components/theme-provider';
 import { HeaderIcon, IconButton, TopBarBackground, useHeaderInk, MenuIcon } from '@/components/ui/primitives';
 import { EditNoteSpaceNameSheet } from '@/components/settings/edit-notespace-name-sheet';
 import { ChatAppearanceSettings } from '@/components/settings/chat-appearance-settings';
-import { type ChatThemeKey } from '@/constants/theme';
+import { headingFontFamily, type ChatThemeKey } from '@/constants/theme';
 import { CHITS_THEMES } from '@/constants/chits-themes';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
@@ -70,7 +70,7 @@ export default function SettingsScreen() {
   const closeSheet = () => { if (!busy) setSheet(null); };
 
   return <SafeAreaView style={[styles.screen, { backgroundColor: tokens.background }]}>
-    <View style={styles.header}><TopBarBackground /><IconButton label="Open navigation" onPress={openDrawer}><MenuIcon /></IconButton><Text accessibilityRole="header" style={[styles.headerTitle, { color: headerInk.ink, fontWeight: look.headingWeight }]}>Settings</Text><IconButton label="Close settings" onPress={() => router.canGoBack() ? router.back() : router.navigate('/')}><HeaderIcon name="close" size={24} /></IconButton></View>
+    <View style={styles.header}><TopBarBackground /><IconButton label="Open navigation" onPress={openDrawer}><MenuIcon /></IconButton><Text accessibilityRole="header" style={[styles.headerTitle, { color: headerInk.ink, fontWeight: look.headingWeight, fontFamily: headingFontFamily(look.headingFont) }]}>Settings</Text><IconButton label="Close settings" onPress={() => router.canGoBack() ? router.back() : router.navigate('/')}><HeaderIcon name="close" size={24} /></IconButton></View>
     <ScrollView contentContainerStyle={styles.content}>
       {error && !sheet ? <Text accessibilityRole="alert" style={{ color: tokens.danger }}>{error}</Text> : null}
       <Section title="NOTESPACE">

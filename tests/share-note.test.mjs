@@ -148,4 +148,5 @@ test('the ten requested themes (and extras) exist and keep text readable', () =>
 
 test('exported files get a readable, sortable name', () => {
   assert.equal(shareNoteFileName(new Date(2026, 8, 29, 7, 5, 3), 'png'), 'Chits Note 2026-09-29 07.05.03.png');
+  assert.equal(shareNoteFileName(new Date(2026, 8, 29, 7, 5, 3), 'png', 'Chits Space'), 'Chits Space 2026-09-29 07.05.03.png');
 });

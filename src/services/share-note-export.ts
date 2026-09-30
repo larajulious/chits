@@ -11,7 +11,7 @@ export function shareNoteExportWidth(format: ShareNoteFormat): number {
   return SHARE_NOTE_FORMATS[format].width / 3;
 }
 
-export async function captureShareNote(_view: View, _format: ShareNoteFormat, _hasPhotos: boolean): Promise<ShareNoteImageFile> {
+export async function captureShareNote(_view: View, _format: ShareNoteFormat, _hasPhotos: boolean, _name?: string): Promise<ShareNoteImageFile> {
   throw new Error('Share Note is available in the Chits iOS and Android app.');
 }
 

@@ -17,6 +17,8 @@ const FONTS: Record<ShareNoteFontStyle, TextStyle> = Platform.select({
     elegant: { fontFamily: 'ui-serif', fontStyle: 'italic', fontWeight: '400' },
     bold: { fontWeight: '900', letterSpacing: -0.6 },
     expressive: { fontFamily: 'ui-serif', fontWeight: '700', letterSpacing: -0.3 },
+    classic: { fontFamily: 'ui-serif', fontWeight: '500' },
+    mono: { fontFamily: 'ui-monospace', fontWeight: '500', letterSpacing: -0.3 },
   },
   default: {
     // A named medium face: many Android system fonts (e.g. Samsung's) have no 600 and fall back to regular.
@@ -26,6 +28,8 @@ const FONTS: Record<ShareNoteFontStyle, TextStyle> = Platform.select({
     elegant: { fontFamily: 'serif', fontStyle: 'italic', fontWeight: '400' },
     bold: { fontFamily: 'sans-serif', fontWeight: '900', letterSpacing: -0.4 },
     expressive: { fontFamily: 'serif', fontWeight: '700' },
+    classic: { fontFamily: 'serif', fontWeight: '400' },
+    mono: { fontFamily: 'monospace', fontWeight: '400' },
   },
 });
 const QUOTE_FONT: TextStyle = Platform.select({ ios: { fontFamily: 'ui-serif' }, default: { fontFamily: 'serif' } });
@@ -204,6 +208,71 @@ export function Decorations({ theme, u, canvas }: { theme: ShareNoteTheme; u: nu
           <View style={[styles.absolute, { left: (centerX - beam / 2) * u, top: vertical.top * u, width: beam * u, height: vertical.length * u, borderRadius: beam / 3 * u, backgroundColor: ink }]} />
           <View style={[styles.absolute, { left: (centerX - armLength / 2) * u, top: (crossbarY - beam / 2) * u, width: armLength * u, height: beam * u, borderRadius: beam / 3 * u, backgroundColor: ink }]} />
         </View>
+      </View>;
+    }
+    case 'ruled': {
+      // Classic stationery: evenly ruled lines and, on a note, a margin rule in
+      // the accent. A header band keeps just the lines, clear of its buttons.
+      const band = height < width * 0.6;
+      return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        {Array.from({ length: Math.ceil(height / 24) }, (_, index) => <View key={index} style={[styles.absolute, { left: 0, right: 0, top: (index * 24 + 18) * u, height: Math.max(1, 0.75 * u), backgroundColor: ink }]} />)}
+        {band ? null : <View style={[styles.absolute, { left: 30 * u, top: 0, bottom: 0, width: Math.max(1, 1.25 * u), backgroundColor: theme.colors.accent, opacity: 0.3 }]} />}
+      </View>;
+    }
+    case 'cassette': {
+      // A tape shell: fine grain, with the label's retro stripes running across
+      // it — low behind a note, thin along the bottom of a header band.
+      const stripes = theme.confetti ?? [theme.colors.accent];
+      const band = height < width * 0.6;
+      const thickness = band ? 4 : 12;
+      const top = band ? height - thickness * stripes.length - 8 : height * 0.7;
+      return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        {Array.from({ length: Math.ceil((width * height) / 2400) }, (_, index) => {
+          const size = (1.4 + scatter(index, 13) * 1.4) * u;
+          return <View key={index} style={[styles.absolute, { left: scatter(index, 14) * width * u, top: scatter(index, 15) * height * u, width: size, height: size, borderRadius: size / 2, backgroundColor: ink }]} />;
+        })}
+        {stripes.map((color, index) => <View key={color + index} style={[styles.absolute, { left: 0, right: 0, top: (top + index * thickness) * u, height: thickness * u, backgroundColor: color }]} />)}
+      </View>;
+    }
+    case 'dot-grid': {
+      // A planner page: an even grid of small dots.
+      const step = 30;
+      const columns = Math.ceil(width / step);
+      return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        {Array.from({ length: columns * Math.ceil(height / step) }, (_, index) => {
+          const size = 2.4 * u;
+          return <View key={index} style={[styles.absolute, { left: ((index % columns) * step + step / 2) * u - size / 2, top: (Math.floor(index / columns) * step + step / 2) * u - size / 2, width: size, height: size, borderRadius: size / 2, backgroundColor: ink }]} />;
+        })}
+      </View>;
+    }
+    case 'geometric': {
+      // Floating rings, a rounded tile and small orbs: soft, futuristic depth.
+      const colors = theme.confetti ?? [theme.colors.accent];
+      const band = height < width * 0.6;
+      // [left, top, width, height, radius, color, opacity, ring thickness (0 = filled), rotation]
+      const shapes: [number, number, number, number, number, number, number, number, number][] = band
+        ? [
+          [width - 90, -40, 120, 120, 60, 0, 0.3, 10, 0],
+          [-20, height - 30, 50, 50, 14, 1, 0.3, 0, 18],
+          [width * 0.62, height * 0.55, 16, 16, 8, 2, 0.6, 0, 0],
+          [width * 0.3, height * 0.15, 18, 18, 9, 3, 0.5, 3, 0],
+        ]
+        : [
+          [width - 120, -50, 190, 190, 95, 0, 0.35, 16, 0],
+          [-40, height - 150, 130, 130, 36, 1, 0.35, 0, 18],
+          [width - 70, height * 0.62, 44, 44, 22, 2, 0.6, 0, 0],
+          [26, height * 0.18, 36, 36, 18, 3, 0.6, 5, 0],
+          [width * 0.55, height - 40, 70, 18, 9, 0, 0.45, 0, -12],
+        ];
+      return <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        {shapes.map(([left, top, w, h, radius, colorIndex, opacity, ring, rotate], index) => {
+          const color = colors[colorIndex % colors.length];
+          return <View key={index} style={[styles.absolute, {
+            left: left * u, top: top * u, width: w * u, height: h * u, borderRadius: radius * u, opacity,
+            transform: [{ rotate: `${rotate}deg` }],
+            ...(ring ? { borderWidth: ring * u, borderColor: color } : { backgroundColor: color }),
+          }]} />;
+        })}
       </View>;
     }
     default:
