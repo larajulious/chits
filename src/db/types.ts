@@ -2,6 +2,13 @@ import type { SpaceId } from '../constants/spaces';
 
 export type MessageType = 'text' | 'photo' | 'video' | 'audio' | 'file';
 
+export interface MessageReminderState {
+  messageId: string;
+  reminderAt: number | null;
+  cardId: string | null;
+  cardReminderAt: number | null;
+}
+
 export interface Message {
   id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number;
   archivedAt: number | null; pinned: boolean; isHiddenContent: boolean; deletedAt: number | null; attachments: Attachment[];

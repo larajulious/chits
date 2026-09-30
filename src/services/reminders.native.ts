@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import * as Notifications from './local-notifications.native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { createReminderRepository } from '@/db/repositories';

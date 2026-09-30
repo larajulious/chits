@@ -19,6 +19,7 @@ test('Chat loads its own pending reminders and clears removed or completed remin
   const thought = await repository.getActiveById('thought');
   assert.equal(thought.organization, null, 'a board is not required for a Chat reminder');
   assert.equal(thought.reminderAt, future);
+  assert.deepEqual((await repository.getReminderStates(['thought'])).map((row) => ({ ...row })), [{ messageId: 'thought', reminderAt: future, cardId: null, cardReminderAt: null }]);
   assert.equal((await repository.listPinned())[0].reminderAt, future);
   assert.equal((await repository.getActiveById('plain')).reminderAt, null);
   const page = await repository.listTimeline();
@@ -29,6 +30,7 @@ test('Chat loads its own pending reminders and clears removed or completed remin
   const refreshed = await repository.getActiveByIds(['thought', 'photo', 'plain']);
   assert.equal(refreshed.length, 3);
   assert.ok(refreshed.every((message) => message.reminderAt === null));
+  assert.ok((await repository.getReminderStates(['thought', 'photo'])).every((state) => state.reminderAt === null));
   assert.ok(refreshed.every((message) => message.updatedAt === message.createdAt), 'reminders do not edit message text or timestamps');
 });
 
@@ -45,6 +47,29 @@ test('Chat refreshes reminders across loaded history batches and excludes inacti
   await db.runAsync("INSERT INTO message_reminders (message_id, scheduled_at, created_at, updated_at) VALUES ('message-204', 123, 1, 1)");
   const refreshed = await repository.getActiveByIds(ids);
   assert.equal(refreshed.length, 203);
+  const states = await repository.getReminderStates(ids);
+  assert.equal(states.length, 203);
+  assert.equal(states.find((state) => state.messageId === 'message-204').reminderAt, 123);
+  assert.deepEqual(await repository.getReminderStates([]), []);
   assert.equal(refreshed.find((message) => message.id === 'message-204').reminderAt, 123);
   assert.deepEqual(await repository.getActiveByIds([]), []);
+});
+
+test('lightweight refresh reads the linked card reminder and its removal', async (t) => {
+  const env = runtime();
+  t.after(() => env.cleanup());
+  const db = await env.sqlite.openDatabaseAsync('chat-card-reminder-state.db');
+  await migration.migrateDatabase(db);
+  const repository = createMessageRepository(db);
+  await db.runAsync("INSERT INTO boards (id, name, created_at, updated_at) VALUES ('b', 'Work', 1, 1)");
+  await db.runAsync("INSERT INTO board_columns (id, board_id, name, position, created_at, updated_at) VALUES ('col', 'b', 'Notes', 0, 1, 1)");
+  await db.runAsync("INSERT INTO cards (id, board_id, column_id, title, position, created_at, updated_at) VALUES ('c', 'b', 'col', 'Call', 0, 1, 1)");
+  await db.runAsync("INSERT INTO messages (id, text, type, created_at, updated_at) VALUES ('m', 'Call', 'text', 1, 1)");
+  await db.runAsync("INSERT INTO card_messages (card_id, message_id, position) VALUES ('c', 'm', 0)");
+  const future = Date.now() + 3_600_000;
+  await db.runAsync('INSERT INTO card_reminders (card_id, scheduled_at, created_at, updated_at) VALUES (?, ?, 1, 1)', 'c', future);
+  assert.equal((await repository.getReminderStates(['m']))[0].cardReminderAt, future);
+  assert.equal((await repository.getReminderStates(['m']))[0].cardId, 'c');
+  await db.runAsync("UPDATE card_reminders SET completed_at = 1 WHERE card_id = 'c'");
+  assert.equal((await repository.getReminderStates(['m']))[0].cardReminderAt, null);
 });

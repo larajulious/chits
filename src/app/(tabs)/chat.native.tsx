@@ -4,8 +4,9 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { updateMessageReminder, updateTimelineReminders } from '@/services/chat-reminder-state';
 import { canMergeTimelineRefresh } from '@/services/timeline-refresh';
 import { removeMessageReminder, requestReminderSync, setMessageReminder, subscribeToReminderChanges } from '@/services/reminders';
 import { AccessibilityInfo, ActivityIndicator, AppState, BackHandler, FlatList, Keyboard, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -128,6 +129,24 @@ function ChitsRow({ event, onPress }: { event: TimelineEvent; onPress: () => voi
     </Pressable>
   </View>;
 }
+
+const ChatTimelineRow = memo(function ChatTimelineRow({ item, showDate, focused, temporarilyRevealed, onReveal, onHideAgain, onActions, onEvent }: {
+  item: FeedItem;
+  showDate: boolean;
+  focused: boolean;
+  temporarilyRevealed: boolean;
+  onReveal: (message: Message) => void;
+  onHideAgain: (message: Message) => void;
+  onActions: (message: Message) => void;
+  onEvent: (event: TimelineEvent) => void;
+}) {
+  return <View>
+    {showDate ? <DateSeparator label={dateLabel(item.createdAt)} /> : null}
+    {item.kind === 'message'
+      ? <MessageRow message={item.message} focused={focused} temporarilyRevealed={temporarilyRevealed} onReveal={onReveal} onHideAgain={onHideAgain} onLongPress={onActions} />
+      : <ChitsRow event={item.event} onPress={() => onEvent(item.event)} />}
+  </View>;
+});
 
 function searchResultPreview(message: Message) {
   if (message.isHiddenContent) return 'Hidden Chit';
@@ -395,12 +414,40 @@ export default function ChatScreen() {
         void refreshPinned();
       }).catch(() => undefined);
     };
-    // Refresh older loaded thoughts too when returning from Calendar or a card.
-    if (loadedOnce.current) refreshLoadedMessages();
     const stopAttachments = subscribeToAttachmentChanges(refreshLoadedMessages);
-    const stopReminders = subscribeToReminderChanges(refreshLoadedMessages);
-    return () => { active = false; stopAttachments(); stopReminders(); };
+    return () => { active = false; stopAttachments(); };
   }, [repository, refreshPinned]));
+
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    let refreshing = false;
+    let pending = false;
+    const refreshReminders = async () => {
+      pending = true;
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        while (active && pending) {
+          pending = false;
+          const ids = feedRef.current.flatMap((item) => item.kind === 'message' ? [item.message.id] : []);
+          const rows = await repository.getReminderStates(ids);
+          if (!active) return;
+          if (pending) continue;
+          const states = new Map(rows.map((state) => [state.messageId, state]));
+          setFeed((current) => updateTimelineReminders(current, states));
+          setPinnedMessages((current) => {
+            const next = current.map((message) => updateMessageReminder(message, states.get(message.id)));
+            return next.some((message, index) => message !== current[index]) ? next : current;
+          });
+        }
+      } catch { /* A later reminder change or focus will retry. */ }
+      finally { refreshing = false; }
+    };
+    // Refresh older loaded reminders without reloading their text or attachments.
+    if (loadedOnce.current) void refreshReminders();
+    const stop = subscribeToReminderChanges(() => void refreshReminders());
+    return () => { active = false; stop(); };
+  }, [repository]));
 
 
   // Stable callbacks: changing transition state must not run focus cleanup.
@@ -857,7 +904,16 @@ export default function ChatScreen() {
     setSelected(null);
   };
   const openEvent = useCallback((event: TimelineEvent) => { if (event.relatedBoardId) router.push(`/board/${event.relatedBoardId}`); }, [router]);
-  const renderFeedItem = useCallback(({ item, index }: { item: FeedItem; index: number }) => <View>{(index === 0 || dayStart(feed[index - 1].createdAt) !== dayStart(item.createdAt)) && <DateSeparator label={dateLabel(item.createdAt)} />}{item.kind === 'message' ? <MessageRow message={item.message} focused={item.message.id === focusedId} temporarilyRevealed={temporarilyRevealedIds.has(item.message.id)} onReveal={revealContent} onHideAgain={hideAgain} onLongPress={setSelected} /> : <ChitsRow event={item.event} onPress={() => openEvent(item.event)} />}</View>, [feed, focusedId, hideAgain, openEvent, revealContent, temporarilyRevealedIds]);
+  const renderFeedItem = useCallback(({ item, index }: { item: FeedItem; index: number }) => <ChatTimelineRow
+    item={item}
+    showDate={index === 0 || dayStart(feed[index - 1].createdAt) !== dayStart(item.createdAt)}
+    focused={item.kind === 'message' && item.message.id === focusedId}
+    temporarilyRevealed={item.kind === 'message' && temporarilyRevealedIds.has(item.message.id)}
+    onReveal={revealContent}
+    onHideAgain={hideAgain}
+    onActions={setSelected}
+    onEvent={openEvent}
+  />, [feed, focusedId, hideAgain, openEvent, revealContent, temporarilyRevealedIds]);
   const hasDraft = Boolean(draft.trim());
   const canSend = hasDraft || Boolean(attachmentDraft) || Boolean(editing?.attachments.length);
   // ONE source of truth for compact vs. expanded (see PHASE: FIX INCONSISTENT
@@ -919,7 +975,7 @@ export default function ChatScreen() {
       <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: 'transparent' }}>
         {background ? <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: theme.chatBackground }} /> : null}
         <View style={styles.timelineLayer} onLayout={() => { maybePerformInitialScroll(); if (hasPositionedRef.current && nearBottom.current) scrollToLatest(false); }}><View style={styles.flex}>{isInitialLoading ? (showInitialLoader ? <View style={styles.initialLoader}><ChitsLoader /></View> : null) : feed.length === 0 ? <View style={styles.initialLoader}><EmptyState title="What’s on your mind?" description="Send yourself anything. You can organize it later." style={background ? { flex: 0, alignSelf: 'stretch', marginHorizontal: spacing.md, paddingVertical: spacing.lg, borderRadius: radii.contentCard, backgroundColor: theme.surface } : undefined} /></View> : <FlatList
-          ref={listRef} data={feed} keyExtractor={(item) => `${item.kind}-${item.kind === 'message' ? item.message.id : item.event.id}`}
+          ref={listRef} data={feed} keyExtractor={timelineKey}
           renderItem={renderFeedItem}
           // The feed is oldest-first, so a small default render window mounts the
           // wrong end first; render the whole initial page up front so the newest

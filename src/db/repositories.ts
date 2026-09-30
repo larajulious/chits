@@ -4,7 +4,7 @@ import { notifyChatBackgroundChanged } from '../services/chat-background';
 import { notifyAttachmentsChanged } from '../services/attachment-changes';
 import { notifySpacesChanged } from '../services/space-changes';
 import { autoPlace, clampUnit, DEFAULT_STICKY_COLOR, randomRotation, resolveSpaceId, SELECTED_SPACE_SETTING_KEY, SPACE_CAPACITY, SPACE_IDS, STICKY_COLORS, type SpaceId, type SpacePoint } from '../constants/spaces';
-import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type AttachmentFilterType, type AttachmentLike, type AttachmentPage, type AttachmentPageOptions, type AttachmentSummary, type Board, type Message, type MessageType, type PageOptions, type TimelineEvent, type TimelineEventType, type TimelineItem, type TimelinePage, type TimelinePageOptions , type PinnedNote, type SpaceCandidate, type SpaceNoteDetail, type SpaceNoteKind, type SpaceNoteMedia, type SpacePlacement } from './types';
+import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type AttachmentFilterType, type AttachmentLike, type AttachmentPage, type AttachmentPageOptions, type AttachmentSummary, type Board, type Message, type MessageReminderState, type MessageType, type PageOptions, type TimelineEvent, type TimelineEventType, type TimelineItem, type TimelinePage, type TimelinePageOptions , type PinnedNote, type SpaceCandidate, type SpaceNoteDetail, type SpaceNoteKind, type SpaceNoteMedia, type SpacePlacement } from './types';
 
 const DEFAULT_PAGE_SIZE = 50;
 type MessageRow = { id: string; text: string | null; type: Message['type']; created_at: number; updated_at: number; archived_at: number | null; pinned: number; is_hidden_content: number; deleted_at: number | null };
@@ -293,6 +293,27 @@ export function createMessageRepository(database: SQLiteDatabase) {
       pageRows.forEach((row) => { if (row.entryKind === 'message' && row.messageId) { const message = messageById.get(row.messageId); if (message) timeline.push({ kind: 'message', message, createdAt: row.createdAt }); } else if (row.entryKind === 'event' && row.eventId) { const event = eventById.get(row.eventId); if (event) timeline.push({ kind: 'event', event, createdAt: row.createdAt }); } });
       const oldest = pageRows.at(-1);
       return { items: timeline, hasMore, nextCursor: oldest ? { createdAt: oldest.createdAt, sortId: oldest.sortId } : null };
+    },
+    async getReminderStates(ids: string[]): Promise<MessageReminderState[]> {
+      const states: MessageReminderState[] = [];
+      for (let offset = 0; offset < ids.length; offset += 200) {
+        const batch = ids.slice(offset, offset + 200);
+        states.push(...await database.getAllAsync<MessageReminderState>(`
+          SELECT m.id AS messageId, mr.scheduled_at AS reminderAt,
+            c.id AS cardId, ${UPCOMING_REMINDER_SQL} AS cardReminderAt
+          FROM messages m
+          LEFT JOIN message_reminders mr ON mr.message_id = m.id AND mr.completed_at IS NULL
+          LEFT JOIN cards c ON c.id = (
+            SELECT linked.id FROM card_messages cm
+            JOIN cards linked ON linked.id = cm.card_id
+            JOIN boards b ON b.id = linked.board_id
+            WHERE cm.message_id = m.id AND linked.archived_at IS NULL AND b.archived_at IS NULL
+            ORDER BY linked.created_at ASC LIMIT 1
+          )
+          WHERE m.id IN (${batch.map(() => '?').join(', ')})
+            AND m.deleted_at IS NULL AND m.archived_at IS NULL`, ...batch));
+      }
+      return states;
     },
     async getActiveByIds(ids: string[]): Promise<Message[]> {
       const messages: Message[] = [];
