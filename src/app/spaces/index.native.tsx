@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View, type LayoutRectangle } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { FadeIn, FadeOut, runOnJS } from 'react-native-reanimated';
 import { Redirect, router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
@@ -19,6 +20,7 @@ import { LetterMagnets, SpaceSurface } from '@/components/spaces/space-surface';
 import { StickyPaper } from '@/components/spaces/sticky-note';
 import { useNoteSpaceName } from '@/components/spaces/use-notespace-name';
 import { SheetDim, StickyOptionsSheet } from '@/components/spaces/sticky-options-sheet';
+import { StickyViewSheet } from '@/components/spaces/sticky-view-sheet';
 import { Toast } from '@/components/ui/primitives';
 import { DEFAULT_STICKY_COLOR, SPACE_CAPACITY, SPACE_IDS, SPACE_LIST, SPACES, toUnit, type SpaceId } from '@/constants/spaces';
 import { DARK_SURFACE, DOCK_ICONS, DOCK_LABELS, noteSeed, SPACE_UI } from '@/constants/spaces-theme';
@@ -28,7 +30,8 @@ import { subscribeToSpaceChanges } from '@/services/space-changes';
 
 const EMPTY_COUNTS = Object.fromEntries(SPACE_IDS.map((id) => [id, 0])) as Record<SpaceId, number>;
 
-const openNote = (note: Pick<PinnedNote, 'kind' | 'noteId'>) => router.push(note.kind === 'card' ? `/card/${note.noteId}` : `/chat?messageId=${note.noteId}`);
+// A card opens its details; a thought opens the board it was organized into, else Chat.
+const openNote = (note: Pick<PinnedNote, 'kind' | 'noteId' | 'boardId'>) => router.push(note.kind === 'card' ? `/card/${note.noteId}` : note.boardId ? `/board/${note.boardId}` : `/chat?messageId=${note.noteId}`);
 
 /**
  * Spaces (chits://spaces, also chits://pinned). Opens on the saved space, or
@@ -54,11 +57,24 @@ function SpaceBoard({ initialSpaceId }: { initialSpaceId: SpaceId }) {
   const [counts, setCounts] = useState(EMPTY_COUNTS);
   const [board, setBoard] = useState<LayoutRectangle | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const space = SPACES[spaceId];
   const count = counts[spaceId];
   const selected = notes?.find((note) => note.id === selectedId) ?? null;
+  const viewing = notes?.find((note) => note.id === viewingId) ?? null;
+
+  // Pick a Space (from the side panel) can choose another space while this
+  // one waits underneath; coming back shows the one just picked.
+  useFocusEffect(useCallback(() => {
+    const saved = repository.getSelectedSpaceSync();
+    if (!saved || saved === spaceId) return;
+    setSelectedId(null);
+    setViewingId(null);
+    setNotes(null);
+    setSpaceId(saved);
+  }, [repository, spaceId]));
 
   // Reloads on focus (a note may have changed elsewhere), on every space
   // switch, on any change to a space, and after a failed save (bump `reload`).
@@ -80,14 +96,40 @@ function SpaceBoard({ initialSpaceId }: { initialSpaceId: SpaceId }) {
   }, [repository, spaceId, reload]));
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 2200); return () => clearTimeout(timer); }, [toast]);
 
-  const switchSpace = (next: SpaceId) => {
+  const switchSpace = useCallback((next: SpaceId) => {
     if (next === spaceId) return;
     void Haptics.selectionAsync();
     setSelectedId(null);
+    setViewingId(null);
     setNotes(null);
     setSpaceId(next);
     void repository.setSelectedSpace(next).catch(() => undefined);
-  };
+  }, [repository, spaceId]);
+
+  // Swiping across the space steps through the dock's order: left for the
+  // next space, right for the one before. A swipe that starts on a sticky
+  // drags the sticky instead (it takes a move of 4pt; this waits for 24pt
+  // sideways), and nothing swipes while a sheet or the picker is open. The
+  // space doesn't follow the finger: it just cross-fades, as a dock tap does.
+  const index = SPACE_IDS.indexOf(spaceId);
+  const swipeBy = useCallback((step: 1 | -1) => {
+    const next = SPACE_IDS[index + step];
+    if (next) switchSpace(next);
+  }, [index, switchSpace]);
+  const overlayOpen = Boolean(selectedId || viewingId || pickerOpen);
+  const swipe = useMemo(() => {
+    const first = index === 0;
+    const last = index === SPACE_IDS.length - 1;
+    return Gesture.Pan()
+      .enabled(!overlayOpen)
+      .activeOffsetX([-24, 24])
+      .failOffsetY([-18, 18])
+      .onEnd((event) => {
+        const far = Math.abs(event.translationX) > 70 || Math.abs(event.velocityX) > 600;
+        if (far && event.translationX < 0 && !last) runOnJS(swipeBy)(1);
+        else if (far && event.translationX > 0 && !first) runOnJS(swipeBy)(-1);
+      });
+  }, [index, overlayOpen, swipeBy]);
 
   const onLift = useCallback(() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }, []);
   const onDrop = useCallback((id: string, x: number, y: number) => {
@@ -100,13 +142,10 @@ function SpaceBoard({ initialSpaceId }: { initialSpaceId: SpaceId }) {
     });
     void repository.savePosition(id, unit).catch(() => { setToast('That move couldn’t be saved.'); load(); });
   }, [board, load, repository]);
-  // Read through a ref so the stickies' gestures never rebuild (mid-drag) when the list reloads.
-  const notesRef = useRef(notes);
-  useEffect(() => { notesRef.current = notes; }, [notes]);
-  const onOpen = useCallback((id: string) => {
-    const note = notesRef.current?.find((item) => item.id === id);
-    if (note) openNote(note);
-  }, []);
+  // A tap reads the note right here, over the space; leaving for the card or
+  // Chat is the sheet's own button.
+  const onOpen = useCallback((id: string) => { void Haptics.selectionAsync(); setViewingId(id); }, []);
+  const closeView = useCallback(() => setViewingId(null), []);
   const onOptions = useCallback((id: string) => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setSelectedId(id); }, []);
   const closeOptions = useCallback(() => setSelectedId(null), []);
 
@@ -158,7 +197,7 @@ function SpaceBoard({ initialSpaceId }: { initialSpaceId: SpaceId }) {
   const dockBottom = insets.bottom + 16;
   const boardTop = top + 44 + 26;
   const boardBottom = dockBottom + DOCK_HEIGHT + 8;
-  return <View style={styles.root} onLayout={({ nativeEvent: { layout } }) => setScreenSize((current) => (current.width === layout.width && current.height === layout.height ? current : { width: layout.width, height: layout.height }))}>
+  return <GestureDetector gesture={swipe}><View style={styles.root} onLayout={({ nativeEvent: { layout } }) => setScreenSize((current) => (current.width === layout.width && current.height === layout.height ? current : { width: layout.width, height: layout.height }))}>
     <StatusBar style={DARK_SURFACE[spaceId] ? 'light' : 'dark'} />
     {/* The space, edge to edge (under the status bar too). Switching cross-fades it. */}
     <Animated.View key={spaceId} entering={FadeIn.duration(200)} exiting={FadeOut.duration(200)} style={StyleSheet.absoluteFill}>
@@ -166,8 +205,12 @@ function SpaceBoard({ initialSpaceId }: { initialSpaceId: SpaceId }) {
       {spaceId === 'fridge' ? <View pointerEvents="none" style={[styles.letters, { bottom: boardBottom + 6 }]}><LetterMagnets name={noteSpaceName} maxWidth={screenSize.width - 44} /></View> : null}
     </Animated.View>
 
-    <View style={[styles.board, { top: boardTop, bottom: boardBottom }]} onLayout={({ nativeEvent: { layout } }) => setBoard((current) => (current && current.width === layout.width && current.height === layout.height && current.x === layout.x && current.y === layout.y ? current : layout))}>
-      {board && notes ? notes.map((note, index) => <DraggableSticky key={note.id} note={note} order={index} seed={noteSeed(note.id)} board={board} pinStyle={space.pinStyle} onLift={onLift} onDrop={onDrop} onOpen={onOpen} onOptions={onOptions} />) : null}
+    {/* collapsable={false}: the board must stay a real view, or it's flattened
+        away and the stickies' own zIndex (up to 1000 mid-drag) stacks them over
+        the sheets, top bar and dock drawn after it. */}
+    <View collapsable={false} style={[styles.board, { top: boardTop, bottom: boardBottom }]} onLayout={({ nativeEvent: { layout } }) => setBoard((current) => (current && current.width === layout.width && current.height === layout.height && current.x === layout.x && current.y === layout.y ? current : layout))}>
+      {/* Keyed by space, so a switch fades the old notes out and the new ones in with the surface. */}
+      {board && notes ? <Animated.View key={spaceId} collapsable={false} entering={FadeIn.duration(200)} exiting={FadeOut.duration(200)} pointerEvents="box-none" style={StyleSheet.absoluteFill}>{notes.map((note, index) => <DraggableSticky key={note.id} note={note} order={index} seed={noteSeed(note.id)} board={board} pinStyle={space.pinStyle} onLift={onLift} onDrop={onDrop} onOpen={onOpen} onOptions={onOptions} />)}</Animated.View> : null}
       {empty ? <View style={styles.emptyWrap} pointerEvents="box-none">
         <Pressable accessibilityRole="button" accessibilityLabel={`Nothing here yet. Stick a note on your ${space.name}.`} onPress={openPicker} style={({ pressed }) => pressed && styles.pressed}>
           <StickyPaper note={EMPTY_NOTE} space={spaceId} seed={0} />
@@ -176,12 +219,20 @@ function SpaceBoard({ initialSpaceId }: { initialSpaceId: SpaceId }) {
     </View>
 
     <View pointerEvents="box-none" style={[styles.topBar, { top }]}>
-      <RoundButton icon="chevron-back" label="Go back" onPress={() => (router.canGoBack() ? router.back() : router.navigate('/'))} />
-      <View accessible accessibilityRole="header" accessibilityLabel={`${space.name}, ${count} of ${SPACE_CAPACITY} notes`} style={styles.titles}>
-        <LabelTape text={space.name} variant="dark" size="lg" rotation={-2} />
-        <LabelTape text={`${count} / ${SPACE_CAPACITY} notes`} variant="red" size="sm" rotation={2} style={styles.countTape} />
+      {/* Each side is two buttons wide (the right has Chat and Share) so the name stays centered. */}
+      <View style={styles.sideGroup}>
+        <RoundButton icon="chevron-back" label="Go back" onPress={() => (router.canGoBack() ? router.back() : router.navigate('/'))} />
       </View>
-      <RoundButton icon="share-outline" label={`Share your ${space.name}`} disabled={!notes?.length} onPress={() => router.push({ pathname: '/spaces/share', params: { space: spaceId } })} />
+      <View style={styles.middle}>
+        <View accessible accessibilityRole="header" accessibilityLabel={`${space.name}, ${count} of ${SPACE_CAPACITY} notes`} style={styles.titles}>
+          <LabelTape text={space.name} variant="dark" size="lg" rotation={-2} />
+          <LabelTape text={`${count} / ${SPACE_CAPACITY} notes`} variant="red" size="sm" rotation={2} style={styles.countTape} />
+        </View>
+      </View>
+      <View style={[styles.sideGroup, styles.sideGroupEnd]}>
+        <RoundButton icon="chatbox-outline" label="Open Chat" onPress={() => { void Haptics.selectionAsync(); router.navigate('/chat'); }} />
+        <RoundButton icon="share-outline" label={`Share your ${space.name}`} disabled={!notes?.length} onPress={() => router.push({ pathname: '/spaces/share', params: { space: spaceId } })} />
+      </View>
     </View>
 
     <View accessibilityRole="radiogroup" accessibilityLabel="Space" style={[styles.dock, { bottom: dockBottom }]}>
@@ -195,6 +246,15 @@ function SpaceBoard({ initialSpaceId }: { initialSpaceId: SpaceId }) {
     </View>
     <MagnetButton size={DOCK_HEIGHT} icon="add" accessibilityLabel="Stick a note" onPress={openPicker} style={[styles.magnet, { bottom: dockBottom }]} />
 
+    {viewing && !selected ? <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      <SheetDim label="Close note" onPress={closeView} />
+      <StickyViewSheet
+        note={viewing}
+        onDismiss={closeView}
+        onOpen={() => { setViewingId(null); openNote(viewing); }}
+        onOptions={() => { setViewingId(null); setSelectedId(viewing.id); }}
+      />
+    </View> : null}
     {selected && board ? <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <SheetDim onPress={closeOptions} />
       <View pointerEvents="none" style={{ position: 'absolute', left: board.x, top: board.y, width: board.width, height: board.height }}>
@@ -213,11 +273,11 @@ function SpaceBoard({ initialSpaceId }: { initialSpaceId: SpaceId }) {
     </View> : null}
     <NotePicker visible={pickerOpen} spaceName={space.name} onClose={() => setPickerOpen(false)} onPick={(candidate) => void stick(candidate)} />
     <Toast message={toast} />
-  </View>;
+  </View></GestureDetector>;
 }
 
 /** A round paper button floating over the surface. */
-function RoundButton({ icon, label, onPress, disabled = false }: { icon: 'chevron-back' | 'share-outline'; label: string; onPress: () => void; disabled?: boolean }) {
+function RoundButton({ icon, label, onPress, disabled = false }: { icon: 'chevron-back' | 'share-outline' | 'chatbox-outline'; label: string; onPress: () => void; disabled?: boolean }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.round, disabled && styles.disabled, pressed && styles.pressed]}>
     <Ionicons accessible={false} name={icon} size={icon === 'chevron-back' ? 24 : 21} color={SPACE_UI.ink} style={icon === 'chevron-back' ? { marginLeft: -2 } : undefined} />
   </Pressable>;
@@ -233,6 +293,9 @@ const styles = StyleSheet.create({
   board: { position: 'absolute', left: 0, right: 0 },
   emptyWrap: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' },
   topBar: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  sideGroup: { width: 44 * 2 + 8, flexDirection: 'row', gap: 8 },
+  sideGroupEnd: { justifyContent: 'flex-end' },
+  middle: { flex: 1, alignItems: 'center' },
   titles: { alignItems: 'center', paddingTop: 4 },
   countTape: { alignSelf: 'flex-end', marginTop: -3, marginRight: -14 },
   round: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(251,250,246,0.94)', boxShadow: '0px 3px 8px rgba(0,0,0,0.22)' },

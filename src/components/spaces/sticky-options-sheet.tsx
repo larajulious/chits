@@ -8,7 +8,7 @@ import { SPACE_CAPACITY, SPACE_LIST, SPACES, STICKY_COLORS, type SpaceId } from 
 import { paperColor, SPACE_UI } from '@/constants/spaces-theme';
 import type { PinnedNote } from '@/db/types';
 import { useSpaceFonts } from './space-fonts';
-import { stickyText } from './sticky-note';
+import { photoCaption, stickyText } from './sticky-note';
 
 type Props = {
   note: PinnedNote;
@@ -22,6 +22,7 @@ type Props = {
 };
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
+const MEDIA_NAMES = { photo: 'Photo', video: 'Video', audio: 'Voice note' } as const;
 // Each swatch sits at its own slight angle, like squares of paper laid out.
 const SWATCH_TILTS = [-4, 3, -2, 4, -3];
 
@@ -49,7 +50,10 @@ export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onOpen, o
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => { if (moving) setMoving(false); else onDismiss(); return true; });
     return () => subscription.remove();
   }, [moving, onDismiss]);
-  const title = note.hidden ? 'Hidden Chit' : stickyText(note).split('\n')[0] || 'Note';
+  const media = note.hidden ? null : note.media;
+  // A photo print has no paper to color; a tape's label does.
+  const isPrint = media?.attachment.type === 'photo' || media?.attachment.type === 'video';
+  const title = note.hidden ? 'Hidden Chit' : media ? photoCaption(note) ?? MEDIA_NAMES[media.attachment.type] : stickyText(note).split('\n')[0] || 'Note';
   return <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
     <View style={styles.grabber} />
     <Text accessibilityRole="header" numberOfLines={1} style={[fonts.uiHeavy, styles.title]}>{title}</Text>
@@ -67,8 +71,9 @@ export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onOpen, o
         </Pressable>;
       })}
     </View> : <>
-      <Text style={[fonts.label, styles.section]}>PAPER COLOR</Text>
-      <View accessibilityRole="radiogroup" accessibilityLabel="Paper color" style={styles.swatches}>
+      {isPrint ? <View style={styles.printGap} /> : <>
+      <Text style={[fonts.label, styles.section]}>{media ? 'LABEL COLOR' : 'PAPER COLOR'}</Text>
+      <View accessibilityRole="radiogroup" accessibilityLabel={media ? 'Label color' : 'Paper color'} style={styles.swatches}>
         {STICKY_COLORS.map((color, index) => {
           const selected = color.hex === note.color;
           const paper = paperColor(color.hex);
@@ -79,6 +84,7 @@ export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onOpen, o
           </Pressable>;
         })}
       </View>
+      </>}
       <View style={styles.grid}>
         <View style={styles.gridRow}>
           <Tile icon="open-outline" label="Open note" onPress={onOpen} />
@@ -93,10 +99,10 @@ export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onOpen, o
   </Animated.View>;
 }
 
-/** The dim over the surface behind the sheet; tapping it closes the sheet. */
-export function SheetDim({ onPress }: { onPress: () => void }) {
+/** The dim over the surface behind a sheet; tapping it closes the sheet. */
+export function SheetDim({ onPress, label = 'Close options' }: { onPress: () => void; label?: string }) {
   return <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(160)} style={[StyleSheet.absoluteFill, styles.dim]}>
-    <Pressable accessibilityRole="button" accessibilityLabel="Close options" onPress={onPress} style={StyleSheet.absoluteFill} />
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={StyleSheet.absoluteFill} />
   </Animated.View>;
 }
 
@@ -114,6 +120,7 @@ const styles = StyleSheet.create({
   ring: { padding: 3, borderRadius: 7, borderWidth: 2, borderColor: 'transparent' },
   ringSelected: { borderColor: SPACE_UI.paper },
   swatch: { width: 44, height: 44, borderRadius: 2, boxShadow: '0px 2px 3px rgba(0,0,0,0.3)' },
+  printGap: { height: 18 },
   grid: { gap: 10 },
   gridRow: { flexDirection: 'row', gap: 10 },
   tile: { flex: 1, height: 78, borderRadius: 16, padding: 12, justifyContent: 'space-between' },

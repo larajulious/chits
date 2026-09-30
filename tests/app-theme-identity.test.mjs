@@ -22,7 +22,7 @@ const lum = (hex) => {
 const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
 
 test('Settings offers Default plus every personality, in order', () => {
-  assert.deepEqual(CHITS_THEME_LIST.map((theme) => theme.name), ['Default', 'Faith', 'Casual', 'Corporate', 'Love', 'Friends', 'Boss', 'Stranger', 'Motivation', 'Calm', 'Creative', 'Cute', 'Christmas', 'Spooky', 'New Year', 'Midnight', 'Boomers', 'Gen X', 'Millennials', 'Gen Z', 'Gen Alpha']);
+  assert.deepEqual(CHITS_THEME_LIST.map((theme) => theme.name), ['Default', 'Faith', 'Casual', 'Corporate', 'Love', 'Friends', 'Boss', 'Stranger', 'Motivation', 'Calm', 'Creative', 'Cute', 'Christmas', 'Spooky', 'New Year', 'Midnight', 'Boomers', 'Gen X', 'Millennials', 'Gen Z', 'Gen Alpha', 'Game Changer']);
   assert.deepEqual(CHITS_THEME_LIST.map((theme) => theme.id), [...CHITS_THEME_IDS]);
   assert.equal(DEFAULT_THEME_IDENTITY, 'default');
   assert.equal(THEME_SETTING_KEY, 'app_theme');
@@ -120,11 +120,15 @@ test('Faith carries the cross of Jesus Christ through the app and every Share No
   assert.equal(faith.look.chatPattern, 'cross', 'a quiet cross stands behind Chat');
 });
 
-test('Settings and Share Note group themes into Personalities, then Generations', () => {
+test('Settings and Share Note group themes into Personalities, Generations, then Limited Edition', () => {
   for (const collections of [CHITS_THEME_COLLECTIONS, SHARE_NOTE_COLLECTIONS]) {
-    assert.deepEqual(collections.map((collection) => collection.name), ['Personalities', 'Generations']);
+    assert.deepEqual(collections.map((collection) => collection.name), ['Personalities', 'Generations', 'Limited Edition']);
     assert.deepEqual(collections[1].themes.map((theme) => theme.name), ['Boomers', 'Gen X', 'Millennials', 'Gen Z', 'Gen Alpha']);
+    assert.deepEqual(collections[2].themes.map((theme) => theme.name), ['Game Changer']);
+    // Limited Edition is hidden from both pickers for now; the rest are offered.
+    assert.deepEqual(collections.filter((collection) => collection.shown).map((collection) => collection.name), ['Personalities', 'Generations']);
   }
+  assert.equal(resolveThemeIdentity('game-changer'), 'game-changer', 'someone already wearing a hidden theme keeps it');
   // Every theme appears exactly once, in its own collection.
   assert.deepEqual(CHITS_THEME_COLLECTIONS.flatMap((collection) => collection.themes), CHITS_THEME_LIST);
   for (const collection of CHITS_THEME_COLLECTIONS) for (const theme of collection.themes) assert.equal(theme.category, collection.id, theme.id);
@@ -144,4 +148,22 @@ test('each generation keeps its brief’s palette in its native mode, and a dist
   }
   const voices = Object.keys(native).map((id) => { const { look, shareNote } = CHITS_THEMES[id]; return `${look.headingFont ?? 'system'}/${look.chatPattern}/${shareNote.fontStyle}/${shareNote.decorationStyle}`; });
   assert.equal(new Set(voices).size, voices.length, 'no two generations share a type voice and texture');
+});
+
+test('Game Changer wears its picture in the header band, with white ink that stays readable over it', async () => {
+  const { topBarForIdentity, TOP_BAR_IMAGE_SCRIM } = await import('../src/constants/chits-themes.ts');
+  const theme = CHITS_THEMES['game-changer'];
+  assert.equal(theme.name, 'Game Changer');
+  assert.equal(theme.category, 'limited-edition');
+  assert.equal(theme.look.bandImage, 'game-changer');
+  const bar = topBarForIdentity('game-changer');
+  assert.equal(bar.image, 'game-changer');
+  assert.equal(bar.ink, '#FFFFFF');
+  // Worst case: a pure-white patch of the picture under the scrim of the band's first color.
+  const tint = bar.colors[0];
+  const mixed = `#${[1, 3, 5].map((i) => Math.round(255 + (parseInt(tint.slice(i, i + 2), 16) - 255) * TOP_BAR_IMAGE_SCRIM).toString(16).padStart(2, '0')).join('')}`;
+  assert.ok(contrast(bar.ink, mixed) >= 4.5, `title over the brightest part of the picture is ${contrast(bar.ink, mixed).toFixed(2)}`);
+  assert.ok(contrast(bar.inkMuted, mixed) >= 4.5, `subtitle over the brightest part of the picture is ${contrast(bar.inkMuted, mixed).toFixed(2)}`);
+  // Every other theme keeps its pattern.
+  for (const id of CHITS_THEME_IDS.filter((item) => item !== 'default' && item !== 'game-changer')) assert.equal(topBarForIdentity(id).image, null, id);
 });

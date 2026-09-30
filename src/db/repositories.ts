@@ -4,7 +4,7 @@ import { notifyChatBackgroundChanged } from '../services/chat-background';
 import { notifyAttachmentsChanged } from '../services/attachment-changes';
 import { notifySpacesChanged } from '../services/space-changes';
 import { autoPlace, clampUnit, DEFAULT_STICKY_COLOR, randomRotation, resolveSpaceId, SELECTED_SPACE_SETTING_KEY, SPACE_CAPACITY, SPACE_IDS, STICKY_COLORS, type SpaceId, type SpacePoint } from '../constants/spaces';
-import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type AttachmentFilterType, type AttachmentLike, type AttachmentPage, type AttachmentPageOptions, type AttachmentSummary, type Board, type Message, type MessageType, type PageOptions, type TimelineEvent, type TimelineEventType, type TimelineItem, type TimelinePage, type TimelinePageOptions , type PinnedNote, type SpaceCandidate, type SpaceNoteKind, type SpacePlacement } from './types';
+import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type AttachmentFilterType, type AttachmentLike, type AttachmentPage, type AttachmentPageOptions, type AttachmentSummary, type Board, type Message, type MessageType, type PageOptions, type TimelineEvent, type TimelineEventType, type TimelineItem, type TimelinePage, type TimelinePageOptions , type PinnedNote, type SpaceCandidate, type SpaceNoteDetail, type SpaceNoteKind, type SpaceNoteMedia, type SpacePlacement } from './types';
 
 const DEFAULT_PAGE_SIZE = 50;
 type MessageRow = { id: string; text: string | null; type: Message['type']; created_at: number; updated_at: number; archived_at: number | null; pinned: number; is_hidden_content: number; deleted_at: number | null };
@@ -970,18 +970,46 @@ export function createSpaceRepository(database: SQLiteDatabase) {
     setSelectedSpace: (spaceId: SpaceId) => database.runAsync('INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at', SELECTED_SPACE_SETTING_KEY, spaceId, Date.now()),
     /** A space's stickies, back to front. */
     async list(spaceId: SpaceId): Promise<PinnedNote[]> {
-      const rows = await database.getAllAsync<PlacementRow & { title: string | null; text: string | null; hidden: number; board_id: string | null }>(`
+      const rows = await database.getAllAsync<PlacementRow & { title: string | null; text: string | null; hidden: number; board_id: string | null; lead_message_id: string | null }>(`
         SELECT p.*,
+          CASE WHEN p.card_id IS NOT NULL THEN (SELECT lcm.message_id FROM card_messages lcm WHERE lcm.card_id = c.id ORDER BY lcm.position ASC LIMIT 1) ELSE p.message_id END AS lead_message_id,
           CASE WHEN p.card_id IS NOT NULL THEN NULLIF(TRIM(c.title), '') END AS title,
           CASE WHEN p.card_id IS NOT NULL THEN (SELECT ${MESSAGE_TEXT_SQL('fm')} FROM card_messages fcm INNER JOIN messages fm ON fm.id = fcm.message_id WHERE fcm.card_id = c.id ORDER BY fcm.position ASC LIMIT 1) ELSE ${MESSAGE_TEXT_SQL('m')} END AS text,
           CASE WHEN p.card_id IS NOT NULL THEN EXISTS (SELECT 1 FROM card_messages hcm INNER JOIN messages hm ON hm.id = hcm.message_id WHERE hcm.card_id = c.id AND hm.is_hidden_content = 1) ELSE m.is_hidden_content = 1 END AS hidden,
-          c.board_id
+          -- A card's board; for a thought, the board of the card it was organized into, if any.
+          COALESCE(c.board_id, (SELECT oc.board_id FROM card_messages ocm INNER JOIN cards oc ON oc.id = ocm.card_id INNER JOIN boards ob ON ob.id = oc.board_id WHERE ocm.message_id = p.message_id AND oc.archived_at IS NULL AND ob.archived_at IS NULL ORDER BY oc.created_at ASC LIMIT 1)) AS board_id
         ${LIVE_PLACEMENTS_SQL} AND p.space_id = ?
         ORDER BY p.z_index ASC, p.pinned_at ASC`, spaceId);
+      // The lead thought's first photo, video or recording, if any — a hidden note never gets one.
+      const leadIds = [...new Set(rows.filter((row) => row.hidden !== 1 && row.lead_message_id).map((row) => row.lead_message_id as string))];
+      const mediaRows = leadIds.length ? await database.getAllAsync<AttachmentRow & { caption: string | null }>(`SELECT a.*, NULLIF(TRIM(m.text), '') AS caption FROM attachments a INNER JOIN messages m ON m.id = a.message_id WHERE a.message_id IN (${leadIds.map(() => '?').join(', ')}) AND a.type IN ('photo', 'video', 'audio') ORDER BY a.created_at ASC`, ...leadIds) : [];
+      const media = new Map<string, SpaceNoteMedia>();
+      for (const row of mediaRows) if (!media.has(row.message_id)) media.set(row.message_id, { attachment: attachmentFromRow(row) as SpaceNoteMedia['attachment'], messageId: row.message_id, caption: row.caption });
       return rows.map((row) => {
         const hidden = row.hidden === 1;
-        return { ...placementFromRow(row), hidden, title: hidden ? null : row.title, text: hidden ? null : row.text ?? '', boardId: row.board_id };
+        return { ...placementFromRow(row), hidden, title: hidden ? null : row.title, text: hidden ? null : row.text ?? '', boardId: row.board_id, media: hidden || !row.lead_message_id ? null : media.get(row.lead_message_id) ?? null };
       });
+    },
+    /**
+     * Everything a sticky only has room to start: a card's thoughts in order
+     * (with its board and column), or a single thought. Nothing when the note
+     * is hidden in Chat, same as the sticky itself.
+     */
+    async readNote(kind: SpaceNoteKind, noteId: string): Promise<SpaceNoteDetail> {
+      if (kind === 'card') {
+        const [card, rows] = await Promise.all([
+          database.getFirstAsync<{ board: string; column: string }>('SELECT b.name AS board, bc.name AS "column" FROM cards c INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id WHERE c.id = ?', noteId),
+          database.getAllAsync<{ messageId: string; text: string; caption: string | null; hidden: number }>(`SELECT m.id AS messageId, ${MESSAGE_TEXT_SQL('m')} AS text, NULLIF(TRIM(m.text), '') AS caption, m.is_hidden_content AS hidden FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = ? AND m.deleted_at IS NULL ORDER BY cm.position ASC`, noteId),
+        ]);
+        const hidden = rows.some((row) => row.hidden === 1);
+        return { context: card ? `${card.board} · ${card.column}` : null, thoughts: hidden ? [] : rows.map(({ messageId, text, caption }) => ({ messageId, text, caption })) };
+      }
+      const [row, organized] = await Promise.all([
+        database.getFirstAsync<{ text: string; caption: string | null; hidden: number }>(`SELECT ${MESSAGE_TEXT_SQL('m')} AS text, NULLIF(TRIM(m.text), '') AS caption, m.is_hidden_content AS hidden FROM messages m WHERE m.id = ?`, noteId),
+        // Where a thought was organized to, same card the board list picks.
+        database.getFirstAsync<{ board: string; column: string }>('SELECT b.name AS board, bc.name AS "column" FROM card_messages cm INNER JOIN cards c ON c.id = cm.card_id INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id WHERE cm.message_id = ? AND c.archived_at IS NULL AND b.archived_at IS NULL ORDER BY c.created_at ASC LIMIT 1', noteId),
+      ]);
+      return { context: organized ? `${organized.board} · ${organized.column}` : 'Chat', thoughts: row && row.hidden !== 1 ? [{ messageId: noteId, text: row.text, caption: row.caption }] : [] };
     },
     /** Live stickies per space, for the nav badge and "X of 12". */
     async counts(): Promise<Record<SpaceId, number>> {

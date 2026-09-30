@@ -75,8 +75,10 @@ function DrawerContent({ close }: { close: () => void }) {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
         <NavigationRow destination={boardsDestination} pathname={pathname} close={close} />
         <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
-        <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
       </ScrollView>
+      <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }]}>
+        <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
+      </View>
     </SafeAreaView>
   );
 }
@@ -118,6 +120,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 21, fontWeight: '600' },
   headerAction: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
   drawerContent: { paddingTop: spacing.sm, paddingBottom: spacing.lg },
+  footer: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: spacing.xs },
   item: {
     minHeight: 52,
     flexDirection: 'row',
@@ -127,7 +130,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     borderRadius: 10,
   },
-  iconSlot: { width: 24, alignItems: 'center', justifyContent: 'center' },
+  iconSlot: { width: 30, alignItems: 'center', justifyContent: 'center' },
   itemText: { fontSize: 16 },
   itemTextSelected: { fontWeight: '700' },
   pressed: { opacity: 0.62 },

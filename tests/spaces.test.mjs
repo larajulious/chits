@@ -121,7 +121,7 @@ test('drag, bring to front, recolor and move between spaces all persist', async 
   const [onWall] = await spaces.list('wall');
   assert.deepEqual({ id: onWall.id, color: onWall.color, rotation: onWall.rotation }, { id: a.id, color: '#C4E4FF', rotation: a.rotation }, 'keeps its color and tilt');
   assert.equal((await spaces.list('fridge')).length, 1);
-  const { title, text, hidden, boardId, ...placement } = onWall;
+  const { title, text, hidden, boardId, media, ...placement } = onWall;
   assert.deepEqual(await spaces.placementFor('thought', 't0'), placement);
   assert.equal(await spaces.remove(a.id), true);
   assert.equal(await spaces.placementFor('thought', 't0'), null);

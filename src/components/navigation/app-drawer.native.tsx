@@ -8,6 +8,7 @@ import {
   useState,
   type ComponentProps,
   type PropsWithChildren,
+  type ReactNode,
 } from 'react';
 import {
   AccessibilityInfo,
@@ -52,7 +53,7 @@ type ContextItem = {
   accessibilityContext: string | null;
 };
 type IconName = ComponentProps<typeof Ionicons>['name'];
-type Destination = { label: string; path: '/' | '/spaces' | '/archive' | '/settings'; icon: IconName };
+type Destination = { label: string; path: '/' | '/spaces/pick' | '/archive' | '/settings'; icon: IconName };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
 // Boards, Chat, and Attachments are the 3 items in the bottom navigation (see
@@ -64,7 +65,8 @@ const DrawerContext = createContext<DrawerContextValue | null>(null);
 const boardsDestination: Destination = { label: 'Notes', path: '/', icon: 'reader-outline' };
 // Spaces: notes stuck on a fridge, desk, cork board or wall. Its own word (and a
 // magnet, not a pin) so it's never confused with the PINNED shortcuts below.
-const spacesDestination: Destination = { label: 'Spaces', path: '/spaces', icon: 'magnet-outline' };
+// It opens on Pick a Space every time, so choosing where to go comes first.
+const spacesDestination: Destination = { label: 'Spaces', path: '/spaces/pick', icon: 'magnet-outline' };
 const archiveDestination: Destination = { label: 'Archive', path: '/archive', icon: 'archive-outline' };
 const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
 
@@ -76,7 +78,7 @@ export function useAppDrawer() {
 
 function isDestinationActive(pathname: string, destination: Destination) {
   // Spaces is two screens (the board and Pick a Space); either one is "here".
-  if (destination.path === '/spaces') return pathname === '/spaces' || pathname.startsWith('/spaces/');
+  if (destination.path === '/spaces/pick') return pathname === '/spaces' || pathname.startsWith('/spaces/');
   return pathname === destination.path;
 }
 
@@ -114,10 +116,13 @@ function NavigationRow({ destination, pathname, close, badge = 0 }: { destinatio
   );
 }
 
-function ContextRow({ item, close, showKind = false }: { item: ContextItem; close: () => void; showKind?: boolean }) {
+// One row shape for both Pinned and Recent so the two lists read as the same
+// kind of thing; only Pinned rows get the trailing unpin button.
+function ShortcutRow({ item, close, onUnpin }: { item: ContextItem; close: () => void; onUnpin?: () => void }) {
   const router = useRouter();
   const { tokens } = useTheme();
-  const accessibilityLabel = item.kind === 'board'
+  const isBoard = item.kind === 'board';
+  const accessibilityLabel = isBoard
     ? `${item.title}. Board.`
     : `${item.title}. Card. ${item.accessibilityContext}.`;
   return (
@@ -126,18 +131,43 @@ function ContextRow({ item, close, showKind = false }: { item: ContextItem; clos
       accessibilityLabel={accessibilityLabel}
       onPress={() => {
         close();
-        if (item.kind === 'board') router.push({ pathname: '/board/[id]', params: { id: item.id } });
+        if (isBoard) router.push({ pathname: '/board/[id]', params: { id: item.id } });
         else router.push({ pathname: '/card/[id]', params: { id: item.id } });
       }}
-      style={({ pressed }) => [styles.contextRow, pressed && styles.pressed]}>
-      <View accessible={false} style={[styles.contextIcon, { backgroundColor: item.kind === 'board' ? tokens.accentSoft : tokens.surfaceElevated, borderColor: item.kind === 'board' ? tokens.accentBorder : tokens.borderSubtle }]}>
-        <Ionicons accessible={false} name={item.kind === 'board' ? 'grid-outline' : 'document-text-outline'} size={17} color={item.kind === 'board' ? tokens.accentStrong : tokens.textSecondary} />
+      style={({ pressed }) => [styles.contextRow, onUnpin && styles.pinnedRow, pressed && styles.pressed]}>
+      <View accessible={false} style={[styles.contextIcon, { backgroundColor: isBoard ? tokens.accentSoft : tokens.surfaceElevated, borderColor: isBoard ? tokens.accentBorder : tokens.borderSubtle }]}>
+        <Ionicons accessible={false} name={isBoard ? 'grid-outline' : 'document-text-outline'} size={17} color={isBoard ? tokens.accentStrong : tokens.textSecondary} />
       </View>
       <View style={styles.contextCopy}>
-        <View style={styles.contextTitleRow}><Text numberOfLines={1} ellipsizeMode="tail" style={[styles.contextTitle, { color: tokens.textPrimary }]}>{item.title}</Text>{showKind && item.kind === 'card' ? <View style={[styles.kindBadge, { backgroundColor: tokens.surfaceElevated }]}><Text style={[styles.kindBadgeText, { color: tokens.textSecondary }]}>CARD</Text></View> : null}</View>
+        <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.contextTitle, { color: tokens.textPrimary }]}>{item.title}</Text>
         <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.contextMeta, { color: tokens.textSecondary }]}>{item.context}</Text>
       </View>
+      {/* Nested Pressable, not the row's own onPress — stopPropagation keeps this
+          from also opening the row underneath it. Neutral color throughout: this
+          unpins, it never deletes anything. */}
+      {onUnpin ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Remove ${item.title} from Pinned`}
+          hitSlop={10}
+          onPress={(event) => { event.stopPropagation(); onUnpin(); }}
+          style={({ pressed }) => [styles.unpinButton, pressed && styles.unpinPressed]}>
+          <Ionicons accessible={false} name="close" size={16} color={tokens.textMuted} />
+        </Pressable>
+      ) : null}
     </Pressable>
+  );
+}
+
+// Shared header row for every drawer section, so PINNED and RECENT sit at the
+// same height whether or not they carry a trailing action.
+function SectionHeader({ label, action }: { label: string; action?: ReactNode }) {
+  const { tokens } = useTheme();
+  return (
+    <View style={styles.sectionHeader}>
+      <Text accessibilityRole="header" style={[styles.sectionLabel, { color: tokens.textMuted }]}>{label}</Text>
+      {action}
+    </View>
   );
 }
 
@@ -150,57 +180,18 @@ function DrawerBackdrop({ close, reduceTransparency, darkMode }: { close: () => 
   return <View style={[styles.backdrop, { backgroundColor: tint }]}>{tapTarget}</View>;
 }
 
-function ShortcutSection({ label, items, close }: { label: 'RECENT'; items: ContextItem[]; close: () => void }) {
-  const { tokens } = useTheme();
+function RecentSection({ items, close }: { items: ContextItem[]; close: () => void }) {
   if (!items.length) return null;
   return (
     <View style={styles.section}>
-      <Text accessibilityRole="header" style={[styles.sectionLabel, { color: tokens.textMuted }]}>{label}</Text>
-      {items.map((item) => <ContextRow key={`${item.kind}-${item.id}`} item={item} close={close} showKind />)}
+      <SectionHeader label="RECENT" />
+      {items.map((item) => <ShortcutRow key={`${item.kind}-${item.id}`} item={item} close={close} />)}
     </View>
   );
 }
 
 function matchesPinnedQuery(item: ContextItem, query: string) {
   return `${item.title} ${item.context}`.toLowerCase().includes(query.toLowerCase());
-}
-
-function PinnedRow({ item, close, onUnpin }: { item: ContextItem; close: () => void; onUnpin: () => void }) {
-  const router = useRouter();
-  const { tokens } = useTheme();
-  const accessibilityLabel = item.kind === 'board'
-    ? `${item.title}. Board.`
-    : `${item.title}. Card. ${item.accessibilityContext}.`;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      onPress={() => {
-        close();
-        if (item.kind === 'board') router.push({ pathname: '/board/[id]', params: { id: item.id } });
-        else router.push({ pathname: '/card/[id]', params: { id: item.id } });
-      }}
-      style={({ pressed }) => [styles.contextRow, styles.pinnedRow, pressed && styles.pressed]}>
-      <View accessible={false} style={[styles.contextIcon, { backgroundColor: item.kind === 'board' ? tokens.accentSoft : tokens.surfaceElevated, borderColor: item.kind === 'board' ? tokens.accentBorder : tokens.borderSubtle }]}>
-        <Ionicons accessible={false} name={item.kind === 'board' ? 'grid-outline' : 'document-text-outline'} size={17} color={item.kind === 'board' ? tokens.accentStrong : tokens.textSecondary} />
-      </View>
-      <View style={styles.contextCopy}>
-        <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.contextTitle, { color: tokens.textPrimary }]}>{item.title}</Text>
-        <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.contextMeta, { color: tokens.textSecondary }]}>{item.context}</Text>
-      </View>
-      {/* Nested Pressable, not the row's own onPress — stopPropagation keeps this
-          from also opening the row underneath it. Neutral color throughout: this
-          unpins, it never deletes anything. */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Remove ${item.title} from Pinned`}
-        hitSlop={10}
-        onPress={(event) => { event.stopPropagation(); onUnpin(); }}
-        style={({ pressed }) => [styles.unpinButton, pressed && styles.unpinPressed]}>
-        <Ionicons accessible={false} name="close" size={16} color={tokens.textMuted} />
-      </Pressable>
-    </Pressable>
-  );
 }
 
 function PinnedSection({ items, close, onUnpin }: { items: ContextItem[]; close: () => void; onUnpin: (item: ContextItem) => void }) {
@@ -226,8 +217,8 @@ function PinnedSection({ items, close, onUnpin }: { items: ContextItem[]; close:
 
   return (
     <View style={styles.section}>
-      <View style={styles.pinnedHeader}>
-        {searchOpen ? <>
+      {searchOpen ? (
+        <View style={styles.sectionHeader}>
           <View style={[styles.pinnedSearchField, { backgroundColor: tokens.surfaceElevated, borderColor: tokens.borderSubtle }]}>
             <Ionicons accessible={false} name="search-outline" size={15} color={tokens.textMuted} />
             <TextInput
@@ -246,16 +237,20 @@ function PinnedSection({ items, close, onUnpin }: { items: ContextItem[]; close:
           <Pressable accessibilityRole="button" accessibilityLabel="Close pinned search" hitSlop={10} onPress={closeSearch} style={styles.pinnedSearchClose}>
             <Ionicons accessible={false} name="close" size={18} color={tokens.textSecondary} />
           </Pressable>
-        </> : <>
-          <Text accessibilityRole="header" style={[styles.sectionLabel, styles.pinnedLabel, { color: tokens.textMuted }]}>PINNED</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Search pinned items" hitSlop={10} onPress={openSearch} style={styles.pinnedSearchButton}>
-            <Ionicons accessible={false} name="search-outline" size={17} color={tokens.textMuted} />
-          </Pressable>
-        </>}
-      </View>
+        </View>
+      ) : (
+        <SectionHeader
+          label="PINNED"
+          action={(
+            <Pressable accessibilityRole="button" accessibilityLabel="Search pinned items" hitSlop={10} onPress={openSearch} style={styles.pinnedSearchButton}>
+              <Ionicons accessible={false} name="search-outline" size={17} color={tokens.textMuted} />
+            </Pressable>
+          )}
+        />
+      )}
       {trimmed && filtered.length === 0
         ? <Text style={[styles.pinnedNoResults, { color: tokens.textMuted }]}>No pinned items found.</Text>
-        : filtered.map((item) => <PinnedRow key={`${item.kind}-${item.id}`} item={item} close={close} onUnpin={() => onUnpin(item)} />)}
+        : filtered.map((item) => <ShortcutRow key={`${item.kind}-${item.id}`} item={item} close={close} onUnpin={() => onUnpin(item)} />)}
     </View>
   );
 }
@@ -309,7 +304,11 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
       .catch(() => { void load(); });
   }, [load, repository]);
 
-  const hasShortcuts = pinned.length > 0 || recent.length > 0;
+  // Anything already in Pinned is one tap away there; repeating it under Recent
+  // just doubles the list.
+  const pinnedKeys = new Set(pinned.map((item) => `${item.kind}-${item.id}`));
+  const recentUnpinned = recent.filter((item) => !pinnedKeys.has(`${item.kind}-${item.id}`));
+  const hasShortcuts = pinned.length > 0 || recentUnpinned.length > 0;
   return (
     <SafeAreaView accessibilityViewIsModal style={[styles.drawer, { backgroundColor: tokens.surface, borderColor: tokens.borderSubtle }]}>
       <View style={styles.top}>
@@ -330,11 +329,15 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
         <NavigationRow destination={boardsDestination} pathname={pathname} close={close} />
         <NavigationRow destination={spacesDestination} pathname={pathname} close={close} badge={stuckCount} />
         <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
-        <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
         {hasShortcuts ? <View style={[styles.divider, { backgroundColor: tokens.borderSubtle }]} /> : null}
         <PinnedSection items={pinned} close={close} onUnpin={unpinItem} />
-        <ShortcutSection label="RECENT" items={recent.slice(0, 5)} close={close} />
+        <RecentSection items={recentUnpinned.slice(0, 5)} close={close} />
       </ScrollView>
+      {/* Settings is app chrome, not a place your notes live — it stays pinned
+          to the bottom instead of sitting in the list of destinations. */}
+      <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }]}>
+        <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
+      </View>
       <Toast message={toast} />
     </SafeAreaView>
   );
@@ -439,16 +442,13 @@ const styles = StyleSheet.create({
   itemText: { fontSize: 16 },
   itemTextSelected: { fontWeight: '700' },
   badge: { marginLeft: 'auto', alignSelf: 'center' },
-  iconSlot: { width: 24, alignItems: 'center', justifyContent: 'center' },
-  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.lg, marginTop: spacing.md },
-  section: { paddingTop: spacing.lg },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xs,
-  },
+  // Same width as contextIcon so destination labels and shortcut titles share one text column.
+  iconSlot: { width: 30, alignItems: 'center', justifyContent: 'center' },
+  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.lg, marginTop: spacing.sm },
+  footer: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: spacing.xs },
+  section: { paddingTop: spacing.sm },
+  sectionHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg },
+  sectionLabel: { flex: 1, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
   contextRow: {
     minHeight: 56,
     flexDirection: 'row',
@@ -460,15 +460,10 @@ const styles = StyleSheet.create({
   },
   contextIcon: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderRadius: 9 },
   contextCopy: { flex: 1, minWidth: 0 },
-  contextTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  contextTitle: { flexShrink: 1, fontSize: 15, fontWeight: '500' },
+  contextTitle: { fontSize: 15, fontWeight: '500' },
   contextMeta: { fontSize: 12, marginTop: 2 },
-  kindBadge: { minHeight: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, borderRadius: 5 },
-  kindBadgeText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.45 },
   // Same 44pt-ish footprint as the drawer's other header actions (headerAction),
   // just inline with the PINNED label instead of top-right.
-  pinnedHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg },
-  pinnedLabel: { flex: 1, paddingHorizontal: 0, paddingBottom: 0 },
   pinnedSearchButton: { width: 44, height: 44, marginRight: -spacing.sm, alignItems: 'center', justifyContent: 'center' },
   pinnedSearchField: { flex: 1, minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, borderRadius: 18, borderWidth: 1 },
   pinnedSearchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },

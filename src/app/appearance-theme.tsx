@@ -1,13 +1,15 @@
 import { memo, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '@/components/theme-provider';
 import { AppHeader, IconButton, Screen, Toast, HeaderIcon } from '@/components/ui/primitives';
-import { CHITS_THEME_COLLECTIONS, topBarForIdentity, type ChitsTheme } from '@/constants/chits-themes';
+import { CHITS_THEME_COLLECTIONS, TOP_BAR_IMAGE_SCRIM, topBarForIdentity, type ChitsTheme } from '@/constants/chits-themes';
+import { THEME_IMAGES } from '@/constants/theme-images';
 import { getThemeTokens, headingFontFamily, radii, spacing } from '@/constants/theme';
 
 const COLUMNS = 2;
@@ -30,7 +32,10 @@ const ThemePreviewCard = memo(function ThemePreviewCard({ theme, selected, width
   >
     <View style={[styles.mock, { backgroundColor: t.chatBackground }]}>
       <View style={[styles.mockHeader, bar ? { backgroundColor: bar.colors[0] } : { borderBottomColor: t.borderSubtle, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-        {bar?.share.backgroundType === 'gradient' ? <LinearGradient colors={bar.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} /> : null}
+        {bar?.image ? <>
+          <Image source={THEME_IMAGES[bar.image]} contentFit="cover" contentPosition="top" style={StyleSheet.absoluteFill} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: bar.colors[0], opacity: TOP_BAR_IMAGE_SCRIM }]} />
+        </> : bar?.share.backgroundType === 'gradient' ? <LinearGradient colors={bar.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} /> : null}
         <Text numberOfLines={1} style={[styles.mockTitle, { color: bar ? bar.ink : t.textPrimary, fontWeight: theme.look.headingWeight, fontFamily: headingFontFamily(theme.look.headingFont) }]}>Chits</Text>
         {theme.shareNote.mark === 'cross'
           ? <View style={styles.mockCross}><View style={[styles.mockCrossBeam, { backgroundColor: markColor }]} /><View style={[styles.mockCrossArm, { backgroundColor: markColor }]} /></View>
@@ -80,9 +85,10 @@ export default function AppearanceThemeScreen() {
     <AppHeader title="Theme" leading={<IconButton label="Go back" onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
     <ScrollView contentContainerStyle={styles.content}>
       <Text style={[styles.intro, { color: tokens.textSecondary }]}>Choose the personality Chits wears. Your notes, boards and layout stay exactly the same.</Text>
-      {CHITS_THEME_COLLECTIONS.map((collection) => <View key={collection.id} style={styles.collection}>
+      {CHITS_THEME_COLLECTIONS.filter((collection) => collection.shown).map((collection) => <View key={collection.id} style={styles.collection}>
         <Text accessibilityRole="header" style={[styles.collectionTitle, { color: tokens.textPrimary }]}>{collection.name}</Text>
         {collection.id === 'generations' ? <Text style={[styles.collectionDetail, { color: tokens.textMuted }]}>Five design eras, told through type, color and texture.</Text> : null}
+        {collection.id === 'limited-edition' ? <Text style={[styles.collectionDetail, { color: tokens.textMuted }]}>Special themes with their own artwork across the top of every screen.</Text> : null}
         <View accessibilityRole="radiogroup" accessibilityLabel={`${collection.name} themes`} style={styles.grid}>
           {collection.themes.map((theme) => <ThemePreviewCard key={theme.id} theme={theme} selected={theme.id === identity} width={cardWidth} onPress={() => choose(theme)} />)}
         </View>

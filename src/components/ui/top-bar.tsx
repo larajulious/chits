@@ -1,11 +1,14 @@
 import { memo, useState, type ComponentProps } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Decorations } from '@/components/share-note/share-note-template';
 import { useTheme } from '@/components/theme-provider';
+import { TOP_BAR_IMAGE_SCRIM } from '@/constants/chits-themes';
+import { THEME_IMAGES } from '@/constants/theme-images';
 import { SHARE_NOTE_DESIGN_WIDTH } from '@/services/share-note';
 
 /**
@@ -41,9 +44,11 @@ export function MenuIcon({ size = 24 }: { size?: number }) {
 
 /**
  * The theme's Share Note background — its gradient and decoration at full
- * strength — behind a screen header, reaching up under the status bar. Place
- * it as the header's first child; the header itself stays exactly as laid out.
- * Renders nothing under Default.
+ * strength — behind a screen header, reaching up under the status bar. A theme
+ * with a band picture (Game Changer) shows that instead, anchored to its top
+ * and tinted with the band's first color so the header ink stays readable.
+ * Place it as the header's first child; the header itself stays exactly as
+ * laid out. Renders nothing under Default.
  */
 export const TopBarBackground = memo(function TopBarBackground({ extendIntoStatusBar = true }: { extendIntoStatusBar?: boolean }) {
   const { topBar } = useTheme();
@@ -60,8 +65,13 @@ export const TopBarBackground = memo(function TopBarBackground({ extendIntoStatu
     onLayout={({ nativeEvent: { layout } }) => setSize((current) => current && current.width === layout.width && current.height === layout.height ? current : { width: layout.width, height: layout.height })}
     style={[styles.band, { top: extendIntoStatusBar ? -insets.top : 0, backgroundColor: colors[0] }]}
   >
-    {share.backgroundType === 'gradient' ? <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} /> : null}
-    {size ? <Decorations theme={share} u={u} canvas={{ width: SHARE_NOTE_DESIGN_WIDTH, height: size.height / u }} /> : null}
+    {topBar.image ? <>
+      <Image source={THEME_IMAGES[topBar.image]} contentFit="cover" contentPosition="top" style={StyleSheet.absoluteFill} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors[0], opacity: TOP_BAR_IMAGE_SCRIM }]} />
+    </> : <>
+      {share.backgroundType === 'gradient' ? <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} /> : null}
+      {size ? <Decorations theme={share} u={u} canvas={{ width: SHARE_NOTE_DESIGN_WIDTH, height: size.height / u }} /> : null}
+    </>}
   </View>;
 });
 

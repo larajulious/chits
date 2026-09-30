@@ -67,7 +67,7 @@ const ThemeSwatch = memo(function ThemeSwatch({ item, selected, onPress }: { ite
 export function ThemePicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
   const { tokens: theme } = useTheme();
   return <View accessibilityRole="radiogroup" accessibilityLabel="Theme" style={styles.collections}>
-    {SHARE_NOTE_COLLECTIONS.map((collection) => <View key={collection.id}>
+    {SHARE_NOTE_COLLECTIONS.filter((collection) => collection.shown).map((collection) => <View key={collection.id}>
       <Text accessibilityRole="header" style={[styles.collectionTitle, { color: theme.textSecondary }]}>{collection.name}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityLabel={`${collection.name} themes`} contentContainerStyle={styles.themeRow} style={styles.bleed}>
         {collection.themes.map((item) => <ThemeSwatch key={item.id} item={item} selected={item.id === value} onPress={() => onChange(item.id)} />)}

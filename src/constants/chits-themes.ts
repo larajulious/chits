@@ -12,6 +12,7 @@ import type { ShareNoteFontMetrics } from '../services/share-note';
 export const CHITS_THEME_IDS = [
   'default', 'faith', 'casual', 'corporate', 'love', 'friends', 'boss', 'stranger', 'motivation', 'calm', 'creative', 'cute', 'christmas', 'spooky', 'new-year', 'midnight',
   'boomers', 'gen-x', 'millennials', 'gen-z', 'gen-alpha',
+  'game-changer',
 ] as const;
 export type ChitsThemeIdentity = typeof CHITS_THEME_IDS[number];
 export const DEFAULT_THEME_IDENTITY: ChitsThemeIdentity = 'default';
@@ -23,8 +24,16 @@ export const DEFAULT_THEME_IDENTITY: ChitsThemeIdentity = 'default';
 export const THEME_COLLECTIONS = [
   { id: 'personalities', name: 'Personalities' },
   { id: 'generations', name: 'Generations' },
+  { id: 'limited-edition', name: 'Limited Edition' },
 ] as const;
 export type ThemeCollectionId = typeof THEME_COLLECTIONS[number]['id'];
+
+/**
+ * Collections kept out of both theme pickers for now. Their themes still
+ * exist, so anyone already wearing one keeps it (and a backup restores it);
+ * take an id out of here to offer the section again.
+ */
+export const HIDDEN_THEME_COLLECTIONS: ReadonlySet<ThemeCollectionId> = new Set(['limited-edition']);
 
 /** The one stored setting: just the identity, never the palette. */
 export const THEME_SETTING_KEY = 'app_theme';
@@ -56,6 +65,11 @@ export type AppPalette = {
 };
 
 export type ChatPattern = 'none' | 'dots' | 'soft-shapes' | 'confetti' | 'cross' | 'grain' | 'geometric';
+/**
+ * A picture a theme can wear in its header band. Only the id lives here (this
+ * file stays free of React Native); theme-images.ts maps it to the bundled file.
+ */
+export type ThemeImageId = 'game-changer';
 /** The face screen titles are set in; 'system' is the platform default. */
 export type HeadingFont = 'system' | 'serif' | 'mono' | 'rounded';
 
@@ -70,6 +84,8 @@ export type ChitsLook = {
   chatPattern: ChatPattern;
   /** Colors for the confetti/geometric chat patterns; omitted means the accent family. */
   patternColors?: string[];
+  /** A picture behind every screen header in place of the band's pattern; see TopBarStyle. */
+  bandImage?: ThemeImageId;
 };
 
 export type ChitsTheme = {
@@ -466,7 +482,6 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
       fontStyle: 'elegant', decorationStyle: 'dots', mark: 'quote', align: 'center',
     },
   },
-
   // ── Generations ──
   // Each era speaks through type, palette, texture and spacing only. The
   // brief's colors are kept wherever they meet the contrast rules; where one
@@ -578,6 +593,30 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
       fontStyle: 'playful', decorationStyle: 'geometric', mark: 'bar', align: 'left', confetti: ['#536DFE', '#00C8C8', '#FFB84D', '#FF70A6'],
     },
   },
+
+  // ── Limited Edition ──
+  // Themes with their own artwork, worn in the header band.
+  'game-changer': {
+    id: 'game-changer', category: 'limited-edition', name: 'Game Changer', description: 'Sunlit arches, navy and garden gold',
+    palette: {
+      light: {
+        background: '#F8F4EC', surface: '#FFFCF6', surfaceElevated: '#EFE8DA', textPrimary: '#18203A', textSecondary: '#454C60', textMuted: '#5A6072', borderSubtle: '#E3DACA',
+        accent: '#24366B', accentSoft: '#E3E8F4', accentStrong: '#1C2B57', accentText: '#FFFFFF', accentBorder: '#A7B4D6', danger: '#A8321F', success: '#3B6B2E',
+        bubble: '#24366B', bubbleText: '#FFFFFF', chatBackground: '#F5F0E6', cardPaper: '#FFFCF6', cardBase: '#FFFFFF',
+      },
+      dark: {
+        background: '#0F1422', surface: '#161C2D', surfaceElevated: '#20273B', textPrimary: '#F2EEE4', textSecondary: '#C3C7D3', textMuted: '#979DAE', borderSubtle: '#2A3148',
+        accent: '#E0B43A', accentSoft: '#2E2A1A', accentStrong: '#F0CB62', accentText: '#18203A', accentBorder: '#7A6428', danger: '#F28B82', success: '#79B38A',
+        bubble: '#24366B', bubbleText: '#F2EEE4', chatBackground: '#0F1422', cardPaper: '#161C2D', cardBase: '#161C2D',
+      },
+    },
+    look: { headingWeight: '800', cardShadowOpacity: 0.07, chatPattern: 'none', bandImage: 'game-changer' },
+    shareNote: {
+      id: 'game-changer', name: 'Game Changer', mood: 'Bold, sunny and self-made', backgroundType: 'gradient',
+      colors: { background: '#1E2A47', backgroundEnd: '#2F5A3A', surface: '#FFFCF6', textPrimary: '#18203A', textSecondary: '#5A6072', accent: '#B8861A', decoration: '#E0B43A' },
+      fontStyle: 'bold', decorationStyle: 'soft-shapes', mark: 'bar', align: 'left',
+    },
+  },
 };
 
 export const CHITS_THEME_LIST: ChitsTheme[] = CHITS_THEME_IDS.map((id) => CHITS_THEMES[id]);
@@ -590,12 +629,12 @@ export const SHARE_NOTE_THEMES: ShareNoteTheme[] = [...CHITS_THEME_LIST.map((the
 
 /** Settings → Theme, grouped: Personalities first, then Generations. */
 export const CHITS_THEME_COLLECTIONS = THEME_COLLECTIONS.map((collection) => ({
-  ...collection, themes: CHITS_THEME_LIST.filter((theme) => theme.category === collection.id),
+  ...collection, shown: !HIDDEN_THEME_COLLECTIONS.has(collection.id), themes: CHITS_THEME_LIST.filter((theme) => theme.category === collection.id),
 }));
 
 /** Share Note → Theme, grouped the same way; sharing-only extras join Personalities. */
 export const SHARE_NOTE_COLLECTIONS = CHITS_THEME_COLLECTIONS.map((collection) => ({
-  id: collection.id, name: collection.name,
+  id: collection.id, name: collection.name, shown: collection.shown,
   themes: [...collection.themes.map((theme) => theme.shareNote), ...(collection.id === 'personalities' ? SHARE_NOTE_EXTRAS : [])],
 }));
 
@@ -616,7 +655,18 @@ export function shareNoteThemeForIdentity(identity: ChitsThemeIdentity): string 
  * `ink`/`inkMuted` are the header's text and icon colors on it (readable on
  * both gradient ends), and `dark` picks light status-bar icons.
  */
-export type TopBarStyle = { share: ShareNoteTheme; colors: [string, string]; ink: string; inkMuted: string; dark: boolean };
+export type TopBarStyle = {
+  share: ShareNoteTheme; colors: [string, string]; ink: string; inkMuted: string; dark: boolean;
+  /** A picture drawn instead of the pattern, under a scrim of the first gradient stop (see TOP_BAR_IMAGE_SCRIM). */
+  image: ThemeImageId | null;
+};
+
+/**
+ * How strongly a band picture is tinted with the band's first color. At 0.66
+ * even a pure-white patch of the picture comes out dark enough for white
+ * header text (tested against the band's own navy).
+ */
+export const TOP_BAR_IMAGE_SCRIM = 0.66;
 
 const channel = (hex: string, index: number) => parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16);
 function luminance(hex: string) {
@@ -642,5 +692,8 @@ export function topBarForIdentity(identity: ChitsThemeIdentity): TopBarStyle | n
     const candidate = mix(ink, stops[0], amount);
     if (readableOn(candidate, stops, 4.5)) { inkMuted = candidate; break; }
   }
-  return { share, colors: stops, ink, inkMuted, dark };
+  const image = CHITS_THEMES[identity].look.bandImage ?? null;
+  // Over a picture, a softened ink isn't guaranteed to read on its brightest
+  // patch; subtitles there use the full ink.
+  return { share, colors: stops, ink, inkMuted: image ? ink : inkMuted, dark, image };
 }

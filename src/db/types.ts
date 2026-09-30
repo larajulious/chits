@@ -110,7 +110,14 @@ export interface SpacePlacement {
 }
 // What a sticky draws. `text` is null while the note is hidden in Chat, so
 // neither the board nor a shared image can ever show it; `title` is a card's
-// own title, when it has one. `boardId` opens a card's details.
-export interface PinnedNote extends SpacePlacement { title: string | null; text: string | null; hidden: boolean; boardId: string | null; }
+// own title, when it has one. `boardId` is a card's board, or for a thought the board it was organized into. `media` is set
+// when the note leads with a photo or video (a print) or a recording (a cassette), not a sticky.
+export interface PinnedNote extends SpacePlacement { title: string | null; text: string | null; hidden: boolean; boardId: string | null; media: SpaceNoteMedia | null; }
+// A note's first photo, video or voice recording, and the words typed with it (null when it was sent alone).
+export interface SpaceNoteMedia { attachment: AttachmentLike & { type: 'photo' | 'video' | 'audio' }; messageId: string; caption: string | null; }
+// The whole of a stuck note, for the view sheet: where it lives and every
+// thought on it (empty while it's hidden in Chat).
+// `caption` is a thought's own words, without the "Photo"/"Video" stand-in `text` falls back to.
+export interface SpaceNoteDetail { context: string | null; thoughts: { messageId: string; text: string; caption: string | null }[]; }
 // A note that can be stuck on a space: a card or an unorganized thought.
 export interface SpaceCandidate { kind: SpaceNoteKind; id: string; title: string; context: string | null; hidden: boolean; updatedAt: number; }

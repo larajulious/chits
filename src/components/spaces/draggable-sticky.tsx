@@ -5,7 +5,7 @@ import Animated, { runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, 
 
 import { fromUnit, SPACE_LIST, STICKY_SIZE, stickyBounds, type SpaceId, type SpacePinStyle } from '@/constants/spaces';
 import type { PinnedNote } from '@/db/types';
-import { StickyPaper, stickyAccessibilityLabel } from './sticky-note';
+import { StickyPaper, stickyAccessibilityLabel, stickyShape } from './sticky-note';
 
 // Quick, settled lift — no wobble.
 const LIFT = { damping: 20, stiffness: 320, mass: 0.6 };
@@ -82,6 +82,7 @@ export const DraggableSticky = memo(function DraggableSticky({ note, order, seed
     zIndex: dragging.get() ? 1000 : order,
     transform: [{ translateX: x.get() }, { translateY: y.get() }, { scale: 1 + lift.get() * (reduceMotion ? 0 : 0.05) }],
   }));
+  const shape = stickyShape(note);
   // The deeper lifted shadow fades in over the resting one as the note comes up.
   const liftShadow = useAnimatedStyle(() => ({ opacity: lift.get(), transform: [{ rotate: `${note.rotation}deg` }] }));
 
@@ -90,12 +91,16 @@ export const DraggableSticky = memo(function DraggableSticky({ note, order, seed
       accessible
       accessibilityRole="button"
       accessibilityLabel={stickyAccessibilityLabel(note)}
-      accessibilityHint="Opens the note. Options are in the actions menu."
+      accessibilityHint="Shows the whole note. Options are in the actions menu."
       accessibilityActions={[{ name: 'activate' }, { name: 'longpress', label: 'Options' }]}
       onAccessibilityAction={({ nativeEvent }) => (nativeEvent.actionName === 'longpress' ? onOptions(note.id) : onOpen(note.id))}
-      style={[styles.sticky, position]}
+      // Only as tall as the note itself, so a cassette's empty strip below it isn't a touch target.
+      style={[styles.sticky, { height: shape.height }, position]}
     >
-      <Animated.View pointerEvents="none" style={[styles.shadow, liftShadow]} />
+      {/* Turned about the full footprint's center, like the note, with the shadow only where the note is. */}
+      <Animated.View pointerEvents="none" style={[styles.footprint, liftShadow]}>
+        <View style={[styles.shadow, { height: shape.height, borderRadius: shape.borderRadius }]} />
+      </Animated.View>
       <StickyPaper note={note} space={spaceFor(pinStyle)} seed={seed} />
     </Animated.View>
   </GestureDetector>;
@@ -112,5 +117,6 @@ export function RaisedSticky({ note, seed, board, pinStyle }: Pick<Props, 'note'
 
 const styles = StyleSheet.create({
   sticky: { position: 'absolute', left: 0, top: 0, width: STICKY_SIZE.width, height: STICKY_SIZE.height },
-  shadow: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: 2, boxShadow: DEEP_SHADOW },
+  footprint: { position: 'absolute', left: 0, top: 0, width: STICKY_SIZE.width, height: STICKY_SIZE.height },
+  shadow: { width: STICKY_SIZE.width, boxShadow: DEEP_SHADOW },
 });

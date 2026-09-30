@@ -248,6 +248,125 @@ function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCa
   </Modal>;
 }
 
+/**
+ * Merge — several selected thoughts become one card. Same sheet as Add to
+ * board (handle, header with close, board rows), in two steps: pick a board,
+ * then its column and an optional title. Back returns to the board list.
+ */
+function MergeSheet({ visible, boards, recentBoardIds, count, busy, error, onClose, onLoadColumns, onMerge }: {
+  visible: boolean;
+  boards: BoardSummary[];
+  recentBoardIds: string[];
+  count: number;
+  busy: boolean;
+  error: string | null;
+  onClose: () => void;
+  onLoadColumns: (board: BoardSummary) => Promise<ColumnOption[]>;
+  onMerge: (board: BoardSummary, columnId: string, title: string) => void;
+}) {
+  const { tokens: theme } = useTheme();
+  const [board, setBoard] = useState<BoardSummary | null>(null);
+  const [columns, setColumns] = useState<ColumnOption[] | null>(null);
+  const [columnId, setColumnId] = useState<string | null>(null);
+  const [title, setTitle] = useState('');
+  const [search, setSearch] = useState('');
+  const [prevVisible, setPrevVisible] = useState(visible);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
+    if (visible) { setBoard(null); setColumns(null); setColumnId(null); setTitle(''); setSearch(''); }
+  }
+
+  const close = () => { if (!busy) onClose(); };
+  const heading = `Merge ${pluralize(count, 'thought')}`;
+  const query = search.trim();
+  const filtered = query ? boards.filter((item) => item.name.toLowerCase().includes(query.toLowerCase())) : boards;
+  const recentBoards = query ? [] : recentBoardIds.map((id) => boards.find((item) => item.id === id)).filter((item): item is BoardSummary => Boolean(item));
+  const pickBoard = (next: BoardSummary) => {
+    setBoard(next); setColumns(null); setColumnId(null);
+    void onLoadColumns(next).then((loaded) => { setColumns(loaded); setColumnId(loaded[0]?.id ?? null); }, () => setColumns([]));
+  };
+  const canMerge = Boolean(board && columnId) && !busy;
+
+  return <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
+    <KeyboardAvoidingView style={sheetStyles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Close" style={StyleSheet.absoluteFill} onPress={close} />
+      <SafeAreaView edges={['bottom']} accessibilityViewIsModal style={[sheetStyles.sheetSafeArea, { backgroundColor: theme.surface }]}>
+        <GlassSurface style={[sheetStyles.sheet, { borderColor: theme.borderSubtle }]}>
+          <View style={[sheetStyles.handle, { backgroundColor: theme.borderSubtle }]} />
+          <View style={sheetStyles.headerRow}>
+            {board ? <IconButton label="Back to boards" onPress={() => setBoard(null)}><Text style={[sheetStyles.backIcon, { color: theme.textPrimary }]}>‹</Text></IconButton> : null}
+            <View style={sheetStyles.headerCopy}>
+              <Text accessibilityRole="header" style={[sheetStyles.title, { color: theme.textPrimary }]}>{heading}</Text>
+              <Text style={[sheetStyles.subtitle, { color: theme.textSecondary }]}>{board ? `Into ${board.name} · choose a column and a title.` : 'They’ll become one card, in the order you picked them. Choose a board.'}</Text>
+            </View>
+            <IconButton label="Close" onPress={close}><Ionicons accessible={false} name="close" size={22} color={theme.textPrimary} /></IconButton>
+          </View>
+
+          {!board ? (boards.length === 0 ? (
+            <View style={sheetStyles.emptyWrap}>
+              <View style={[sheetStyles.emptyMark, { backgroundColor: theme.accentSoft }]}><Ionicons accessible={false} name="folder-outline" size={28} color={theme.accentStrong} /></View>
+              <Text style={[sheetStyles.emptyTitle, { color: theme.textPrimary }]}>No boards yet</Text>
+              <Text style={[sheetStyles.emptyDescription, { color: theme.textSecondary }]}>Create a board with Add to board first, then merge into it.</Text>
+              <Pressable accessibilityRole="button" onPress={close} style={sheetStyles.emptyCancel}>
+                <Text style={[sheetStyles.secondaryText, { color: theme.textSecondary }]}>Cancel</Text>
+              </Pressable>
+            </View>
+          ) : <>
+            <View style={sheetStyles.searchRow}>
+              <Ionicons accessible={false} name="search" size={17} color={theme.textMuted} style={sheetStyles.searchIcon} />
+              <TextInput value={search} onChangeText={setSearch} placeholder="Search boards…" placeholderTextColor={theme.textMuted} style={[sheetStyles.searchInput, { color: theme.textPrimary }]} returnKeyType="search" />
+              {search ? <IconButton label="Clear search" onPress={() => setSearch('')}><Ionicons accessible={false} name="close-circle" size={17} color={theme.textMuted} /></IconButton> : null}
+            </View>
+            <View style={sheetStyles.listWrap}>
+              {query && filtered.length === 0 ? (
+                <View style={sheetStyles.noResults}><Text style={[sheetStyles.noResultsText, { color: theme.textSecondary }]}>No boards found for “{query}”</Text></View>
+              ) : (
+                <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={sheetStyles.listContent}>
+                  {recentBoards.length > 0 ? <>
+                    <Text style={[sheetStyles.sectionLabel, { color: theme.textMuted }]}>RECENT</Text>
+                    {recentBoards.map((item) => <BoardRow key={`recent-${item.id}`} board={item} disabled={busy} onPress={() => pickBoard(item)} />)}
+                    <Text style={[sheetStyles.sectionLabel, { color: theme.textMuted }]}>ALL BOARDS</Text>
+                  </> : null}
+                  {filtered.map((item) => <BoardRow key={item.id} board={item} disabled={busy} onPress={() => pickBoard(item)} />)}
+                </ScrollView>
+              )}
+            </View>
+          </>) : (
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={mergeStyles.body}>
+              <Text style={[sheetStyles.label, { color: theme.textSecondary }]}>Column</Text>
+              {columns === null ? <View style={mergeStyles.loading}><ActivityIndicator color={theme.accent} /></View>
+                : columns.length === 0 ? <Text style={[mergeStyles.note, { color: theme.textSecondary }]}>{board.name} doesn’t have a column yet. Add one from the board, then merge.</Text>
+                : <View accessibilityRole="radiogroup" accessibilityLabel="Column" style={mergeStyles.chips}>
+                  {columns.map((column) => {
+                    const selected = column.id === columnId;
+                    return <Pressable
+                      key={column.id}
+                      accessibilityRole="radio"
+                      accessibilityLabel={column.name}
+                      accessibilityState={{ selected }}
+                      onPress={() => setColumnId(column.id)}
+                      // Same border width either way, so choosing a column never shifts the row.
+                      style={({ pressed }) => [mergeStyles.chip, { borderColor: selected ? theme.accent : theme.borderSubtle, backgroundColor: selected ? theme.accentSoft : 'transparent' }, pressed && sheetStyles.pressed]}>
+                      {selected ? <Ionicons accessible={false} name="checkmark" size={15} color={theme.accentStrong} /> : null}
+                      <Text numberOfLines={1} style={[mergeStyles.chipText, { color: selected ? theme.accentStrong : theme.textPrimary }]}>{column.name}</Text>
+                    </Pressable>;
+                  })}
+                </View>}
+
+              <Text style={[sheetStyles.label, mergeStyles.titleLabel, { color: theme.textSecondary }]}>Card title</Text>
+              <TextInput value={title} onChangeText={setTitle} placeholder="Optional — e.g. Trip ideas" placeholderTextColor={theme.textMuted} selectionColor={theme.accent} maxLength={120} returnKeyType="done" onSubmitEditing={() => { if (canMerge && board && columnId) onMerge(board, columnId, title); }} style={[sheetStyles.nameInput, { borderColor: theme.borderSubtle, color: theme.textPrimary, backgroundColor: theme.background }]} />
+              {error ? <Text accessibilityRole="alert" style={[sheetStyles.error, mergeStyles.error, { color: theme.danger }]}>{error}</Text> : null}
+              <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canMerge }} disabled={!canMerge} onPress={() => { if (board && columnId) onMerge(board, columnId, title); }} style={[sheetStyles.primaryButton, mergeStyles.submit, { backgroundColor: theme.accent }, !canMerge && sheetStyles.disabled]}>
+                <Text style={[sheetStyles.primaryButtonText, { color: theme.accentText }]}>{busy ? 'Merging…' : 'Create merged card'}</Text>
+              </Pressable>
+            </ScrollView>
+          )}
+        </GlassSurface>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
+  </Modal>;
+}
+
 function BoardRow({ board, disabled, onPress }: { board: BoardSummary; disabled: boolean; onPress: () => void }) {
   const { tokens: theme } = useTheme();
   return <Pressable accessibilityRole="button" accessibilityLabel={`${board.name}. ${pluralize(board.cardCount, 'note')}.`} disabled={disabled} onPress={onPress} style={({ pressed }) => [sheetStyles.boardRow, { borderBottomColor: theme.borderSubtle }, pressed && sheetStyles.pressed]}>
@@ -291,10 +410,6 @@ export default function UnorganizedScreen() {
   const [sheetColumns, setSheetColumns] = useState<ColumnOption[] | null>(null);
   const [sheetColumnsLoading, setSheetColumnsLoading] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
-  const [mergeBoard, setMergeBoard] = useState<Board | null>(null);
-  const [mergeColumns, setMergeColumns] = useState<{ id: string; name: string }[]>([]);
-  const [mergeColumnId, setMergeColumnId] = useState<string | null>(null);
-  const [mergeTitle, setMergeTitle] = useState('');
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast>(null);
@@ -400,14 +515,9 @@ export default function UnorganizedScreen() {
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Chits could not add those thoughts to this card.'); }
     finally { setWorking(false); }
   };
-  const chooseMergeBoard = async (board: Board) => {
-    const columns = await createBoardRepository(database).listColumns(board.id);
-    setMergeBoard(board); setMergeColumns(columns); setMergeColumnId(columns[0]?.id ?? null);
-  };
-  const merge = async () => {
-    if (!mergeBoard || !mergeColumnId) return;
+  const merge = async (board: Board, columnId: string, title: string) => {
     setWorking(true); setError(null);
-    try { const cardId = await createBoardRepository(database).mergeMessages({ boardId: mergeBoard.id, columnId: mergeColumnId, messageIds: selected, title: mergeTitle }); setMergeOpen(false); setSelected([]); await load(); router.replace(`/card/${cardId}`); }
+    try { const cardId = await createBoardRepository(database).mergeMessages({ boardId: board.id, columnId, messageIds: selected, title }); setMergeOpen(false); setSelected([]); await load(); router.replace(`/card/${cardId}`); }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Chits could not merge those thoughts.'); }
     finally { setWorking(false); }
   };
@@ -442,7 +552,7 @@ export default function UnorganizedScreen() {
         <Animated.View entering={SlideInDown.springify().damping(20).mass(0.6)} exiting={SlideOutDown.duration(160)} style={[styles.actionBar, { borderTopColor: theme.borderSubtle, backgroundColor: theme.surface }]}>
           <Text style={styles.selectedCount}>{selected.length} selected</Text>
           <View style={styles.actionButtons}>
-            {!addToCard ? <Pressable disabled={selected.length < 2 || working} accessibilityRole="button" onPress={() => { setMergeBoard(null); setMergeColumnId(null); setMergeTitle(''); setMergeOpen(true); }} style={styles.textAction}><Text style={[styles.mergeText, (selected.length < 2 || working) && styles.disabledText]}>Merge</Text></Pressable> : null}
+            {!addToCard ? <Pressable disabled={selected.length < 2 || working} accessibilityRole="button" onPress={() => { setError(null); setMergeOpen(true); }} style={styles.textAction}><Text style={[styles.mergeText, (selected.length < 2 || working) && styles.disabledText]}>Merge</Text></Pressable> : null}
             <Pressable disabled={working} onPress={() => void archive()} style={styles.textAction}><Text style={[styles.archiveText, working && styles.disabledText]}>Archive</Text></Pressable>
             <Pressable disabled={working} onPress={() => { if (addToCard) void addToExistingCard(); else openAddToBoardSheet(); }} style={[styles.primaryPill, working && styles.disabled]}>
               <Text style={styles.primaryPillText}>{addToCard ? 'Add to card' : 'Add to board'}</Text>
@@ -478,7 +588,17 @@ export default function UnorganizedScreen() {
       onCreateColumn={onCreateColumn}
     />
 
-    <Modal visible={mergeOpen} transparent animationType="slide" onRequestClose={() => !working && setMergeOpen(false)}><View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => !working && setMergeOpen(false)} /><View style={styles.modal}><Text style={styles.modalTitle}>Merge {selected.length} related thoughts</Text>{!mergeBoard ? <><Text style={styles.modalCopy}>Choose a board.</Text>{boards.map((board) => <Pressable key={board.id} onPress={() => void chooseMergeBoard(board)} style={styles.board}><View style={[styles.boardDot, { backgroundColor: board.accent ?? theme.accent }]} /><Text style={styles.boardName}>{board.name}</Text><Text style={styles.arrow}>›</Text></Pressable>)}</> : <><Text style={styles.modalCopy}>{mergeBoard.name} · choose a column and an optional title.</Text><View style={styles.columnChoices}>{mergeColumns.map((column) => <Pressable key={column.id} onPress={() => setMergeColumnId(column.id)} style={[styles.columnChoice, mergeColumnId === column.id && styles.columnChoiceSelected]}><Text style={styles.columnChoiceText}>{column.name}</Text></Pressable>)}</View><TextInput value={mergeTitle} onChangeText={setMergeTitle} placeholder="Title (optional)" placeholderTextColor={theme.textMuted} style={styles.titleInput} /><Pressable disabled={!mergeColumnId || working} onPress={() => void merge()} style={[styles.createButton, (!mergeColumnId || working) && styles.disabled]}><Text style={styles.addText}>{working ? 'Merging…' : 'Create merged card'}</Text></Pressable></>}</View></View></Modal>
+    <MergeSheet
+      visible={mergeOpen}
+      boards={boards}
+      recentBoardIds={recentBoardIds}
+      count={selected.length}
+      busy={working}
+      error={mergeOpen ? error : null}
+      onClose={() => setMergeOpen(false)}
+      onLoadColumns={(board) => createBoardRepository(database).listColumns(board.id)}
+      onMerge={(board, columnId, title) => void merge(board, columnId, title)}
+    />
   </Screen>;
 }
 
@@ -512,21 +632,18 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   toast: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
   toastText: { fontSize: 14, fontWeight: '600' },
   toastUndo: { fontSize: 14, fontWeight: '800', textDecorationLine: 'underline' },
-  modalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: 'rgba(24,24,23,0.3)' },
-  modal: { width: '100%', maxWidth: 420, padding: spacing.lg, borderRadius: 18, backgroundColor: tokens.surface },
-  modalTitle: { color: tokens.textPrimary, fontSize: 19, fontWeight: '700', marginBottom: spacing.md },
-  modalCopy: { color: tokens.textSecondary, lineHeight: 20, marginBottom: spacing.md },
-  board: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: tokens.borderSubtle },
-  boardDot: { width: 12, height: 12, borderRadius: 6 },
-  boardName: { flex: 1, color: tokens.textPrimary, fontSize: 16 },
-  arrow: { color: tokens.textMuted, fontSize: 25 },
-  createButton: { alignSelf: 'flex-start', backgroundColor: tokens.accent, borderRadius: 9, paddingHorizontal: spacing.md, minHeight: 42, justifyContent: 'center' },
-  addText: { color: tokens.accentText, fontWeight: '700', fontSize: 13 },
-  columnChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  columnChoice: { paddingHorizontal: spacing.sm, minHeight: 36, justifyContent: 'center', borderRadius: 9, backgroundColor: tokens.surfaceElevated },
-  columnChoiceSelected: { backgroundColor: tokens.surfaceElevated, borderWidth: 1, borderColor: tokens.accent },
-  columnChoiceText: { color: tokens.textPrimary, fontSize: 13, fontWeight: '600' },
-  titleInput: { minHeight: 44, borderWidth: 1, borderColor: tokens.borderSubtle, borderRadius: 9, paddingHorizontal: spacing.sm, color: tokens.textPrimary },
+});
+
+const mergeStyles = StyleSheet.create({
+  body: { paddingTop: spacing.xs, paddingBottom: spacing.md },
+  loading: { minHeight: 44, alignItems: 'flex-start', justifyContent: 'center' },
+  note: { fontSize: 14, lineHeight: 20 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  chip: { minHeight: 40, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, borderRadius: 20, borderWidth: 1.5 },
+  chipText: { flexShrink: 1, fontSize: 14, fontWeight: '600' },
+  titleLabel: { marginTop: spacing.md },
+  error: { marginTop: spacing.xs },
+  submit: { marginTop: spacing.md },
 });
 
 const sheetStyles = StyleSheet.create({
