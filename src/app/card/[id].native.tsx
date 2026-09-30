@@ -399,6 +399,27 @@ export default function CardDetailScreen() {
     }
   };
 
+  const confirmSpaceAction = () => {
+    if (!spaceAction) return;
+    const action = spaceAction;
+    const removing = action.icon === 'close-circle-outline';
+    confirm({
+      type: 'default',
+      icon: action.icon,
+      title: `${action.label}?`,
+      message: removing
+        ? 'This removes the sticky note from its space. Your card stays on its board.'
+        : 'This adds a sticky note you can move around on the space. Your card stays on its board.',
+      confirmText: action.label,
+      cancelText: 'Cancel',
+      accentColor: detail?.boardAccent ?? null,
+      onConfirm: async () => {
+        try { setToast(await action.run()); }
+        catch { setToast('That couldn’t be saved. Please try again.'); }
+      },
+    });
+  };
+
   const archive = () => confirm({
     type: 'default',
     icon: 'archive-outline',
@@ -606,7 +627,7 @@ export default function CardDetailScreen() {
             <View style={styles.actionDivider} />
           </> : null}
           {spaceAction ? <>
-            <Pressable accessibilityRole="button" onPress={() => void spaceAction.run().then(setToast, () => setToast('That couldn’t be saved. Please try again.'))} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
+            <Pressable accessibilityRole="button" onPress={confirmSpaceAction} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
               <Ionicons accessible={false} name={spaceAction.icon} size={18} color={theme.textSecondary} />
               <View style={styles.flexCopy}><Text style={styles.actionTitle}>{spaceAction.label}</Text><Text style={styles.actionCopy}>{spaceAction.icon === 'magnet-outline' ? 'Put this card on a space as a sticky note you can move around.' : 'Take this card’s sticky note off its space.'}</Text></View>
             </Pressable>
