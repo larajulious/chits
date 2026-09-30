@@ -33,6 +33,7 @@ import { shareNoteHref } from '@/services/share-note-source';
 import { resolveBoardIcon, type BoardIconName } from '@/constants/board-appearance';
 import { radii, spacing } from '@/constants/theme';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
+import { GettingStartedCard } from '@/features/onboarding/components/checklist-card';
 import type { Board, CardListItem, MessageType } from '@/db/types';
 import { removeCardAttachmentFile } from '@/services/card-attachment-storage';
 import { spaceNoteAction } from '@/components/spaces/space-note-action';
@@ -482,6 +483,8 @@ export default function BoardsScreen() {
           </IconButton>
         )}
       />
+
+      <GettingStartedCard onHome />
 
       {!ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : (
       <View style={styles.flex}>
