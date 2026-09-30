@@ -529,8 +529,14 @@ export default function CardDetailScreen() {
         <View style={styles.sectionHeader}><Text accessibilityRole="header" style={styles.sectionTitle}>DETAILS</Text></View>
         <View style={styles.detailsCard}>
           <View style={styles.detailGroup}>
-            <View style={styles.detailRow}><Text style={styles.detailLabel}>Board</Text><Text style={styles.detailValue}>{detail.boardName}</Text></View>
-            <View style={styles.detailRow}><Text style={styles.detailLabel}>Column</Text><Text style={styles.detailValue}>{detail.columnName}</Text></View>
+            <Pressable accessibilityRole="link" accessibilityLabel={`Open board ${detail.boardName}`} onPress={() => router.push({ pathname: '/board/[id]', params: { id: detail.boardId } })} style={({ pressed }) => [styles.detailRow, styles.detailLinkRow, pressed && styles.pressed]}>
+              <Text style={styles.detailLabel}>Board</Text><Text style={[styles.detailValue, styles.detailLinkValue]}>{detail.boardName}</Text>
+              <Ionicons accessible={false} name="chevron-forward" size={16} color={theme.textMuted} />
+            </Pressable>
+            <Pressable accessibilityRole="link" accessibilityLabel={`Open column ${detail.columnName} in ${detail.boardName}`} onPress={() => router.push({ pathname: '/board/[id]', params: { id: detail.boardId, highlightColumnId: detail.columnId } })} style={({ pressed }) => [styles.detailRow, styles.detailLinkRow, pressed && styles.pressed]}>
+              <Text style={styles.detailLabel}>Column</Text><Text style={[styles.detailValue, styles.detailLinkValue]}>{detail.columnName}</Text>
+              <Ionicons accessible={false} name="chevron-forward" size={16} color={theme.textMuted} />
+            </Pressable>
           </View>
           <View style={styles.detailDivider} />
           <View style={styles.detailGroup}>
@@ -746,6 +752,8 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   detailRow: { minHeight: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
   detailLabel: { width: 72, color: tokens.textMuted, fontSize: 12, fontWeight: '600' },
   detailValue: { flex: 1, color: tokens.textSecondary, fontSize: 14, lineHeight: 20 },
+  detailLinkRow: { minHeight: 44 },
+  detailLinkValue: { color: tokens.accentStrong },
   // Deliberately quieter than the card's own content: no icon chips, smaller
   // type, a plain bordered list rather than a prominent surfaced card.
   cardActions: { marginTop: spacing.sm, overflow: 'hidden', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: tokens.borderSubtle },

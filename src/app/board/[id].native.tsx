@@ -748,6 +748,7 @@ export default function BoardScreen() {
         scrollEventThrottle={48}
         onMomentumScrollEnd={settleColumn}
         getItemLayout={(_, index) => ({ length: columnInterval, offset: columnInterval * index, index })}
+        initialScrollIndex={columnIndex}
         initialNumToRender={carouselItems.length}
         windowSize={Math.max(21, carouselItems.length * 2)}
         contentContainerStyle={[styles.boardTrack, { paddingHorizontal: carouselInset, paddingBottom: reservedNavigatorHeight ? spacing.sm : spacing.md }]}
