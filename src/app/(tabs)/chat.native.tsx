@@ -231,7 +231,7 @@ function QuickFilterRow({ pinned, onSelect }: { pinned: Message[]; onSelect: (me
 export default function ChatScreen() {
   const database = useSQLiteContext();
   const repository = useMemo(() => createMessageRepository(database), [database]);
-  const { messageId } = useLocalSearchParams<{ messageId?: string }>();
+  const { messageId, prefill } = useLocalSearchParams<{ messageId?: string; prefill?: string }>();
   const router = useRouter();
   const { tokens: theme, topBar } = useTheme();
   const { confirm } = useAppDialog();
@@ -462,7 +462,7 @@ export default function ChatScreen() {
   useEffect(() => {
     let active = true;
     void database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', 'chat_draft_text')
-      .then((row) => { if (active && row?.value) setDraft(row.value); })
+      .then((row) => { if (active && row?.value) setDraft((current) => current.trim() ? current : row.value); })
       .catch(() => undefined);
     return () => { active = false; };
   }, [database]);
@@ -472,6 +472,16 @@ export default function ChatScreen() {
     }, 400);
     return () => clearTimeout(timer);
   }, [database, draft]);
+  // Onboarding's starter chips arrive as ?prefill=…: fill an empty composer (never
+  // replace typed text), then clear the param so the same chip works again.
+  useEffect(() => {
+    if (!prefill) return;
+    const frame = requestAnimationFrame(() => {
+      setDraft((current) => (current.trim() ? current : prefill));
+      router.setParams({ prefill: undefined });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [prefill, router]);
 
   useEffect(() => () => { const pending = attachmentDraftRef.current; if (pending) void pending.remove().catch(() => undefined); }, []);
   useEffect(() => () => {
