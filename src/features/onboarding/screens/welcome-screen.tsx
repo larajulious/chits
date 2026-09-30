@@ -28,13 +28,16 @@ export default function OnboardingWelcomeScreen() {
   // Set once the person picks an action. Leaving any other way (back gesture,
   // hardware back) counts as Skip, so an unanswered tour never lingers.
   const chose = useRef(false);
+  const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { void readTour(database).then((tour) => setMode(tour?.mode ?? null)).catch(() => undefined); }, [database]);
   useFocusEffect(useCallback(() => {
+    if (leaveTimer.current) clearTimeout(leaveTimer.current);
     chose.current = false;
-    return () => { if (!chose.current) void endTour(database).catch(() => undefined); };
+    return () => { if (!chose.current) leaveTimer.current = setTimeout(() => { void endTour(database).catch(() => undefined); }, 0); };
   }, [database]));
 
   const start = async () => {
+    if (chose.current) return;
     chose.current = true;
     try {
       // Opened with no tour running (e.g. from a link): it can only be a replay.
@@ -44,13 +47,14 @@ export default function OnboardingWelcomeScreen() {
     router.navigate('/chat');
   };
   const skip = async () => {
+    if (chose.current) return;
     chose.current = true;
     await endTour(database).catch(() => undefined);
     router.navigate('/chat');
   };
   // The existing Backup & Restore screen, unchanged. Coming back without
   // restoring returns here; a restore remounts the app with the restored data.
-  const restore = () => { chose.current = true; router.push('/backup'); };
+  const restore = () => { if (chose.current) return; chose.current = true; router.push('/backup'); };
 
   return (
     <Screen style={{ backgroundColor: theme.background }}>
