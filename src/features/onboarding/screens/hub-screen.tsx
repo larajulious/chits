@@ -1,54 +1,55 @@
-import { useFocusEffect, useRouter } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
-import { BackHeader, ListRow, Screen } from '@/components/ui/primitives';
-import { layout, spacing } from '@/constants/theme';
+import { BackHeader, Screen } from '@/components/ui/primitives';
+import { headingFontFamily, layout, radii, spacing } from '@/constants/theme';
 import { GettingStartedCard } from '../components/checklist-card';
 import { ot } from '../strings';
-import { ONBOARDING_KEYS, readOnboardingValue, resetOnboarding, writeOnboardingValue } from '../storage';
 import { endTour, startTour } from '../tour';
 
 export default function OnboardingHubScreen() {
   const database = useSQLiteContext();
   const router = useRouter();
-  const { confirm } = useAppDialog();
-  const { tokens: theme } = useTheme();
-  const [onHome, setOnHome] = useState(false);
-  useFocusEffect(useCallback(() => { void readOnboardingValue(database, ONBOARDING_KEYS.checklistHome).then((value) => setOnHome(value === 'shown')); }, [database]));
-  const replay = async () => { await endTour(database); await startTour(database, 'replay'); router.push('/onboarding/welcome'); };
-  const showHome = async () => { await writeOnboardingValue(database, ONBOARDING_KEYS.checklistHome, 'shown'); setOnHome(true); };
-  const reset = () => confirm({
-    title: ot('hub.reset.confirmTitle'), message: ot('hub.reset.confirmMessage'), icon: 'refresh-outline',
-    confirmText: ot('hub.reset.confirm'), cancelText: ot('hub.reset.cancel'),
-    onConfirm: async () => {
-      await resetOnboarding(database);
-      // A later ordinary launch must not mistake this deliberate reset for a fresh install.
-      await writeOnboardingValue(database, ONBOARDING_KEYS.version, '1');
-      await writeOnboardingValue(database, ONBOARDING_KEYS.firstRun, 'existing-user');
-      setOnHome(false);
-    },
-  });
+  const { tokens: theme, look } = useTheme();
+  const opening = useRef(false);
+  const [error, setError] = useState(false);
+  const replay = async () => {
+    if (opening.current) return;
+    opening.current = true;
+    setError(false);
+    try { await endTour(database); await startTour(database, 'replay'); router.push('/onboarding/welcome'); }
+    catch { setError(true); }
+    finally { opening.current = false; }
+  };
   return <Screen>
-    <BackHeader title={ot('hub.title')} onBack={() => router.back()} />
+    <BackHeader title={ot('hub.title')} onBack={() => router.canGoBack() ? router.back() : router.replace('/')} />
     <ScrollView contentContainerStyle={styles.content}>
-      <Text style={[styles.intro, { color: theme.textSecondary }]}>{ot('hub.intro')}</Text>
-      <View style={[styles.group, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
-        <ListRow title={ot('hub.replay')} detail={ot('hub.replay.detail')} onPress={() => void replay()} />
+      <View style={styles.section}>
+        <Text accessibilityRole="header" style={[styles.sectionTitle, { color: theme.textPrimary, fontWeight: look.headingWeight, fontFamily: headingFontFamily(look.headingFont) }]}>{ot('hub.tour.title')}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={ot('hub.replay')} accessibilityHint={ot('hub.tour.description')} onPress={() => void replay()} style={({ pressed }) => [styles.tour, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.pressed]}>
+          <View style={[styles.tourIcon, { backgroundColor: theme.accentSoft }]}><Ionicons accessible={false} name="play-outline" size={23} color={theme.accentStrong} /></View>
+          <View style={styles.copy}>
+            <Text style={[styles.actionTitle, { color: theme.textPrimary }]}>{ot('hub.replay')}</Text>
+            <Text style={[styles.description, { color: theme.textSecondary }]}>{ot('hub.tour.description')}</Text>
+          </View>
+          <Ionicons accessible={false} name="chevron-forward" size={18} color={theme.textMuted} />
+        </Pressable>
+        {error ? <Text accessibilityRole="alert" style={[styles.description, { color: theme.danger }]}>{ot('hub.tour.error')}</Text> : null}
       </View>
       <GettingStartedCard />
-      <View style={[styles.group, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
-        <ListRow title={onHome ? ot('hub.shownOnHome') : ot('hub.showOnHome')} detail={ot('hub.showOnHome.detail')} onPress={onHome ? undefined : () => void showHome()} />
-        <ListRow title={ot('hub.reset')} detail={ot('hub.reset.detail')} onPress={reset} />
-      </View>
     </ScrollView>
   </Screen>;
 }
 
 const styles = StyleSheet.create({
-  content: { width: '100%', maxWidth: layout.maxContentWidth, alignSelf: 'center', padding: spacing.md, paddingBottom: spacing.xl, gap: spacing.md },
-  intro: { fontSize: 15, lineHeight: 22 }, group: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, paddingHorizontal: spacing.md },
+  content: { width: '100%', maxWidth: layout.maxContentWidth, alignSelf: 'center', padding: spacing.lg, paddingBottom: spacing.xl, gap: spacing.xl },
+  section: { gap: spacing.sm }, sectionTitle: { fontSize: 18, fontWeight: '600' },
+  tour: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.compactCard, minHeight: 88 },
+  tourIcon: { width: 44, height: 44, borderRadius: radii.control, justifyContent: 'center', alignItems: 'center' },
+  copy: { flex: 1, minWidth: 0 }, actionTitle: { fontSize: 16, fontWeight: '600' }, description: { fontSize: 13, lineHeight: 19, marginTop: spacing.xxs },
+  pressed: { opacity: 0.65 },
 });

@@ -87,7 +87,7 @@ test('drawer, real Chat and home link to onboarding without replacing existing f
   assert.match(home, /<GettingStartedCard onHome \/>/);
   assert.match(chat, /prefill\?: string/);
   assert.match(hub, /startTour\(database, 'replay'\)/);
-  assert.match(hub, /resetOnboarding\(database\)/);
+  assert.doesNotMatch(hub, /resetOnboarding|hub\.reset/);
   assert.match(read('src/features/onboarding/onboarding-layer.native.tsx'), /pathname: '\/unorganized'/);
   assert.match(read('src/features/onboarding/onboarding-layer.native.tsx'), /card_messages cm INNER JOIN cards/);
 });

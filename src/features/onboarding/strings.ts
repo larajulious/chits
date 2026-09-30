@@ -76,6 +76,13 @@ const strings = {
   'checklist.item.space.hint': 'Stick a note on your Fridge, Desk, Cork board or Wall',
 
   'hub.title': 'Getting started',
+  'hub.tour.title': 'Welcome tour',
+  'hub.tour.description': 'See how a chat note becomes a card on a board.',
+  'hub.tour.error': 'The tour couldn’t open. Please try again.',
+  'hub.checklist.title': 'Your progress',
+  'hub.checklist.showOnNotes': 'Show checklist on Notes',
+  'hub.checklist.visibleOnNotes': 'This checklist also appears on Notes.',
+  'hub.checklist.saveError': 'The checklist couldn’t be shown on Notes. Please try again.',
   'hub.back': 'Go back',
   'hub.intro': 'A quick tour of Chits, and a few things worth trying.',
   'hub.replay': 'Replay the welcome tour',

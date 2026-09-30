@@ -25,7 +25,7 @@ The exact diff of these existing files from the pre-onboarding baseline follows 
 
 ## What the tour does
 
-Fresh installs with no prior note, board, or non-onboarding setting see Welcome once. Existing installs are marked as existing users and do not get an automatic tour. Welcome opens the real Chat or existing Backup & Restore screen. Starter chips fill the real composer; sending remains the user's action. The tour observes the saved message, shows a short confirmation, then uses Chat's existing message focus/highlight and a themed guide. Try it opens the existing Add to Board flow with that note selected. Its existing board route highlights the new card. Quick setup creates only the boards the user selects, with Chits' existing default Notes column, and reuses matching board names. The checklist reads real persisted state and latches reminder/Space achievements after those records are removed. The drawer hub offers replay, the checklist, and Reset tips. Replay never creates or moves data on its own.
+Fresh installs with no prior note, board, or non-onboarding setting see Welcome once. Existing installs are marked as existing users and do not get an automatic tour. Welcome opens the real Chat or existing Backup & Restore screen. Starter chips fill the real composer; sending remains the user's action. The tour observes the saved message, shows a short confirmation, then uses Chat's existing message focus/highlight and a themed guide. Try it opens the existing Add to Board flow with that note selected. Its existing board route highlights the new card. Quick setup creates only the boards the user selects, with Chits' existing default Notes column, and reuses matching board names. The checklist reads real persisted state and latches reminder/Space achievements after those records are removed. The drawer hub offers replay, the checklist, and an action to show the checklist on Notes. Replay never creates or moves data on its own.
 
 ## Adapted or skipped steps
 
@@ -51,6 +51,8 @@ No native screen interaction, VoiceOver/TalkBack pass, device backup restore, or
 
 Back navigation follow-up: Welcome Start/Skip, quick setup completion/Skip, and the coach mark's finish action now use `dismissTo('/chat')`. This removes completed tour screens above the existing tabs instead of leaving them in Back history. Six new regression checks cover the installed Expo Router stack reducer and all four Chat transitions, including replay and a direct Welcome link. TypeScript, lint, and the full 138-test suite pass after this fix; device Back behavior still needs a manual check.
 
+Getting started structure follow-up: removed the redundant Reset tips action because Replay already restarts the guided tips. The hub now separates Welcome tour from Your progress, with instructions beside each checklist item, a progress indicator, and the Notes visibility action beneath the checklist. The hub uses one scrolling page; the compact Notes card retains its existing presentation. TypeScript, lint, and all 138 tests pass after this change; native visual validation remains outstanding. Platform exports above were run before this layout follow-up.
+
 ## Manual QA on disposable iOS and Android installs
 
 1. Fresh install: Welcome appears once. Skip reaches normal Chat. Kill and reopen mid-tour; no overlay traps the app.
@@ -58,7 +60,7 @@ Back navigation follow-up: Welcome Start/Skip, quick setup completion/Skip, and 
 3. Try it: the note is selected in Unorganized. Create Personal through the existing sheet, add it, and verify the board opens with the card highlighted. Back to chat and Continue both work.
 4. Quick setup: select boards, create, then replay and check there are no duplicate Personal boards. Skip creates none.
 5. Checklist: send a note, add a card, set a reminder, and stick a note in a Space. Check automatic ticks. Dismiss on Notes, then reopen from the drawer hub.
-6. Hub: Replay the tour with existing content and verify no note or board appears without a normal user action. Reset tips and verify other settings and content remain.
+6. Hub: Replay the tour with existing content and verify no note or board appears without a normal user action. Dismiss the checklist on Notes, restore it from the hub, and verify completed items remain checked.
 7. Restore an older backup and check it does not force onboarding. Check a fresh deep link to a card or reminder does not get interrupted by Welcome.
 8. Check light/dark and several personality themes, large text, VoiceOver/TalkBack focus and labels, small/large phones, and portrait tablet compatibility. The app currently locks orientation to portrait.
 
