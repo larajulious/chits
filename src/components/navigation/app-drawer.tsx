@@ -9,7 +9,7 @@ import { spacing } from '@/constants/theme';
 
 type DrawerContextValue = { openDrawer: () => void; closeDrawer: () => void };
 type IconName = ComponentProps<typeof Ionicons>['name'];
-type Destination = { label: string; path: '/' | '/archive' | '/settings'; icon: IconName };
+type Destination = { label: string; path: '/' | '/archive' | '/settings' | '/onboarding'; icon: IconName };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
 // Boards, Chat, and Attachments are the 3 items in the bottom navigation; Archive
@@ -19,6 +19,7 @@ const DrawerContext = createContext<DrawerContextValue | null>(null);
 const boardsDestination: Destination = { label: 'Notes', path: '/', icon: 'reader-outline' };
 const archiveDestination: Destination = { label: 'Archive', path: '/archive', icon: 'archive-outline' };
 const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
+const gettingStartedDestination: Destination = { label: 'Getting started', path: '/onboarding', icon: 'compass-outline' };
 
 export function useAppDrawer() {
   const context = useContext(DrawerContext);
@@ -77,6 +78,7 @@ function DrawerContent({ close }: { close: () => void }) {
         <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
       </ScrollView>
       <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }]}>
+        <NavigationRow destination={gettingStartedDestination} pathname={pathname} close={close} />
         <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
       </View>
     </SafeAreaView>

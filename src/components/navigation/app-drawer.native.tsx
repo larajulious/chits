@@ -53,7 +53,7 @@ type ContextItem = {
   accessibilityContext: string | null;
 };
 type IconName = ComponentProps<typeof Ionicons>['name'];
-type Destination = { label: string; path: '/' | '/spaces/pick' | '/archive' | '/settings'; icon: IconName };
+type Destination = { label: string; path: '/' | '/spaces/pick' | '/archive' | '/settings' | '/onboarding'; icon: IconName };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
 // Boards, Chat, and Attachments are the 3 items in the bottom navigation (see
@@ -69,6 +69,7 @@ const boardsDestination: Destination = { label: 'Notes', path: '/', icon: 'reade
 const spacesDestination: Destination = { label: 'Spaces', path: '/spaces/pick', icon: 'magnet-outline' };
 const archiveDestination: Destination = { label: 'Archive', path: '/archive', icon: 'archive-outline' };
 const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
+const gettingStartedDestination: Destination = { label: 'Getting started', path: '/onboarding', icon: 'compass-outline' };
 
 export function useAppDrawer() {
   const context = useContext(DrawerContext);
@@ -336,6 +337,7 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
       {/* Settings is app chrome, not a place your notes live — it stays pinned
           to the bottom instead of sitting in the list of destinations. */}
       <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }]}>
+        <NavigationRow destination={gettingStartedDestination} pathname={pathname} close={close} />
         <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
       </View>
       <Toast message={toast} />
