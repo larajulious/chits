@@ -44,13 +44,14 @@ export default function OnboardingWelcomeScreen() {
       if (!(await readTour(database))) await startTour(database, 'replay');
       await updateTour(database, { stage: 'first-note' });
     } catch { /* The chat still opens; the tour just doesn't follow. */ }
-    router.navigate('/chat');
+    // Remove Welcome (and the replay hub above the tabs) from Back history.
+    router.dismissTo('/chat');
   };
   const skip = async () => {
     if (chose.current) return;
     chose.current = true;
     await endTour(database).catch(() => undefined);
-    router.navigate('/chat');
+    router.dismissTo('/chat');
   };
   // The existing Backup & Restore screen, unchanged. Coming back without
   // restoring returns here; a restore remounts the app with the restored data.

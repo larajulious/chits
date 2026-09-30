@@ -97,7 +97,8 @@ export function OnboardingLayer() {
   const finish = useCallback(async () => {
     if (pathnameRef.current === '/chat') router.setParams({ messageId: undefined });
     await endTour(database).catch(() => undefined);
-    router.navigate('/chat');
+    // Return to the existing tabs, removing the move/setup screens above them.
+    router.dismissTo('/chat');
   }, [database]);
   useEffect(() => {
     if (!tour || (tour.stage !== 'aha' && tour.stage !== 'moved')) return;

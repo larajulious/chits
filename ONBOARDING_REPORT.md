@@ -10,7 +10,7 @@ Baseline: commit `37b3e10`. The first-run gate and welcome screen were already c
 - `src/features/onboarding/onboarding-layer.native.tsx`, `onboarding-layer.tsx` — first-run gate, real Chat and Board guidance, web no-op.
 - `src/features/onboarding/components/chat-to-card-illustration.tsx`, `checklist-card.tsx` — themed illustration and checklist.
 - `src/features/onboarding/screens/web-placeholder.tsx`, `welcome-screen.tsx`, `setup-screen.tsx`, `hub-screen.tsx` — tour screens.
-- `tests/onboarding-first-run.test.mjs`, `tests/onboarding-flow.test.mjs` — new tests only.
+- `tests/onboarding-first-run.test.mjs`, `tests/onboarding-flow.test.mjs`, `tests/onboarding-navigation.test.mjs` — new tests only.
 - `ONBOARDING_REPORT.md` — this report.
 
 ## Existing files touched
@@ -40,7 +40,7 @@ Fresh installs with no prior note, board, or non-onboarding setting see Welcome 
 
 ## Verification
 
-- `npm test`: 132 passed, 0 failed.
+- `npm test`: 138 passed, 0 failed (including the Back navigation regression).
 - `npx tsc --noEmit --pretty false`: passed.
 - `npm run lint`: passed.
 - `npx expo export --platform ios`: passed.
@@ -48,6 +48,8 @@ Fresh installs with no prior note, board, or non-onboarding setting see Welcome 
 - `git diff --check`: passed.
 
 No native screen interaction, VoiceOver/TalkBack pass, device backup restore, or physical device layout test was performed in this continuation.
+
+Back navigation follow-up: Welcome Start/Skip, quick setup completion/Skip, and the coach mark's finish action now use `dismissTo('/chat')`. This removes completed tour screens above the existing tabs instead of leaving them in Back history. Six new regression checks cover the installed Expo Router stack reducer and all four Chat transitions, including replay and a direct Welcome link. TypeScript, lint, and the full 138-test suite pass after this fix; device Back behavior still needs a manual check.
 
 ## Manual QA on disposable iOS and Android installs
 

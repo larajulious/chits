@@ -22,7 +22,7 @@ export default function OnboardingSetupScreen() {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState(false);
   useFocusEffect(useCallback(() => { void createBoardRepository(database).listActive().then((boards) => setExisting(boards.map((board) => board.name.toLowerCase()))); }, [database]));
-  const finish = async () => { await endTour(database); router.navigate('/chat'); };
+  const finish = async () => { await endTour(database); router.dismissTo('/chat'); };
   const create = async () => {
     if (working) return;
     setWorking(true); setError(false);
