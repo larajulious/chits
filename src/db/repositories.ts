@@ -178,6 +178,8 @@ export function createMessageRepository(database: SQLiteDatabase) {
     const ids = messages.map(({ id }) => id);
     const attachmentRows = await database.getAllAsync<AttachmentRow>(`SELECT * FROM attachments WHERE message_id IN (${ids.map(() => '?').join(', ')}) ORDER BY created_at ASC`, ...ids);
     const organizationRows = await database.getAllAsync<{ messageId: string; boardId: string; boardName: string; columnId: string; columnName: string; cardId: string; reminderAt: number | null; attachmentCount: number }>(`SELECT cm.message_id AS messageId, c.board_id AS boardId, b.name AS boardName, bc.id AS columnId, bc.name AS columnName, c.id AS cardId, ${UPCOMING_REMINDER_SQL} AS reminderAt, ${CARD_ATTACHMENT_COUNT_SQL} AS attachmentCount FROM card_messages cm INNER JOIN cards c ON c.id = cm.card_id INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id WHERE cm.message_id IN (${ids.map(() => '?').join(', ')}) AND c.archived_at IS NULL AND b.archived_at IS NULL ORDER BY c.created_at ASC`, ...ids);
+    const reminderRows = await database.getAllAsync<{ messageId: string; scheduledAt: number }>(`SELECT message_id AS messageId, scheduled_at AS scheduledAt FROM message_reminders WHERE message_id IN (${ids.map(() => '?').join(', ')}) AND completed_at IS NULL`, ...ids);
+    const remindersByMessage = new Map(reminderRows.map((row) => [row.messageId, row.scheduledAt]));
     const grouped = new Map<string, Attachment[]>();
     const organizationByMessage = new Map<string, (typeof organizationRows)[number]>();
     for (const organization of organizationRows) if (!organizationByMessage.has(organization.messageId)) organizationByMessage.set(organization.messageId, organization);
@@ -194,7 +196,7 @@ export function createMessageRepository(database: SQLiteDatabase) {
     for (const { cardId, ...item } of previewRows) previewByCard.set(cardId, [...(previewByCard.get(cardId) ?? []), item]);
     return messages.map((message) => {
       const organization = organizationByMessage.get(message.id);
-      return { ...message, attachments: grouped.get(message.id) ?? [], organization: organization ? { ...organization, attachmentPreview: previewByCard.get(organization.cardId) ?? [] } : null };
+      return { ...message, reminderAt: remindersByMessage.get(message.id) ?? null, attachments: grouped.get(message.id) ?? [], organization: organization ? { ...organization, attachmentPreview: previewByCard.get(organization.cardId) ?? [] } : null };
     });
   };
   return {
@@ -291,6 +293,16 @@ export function createMessageRepository(database: SQLiteDatabase) {
       pageRows.forEach((row) => { if (row.entryKind === 'message' && row.messageId) { const message = messageById.get(row.messageId); if (message) timeline.push({ kind: 'message', message, createdAt: row.createdAt }); } else if (row.entryKind === 'event' && row.eventId) { const event = eventById.get(row.eventId); if (event) timeline.push({ kind: 'event', event, createdAt: row.createdAt }); } });
       const oldest = pageRows.at(-1);
       return { items: timeline, hasMore, nextCursor: oldest ? { createdAt: oldest.createdAt, sortId: oldest.sortId } : null };
+    },
+    async getActiveByIds(ids: string[]): Promise<Message[]> {
+      const messages: Message[] = [];
+      // Bound SQL parameters when refreshing a long, already-loaded timeline.
+      for (let offset = 0; offset < ids.length; offset += 200) {
+        const batch = ids.slice(offset, offset + 200);
+        const rows = await database.getAllAsync<MessageRow>(`SELECT * FROM messages WHERE id IN (${batch.map(() => '?').join(', ')}) AND deleted_at IS NULL AND archived_at IS NULL`, ...batch);
+        messages.push(...await withAttachments(rows));
+      }
+      return messages;
     },
     async getActiveById(id: string) {
       const rows = await database.getAllAsync<MessageRow>('SELECT * FROM messages WHERE id = ? AND deleted_at IS NULL AND archived_at IS NULL', id);

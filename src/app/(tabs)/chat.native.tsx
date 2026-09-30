@@ -7,7 +7,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { canMergeTimelineRefresh } from '@/services/timeline-refresh';
-import { removeMessageReminder, requestReminderSync, setMessageReminder } from '@/services/reminders';
+import { removeMessageReminder, requestReminderSync, setMessageReminder, subscribeToReminderChanges } from '@/services/reminders';
 import { AccessibilityInfo, ActivityIndicator, AppState, BackHandler, FlatList, Keyboard, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 
@@ -378,14 +378,29 @@ export default function ChatScreen() {
   }, [loadInitial]);
 
   useEffect(() => { feedRef.current = feed; }, [feed]);
-  useFocusEffect(useCallback(() => subscribeToAttachmentChanges(() => {
-    const ids = feedRef.current.flatMap((item) => item.kind === 'message' ? [item.message.id] : []);
-    void Promise.all(ids.map((id) => repository.getActiveById(id))).then((messages) => {
-      const updated = new Map(messages.filter((message): message is Message => message !== null).map((message) => [message.id, message]));
-      setFeed((current) => current.map((item) => item.kind === 'message' && updated.has(item.message.id) ? { ...item, message: updated.get(item.message.id)! } : item));
-      void refreshPinned();
-    }).catch(() => undefined);
-  }), [repository, refreshPinned]));
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    let revision = 0;
+    const refreshLoadedMessages = () => {
+      const request = ++revision;
+      const ids = feedRef.current.flatMap((item) => item.kind === 'message' ? [item.message.id] : []);
+      void repository.getActiveByIds(ids).then((messages) => {
+        if (!active || request !== revision) return;
+        const updated = new Map(messages.map((message) => [message.id, message]));
+        setFeed((current) => current.map((item) => {
+          if (item.kind !== 'message') return item;
+          const message = updated.get(item.message.id);
+          return message && JSON.stringify(message) !== JSON.stringify(item.message) ? { ...item, message } : item;
+        }));
+        void refreshPinned();
+      }).catch(() => undefined);
+    };
+    // Refresh older loaded thoughts too when returning from Calendar or a card.
+    if (loadedOnce.current) refreshLoadedMessages();
+    const stopAttachments = subscribeToAttachmentChanges(refreshLoadedMessages);
+    const stopReminders = subscribeToReminderChanges(refreshLoadedMessages);
+    return () => { active = false; stopAttachments(); stopReminders(); };
+  }, [repository, refreshPinned]));
 
 
   // Stable callbacks: changing transition state must not run focus cleanup.

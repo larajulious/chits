@@ -5,7 +5,9 @@ export type MessageType = 'text' | 'photo' | 'video' | 'audio' | 'file';
 export interface Message {
   id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number;
   archivedAt: number | null; pinned: boolean; isHiddenContent: boolean; deletedAt: number | null; attachments: Attachment[];
-  // reminderAt: the upcoming reminder on the card this thought belongs to (null when none).
+  // The thought's own pending reminder, including overdue reminders.
+  reminderAt?: number | null;
+  // organization.reminderAt: the upcoming reminder on the card this thought belongs to (null when none).
   // attachmentCount: every attachment on that card (all its thoughts' plus its own) —
   // the same total the Board card and Card Details show. attachmentPreview: the first
   // few of those, in Card Details' order, for Chat's attachment mosaic.
