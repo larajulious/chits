@@ -178,8 +178,7 @@ const migrations: Migration[] = [{
   version: 20,
   up: async (database) => {
     // One reminder per card (card_id is the key). It is metadata on the card,
-    // not a task: it cascades away with the card, and a fired reminder's row is
-    // removed by the reminder sync. notification_id is the local notification
+    // not a task: it cascades away with the card. notification_id is the local notification
     // scheduled on this device (NULL until scheduled, e.g. right after a restore).
     await database.execAsync(CARD_REMINDERS_SCHEMA);
   },
@@ -192,6 +191,23 @@ const migrations: Migration[] = [{
     // placement can never outlive its note, however the note is removed.
     // x/y are fractions (0–1) of the room the sticky can move in.
     await database.execAsync(SPACE_PLACEMENTS_SCHEMA);
+  },
+}, {
+  version: 22,
+  up: async (database) => {
+    await database.execAsync(`
+      ALTER TABLE card_reminders ADD COLUMN completed_at INTEGER;
+      CREATE TABLE IF NOT EXISTS message_reminders (
+        message_id TEXT PRIMARY KEY NOT NULL,
+        scheduled_at INTEGER NOT NULL,
+        notification_id TEXT,
+        completed_at INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_message_reminders_scheduled ON message_reminders(completed_at, scheduled_at);
+    `);
   },
 }];
 

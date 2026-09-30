@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View, type LayoutRectangle } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { FadeIn, FadeOut, runOnJS } from 'react-native-reanimated';
-import { Redirect, router, useFocusEffect } from 'expo-router';
+import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import * as Haptics from 'expo-haptics';
@@ -21,8 +21,11 @@ import { StickyPaper } from '@/components/spaces/sticky-note';
 import { useNoteSpaceName } from '@/components/spaces/use-notespace-name';
 import { SheetDim, StickyOptionsSheet } from '@/components/spaces/sticky-options-sheet';
 import { StickyViewSheet } from '@/components/spaces/sticky-view-sheet';
+import { ReminderSheet } from '@/components/reminders/reminder-sheet';
+import { removeCardReminder, removeMessageReminder, setCardReminder, setMessageReminder } from '@/services/reminders';
+import { useTheme } from '@/components/theme-provider';
 import { Toast } from '@/components/ui/primitives';
-import { DEFAULT_STICKY_COLOR, SPACE_CAPACITY, SPACE_IDS, SPACE_LIST, SPACES, toUnit, type SpaceId } from '@/constants/spaces';
+import { DEFAULT_STICKY_COLOR, SPACE_CAPACITY, SPACE_IDS, SPACE_LIST, SPACES, resolveSpaceId, toUnit, type SpaceId } from '@/constants/spaces';
 import { DARK_SURFACE, DOCK_ICONS, DOCK_LABELS, noteSeed, SPACE_UI } from '@/constants/spaces-theme';
 import { createSpaceRepository } from '@/db/repositories';
 import type { PinnedNote, SpaceCandidate } from '@/db/types';
@@ -39,13 +42,15 @@ const openNote = (note: Pick<PinnedNote, 'kind' | 'noteId' | 'boardId'>) => rout
  */
 export default function SpacesScreen() {
   const database = useSQLiteContext();
-  const [initial] = useState(() => createSpaceRepository(database).getSelectedSpaceSync());
+  const { spaceId, noteId } = useLocalSearchParams<{ spaceId?: string; noteId?: string }>();
+  const [initial] = useState(() => resolveSpaceId(spaceId) ?? createSpaceRepository(database).getSelectedSpaceSync());
   if (!initial) return <Redirect href="/spaces/pick" />;
-  return <SpaceBoard initialSpaceId={initial} />;
+  return <SpaceBoard initialSpaceId={initial} focusNoteId={noteId} />;
 }
 
-function SpaceBoard({ initialSpaceId }: { initialSpaceId: SpaceId }) {
+function SpaceBoard({ initialSpaceId, focusNoteId }: { initialSpaceId: SpaceId; focusNoteId?: string }) {
   const database = useSQLiteContext();
+  const { tokens: theme } = useTheme();
   const repository = useMemo(() => createSpaceRepository(database), [database]);
   const insets = useSafeAreaInsets();
   const fonts = useSpaceFonts();
@@ -58,6 +63,10 @@ function SpaceBoard({ initialSpaceId }: { initialSpaceId: SpaceId }) {
   const [board, setBoard] = useState<LayoutRectangle | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
+  const [reminderNote, setReminderNote] = useState<PinnedNote | null>(null);
+  const [reminderAt, setReminderAt] = useState<number | null>(null);
+  const [reminderKey, setReminderKey] = useState(0);
+  const focusedOnce = useRef(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const space = SPACES[spaceId];
@@ -68,13 +77,14 @@ function SpaceBoard({ initialSpaceId }: { initialSpaceId: SpaceId }) {
   // Pick a Space (from the side panel) can choose another space while this
   // one waits underneath; coming back shows the one just picked.
   useFocusEffect(useCallback(() => {
+    if (focusNoteId) return;
     const saved = repository.getSelectedSpaceSync();
     if (!saved || saved === spaceId) return;
     setSelectedId(null);
     setViewingId(null);
     setNotes(null);
     setSpaceId(saved);
-  }, [repository, spaceId]));
+  }, [repository, spaceId, focusNoteId]));
 
   // Reloads on focus (a note may have changed elsewhere), on every space
   // switch, on any change to a space, and after a failed save (bump `reload`).
@@ -88,12 +98,16 @@ function SpaceBoard({ initialSpaceId }: { initialSpaceId: SpaceId }) {
       if (!active) return;
       setNotes(list);
       setCounts(nextCounts);
+      if (!focusedOnce.current && focusNoteId) {
+        const note = list.find((entry) => entry.noteId === focusNoteId);
+        if (note) { focusedOnce.current = true; setViewingId(note.id); }
+      }
     };
     void read();
     const unsubscribe = subscribeToSpaceChanges(() => { void read(); });
     return () => { active = false; unsubscribe(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `reload` only re-runs the read.
-  }, [repository, spaceId, reload]));
+  }, [repository, spaceId, reload, focusNoteId]));
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 2200); return () => clearTimeout(timer); }, [toast]);
 
   const switchSpace = useCallback((next: SpaceId) => {
@@ -190,6 +204,14 @@ function SpaceBoard({ initialSpaceId }: { initialSpaceId: SpaceId }) {
       else void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch { setToast('That note couldn’t be added.'); }
   };
+  const openReminder = (note: PinnedNote) => {
+    setSelectedId(null);
+    const table = note.kind === 'card' ? 'card_reminders' : 'message_reminders';
+    const key = note.kind === 'card' ? 'card_id' : 'message_id';
+    void database.getFirstAsync<{ scheduledAt: number }>(`SELECT scheduled_at AS scheduledAt FROM ${table} WHERE ${key} = ? AND completed_at IS NULL`, note.noteId)
+      .then((row) => { setReminderAt(row?.scheduledAt ?? null); setReminderNote(note); setReminderKey((value) => value + 1); })
+      .catch(() => setToast('Could not open reminder. Try again.'));
+  };
 
   const empty = notes !== null && notes.length === 0;
   // Controls float over the surface, inside the safe areas; notes live between them.
@@ -269,9 +291,21 @@ function SpaceBoard({ initialSpaceId }: { initialSpaceId: SpaceId }) {
         onBringToFront={bringToFront}
         onMove={(target) => void moveTo(target)}
         onRemove={remove}
+        onReminder={() => openReminder(selected)}
       />
     </View> : null}
     <NotePicker visible={pickerOpen} spaceName={space.name} onClose={() => setPickerOpen(false)} onPick={(candidate) => void stick(candidate)} />
+    <ReminderSheet key={reminderKey} visible={reminderNote !== null} existing={reminderAt} accent={theme.accent} accentOn={theme.accentText} onClose={() => setReminderNote(null)} onSave={async (date) => {
+      if (!reminderNote) return { ok: false, reason: 'failed' };
+      const result = reminderNote.kind === 'card' ? await setCardReminder(database, reminderNote.noteId, date.getTime()) : await setMessageReminder(database, reminderNote.noteId, date.getTime());
+      if (result.ok) setToast('Reminder set');
+      return result;
+    }} onRemove={async () => {
+      if (!reminderNote) return;
+      if (reminderNote.kind === 'card') await removeCardReminder(database, reminderNote.noteId);
+      else await removeMessageReminder(database, reminderNote.noteId);
+      setToast('Reminder removed');
+    }} />
     <Toast message={toast} />
   </View></GestureDetector>;
 }

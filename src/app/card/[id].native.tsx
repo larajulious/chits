@@ -101,9 +101,8 @@ export default function CardDetailScreen() {
   // Session-only peek at hidden content, mirroring Chat's temporary reveal — the
   // stored hidden flag only changes through the Hide/Show content action.
   const [temporarilyRevealed, setTemporarilyRevealed] = useState(false);
-  // Computed once at mount, not on every render — a direct Date.now() call inside
-  // render is flagged as impure, and "Today" doesn't need to tick live anyway.
-  const [renderedAt] = useState(() => Date.now());
+  // Refresh on focus/reminder changes; Date.now() inside render is impure.
+  const [renderedAt, setRenderedAt] = useState(() => Date.now());
   const scrollRef = useRef<ScrollView>(null);
   const commentInputRef = useRef<TextInput>(null);
 
@@ -139,8 +138,9 @@ export default function CardDetailScreen() {
 
   const loadReminder = useCallback(async () => {
     if (!id) return;
+    setRenderedAt(Date.now());
     const [row, allowed] = await Promise.all([reminderRepository.get(id), hasNotificationPermission().catch(() => false)]);
-    setReminder(row && row.scheduledAt > Date.now() ? row : null);
+    setReminder(row);
     setNotificationsAllowed(allowed);
   }, [id, reminderRepository]);
   // Reload whenever a reminder changes anywhere (set, removed, fired, reconciled),
@@ -182,6 +182,7 @@ export default function CardDetailScreen() {
     try {
       const title = titleDraft.trim();
       await repository.updateCardTitle(id, title || null);
+      void requestReminderSync();
       setTitleEditing(false);
       await load();
     } catch {
@@ -533,7 +534,7 @@ export default function CardDetailScreen() {
         {/* One quiet row: "Remind me", or the reminder's time once set. */}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={reminder ? `Reminder, ${formatReminder(new Date(reminder.scheduledAt), new Date())}${notificationsAllowed ? '' : '. Notifications are off'}. Change or remove` : 'Remind me. Get notified about this card'}
+          accessibilityLabel={reminder ? `Reminder, ${reminder.scheduledAt < renderedAt ? 'Overdue. ' : ''}${formatReminder(new Date(reminder.scheduledAt), new Date())}${notificationsAllowed ? '' : '. Notifications are off'}. Change or remove` : 'Remind me. Get notified about this card'}
           onPress={openReminderSheet}
           style={({ pressed }) => [styles.reminderRow, pressed && styles.pressed]}
         >
@@ -542,7 +543,7 @@ export default function CardDetailScreen() {
           </View>
           <View style={styles.flexCopy}>
             <Text style={styles.actionTitle}>{reminder ? formatReminder(new Date(reminder.scheduledAt), new Date()) : 'Remind me'}</Text>
-            <Text style={styles.actionCopy}>{reminder ? (notificationsAllowed ? 'Reminder' : 'Notifications are off') : 'Get notified about this card'}</Text>
+            <Text style={styles.actionCopy}>{reminder ? reminder.scheduledAt < renderedAt ? 'Overdue · Change or remove' : notificationsAllowed ? 'Reminder' : 'Notifications are off' : 'Get notified about this card'}</Text>
           </View>
           <Ionicons accessible={false} name="chevron-forward" size={16} color={theme.textMuted} />
         </Pressable>

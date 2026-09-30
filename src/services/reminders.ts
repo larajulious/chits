@@ -10,4 +10,7 @@ export function resumeReminderSync() {}
 export async function hasNotificationPermission(): Promise<boolean> { return false; }
 export async function setCardReminder(_database: SQLiteDatabase, _cardId: string, _scheduledAt: number): Promise<SetReminderResult> { return { ok: false, reason: 'failed' }; }
 export async function removeCardReminder(_database: SQLiteDatabase, _cardId: string): Promise<void> {}
-export function observeReminderNotifications(_: (cardId: string) => void): () => void { return () => undefined; }
+export async function setMessageReminder(_database: SQLiteDatabase, _messageId: string, _scheduledAt: number): Promise<SetReminderResult> { return { ok: false, reason: 'failed' }; }
+export async function removeMessageReminder(_database: SQLiteDatabase, _messageId: string): Promise<void> {}
+export async function completeReminder(_database: SQLiteDatabase, _kind: 'card' | 'message', _id: string): Promise<void> {}
+export function observeReminderNotifications(_: (cardId: string) => void, _openMessage?: (messageId: string) => void): () => void { return () => undefined; }

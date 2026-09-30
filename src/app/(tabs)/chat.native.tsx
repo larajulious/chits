@@ -7,7 +7,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { canMergeTimelineRefresh } from '@/services/timeline-refresh';
-import { requestReminderSync } from '@/services/reminders';
+import { removeMessageReminder, requestReminderSync, setMessageReminder } from '@/services/reminders';
 import { AccessibilityInfo, ActivityIndicator, AppState, BackHandler, FlatList, Keyboard, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 
@@ -16,6 +16,7 @@ import { AttachmentPicker, type AttachmentDraft, type AttachmentPickerHandle } f
 import { ChatHeader } from '@/components/chat/chat-header';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { MessageActions, getCopyableMessageText } from '@/components/chat/message-actions';
+import { ReminderSheet } from '@/components/reminders/reminder-sheet';
 import { spaceNoteAction, type SpaceNoteAction } from '@/components/spaces/space-note-action';
 import { shareNoteHref } from '@/services/share-note-source';
 import { MessageRow } from '@/components/chat/message-row';
@@ -283,6 +284,9 @@ export default function ChatScreen() {
   const [attachmentDraft, setAttachmentDraft] = useState<AttachmentDraft | null>(null);
   const [editing, setEditing] = useState<Message | null>(null);
   const [selected, setSelected] = useState<Message | null>(null);
+  const [reminderMessageId, setReminderMessageId] = useState<string | null>(null);
+  const [reminderExisting, setReminderExisting] = useState<number | null>(null);
+  const [reminderSheetKey, setReminderSheetKey] = useState(0);
   const [temporarilyRevealedIds, setTemporarilyRevealedIds] = useState<Set<string>>(() => new Set());
   const [toast, setToast] = useState<string | null>(null);
   // Whether the selected thought is on a space, looked up as its actions open.
@@ -687,6 +691,7 @@ export default function ChatScreen() {
     try {
       if (editing) {
         const updatedAt = await repository.updateText(editing.id, text);
+        void requestReminderSync();
         setFeed((current) => current.map((item) => item.kind === 'message' && item.message.id === editing.id ? { ...item, message: { ...item.message, text, updatedAt } } : item));
         animateComposerTransition();
         setEditing(null);
@@ -809,6 +814,14 @@ export default function ChatScreen() {
     afterActionsClosed.current = null;
     action?.();
   }, []);
+  const openMessageReminder = (message: Message) => {
+    afterActionsClosed.current = () => {
+      void database.getFirstAsync<{ scheduledAt: number }>('SELECT scheduled_at AS scheduledAt FROM message_reminders WHERE message_id = ? AND completed_at IS NULL', message.id)
+        .then((row) => { setReminderExisting(row?.scheduledAt ?? null); setReminderMessageId(message.id); setReminderSheetKey((key) => key + 1); })
+        .catch(() => setToast('Could not open reminder. Try again.'));
+    };
+    setSelected(null);
+  };
   const remove = () => {
     if (!selected) return;
     const message = selected;
@@ -965,7 +978,13 @@ export default function ChatScreen() {
           </View>
         </View>
         </View>
-      <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => { afterActionsClosed.current = null; setSelected(null); }} onClosed={runAfterActionsClosed} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} spaceAction={spaceAction} onSpaceAction={runSpaceAction} onAddToBoard={addToBoard} onDownload={(message) => { setSelected(null); if (message.attachments[0]) void download.exportAttachment(message.attachments[0]); }} onShareNote={(message) => { afterActionsClosed.current = () => router.push(shareNoteHref({ messageId: message.id })); setSelected(null); }} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
+      <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => { afterActionsClosed.current = null; setSelected(null); }} onClosed={runAfterActionsClosed} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} spaceAction={spaceAction} onSpaceAction={runSpaceAction} onAddToBoard={addToBoard} onReminder={openMessageReminder} onDownload={(message) => { setSelected(null); if (message.attachments[0]) void download.exportAttachment(message.attachments[0]); }} onShareNote={(message) => { afterActionsClosed.current = () => router.push(shareNoteHref({ messageId: message.id })); setSelected(null); }} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
+      <ReminderSheet key={reminderSheetKey} visible={reminderMessageId !== null} existing={reminderExisting} accent={theme.accent} accentOn={theme.accentText} onClose={() => setReminderMessageId(null)} onSave={async (date) => {
+        if (!reminderMessageId) return { ok: false, reason: 'failed' };
+        const result = await setMessageReminder(database, reminderMessageId, date.getTime());
+        if (result.ok) setToast('Reminder set');
+        return result;
+      }} onRemove={async () => { if (reminderMessageId) { await removeMessageReminder(database, reminderMessageId); setToast('Reminder removed'); } }} />
       <Toast message={toast ?? download.status} />
       </Screen>
     </KeyboardAvoidingView></BackgroundReadabilityProvider></Animated.View>

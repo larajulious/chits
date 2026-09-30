@@ -27,8 +27,8 @@ function ResetNotice() {
   return null;
 }
 
-// Keeps card reminders in step with the device (launch, return to foreground)
-// and opens the right card when a reminder notification is tapped — whether
+// Keeps reminders in step with the device (launch, return to foreground)
+// and opens the original card or Chat note when a notification is tapped — whether
 // Chits was open, in the background, or launched from a killed state.
 function ReminderCoordinator() {
   const database = useSQLiteContext();
@@ -47,6 +47,8 @@ function ReminderCoordinator() {
         if (pathnameRef.current === `/card/${cardId}`) return;
         router.push({ pathname: '/card/[id]', params: { id: cardId } });
       });
+    }, (messageId) => {
+      requestAnimationFrame(() => router.push({ pathname: '/chat', params: { messageId } }));
     });
     return () => { appState.remove(); stopObserving(); registerReminderDatabase(null); };
   }, [database]);
@@ -77,6 +79,7 @@ function ThemedApp() {
             <Stack.Screen name="spaces/pick" />
             <Stack.Screen name="spaces/share" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
             <Stack.Screen name="pinned" />
+            <Stack.Screen name="calendar" />
           </Stack>
           <OnboardingLayer />
         </AppDrawerProvider>

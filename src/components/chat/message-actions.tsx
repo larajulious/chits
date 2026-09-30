@@ -31,6 +31,7 @@ type Props = {
   spaceAction?: SpaceNoteAction | null;
   onSpaceAction?: (action: SpaceNoteAction) => void;
   onAddToBoard: () => void;
+  onReminder?: (message: Message) => void;
   onDownload: (message: Message) => void;
   onShareNote: (message: Message) => void;
   onReveal: (message: Message) => void;
@@ -50,7 +51,7 @@ function ActionRow({ icon, label, onPress, destructive = false }: { icon: Compon
   </Pressable>;
 }
 
-export function MessageActions({ message: current, temporarilyRevealed, onDismiss, onClosed, onCopy, onEdit, onPin, spaceAction, onSpaceAction, onAddToBoard, onDownload, onShareNote, onReveal, onHideAgain, onHideContent, onShowContent, onArchive, onDelete }: Props) {
+export function MessageActions({ message: current, temporarilyRevealed, onDismiss, onClosed, onCopy, onEdit, onPin, spaceAction, onSpaceAction, onAddToBoard, onReminder, onDownload, onShareNote, onReveal, onHideAgain, onHideContent, onShowContent, onArchive, onDelete }: Props) {
   const { tokens: theme } = useTheme();
   // Stays mounted (showing the last message) until the native modal has really
   // closed, like AppDialog: iOS can't present another modal (e.g. the delete
@@ -86,6 +87,7 @@ export function MessageActions({ message: current, temporarilyRevealed, onDismis
             {!covered && hasAttachment ? <ActionRow icon="download-outline" label={exportActionLabel(message.attachments[0])} onPress={() => onDownload(message)} /> : null}
             {!covered ? <ActionRow icon="images-outline" label="Share Note" onPress={() => onShareNote(message)} /> : null}
             <ActionRow icon={message.organization ? 'grid' : 'grid-outline'} label={message.organization ? `Go to ${message.organization.boardName}` : 'Add to Board'} onPress={onAddToBoard} />
+            {onReminder ? <ActionRow icon="notifications-outline" label="Reminder" onPress={() => onReminder(message)} /> : null}
           </View>
 
           <View style={[styles.group, styles.groupDivider, { borderTopColor: theme.borderSubtle }]}>

@@ -53,7 +53,7 @@ type ContextItem = {
   accessibilityContext: string | null;
 };
 type IconName = ComponentProps<typeof Ionicons>['name'];
-type Destination = { label: string; path: '/' | '/spaces/pick' | '/archive' | '/settings' | '/onboarding'; icon: IconName };
+type Destination = { label: string; path: '/' | '/spaces/pick' | '/calendar' | '/archive' | '/settings' | '/onboarding'; icon: IconName };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
 // Boards, Chat, and Attachments are the 3 items in the bottom navigation (see
@@ -67,6 +67,7 @@ const boardsDestination: Destination = { label: 'Notes', path: '/', icon: 'reade
 // magnet, not a pin) so it's never confused with the PINNED shortcuts below.
 // It opens on Pick a Space every time, so choosing where to go comes first.
 const spacesDestination: Destination = { label: 'Spaces', path: '/spaces/pick', icon: 'magnet-outline' };
+const calendarDestination: Destination = { label: 'Calendar', path: '/calendar', icon: 'calendar-outline' };
 const archiveDestination: Destination = { label: 'Archive', path: '/archive', icon: 'archive-outline' };
 const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
 const gettingStartedDestination: Destination = { label: 'Getting started', path: '/onboarding', icon: 'compass-outline' };
@@ -329,6 +330,7 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
         <NavigationRow destination={boardsDestination} pathname={pathname} close={close} />
         <NavigationRow destination={spacesDestination} pathname={pathname} close={close} badge={stuckCount} />
+        <NavigationRow destination={calendarDestination} pathname={pathname} close={close} />
         <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
         {hasShortcuts ? <View style={[styles.divider, { backgroundColor: tokens.borderSubtle }]} /> : null}
         <PinnedSection items={pinned} close={close} onUnpin={unpinItem} />

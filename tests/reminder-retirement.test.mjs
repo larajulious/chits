@@ -14,17 +14,18 @@ function sourceFiles(directory) {
   });
 }
 
-test('reminders came back only as card metadata, not the retired task feature', () => {
+test('current note reminders remain separate from the retired task feature', () => {
   const appFiles = sourceFiles('src');
-  // No standalone Reminders screen/route or drawer entry, and no scheduling UI beyond the card sheet.
+  // The retired standalone Reminders task screen stays removed.
   assert.equal(appFiles.some((path) => /src\/app\/.*reminders?\./.test(path)), false);
   assert.doesNotMatch(read('src/app/_layout.tsx'), /name=["']reminders["']/i);
   assert.doesNotMatch(read('src/components/navigation/app-drawer.native.tsx'), /['"]\/reminders['"]/i);
   assert.equal(JSON.parse(read('package.json')).dependencies['@react-native-community/datetimepicker'], undefined);
-  // One reminder per card, removed with the card.
+  // One reminder per card and one per chat note, each tied to its source item.
   const migrations = read('src/db/migrations.ts');
   assert.match(migrations, /CREATE TABLE IF NOT EXISTS card_reminders \(card_id TEXT PRIMARY KEY NOT NULL,[^;]*ON DELETE CASCADE\)/);
-  assert.doesNotMatch(migrations, /card_reminders[^;]*(priority|repeat|recurr|completed)/i);
+  assert.match(migrations, /CREATE TABLE IF NOT EXISTS message_reminders \(/);
+  assert.doesNotMatch(migrations, /card_reminders[^;]*(priority|repeat|recurr)/i);
 });
 
 test('retirement migration removes only deprecated scheduling data', () => {

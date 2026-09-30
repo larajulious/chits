@@ -56,7 +56,8 @@ export interface CardListItem {
   // True when a thought on this card (or this thought itself) is hidden in
   // Chat: the list shows a covered note instead of its text or media.
   hidden: boolean;
-  // Upcoming reminder on this card (ms), or null. Thoughts never have one.
+  // Upcoming reminder shown by this list (ms), or null. Chat thought reminders
+  // use message_reminders and appear in Calendar.
   reminderAt: number | null;
   photoCount: number; videoCount: number; fileCount: number;
   // The single, deterministic media preview for this card/thought — resolved

@@ -16,7 +16,7 @@ import {
 type Choice = ReminderQuickKey | 'custom';
 type Props = {
   visible: boolean;
-  /** The card's current reminder (ms), or null when there isn't one. */
+  /** The note's current reminder (ms), or null when there isn't one. */
   existing: number | null;
   /** Board accent (or theme accent) for the selected state and the main button. */
   accent: string;
@@ -33,7 +33,7 @@ const QUICK_ICONS: Record<ReminderQuickKey, React.ComponentProps<typeof Ionicons
 };
 
 /**
- * "Remind me" for a card: quick choices, then a date and a time the user can
+ * "Remind me" for a note or card: quick choices, then a date and a time the user can
  * adjust, and one clear button. No text field, so no keyboard. The system
  * pickers are used for date/time (inline compact pickers on iOS, the Material
  * dialogs on Android).
@@ -41,7 +41,7 @@ const QUICK_ICONS: Record<ReminderQuickKey, React.ComponentProps<typeof Ionicons
 export function ReminderSheet({ visible, existing, accent, accentOn, onClose, onSave, onRemove }: Props) {
   const { scheme, tokens: theme } = useTheme();
   // Initial state comes from props at mount; the parent remounts the sheet
-  // (new `key`) each time it opens, so it always starts from the card's current
+  // (new `key`) each time it opens, so it always starts from the note's current
   // reminder — or Tomorrow when there isn't one.
   const [initial] = useState(() => {
     const opened = new Date();

@@ -71,5 +71,5 @@ test('Reset tips removes only onboarding rows', async (t) => {
 test('the root layout only gains the onboarding layer, after every existing screen', () => {
   const layout = read('src/app/_layout.tsx');
   assert.match(layout, /import \{ OnboardingLayer \} from '@\/features\/onboarding\/onboarding-layer';/);
-  assert.match(layout, /<Stack\.Screen name="pinned" \/>\n {10}<\/Stack>\n {10}<OnboardingLayer \/>\n {8}<\/AppDrawerProvider>/);
+  assert.match(layout, /<Stack\.Screen name="pinned" \/>\n {12}<Stack\.Screen name="calendar" \/>\n {10}<\/Stack>\n {10}<OnboardingLayer \/>\n {8}<\/AppDrawerProvider>/);
 });

@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } fro
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
+import { requestReminderSync } from '@/services/reminders';
 
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
@@ -83,6 +84,7 @@ export default function EditContentScreen() {
     setError(null);
     try {
       await messageRepository.updateText(messageId, draft.trim());
+      void requestReminderSync();
       justSavedRef.current = true;
       router.back();
     } catch {

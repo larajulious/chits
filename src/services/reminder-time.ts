@@ -1,4 +1,4 @@
-// Pure date logic for card reminders (no React Native imports, so it is unit-tested directly).
+// Pure date logic for Chits reminders (no React Native imports, so it is unit-tested directly).
 
 export type ReminderQuickKey = 'later-today' | 'tomorrow' | 'weekend';
 export type ReminderQuickOption = { key: ReminderQuickKey; label: string; date: Date };

@@ -56,13 +56,14 @@ test('notification text never exposes hidden notes or file details', () => {
   assert.equal(reminderBody({ hidden: false, text: null, title: 'Groceries', attachmentType: 'photo' }), 'Groceries');
 });
 
-test('sync clears fired or orphaned reminders and reschedules missing or stale ones', () => {
+test('sync retains overdue reminders and clears orphaned reminders', () => {
   const now = 1_000;
   const row = (cardId, overrides = {}) => ({ cardId, scheduledAt: 5_000, notificationId: `n-${cardId}`, cardActive: true, body: 'Text', ...overrides });
   const plan = planReminderSync(
     [row('kept'), row('fired', { scheduledAt: 900 }), row('archived', { cardActive: false }), row('missing'), row('edited', { body: 'New text' }), row('restored', { notificationId: null })],
     [
       { identifier: 'n-kept', cardId: 'kept', body: 'Text' },
+      { identifier: 'n-fired', cardId: 'fired', body: 'Text' },
       { identifier: 'n-edited', cardId: 'edited', body: 'Text' },
       { identifier: 'n-archived', cardId: 'archived', body: 'Text' },
       { identifier: 'n-gone-card', cardId: 'deleted-card', body: 'Text' },
@@ -70,9 +71,9 @@ test('sync clears fired or orphaned reminders and reschedules missing or stale o
     ],
     now,
   );
-  assert.deepEqual(plan.deleteRows.sort(), ['archived', 'fired']);
+  assert.deepEqual(plan.deleteRows.sort(), ['archived']);
   assert.deepEqual(plan.schedule.map((item) => item.cardId).sort(), ['edited', 'missing', 'restored']);
-  assert.deepEqual(plan.cancel.sort(), ['n-archived', 'n-duplicate', 'n-edited', 'n-gone-card']);
+  assert.deepEqual(plan.cancel.sort(), ['n-archived', 'n-duplicate', 'n-edited', 'n-fired', 'n-gone-card']);
 });
 
 test('card_reminders: one per card, and deleting the card removes its reminder', async () => {

@@ -18,7 +18,8 @@ async function fixture(t, populated = true) {
       INSERT INTO card_messages VALUES ('card','message',7.5);
       INSERT INTO card_comments VALUES ('comment','card','Keep comment',123,456,NULL);
       INSERT INTO timeline_events VALUES ('event','card_created',123,'message','card','board','{}','unique');
-      INSERT INTO card_reminders VALUES ('card',4102444800000,'OLD-DEVICE-ID',123,456);
+      INSERT INTO card_reminders (card_id, scheduled_at, notification_id, created_at, updated_at) VALUES ('card',4102444800000,'OLD-DEVICE-ID',123,456);
+      INSERT INTO message_reminders (message_id, scheduled_at, notification_id, created_at, updated_at) VALUES ('message',4102444800000,'OLD-MESSAGE-DEVICE-ID',123,456);
       INSERT INTO space_placements VALUES ('on-fridge','message',NULL,'fridge',0.1,0.2,-2.5,'#FFC7CC',3,123,456),('on-desk',NULL,'card','desk',0.9,0.4,1.5,'#FFE58A',1,123,456);
       INSERT INTO app_settings VALUES ('chat_title','My NoteSpace',123),('app_appearance','dark',123),('chat_color_theme','teal',123),('chat_draft_text','unfinished words',123),('chat_background','{"storagePath":"chits-attachments/backgrounds/photo.jpg","source":"device","deviceAssetId":"OLD-DEVICE","dim":0.6,"blur":true}',123);
     `);
@@ -72,6 +73,7 @@ test('round trip preserves content, IDs, ordering, privacy, archives, settings a
   const data = JSON.parse(background.value); delete data.deviceAssetId; background.value = JSON.stringify(data);
   assert.deepEqual(after, before);
   assert.equal(restored.prepare('SELECT notification_id FROM card_reminders').get().notification_id, null);
+  assert.deepEqual({ ...restored.prepare('SELECT message_id, scheduled_at, notification_id, completed_at FROM message_reminders').get() }, { message_id: 'message', scheduled_at: 4102444800000, notification_id: null, completed_at: null });
   assert.equal(restored.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
   assert.equal(restored.prepare('PRAGMA foreign_key_check').all().length, 0);
   for (const file of created.manifest.files) assert.equal(await env.native.hashFileAsync(`file:///chits-test-documents/${file.storagePath}`), file.sha256);

@@ -37,7 +37,7 @@ function truncate(text: string, max: number) {
 export type ReminderRow = { cardId: string; scheduledAt: number; notificationId: string | null; cardActive: boolean; body: string };
 export type ScheduledReminder = { identifier: string; cardId: string | null; body: string | null };
 export type ReminderSyncPlan = {
-  /** Rows to delete (already fired, or their card was archived/removed). */
+  /** Rows to delete because their card was archived/removed. */
   deleteRows: string[];
   /** Local notifications to cancel (orphans, duplicates, stale content). */
   cancel: string[];
@@ -47,7 +47,8 @@ export type ReminderSyncPlan = {
 
 /**
  * Reconciles stored reminders with what's actually scheduled on the device so
- * nothing is orphaned or silently lost: fired/removed reminders are cleared,
+ * nothing is orphaned or silently lost: fired reminders stay in SQLite as overdue,
+ * while removed/orphaned notifications are cleared,
  * notifications with no live reminder are cancelled, and reminders whose
  * notification is missing (restore, reinstall) or whose text changed (edited,
  * hidden) are rescheduled.
@@ -57,7 +58,10 @@ export function planReminderSync(rows: ReminderRow[], scheduled: ScheduledRemind
   const byId = new Map(scheduled.map((item) => [item.identifier, item]));
   const keep = new Set<string>();
   for (const row of rows) {
-    if (row.scheduledAt <= now || !row.cardActive) { plan.deleteRows.push(row.cardId); continue; }
+    if (!row.cardActive) { plan.deleteRows.push(row.cardId); continue; }
+    // A delivered reminder remains in SQLite as overdue until the person acts.
+    // Its device notification has already fired and must never be scheduled again.
+    if (row.scheduledAt <= now) continue;
     const current = row.notificationId ? byId.get(row.notificationId) : undefined;
     if (current && current.cardId === row.cardId && current.body === row.body) { keep.add(current.identifier); continue; }
     plan.schedule.push({ cardId: row.cardId, scheduledAt: row.scheduledAt, body: row.body });

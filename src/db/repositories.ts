@@ -28,7 +28,7 @@ const pageValues = (page: PageOptions) => [page.limit ?? DEFAULT_PAGE_SIZE, page
 const attachmentCardTitle = (message: { text: string | null; type: MessageType | null; originalName: string | null }) => message.text?.trim().slice(0, 120) || (message.type === 'file' ? message.originalName?.trim().slice(0, 120) || 'Attachment' : message.type === 'photo' ? 'Photo' : message.type === 'video' ? 'Video' : message.type === 'audio' ? 'Audio note' : 'Attachment');
 // "Now" inside SQL (ms), for selecting only upcoming reminders.
 const SQL_NOW_MS = "CAST(strftime('%s', 'now') AS INTEGER) * 1000";
-const UPCOMING_REMINDER_SQL = `(SELECT r.scheduled_at FROM card_reminders r WHERE r.card_id = c.id AND r.scheduled_at > ${SQL_NOW_MS})`;
+const UPCOMING_REMINDER_SQL = `(SELECT r.scheduled_at FROM card_reminders r WHERE r.card_id = c.id AND r.completed_at IS NULL AND r.scheduled_at > ${SQL_NOW_MS})`;
 const CARD_TITLE_SQL = `COALESCE(NULLIF(TRIM(c.title), ''), (SELECT COALESCE(NULLIF(TRIM(m.text), ''), CASE WHEN a.type = 'file' THEN COALESCE(NULLIF(TRIM(a.original_name), ''), 'Attachment') WHEN a.type = 'photo' THEN 'Photo' WHEN a.type = 'video' THEN 'Video' WHEN a.type = 'audio' THEN 'Audio note' ELSE 'Attachment' END) FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id LEFT JOIN attachments a ON a.message_id = m.id WHERE cm.card_id = c.id ORDER BY cm.position ASC, a.created_at ASC LIMIT 1), 'Attachment')`;
 // A card's total attachment count, across BOTH sources Card Details renders: the
 // attachments on its linked Chat messages AND its own directly-attached
@@ -871,14 +871,15 @@ export type ReminderSyncSource = CardReminder & {
 };
 export function createReminderRepository(database: SQLiteDatabase) {
   return {
-    get: (cardId: string) => database.getFirstAsync<CardReminder>('SELECT card_id AS cardId, scheduled_at AS scheduledAt, notification_id AS notificationId FROM card_reminders WHERE card_id = ?', cardId),
+    get: (cardId: string) => database.getFirstAsync<CardReminder>('SELECT card_id AS cardId, scheduled_at AS scheduledAt, notification_id AS notificationId FROM card_reminders WHERE card_id = ? AND completed_at IS NULL', cardId),
     // Upsert: a card has at most one reminder, so setting a new time replaces it.
     save: async (cardId: string, scheduledAt: number, notificationId: string | null) => {
       const now = Date.now();
-      await database.runAsync('INSERT INTO card_reminders (card_id, scheduled_at, notification_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(card_id) DO UPDATE SET scheduled_at = excluded.scheduled_at, notification_id = excluded.notification_id, updated_at = excluded.updated_at', cardId, scheduledAt, notificationId, now, now);
+      await database.runAsync('INSERT INTO card_reminders (card_id, scheduled_at, notification_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(card_id) DO UPDATE SET scheduled_at = excluded.scheduled_at, notification_id = excluded.notification_id, completed_at = NULL, updated_at = excluded.updated_at', cardId, scheduledAt, notificationId, now, now);
     },
     setNotificationId: (cardId: string, notificationId: string | null) => database.runAsync('UPDATE card_reminders SET notification_id = ?, updated_at = ? WHERE card_id = ?', notificationId, Date.now(), cardId),
     remove: (cardId: string) => database.runAsync('DELETE FROM card_reminders WHERE card_id = ?', cardId),
+    complete: (cardId: string) => database.runAsync('UPDATE card_reminders SET completed_at = ?, notification_id = NULL, updated_at = ? WHERE card_id = ? AND completed_at IS NULL', Date.now(), Date.now(), cardId),
     // Everything the sync needs to rebuild each notification's text and to know
     // whether its card is still live (not archived, board not archived).
     listForSync: () => database.getAllAsync<ReminderSyncSource>(`
@@ -890,7 +891,8 @@ export function createReminderRepository(database: SQLiteDatabase) {
         (SELECT a.type FROM card_messages cm INNER JOIN attachments a ON a.message_id = cm.message_id WHERE cm.card_id = r.card_id ORDER BY cm.position ASC, a.created_at ASC LIMIT 1) AS attachmentType
       FROM card_reminders r
       LEFT JOIN cards c ON c.id = r.card_id
-      LEFT JOIN boards b ON b.id = c.board_id`),
+      LEFT JOIN boards b ON b.id = c.board_id
+      WHERE r.completed_at IS NULL`),
     deleteMany: async (cardIds: string[]) => {
       if (!cardIds.length) return;
       await database.runAsync(`DELETE FROM card_reminders WHERE card_id IN (${cardIds.map(() => '?').join(', ')})`, ...cardIds);

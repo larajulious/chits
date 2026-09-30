@@ -10,8 +10,8 @@ import { isBackupOperationActive } from '@/services/backup-operation';
 const CHANNEL_ID = 'reminders';
 
 // ---------------------------------------------------------------------------
-// Change notifications: screens showing reminder state (Card details, card
-// lists) reload when a reminder is set, removed, fires or is reconciled.
+// Change notifications: screens showing reminder state (Calendar, Card details,
+// card lists) reload when a reminder is set, removed or reconciled.
 type Listener = () => void;
 let listeners: Listener[] = [];
 export function subscribeToReminderChanges(listener: Listener): () => void {
@@ -142,6 +142,72 @@ export async function removeCardReminder(database: SQLiteDatabase, cardId: strin
   emitReminderChange();
 }
 
+type MessageReminderRow = { messageId: string; scheduledAt: number; notificationId: string | null; text: string | null; hidden: number; attachmentType: 'photo' | 'video' | 'audio' | 'file' | 'text' | null; active: number };
+const MESSAGE_REMINDER_TYPE = 'message-reminder';
+async function getMessageReminder(database: SQLiteDatabase, messageId: string) {
+  return database.getFirstAsync<{ scheduledAt: number; notificationId: string | null }>('SELECT scheduled_at AS scheduledAt, notification_id AS notificationId FROM message_reminders WHERE message_id = ? AND completed_at IS NULL', messageId);
+}
+async function messageNotifications() {
+  return (await Notifications.getAllScheduledNotificationsAsync()).filter((item) => item.content.data?.type === MESSAGE_REMINDER_TYPE);
+}
+async function scheduleMessageNotification(messageId: string, scheduledAt: number, body: string) {
+  await ensureReminderChannel();
+  return Notifications.scheduleNotificationAsync({
+    content: { title: REMINDER_TITLE, body, sound: 'default', data: { type: MESSAGE_REMINDER_TYPE, messageId, url: `/chat?messageId=${messageId}` } },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(scheduledAt), channelId: CHANNEL_ID },
+  });
+}
+
+export async function setMessageReminder(database: SQLiteDatabase, messageId: string, scheduledAt: number): Promise<SetReminderResult> {
+  try {
+    const access = await ensureNotificationPermission();
+    if (access === 'denied') return { ok: false, reason: 'declined' };
+    if (access === 'blocked') return { ok: false, reason: 'blocked' };
+    const row = await database.getFirstAsync<{ text: string | null; hidden: number; attachmentType: MessageReminderRow['attachmentType'] }>(
+      'SELECT m.text, m.is_hidden_content AS hidden, (SELECT a.type FROM attachments a WHERE a.message_id = m.id ORDER BY a.created_at LIMIT 1) AS attachmentType FROM messages m WHERE m.id = ? AND m.deleted_at IS NULL AND m.archived_at IS NULL', messageId);
+    if (!row) return { ok: false, reason: 'failed' };
+    const previous = await getMessageReminder(database, messageId);
+    const body = reminderBody({ text: row.text, hidden: row.hidden === 1, attachmentType: row.attachmentType, title: null });
+    const notificationId = await scheduleMessageNotification(messageId, scheduledAt, body);
+    const now = Date.now();
+    try {
+      await database.runAsync('INSERT INTO message_reminders (message_id, scheduled_at, notification_id, completed_at, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?) ON CONFLICT(message_id) DO UPDATE SET scheduled_at = excluded.scheduled_at, notification_id = excluded.notification_id, completed_at = NULL, updated_at = excluded.updated_at', messageId, scheduledAt, notificationId, now, now);
+    } catch (error) { await cancelNotification(notificationId); throw error; }
+    await cancelNotification(previous?.notificationId);
+    for (const item of await messageNotifications()) if (item.content.data?.messageId === messageId && item.identifier !== notificationId) await cancelNotification(item.identifier);
+    emitReminderChange();
+    return { ok: true };
+  } catch (error) {
+    console.warn('[reminders] could not set message reminder', { messageId, error });
+    return { ok: false, reason: 'failed' };
+  }
+}
+
+export async function removeMessageReminder(database: SQLiteDatabase, messageId: string) {
+  const existing = await getMessageReminder(database, messageId);
+  await cancelNotification(existing?.notificationId);
+  for (const item of await messageNotifications()) if (item.content.data?.messageId === messageId) await cancelNotification(item.identifier);
+  await database.runAsync('DELETE FROM message_reminders WHERE message_id = ?', messageId);
+  emitReminderChange();
+}
+
+export async function completeReminder(database: SQLiteDatabase, kind: 'card' | 'message', id: string) {
+  if (kind === 'card') {
+    const repository = createReminderRepository(database);
+    const previous = await repository.get(id);
+    await repository.complete(id);
+    await cancelNotification(previous?.notificationId);
+    for (const item of await scheduledReminders()) if (item.cardId === id) await cancelNotification(item.identifier);
+  } else {
+    const previous = await getMessageReminder(database, id);
+    const now = Date.now();
+    await database.runAsync('UPDATE message_reminders SET completed_at = ?, notification_id = NULL, updated_at = ? WHERE message_id = ? AND completed_at IS NULL', now, now, id);
+    await cancelNotification(previous?.notificationId);
+    for (const item of await messageNotifications()) if (item.content.data?.messageId === id) await cancelNotification(item.identifier);
+  }
+  emitReminderChange();
+}
+
 // ---------------------------------------------------------------------------
 // Keeping the record and the device in step (see planReminderSync).
 
@@ -194,7 +260,31 @@ async function runSync(database: SQLiteDatabase) {
       }
     }
   }
-  if (changed) emitReminderChange();
+  const messageRows = await database.getAllAsync<MessageReminderRow>(`
+    SELECT r.message_id AS messageId, r.scheduled_at AS scheduledAt, r.notification_id AS notificationId,
+      m.text, m.is_hidden_content AS hidden,
+      (SELECT a.type FROM attachments a WHERE a.message_id = m.id ORDER BY a.created_at LIMIT 1) AS attachmentType,
+      (m.id IS NOT NULL AND m.deleted_at IS NULL AND m.archived_at IS NULL) AS active
+    FROM message_reminders r LEFT JOIN messages m ON m.id = r.message_id WHERE r.completed_at IS NULL`);
+  const deviceMessages = await messageNotifications();
+  const keepMessages = new Set<string>();
+  let messageChanged = false;
+  for (const row of messageRows) {
+    if (!row.active) { await database.runAsync('DELETE FROM message_reminders WHERE message_id = ?', row.messageId); messageChanged = true; continue; }
+    if (row.scheduledAt <= Date.now()) continue;
+    const body = reminderBody({ text: row.text, title: null, hidden: row.hidden === 1, attachmentType: row.attachmentType });
+    const current = deviceMessages.find((item) => item.identifier === row.notificationId);
+    if (current?.content.data?.messageId === row.messageId && current.content.body === body) { keepMessages.add(current.identifier); continue; }
+    if (!await hasNotificationPermission()) continue;
+    try {
+      const notificationId = await scheduleMessageNotification(row.messageId, row.scheduledAt, body);
+      await database.runAsync('UPDATE message_reminders SET notification_id = ?, updated_at = ? WHERE message_id = ?', notificationId, Date.now(), row.messageId);
+      messageChanged = true;
+      keepMessages.add(notificationId);
+    } catch (error) { console.warn('[reminders] could not reschedule message', { messageId: row.messageId, error }); }
+  }
+  for (const item of deviceMessages) if (!keepMessages.has(item.identifier)) await cancelNotification(item.identifier);
+  if (changed || messageChanged) emitReminderChange();
 }
 
 /**
@@ -229,22 +319,28 @@ export function reminderCardId(response: Notifications.NotificationResponse | nu
 
 /**
  * Wires notification taps (app open, backgrounded, or launched from a killed
- * state) to `openCard`, and clears fired reminders as they're delivered.
+ * state) to the original card or Chat note. Fired records remain available as overdue.
  * Returns an unsubscribe function.
  */
-export function observeReminderNotifications(openCard: (cardId: string) => void): () => void {
+export function observeReminderNotifications(openCard: (cardId: string) => void, openMessage?: (messageId: string) => void): () => void {
   const handle = (response: Notifications.NotificationResponse | null) => {
     const cardId = reminderCardId(response);
-    if (!cardId || isBackupOperationActive()) return;
+    const data = response?.notification.request.content.data;
+    const messageId = data?.type === MESSAGE_REMINDER_TYPE && typeof data.messageId === 'string' ? data.messageId : null;
+    if ((!cardId && !messageId) || isBackupOperationActive()) return;
     // Consume it so a later remount (e.g. after a restore) doesn't reopen the card.
     Notifications.clearLastNotificationResponse();
-    openCard(cardId);
+    if (cardId) openCard(cardId);
+    else if (messageId) openMessage?.(messageId);
     void requestReminderSync();
   };
   handle(Notifications.getLastNotificationResponse());
   const responses = Notifications.addNotificationResponseReceivedListener(handle);
   const received = Notifications.addNotificationReceivedListener((notification) => {
-    if (notification.request.content.data?.type === REMINDER_NOTIFICATION_TYPE) void requestReminderSync();
+    if (notification.request.content.data?.type === REMINDER_NOTIFICATION_TYPE || notification.request.content.data?.type === MESSAGE_REMINDER_TYPE) {
+      emitReminderChange();
+      void requestReminderSync();
+    }
   });
   return () => { responses.remove(); received.remove(); };
 }

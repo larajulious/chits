@@ -19,6 +19,7 @@ type Props = {
   onBringToFront: () => void;
   onMove: (spaceId: SpaceId) => void;
   onRemove: () => void;
+  onReminder?: () => void;
 };
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -41,7 +42,7 @@ function Tile({ icon, label, onPress, danger = false }: { icon: IconName; label:
  * Remove — which are also the non-drag way to arrange the board. Drawn over
  * the dimmed surface by the screen, which lifts the note itself above the dim.
  */
-export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onOpen, onBringToFront, onMove, onRemove }: Props) {
+export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onOpen, onBringToFront, onMove, onRemove, onReminder }: Props) {
   const insets = useSafeAreaInsets();
   const fonts = useSpaceFonts();
   const [moving, setMoving] = useState(false);
@@ -86,6 +87,7 @@ export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onOpen, o
       </View>
       </>}
       <View style={styles.grid}>
+        {onReminder ? <View style={styles.gridRow}><Tile icon="notifications-outline" label="Reminder" onPress={onReminder} /></View> : null}
         <View style={styles.gridRow}>
           <Tile icon="open-outline" label="Open note" onPress={onOpen} />
           <Tile icon="layers-outline" label="Bring to front" onPress={onBringToFront} />

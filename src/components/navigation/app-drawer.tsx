@@ -9,7 +9,7 @@ import { spacing } from '@/constants/theme';
 
 type DrawerContextValue = { openDrawer: () => void; closeDrawer: () => void };
 type IconName = ComponentProps<typeof Ionicons>['name'];
-type Destination = { label: string; path: '/' | '/archive' | '/settings' | '/onboarding'; icon: IconName };
+type Destination = { label: string; path: '/' | '/calendar' | '/archive' | '/settings' | '/onboarding'; icon: IconName };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
 // Boards, Chat, and Attachments are the 3 items in the bottom navigation; Archive
@@ -17,6 +17,7 @@ const DrawerContext = createContext<DrawerContextValue | null>(null);
 // ATTACHMENTS SCREEN) — Boards is listed again here too since the drawer is
 // reachable from every screen, not just Boards itself.
 const boardsDestination: Destination = { label: 'Notes', path: '/', icon: 'reader-outline' };
+const calendarDestination: Destination = { label: 'Calendar', path: '/calendar', icon: 'calendar-outline' };
 const archiveDestination: Destination = { label: 'Archive', path: '/archive', icon: 'archive-outline' };
 const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
 const gettingStartedDestination: Destination = { label: 'Getting started', path: '/onboarding', icon: 'compass-outline' };
@@ -75,6 +76,7 @@ function DrawerContent({ close }: { close: () => void }) {
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
         <NavigationRow destination={boardsDestination} pathname={pathname} close={close} />
+        <NavigationRow destination={calendarDestination} pathname={pathname} close={close} />
         <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
       </ScrollView>
       <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }]}>
