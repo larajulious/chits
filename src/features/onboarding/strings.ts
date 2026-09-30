@@ -1,0 +1,101 @@
+// Every onboarding string, under its own namespaced key. Chits has no i18n
+// system yet; keeping onboarding's copy in one catalog means it can move into
+// one later without touching the screens. Use `ot(key)` / `ot(key, { name })`.
+const strings = {
+  'welcome.skip': 'Skip',
+  'welcome.skipLabel': 'Skip the welcome tour',
+  'welcome.illustrationLabel': 'Illustration: a chat message becoming a card on a board',
+  'welcome.illustrationMessage': 'Groceries: eggs, milk, bread',
+  'welcome.illustrationColumn': 'Notes',
+  'welcome.headline': 'Chat your thoughts. Organize them later.',
+  'welcome.body': 'Send yourself anything, like a message. Turn it into cards and boards when you’re ready.',
+  'welcome.trust.account': 'No account needed',
+  'welcome.trust.offline': 'Works offline',
+  'welcome.trust.device': 'Your notes are saved on this phone',
+  'welcome.start': 'Start writing',
+  'welcome.restore': 'Restore from a backup',
+
+  'firstNote.title': 'This is your space',
+  'firstNote.body': 'Send yourself anything: an idea, a to-do, a password hint. Only you can see it.',
+  'firstNote.chipsLabel': 'Starters. Each one fills in the message box; you still tap send.',
+  'firstNote.chip.groceries': 'Groceries: eggs, milk, bread',
+  'firstNote.chip.idea': 'Idea: ',
+  'firstNote.chip.remind': 'Remind me to ',
+  'firstNote.chipHint': 'Fills in the message box',
+  'firstNote.next': 'Next',
+  'firstNote.skip': 'Skip tour',
+  'firstNote.saved': 'Saved on this phone',
+
+  'aha.title': 'Turn it into a card',
+  'aha.body': 'Long-press any message, then tap Add to Board. Your chat stays simple.',
+  'aha.example': 'Example',
+  'aha.exampleMessage': 'Groceries: eggs, milk, bread',
+  'aha.tryIt': 'Try it',
+  'aha.createPersonal': 'Create “{name}” and add',
+  'aha.createPersonalHint': 'Creates a board named {name} and puts this note on it as a card',
+  'aha.skip': 'Skip',
+  'aha.done': 'Got it',
+  'aha.error': 'That couldn’t be added. Try again, or use Try it.',
+  'aha.hidden': 'Hidden Chit',
+  'aha.photo': 'Photo', 'aha.video': 'Video', 'aha.audio': 'Audio note', 'aha.file': 'File', 'aha.thought': 'Thought',
+  'personalBoard': 'Personal',
+
+  'trick.title': 'That’s the whole trick',
+  'trick.body': 'Capture in your chat. Organize on boards, whenever you’re ready.',
+  'trick.back': 'Back to chat',
+  'trick.continue': 'Continue',
+  'trick.done': 'Done',
+
+  'setup.title': 'What will you use Chits for?',
+  'setup.body': 'Pick any. Each becomes a board you can rename or delete later, and Chits notes it in your chat.',
+  'setup.skip': 'Skip',
+  'setup.skipLabel': 'Skip quick setup',
+  'setup.create': 'Create {count} boards',
+  'setup.createOne': 'Create 1 board',
+  'setup.none': 'Continue',
+  'setup.have': 'Already on your boards',
+  'setup.creating': 'Creating…',
+  'setup.error': 'Those boards couldn’t be created. Please try again.',
+  'setup.board.personal': 'Personal', 'setup.board.work': 'Work', 'setup.board.study': 'Study', 'setup.board.home': 'Home', 'setup.board.projects': 'Projects',
+
+  'checklist.title': 'Getting started',
+  'checklist.progress': '{done} of {total} done',
+  'checklist.close': 'Close Getting started',
+  'checklist.allDone': 'You’re all set. Everything else is yours to explore.',
+  'checklist.new': 'NEW',
+  'checklist.done': 'Done',
+  'checklist.item.firstNote': 'Send your first note',
+  'checklist.item.firstNote.hint': 'Open Chat and send yourself anything',
+  'checklist.item.firstCard': 'Turn it into a card',
+  'checklist.item.firstCard.hint': 'Long-press a message, then Add to Board',
+  'checklist.item.reminder': 'Set a reminder',
+  'checklist.item.reminder.hint': 'Open a card and tap Remind me',
+  'checklist.item.space': 'Pin a note in a Space',
+  'checklist.item.space.hint': 'Stick a note on your Fridge, Desk, Cork board or Wall',
+
+  'hub.title': 'Getting started',
+  'hub.back': 'Go back',
+  'hub.intro': 'A quick tour of Chits, and a few things worth trying.',
+  'hub.replay': 'Replay the welcome tour',
+  'hub.replay.detail': 'Walks through Chat and boards again. Nothing is added or changed unless you do it yourself.',
+  'hub.showOnHome': 'Show on the Notes screen',
+  'hub.showOnHome.detail': 'Brings the Getting started card back to the Notes screen.',
+  'hub.shownOnHome': 'Showing on the Notes screen',
+  'hub.reset': 'Reset tips',
+  'hub.reset.detail': 'Clears the tour and checklist progress. Your notes, boards and settings stay as they are.',
+  'hub.reset.confirmTitle': 'Reset tips?',
+  'hub.reset.confirmMessage': 'This only clears Getting started progress. Nothing else in Chits changes.',
+  'hub.reset.confirm': 'Reset tips',
+  'hub.reset.cancel': 'Cancel',
+  'hub.reset.done': 'Tips reset',
+
+  'web.title': 'Getting started lives in the app',
+  'web.body': 'Open Chits on a device to take the tour.',
+} as const;
+
+export type OnboardingStringKey = keyof typeof strings;
+
+export function ot(key: OnboardingStringKey, values?: Record<string, string | number>) {
+  const template: string = strings[key];
+  return values ? template.replace(/\{(\w+)\}/g, (match, name: string) => (name in values ? String(values[name]) : match)) : template;
+}
