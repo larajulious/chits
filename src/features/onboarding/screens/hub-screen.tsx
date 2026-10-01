@@ -8,6 +8,7 @@ import { useTheme } from '@/components/theme-provider';
 import { BackHeader, Screen } from '@/components/ui/primitives';
 import { headingFontFamily, layout, radii, spacing } from '@/constants/theme';
 import { GettingStartedCard } from '../components/checklist-card';
+import { OnboardingMascot } from '../components/onboarding-mascot';
 import { ot } from '../strings';
 import { endTour, startTour } from '../tour';
 
@@ -29,7 +30,13 @@ export default function OnboardingHubScreen() {
     <BackHeader title={ot('hub.title')} onBack={() => router.canGoBack() ? router.back() : router.replace('/')} />
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.section}>
-        <Text accessibilityRole="header" style={[styles.sectionTitle, { color: theme.textPrimary, fontWeight: look.headingWeight, fontFamily: headingFontFamily(look.headingFont) }]}>{ot('hub.tour.title')}</Text>
+        <View style={styles.intro}>
+          <View style={styles.introCopy}>
+            <Text accessibilityRole="header" style={[styles.sectionTitle, { color: theme.textPrimary, fontWeight: look.headingWeight, fontFamily: headingFontFamily(look.headingFont) }]}>{ot('hub.tour.title')}</Text>
+            <Text style={[styles.description, { color: theme.textSecondary }]}>{ot('hub.intro')}</Text>
+          </View>
+          <OnboardingMascot size={88} />
+        </View>
         <Pressable accessibilityRole="button" accessibilityLabel={ot('hub.replay')} accessibilityHint={ot('hub.tour.description')} onPress={() => void replay()} style={({ pressed }) => [styles.tour, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.pressed]}>
           <View style={[styles.tourIcon, { backgroundColor: theme.accentSoft }]}><Ionicons accessible={false} name="play-outline" size={23} color={theme.accentStrong} /></View>
           <View style={styles.copy}>
@@ -48,6 +55,7 @@ export default function OnboardingHubScreen() {
 const styles = StyleSheet.create({
   content: { width: '100%', maxWidth: layout.maxContentWidth, alignSelf: 'center', padding: spacing.lg, paddingBottom: spacing.xl, gap: spacing.xl },
   section: { gap: spacing.sm }, sectionTitle: { fontSize: 18, fontWeight: '600' },
+  intro: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm }, introCopy: { flex: 1, minWidth: 0 },
   tour: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.compactCard, minHeight: 88 },
   tourIcon: { width: 44, height: 44, borderRadius: radii.control, justifyContent: 'center', alignItems: 'center' },
   copy: { flex: 1, minWidth: 0 }, actionTitle: { fontSize: 16, fontWeight: '600' }, description: { fontSize: 13, lineHeight: 19, marginTop: spacing.xxs },

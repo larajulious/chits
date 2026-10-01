@@ -8,6 +8,7 @@ import { PrimaryButton, Screen } from '@/components/ui/primitives';
 import { layout, spacing } from '@/constants/theme';
 import { createBoardRepository } from '@/db/repositories';
 import { createSelectedBoards } from '../board-setup';
+import { OnboardingMascot } from '../components/onboarding-mascot';
 import { ot, type OnboardingStringKey } from '../strings';
 import { endTour } from '../tour';
 
@@ -31,6 +32,7 @@ export default function OnboardingSetupScreen() {
   };
   return <Screen>
     <ScrollView contentContainerStyle={styles.content}>
+      <OnboardingMascot size={112} style={styles.mascot} />
       <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{ot('setup.title')}</Text>
       <Text style={[styles.body, { color: theme.textSecondary }]}>{ot('setup.body')}</Text>
       <View style={styles.chips}>{CHOICES.map((key) => {
@@ -51,6 +53,7 @@ export default function OnboardingSetupScreen() {
 
 const styles = StyleSheet.create({
   content: { width: '100%', maxWidth: layout.maxContentWidth, alignSelf: 'center', flexGrow: 1, justifyContent: 'center', padding: spacing.lg, gap: spacing.md },
+  mascot: { alignSelf: 'center', marginBottom: spacing.xs },
   title: { fontSize: 27, fontWeight: '700' }, body: { fontSize: 16, lineHeight: 23 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginVertical: spacing.md },
   chip: { minHeight: 52, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: spacing.md, justifyContent: 'center' },
   chipText: { fontSize: 16, fontWeight: '600' }, hint: { fontSize: 11 }, skip: { minHeight: 44, justifyContent: 'center', alignItems: 'center' },

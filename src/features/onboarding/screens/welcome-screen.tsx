@@ -2,16 +2,16 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '@/components/theme-provider';
 import { PrimaryButton, Screen } from '@/components/ui/primitives';
 import { headingFontFamily, layout, spacing } from '@/constants/theme';
 import { ChatToCardIllustration } from '../components/chat-to-card-illustration';
+import { OnboardingMascot } from '../components/onboarding-mascot';
 import { ot, type OnboardingStringKey } from '../strings';
 import { endTour, readTour, startTour, updateTour, type TourMode } from '../tour';
 
-const APP_ICON = require('@/assets/images/app_icon.png');
 // Only what is true of Chits today: no accounts, no network code, a local database.
 const TRUST_LINES: { icon: ComponentProps<typeof Ionicons>['name']; key: OnboardingStringKey }[] = [
   { icon: 'person-circle-outline', key: 'welcome.trust.account' },
@@ -66,7 +66,7 @@ export default function OnboardingWelcomeScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.inner}>
-          <Image source={APP_ICON} accessibilityIgnoresInvertColors style={styles.icon} />
+          <OnboardingMascot size={160} />
           <ChatToCardIllustration />
           <View style={styles.copy}>
             <Text accessibilityRole="header" style={[styles.headline, { color: theme.textPrimary, fontWeight: look.headingWeight, fontFamily: headingFontFamily(look.headingFont) }]}>{ot('welcome.headline')}</Text>
@@ -101,7 +101,6 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.6 },
   content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   inner: { width: '100%', maxWidth: 520, alignSelf: 'center', alignItems: 'center', gap: spacing.lg },
-  icon: { width: 112, height: 112, borderRadius: 26 },
   copy: { gap: spacing.xs },
   headline: { fontSize: 26, lineHeight: 32, textAlign: 'center' },
   body: { fontSize: 16, lineHeight: 23, textAlign: 'center' },
