@@ -759,6 +759,16 @@ export function createBoardRepository(database: SQLiteDatabase) {
     // ROW_NUMBER()/COUNT() OVER are ordinary SQLite window functions (present
     // since 3.25, long since bundled by expo-sqlite) — no extra per-card query
     // needed to pick "the" winning candidate or count the rest.
+    listCardSubtaskPreviews: () => database.getAllAsync<{ cardId: string; id: string; title: string; isCompleted: number }>(`
+      SELECT cardId, id, title, isCompleted FROM (
+        SELECT st.card_id AS cardId, st.id, st.title, st.is_completed AS isCompleted,
+          ROW_NUMBER() OVER (PARTITION BY st.card_id ORDER BY st.position, st.created_at, st.id) AS previewPosition
+        FROM card_subtasks st
+        INNER JOIN cards c ON c.id = st.card_id AND c.archived_at IS NULL
+        INNER JOIN boards b ON b.id = c.board_id AND b.archived_at IS NULL
+      ) WHERE previewPosition <= 4
+      ORDER BY cardId, previewPosition
+    `),
     listAllCardSummaries: (options: { searchTerm?: string } = {}) => {
       const term = options.searchTerm?.trim();
       const like = term ? `%${term.replace(/[%_]/g, '\\$&')}%` : null;

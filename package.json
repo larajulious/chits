@@ -9,6 +9,7 @@
     "@expo-google-fonts/space-mono": "^0.4.2",
     "@expo/ui": "~57.0.20",
     "@expo/vector-icons": "^15.0.2",
+    "@shopify/flash-list": "2.0.2",
     "expo": "~57.0.25",
     "expo-asset": "~57.0.18",
     "expo-audio": "~57.0.5",

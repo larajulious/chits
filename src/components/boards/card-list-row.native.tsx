@@ -113,9 +113,8 @@ function paperColors(accent: string | null, dark: boolean, theme: Pick<ThemeToke
 // One note in the Cards grid, designed as a *note* rather than a list item: a
 // sheet of paper whose content leads, with photos/videos inset at the top like
 // a clipped picture, voice notes as an audio pill, files as a document chip,
-// and a quiet footer pinned to the bottom saying where the note lives (the
-// board's color as a small dot) and when. Every variant shares the same paper,
-// padding and footer so the grid keeps one rhythm. Memoized since this list
+// and a quiet footer saying where the note lives and when. Heights follow
+// content, so a quick thought is as compact as it should be. Memoized since this list
 // can grow into the hundreds.
 export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: { item: CardListItem; onPress: () => void; onMore: () => void }) {
   const { scheme, tokens: theme, look } = useTheme();
@@ -154,6 +153,8 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
         // Details / Chat); the picture must not open its own viewer.
         <View pointerEvents="none" style={[styles.picture, { backgroundColor: theme.surfaceElevated }]}>
           <AttachmentContent attachment={picture} variant="grid" />
+          {picture.type === 'video' ? <View style={styles.videoPlay}><Ionicons accessible={false} name="play" size={20} color="#FFFFFF" /></View> : null}
+          {picture.type === 'video' && picture.duration ? <View style={styles.durationBadge}><Text style={styles.durationBadgeText}>{formatDurationSeconds(picture.duration)}</Text></View> : null}
           {overflowCount > 0 ? <View style={styles.overflowBadge}><Text style={styles.overflowBadgeText}>+{overflowCount}</Text></View> : null}
         </View>
       ) : null}
@@ -181,9 +182,22 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
         </>
       )}
 
+      {!item.hidden && item.subtaskPreview?.length ? (
+        <View style={styles.checklist}>
+          {item.subtaskPreview.map((subtask) => (
+            <View key={subtask.id} style={styles.checklistRow}>
+              <Ionicons accessible={false} name={subtask.isCompleted ? 'checkbox' : 'square-outline'} size={15} color={theme.textMuted} />
+              <Text numberOfLines={2} style={[styles.checklistText, { color: subtask.isCompleted ? theme.textMuted : theme.textPrimary }, subtask.isCompleted && styles.completedText]}>{subtask.title}</Text>
+            </View>
+          ))}
+          {item.subtaskCount > 4 ? <Text style={[styles.checklistMore, { color: theme.textMuted }]}>+{item.subtaskCount - 4} more</Text> : null}
+          <Text style={[styles.checklistProgress, { color: theme.textMuted }]}>{item.subtaskCount - item.completedSubtaskCount} remaining</Text>
+        </View>
+      ) : null}
+
       {audio ? (
         <View style={[styles.audioPill, { backgroundColor: theme.accentSoft }]}>
-          <Ionicons accessible={false} name="mic" size={14} color={theme.accentStrong} />
+          <View style={styles.waveform}>{[7, 14, 10, 18, 9, 14, 6].map((height, index) => <View key={index} style={[styles.waveformBar, { height, backgroundColor: theme.accentStrong }]} />)}</View>
           <Text style={[styles.audioText, { color: theme.accentStrong }]}>Voice note{audio.duration ? ` · ${formatDurationSeconds(audio.duration)}` : ''}</Text>
         </View>
       ) : null}
@@ -198,14 +212,10 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
 
       <View style={styles.footer}>
         <View style={styles.footerLeft}>
-          {item.boardName
-            ? <View style={[styles.boardDot, { backgroundColor: item.boardAccent ?? theme.textMuted }]} />
-            : <Ionicons accessible={false} name="file-tray-outline" size={13} color={theme.textMuted} />}
           <Text numberOfLines={1} style={[styles.location, { color: theme.textSecondary }]}>{location}</Text>
         </View>
         <View style={styles.footerMeta}>
           {item.pinned ? <Ionicons accessible={false} name="pin" size={12} color={theme.textMuted} /> : null}
-          {!item.hidden && item.subtaskCount ? <View style={styles.fileBadge}><Ionicons accessible={false} name="checkbox-outline" size={13} color={theme.textMuted} /><Text style={[styles.fileBadgeText, { color: theme.textMuted }]}>{item.completedSubtaskCount}/{item.subtaskCount}</Text></View> : null}
           {showFileBadge ? <View style={styles.fileBadge}><Ionicons accessible={false} name="attach" size={13} color={theme.textMuted} /><Text style={[styles.fileBadgeText, { color: theme.textMuted }]}>{item.fileCount}</Text></View> : null}
           <Text style={[styles.date, { color: theme.textMuted }]}>{formatCardDate(item.updatedAt)}</Text>
         </View>
@@ -218,18 +228,26 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
 });
 
 const styles = StyleSheet.create({
-  // flex: 1 + space-between: notes in a grid row share a height and keep their footer at the bottom.
-  note: { flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0, justifyContent: 'space-between', paddingHorizontal: 14, paddingTop: 14, paddingBottom: 8, borderRadius: radii.contentCard, borderWidth: StyleSheet.hairlineWidth },
+  note: { minWidth: 0, paddingHorizontal: 13, paddingTop: 13, paddingBottom: 8, borderRadius: radii.contentCard, borderWidth: StyleSheet.hairlineWidth },
   // A soft lift so the note reads as paper on the page, not a table row.
-  paperShadow: { shadowColor: '#000000', shadowOpacity: 0.07, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
+  paperShadow: { shadowColor: '#000000', shadowOpacity: 0.04, shadowRadius: 7, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
   pressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
   noteContent: { minWidth: 0, alignSelf: 'stretch' },
   picture: { height: 118, marginBottom: 10, borderRadius: 12, overflow: 'hidden' },
+  videoPlay: { position: 'absolute', alignSelf: 'center', top: 39, width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.55)' },
+  durationBadge: { position: 'absolute', left: 7, bottom: 7, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.62)' },
+  durationBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '600' },
   overflowBadge: { position: 'absolute', right: 8, bottom: 8, minWidth: 26, height: 20, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.62)' },
   overflowBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
-  title: { fontSize: 15.5, lineHeight: 20, fontWeight: '700', letterSpacing: -0.1 },
-  body: { fontSize: 15, lineHeight: 21 },
-  bodyUnderTitle: { marginTop: 4, fontSize: 13.5, lineHeight: 19 },
+  title: { fontSize: 16, lineHeight: 22, fontWeight: '700', letterSpacing: -0.1 },
+  body: { fontSize: 15.5, lineHeight: 22 },
+  bodyUnderTitle: { marginTop: 5, fontSize: 14, lineHeight: 20 },
+  checklist: { marginTop: 12, gap: 6 },
+  checklistRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  checklistText: { flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 17 },
+  completedText: { textDecorationLine: 'line-through' },
+  checklistMore: { fontSize: 11.5, marginLeft: 21 },
+  checklistProgress: { fontSize: 11, marginTop: 2 },
   flexCopy: { flex: 1, minWidth: 0 },
   hiddenRow: { gap: spacing.xs },
   hiddenIcon: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 17 },
@@ -239,14 +257,15 @@ const styles = StyleSheet.create({
   fileIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 11 },
   fileName: { fontSize: 14, lineHeight: 19, fontWeight: '600' },
   fileMeta: { marginTop: 1, fontSize: 12, lineHeight: 16 },
-  audioPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 28, marginTop: 10, paddingHorizontal: 10, borderRadius: radii.pill },
+  audioPill: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 34, marginTop: 10, paddingHorizontal: 9, borderRadius: 10 },
+  waveform: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  waveformBar: { width: 2, borderRadius: 2, opacity: 0.8 },
   audioText: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
   reminderLine: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 },
   reminderText: { flexShrink: 1, fontSize: 11.5, fontWeight: '600', fontVariant: ['tabular-nums'] },
   footer: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 12 },
   footerLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 5 },
   footerMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  boardDot: { width: 8, height: 8, borderRadius: 4 },
   location: { flexShrink: 1, fontSize: 12, fontWeight: '600' },
   fileBadge: { flexDirection: 'row', alignItems: 'center', gap: 1 },
   fileBadgeText: { fontSize: 11, fontWeight: '600', fontVariant: ['tabular-nums'] },

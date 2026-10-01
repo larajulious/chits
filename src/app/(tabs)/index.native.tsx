@@ -1,17 +1,17 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { FlashList } from '@shopify/flash-list';
 import { router, useFocusEffect } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
-  SectionList,
   StyleSheet,
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 
 import { useAppDrawer } from '@/components/navigation/app-drawer';
@@ -21,7 +21,7 @@ import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
 import { AppHeader, EmptyState, IconButton, Screen, Toast, HeaderIcon, MenuIcon } from '@/components/ui/primitives';
 import { AddNoteSheet, type NoteSubmission } from '@/components/boards/add-note-sheet';
-import { groupByMonth } from '@/services/card-grouping';
+import { groupRecentNotes } from '@/services/card-grouping';
 import { detachConfirmationMessage } from '@/services/detach-card';
 import { requestReminderSync, subscribeToReminderChanges } from '@/services/reminders';
 import { BoardAppearanceFields } from '@/components/boards/board-appearance-fields';
@@ -39,17 +39,8 @@ import { StickyGreeting } from '@/components/mascot/sticky-greeting.native';
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 type ViewMode = 'boards' | 'cards';
 
-// Height of the soft fade at the bottom of the sticky month headers.
-const SECTION_HEADER_FADE = 18;
-// Notes render as a two-column grid, so each list row is a pair of notes
-// (virtualized per row); `count` keeps the header honest about notes, not rows.
-type CardSection = { key: string; title: string; month?: string; year?: string; pinned?: boolean; count: number; data: CardListItem[][] };
-
-function pairs<T>(items: T[]): T[][] {
-  const rows: T[][] = [];
-  for (let index = 0; index < items.length; index += 2) rows.push(items.slice(index, index + 2));
-  return rows;
-}
+type CardSection = { key: string; title: string; pinned?: boolean; count: number; data: CardListItem[] };
+type CollectionCell = { kind: 'header'; section: CardSection } | { kind: 'note'; item: CardListItem };
 type UnorganizedSummaryRow = { id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; isHiddenContent: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number };
 
 function pluralize(count: number, singular: string) {
@@ -91,7 +82,7 @@ function unorganizedToCardListItem(row: UnorganizedSummaryRow): CardListItem {
 // have cards get a chip — filtering to an empty board would be a dead end).
 type CardFilter = 'all' | 'unorganized' | (string & {});
 
-type CardFilterChip = { key: CardFilter; label: string; count: number; color?: string | null };
+type CardFilterChip = { key: CardFilter; label: string; count: number };
 
 function CardFilterChips({ chips, filter, onChange }: { chips: CardFilterChip[]; filter: CardFilter; onChange: (next: CardFilter) => void }) {
   const { tokens: theme } = useTheme();
@@ -108,12 +99,11 @@ function CardFilterChips({ chips, filter, onChange }: { chips: CardFilterChip[];
             onPress={() => onChange(chip.key)}
             style={[
               styles.chip,
-              { backgroundColor: selected ? theme.accent : theme.surfaceElevated, borderColor: selected ? theme.accent : theme.borderSubtle },
+              { backgroundColor: selected ? theme.accentSoft : 'transparent', borderColor: selected ? theme.accentBorder : 'transparent' },
             ]}
           >
-            {chip.color ? <View style={[styles.chipDot, { backgroundColor: chip.color }, selected && styles.chipDotSelected]} /> : null}
-            <Text numberOfLines={1} style={[styles.chipLabel, { color: selected ? theme.accentText : theme.textSecondary }]}>
-              {chip.label} <Text style={[styles.chipCountInline, { color: selected ? theme.accentText : theme.textMuted, opacity: selected ? 0.85 : 0.75 }]}>{chip.count}</Text>
+            <Text numberOfLines={1} style={[styles.chipLabel, { color: selected ? theme.accentStrong : theme.textSecondary }]}>
+              {chip.label} <Text style={[styles.chipCountInline, { color: selected ? theme.accentStrong : theme.textMuted, opacity: 0.72 }]}>{chip.count}</Text>
             </Text>
           </Pressable>
         );
@@ -148,6 +138,8 @@ function ViewSwitch({ mode, onChange }: { mode: ViewMode; onChange: (next: ViewM
 }
 
 export default function BoardsScreen() {
+  const { width, fontScale } = useWindowDimensions();
+  const cardColumns = width < 350 || fontScale >= 1.3 ? 1 : 2;
   const database = useSQLiteContext();
   const boardRepository = useMemo(() => createBoardRepository(database), [database]);
   const messageRepository = useMemo(() => createMessageRepository(database), [database]);
@@ -207,14 +199,21 @@ export default function BoardsScreen() {
   }, [boardRepository, database, messageRepository]);
 
   const loadCards = useCallback(async () => {
-    const [cardRows, thoughtRows] = await Promise.all([
+    const [cardRows, thoughtRows, subtaskRows] = await Promise.all([
       boardRepository.listAllCardSummaries(),
       messageRepository.listUnorganizedSummaries(),
+      boardRepository.listCardSubtaskPreviews(),
     ]);
+    const subtasksByCard = new Map<string, { id: string; title: string; isCompleted: boolean }[]>();
+    for (const row of subtaskRows) {
+      const preview = subtasksByCard.get(row.cardId) ?? [];
+      preview.push({ id: row.id, title: row.title, isCompleted: row.isCompleted === 1 });
+      subtasksByCard.set(row.cardId, preview);
+    }
     // A card whose thought is hidden in Chat is covered here too, the same as on its board.
     setCards(cardRows.map(({ isHidden, ...row }) => isHidden === 1
       ? { ...row, kind: 'card' as const, title: 'Hidden Chit', preview: null, pinned: row.pinned === 1, hidden: true, previewMediaType: null, thumbnailPath: null, mediaDuration: null, mediaCount: 0 }
-      : { ...row, kind: 'card' as const, pinned: row.pinned === 1, hidden: false, mediaCount: row.mediaCount ?? 0 }));
+      : { ...row, kind: 'card' as const, pinned: row.pinned === 1, hidden: false, mediaCount: row.mediaCount ?? 0, subtaskPreview: subtasksByCard.get(row.id) ?? [] }));
     setUnorganizedThoughts(thoughtRows.map(unorganizedToCardListItem));
   }, [boardRepository, messageRepository]);
   // Card deletes/archives/hides go through loadCards afterwards, so reconciling
@@ -251,7 +250,7 @@ export default function BoardsScreen() {
       { key: 'unorganized', label: 'Unorganized', count: unorganizedThoughts.length },
       ...boards
         .filter((board) => board.cardCount > 0)
-        .map((board) => ({ key: board.id, label: board.name, count: perBoardCount.get(board.id) ?? 0, color: board.accent })),
+        .map((board) => ({ key: board.id, label: board.name, count: perBoardCount.get(board.id) ?? 0 })),
     ];
   }, [boards, cards, unorganizedThoughts]);
 
@@ -266,15 +265,24 @@ export default function BoardsScreen() {
       : cards.filter((card) => card.boardId === cardFilter);
     const pinned = all.filter((item) => item.pinned).sort((a, b) => b.updatedAt - a.updatedAt);
     const rest = all.filter((item) => !item.pinned).sort((a, b) => b.updatedAt - a.updatedAt);
-    // Pinned stays on top; everything else is grouped by month, newest first.
-    const months = groupByMonth(rest);
+    // Pinned stays on top; recent notes use familiar calendar headings.
+    const groups = groupRecentNotes(rest);
     return [
-      ...(pinned.length ? [{ key: 'pinned', title: 'Pinned', pinned: true, count: pinned.length, data: pairs(pinned) }] : []),
-      ...(months.length
-        ? months.map((month) => ({ key: month.key, title: month.title, month: month.month, year: month.year, count: month.items.length, data: pairs(month.items) }))
-        : [{ key: 'all', title: 'All cards', count: 0, data: [] }]),
+      ...(pinned.length ? [{ key: 'pinned', title: 'Pinned', pinned: true, count: pinned.length, data: pinned }] : []),
+      ...groups.map((group) => ({ key: group.key, title: group.title, count: group.items.length, data: group.items })),
     ];
   }, [cards, unorganizedThoughts, cardFilter]);
+
+  const collection = useMemo(() => {
+    const cells: CollectionCell[] = [];
+    const stickyHeaderIndices: number[] = [];
+    for (const section of cardSections) {
+      stickyHeaderIndices.push(cells.length);
+      cells.push({ kind: 'header', section });
+      for (const item of section.data) cells.push({ kind: 'note', item });
+    }
+    return { cells, stickyHeaderIndices };
+  }, [cardSections]);
 
   // "Move back to Unorganized" — always confirmed first. Fetches a lightweight
   // preview (this row doesn't have message/comment/attachment counts loaded the
@@ -449,62 +457,49 @@ export default function BoardsScreen() {
 
         {viewMode === 'cards' ? (
           totalCardCount === 0 ? (
-            <EmptyState title="No cards yet" description="Notes you organize into your boards will appear here." />
+            <View style={styles.emptyWrap}>
+              <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>Your thoughts will show up here.</Text>
+              <Text style={[styles.emptyDescription, { color: theme.textSecondary }]}>Send yourself something in Chat and it becomes a note you can organize later.</Text>
+              <Pressable accessibilityRole="button" onPress={() => router.push('/chat?focusInput=1')} style={[styles.emptyCreateButton, { backgroundColor: theme.accent }]}>
+                <Text style={[styles.emptyCreateText, { color: theme.accentText }]}>Start a Chit</Text>
+              </Pressable>
+            </View>
           ) : (
             <>
               <CardFilterChips chips={cardFilterChips} filter={cardFilter} onChange={setCardFilter} />
-              {cardSections.every((section) => section.data.length === 0) ? (
+              {collection.cells.length === 0 ? (
                 <EmptyState title="No cards in this filter" description="Choose another board or All cards." />
               ) : (
-                <SectionList
+                <FlashList
+                  key={`cards-${cardColumns}`}
                   style={styles.cardList}
-                  sections={cardSections}
-                  keyExtractor={(row) => row.map((item) => item.id).join('|')}
-                  renderItem={({ item: row }) => (
-                    <View style={styles.noteRow}>
-                      {row.map((item) => (
-                        <CardListRow
-                          key={item.id}
-                          item={item}
-                          onPress={() => router.push(item.kind === 'thought' ? `/chat?messageId=${item.id}` : `/card/${item.id}`)}
-                          onMore={() => void openCardActions(item)}
-                        />
-                      ))}
-                      {row.length === 1 ? <View style={styles.noteSpacer} /> : null}
-                    </View>
-                  )}
-                  // Month headers stick while scrolling so it's always clear which
-                  // month you're looking at. The header is opaque and spans the
-                  // full width (negative margin over the list's side padding) so
-                  // notes pass cleanly underneath it.
-                  renderSectionHeader={({ section }) => (
-                    <View accessibilityRole="header" accessibilityLabel={`${section.title}, ${section.count} ${section.count === 1 ? 'note' : 'notes'}`} style={styles.sectionHeaderRow}>
-                      {/* Solid behind the title, then a soft fade in the header's own
-                          bottom padding: notes dissolve under a stuck header instead of
-                          meeting a hard edge, and an unstuck header fades only empty space. */}
-                      <View pointerEvents="none" style={[styles.sectionHeaderSolid, { backgroundColor: theme.background }]} />
-                      <LinearGradient pointerEvents="none" colors={[theme.background, `${theme.background}00`]} style={styles.sectionHeaderFade} />
+                  data={collection.cells}
+                  masonry
+                  numColumns={cardColumns}
+                  optimizeItemArrangement={false}
+                  overrideItemLayout={(layout, cell) => { layout.span = cell.kind === 'header' ? cardColumns : 1; }}
+                  keyExtractor={(cell) => cell.kind === 'header' ? `section-${cell.section.key}` : `${cell.item.kind}-${cell.item.id}`}
+                  getItemType={(cell) => cell.kind}
+                  stickyHeaderIndices={collection.stickyHeaderIndices}
+                  extraData={theme}
+                  renderItem={({ item: cell }) => cell.kind === 'header' ? (
+                    <View accessibilityRole="header" accessibilityLabel={`${cell.section.title}, ${cell.section.count} ${cell.section.count === 1 ? 'note' : 'notes'}`} style={[styles.sectionHeaderRow, { backgroundColor: theme.background }]}>
                       <View style={styles.sectionHeaderTitle}>
-                        {section.pinned ? <Ionicons accessible={false} name="pin" size={17} color={theme.textPrimary} /> : null}
-                        <Text numberOfLines={1} style={[styles.cardSectionMonth, { color: theme.textPrimary }]}>
-                          {section.month ?? section.title}
-                          {section.year ? <Text style={[styles.cardSectionYear, { color: theme.textMuted }]}>{`  ${section.year}`}</Text> : null}
-                        </Text>
+                        {cell.section.pinned ? <Ionicons accessible={false} name="pin" size={14} color={theme.textSecondary} /> : null}
+                        <Text numberOfLines={1} style={[styles.cardSectionMonth, { color: theme.textPrimary }]}>{cell.section.title}</Text>
                       </View>
-                      <View style={[styles.cardSectionCountPill, { backgroundColor: theme.surfaceElevated }]}>
-                        <Text style={[styles.cardSectionCount, { color: theme.textSecondary }]}>{section.count} {section.count === 1 ? 'note' : 'notes'}</Text>
-                      </View>
+                      <Text style={[styles.cardSectionCount, { color: theme.textMuted }]}>{cell.section.count}</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.noteCell}>
+                      <CardListRow
+                        item={cell.item}
+                        onPress={() => router.push(cell.item.kind === 'thought' ? `/chat?messageId=${cell.item.id}` : `/card/${cell.item.id}`)}
+                        onMore={() => void openCardActions(cell.item)}
+                      />
                     </View>
                   )}
-                  renderSectionFooter={() => <View style={styles.sectionGap} />}
-                  stickySectionHeadersEnabled
                   contentContainerStyle={[styles.cardListContent, { paddingBottom: tabBarHeight + spacing.md }]}
-                  initialNumToRender={12}
-                  maxToRenderPerBatch={12}
-                  windowSize={7}
-                  // No removeClippedSubviews: combined with sticky section headers it
-                  // blanks the list on Android (React Native bug). windowSize and
-                  // maxToRenderPerBatch already bound how much is mounted.
                 />
               )}
             </>
@@ -658,31 +653,18 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: spacing.md, flexGrow: 1 },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  // Header to tabs: 16. The filters sit directly below the tabs.
-  switchWrap: { paddingHorizontal: spacing.md, paddingTop: 16, paddingBottom: 0 },
+  switchWrap: { paddingHorizontal: spacing.md, paddingTop: 12, paddingBottom: 0 },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
   switchTrack: { flexDirection: 'row', height: 32, borderRadius: radii.control, padding: 3 },
   switchOption: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: radii.control - 2 },
   switchLabel: { fontSize: 13, fontWeight: '600' },
   cardList: { flex: 1 },
-  // Two equal columns; notes in a row stretch to the taller one so the grid stays tidy.
-  noteRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12, marginBottom: 12 },
-  noteSpacer: { flexGrow: 1, flexShrink: 1, flexBasis: 0 },
-  cardListContent: { paddingHorizontal: spacing.md, paddingTop: 0, flexGrow: 1 },
-  // Section headers (Pinned, then one per month) are real, sticky headings:
-  // a large bold month with a lighter year, and the note count as a pill.
-  // Spacing between sections comes from `sectionGap` (the section footer),
-  // not header padding, so a stuck header stays compact.
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginHorizontal: -spacing.md, paddingHorizontal: spacing.md, paddingTop: spacing.xs, paddingBottom: SECTION_HEADER_FADE },
-  // Overlaps the fade by 1pt so pixel rounding can't leave a hairline seam between them.
-  sectionHeaderSolid: { position: 'absolute', top: 0, right: 0, bottom: SECTION_HEADER_FADE - 1, left: 0 },
-  sectionHeaderFade: { position: 'absolute', right: 0, bottom: 0, left: 0, height: SECTION_HEADER_FADE },
+  noteCell: { paddingHorizontal: 6, paddingBottom: 12 },
+  cardListContent: { paddingHorizontal: 10, paddingTop: 0 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, minHeight: 48, paddingHorizontal: 6, paddingTop: 10, paddingBottom: 8 },
   sectionHeaderTitle: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  cardSectionMonth: { flexShrink: 1, fontSize: 22, lineHeight: 28, fontWeight: '800', letterSpacing: -0.3 },
-  cardSectionYear: { fontSize: 22, fontWeight: '500', letterSpacing: -0.3 },
-  cardSectionCountPill: { minHeight: 26, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 13 },
-  cardSectionCount: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  sectionGap: { height: spacing.md },
+  cardSectionMonth: { flexShrink: 1, fontSize: 17, lineHeight: 22, fontWeight: '700', letterSpacing: -0.2 },
+  cardSectionCount: { fontSize: 12, fontWeight: '500', fontVariant: ['tabular-nums'] },
   // Fixed, content-only height — flexGrow/flexShrink pinned to 0 so this
   // horizontal ScrollView can never inherit leftover vertical space from its
   // flex-column parent (the exact bug that was reserving a large empty gap
@@ -690,16 +672,12 @@ const styles = StyleSheet.create({
   // stretching to fill available height instead of sizing to its chips).
   // A compact gap separates the tabs from filters; the section heading follows
   // without the space once reserved for an inline search field.
-  chipScroll: { height: 26, flexGrow: 0, flexShrink: 0, marginTop: 12, marginBottom: spacing.xxs },
+  chipScroll: { height: 30, flexGrow: 0, flexShrink: 0, marginTop: 8, marginBottom: 2 },
   chipRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md },
-  // Quiet by default — only the selected chip (theme.accent fill) is meant to
-  // stand out; unselected chips stay small and low-contrast so they read as
-  // supporting tools, not a dashboard of their own.
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 26, paddingHorizontal: 8, borderRadius: radii.pill, borderWidth: StyleSheet.hairlineWidth },
-  chipDot: { width: 6, height: 6, borderRadius: 3 },
-  chipDotSelected: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)' },
-  chipLabel: { fontSize: 11, fontWeight: '600' },
-  chipCountInline: { fontSize: 11, fontWeight: '600' },
+  // Filters remain secondary to the notes: a soft accent marks selection.
+  chip: { flexDirection: 'row', alignItems: 'center', height: 30, paddingHorizontal: 10, borderRadius: radii.pill, borderWidth: StyleSheet.hairlineWidth },
+  chipLabel: { fontSize: 12, fontWeight: '600' },
+  chipCountInline: { fontSize: 11, fontWeight: '500' },
   intro: { fontSize: 14, lineHeight: 20, marginBottom: spacing.md },
   unorganized: { minHeight: 76, flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: spacing.sm, borderWidth: StyleSheet.hairlineWidth, borderRadius: 18 },
   unorganizedMark: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
