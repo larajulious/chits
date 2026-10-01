@@ -518,7 +518,35 @@ export function createBoardRepository(database: SQLiteDatabase) {
     async restoreBoard(id: string) { const result = await database.runAsync('UPDATE boards SET archived_at = NULL, updated_at = ? WHERE id = ?', Date.now(), id); if (result.changes !== 1) throw new Error('That board is no longer available.'); },
     async restoreCard(id: string) { const result = await database.runAsync('UPDATE cards SET archived_at = NULL, updated_at = ? WHERE id = ?', Date.now(), id); if (result.changes !== 1) throw new Error('That card is no longer available.'); },
     listArchived: () => database.getAllAsync<{ id: string; title: string; kind: 'message' | 'card' | 'board'; archivedAt: number }>(`SELECT id, CASE WHEN is_hidden_content = 1 THEN 'Hidden Chit' ELSE COALESCE(text, 'Attachment') END AS title, 'message' AS kind, archived_at AS archivedAt FROM messages WHERE archived_at IS NOT NULL UNION ALL SELECT id, COALESCE(title, 'Related thoughts') AS title, 'card' AS kind, archived_at AS archivedAt FROM cards WHERE archived_at IS NOT NULL UNION ALL SELECT id, name AS title, 'board' AS kind, archived_at AS archivedAt FROM boards WHERE archived_at IS NOT NULL ORDER BY archivedAt DESC`),
-    search: (term: string, includeArchived = false) => { const like = `%${term.replace(/[%_]/g, '\\$&')}%`; return database.getAllAsync<{ id: string; title: string; context: string; kind: 'message' | 'card' | 'board' | 'file' }>(`SELECT id, CASE WHEN is_hidden_content = 1 THEN 'Hidden Chit' ELSE text END AS title, 'Chat' AS context, 'message' AS kind FROM messages WHERE text LIKE ? ESCAPE '\\' ${includeArchived ? '' : 'AND archived_at IS NULL AND deleted_at IS NULL'} UNION ALL SELECT c.id, COALESCE(c.title, 'Related thoughts') AS title, b.name AS context, 'card' AS kind FROM cards c INNER JOIN boards b ON b.id = c.board_id WHERE c.title LIKE ? ESCAPE '\\' ${includeArchived ? '' : 'AND c.archived_at IS NULL AND b.archived_at IS NULL'} UNION ALL SELECT b.id, b.name AS title, 'Board' AS context, 'board' AS kind FROM boards b WHERE b.name LIKE ? ESCAPE '\\' ${includeArchived ? '' : 'AND b.archived_at IS NULL'} UNION ALL SELECT a.message_id AS id, CASE WHEN m.is_hidden_content = 1 THEN 'Hidden Chit' ELSE COALESCE(a.original_name, 'Attachment') END AS title, CASE WHEN m.is_hidden_content = 1 THEN 'Chat' ELSE 'File' END AS context, 'file' AS kind FROM attachments a INNER JOIN messages m ON m.id = a.message_id WHERE a.original_name LIKE ? ESCAPE '\\' ORDER BY title COLLATE NOCASE LIMIT 100`, like, like, like, like); },
+    search: (term: string, includeArchived = false, boardId?: string) => {
+      const like = `%${term.replace(/[%_]/g, '\\$&')}%`;
+      type SearchResult = { id: string; title: string; context: string; kind: 'message' | 'card' | 'board' | 'file' };
+      if (boardId) {
+        // One result per card, including matches in any linked thought or either
+        // attachment source. Hidden thoughts never contribute searchable text.
+        return database.getAllAsync<SearchResult>(`
+          SELECT c.id,
+            CASE WHEN EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id AND m.is_hidden_content = 1)
+              THEN 'Hidden Chit' ELSE ${CARD_TITLE_SQL} END AS title,
+            b.name || ' · ' || bc.name AS context, 'card' AS kind
+          FROM cards c
+          INNER JOIN boards b ON b.id = c.board_id
+          INNER JOIN board_columns bc ON bc.id = c.column_id
+          WHERE c.board_id = ?
+            ${includeArchived ? '' : 'AND c.archived_at IS NULL AND b.archived_at IS NULL'}
+            AND (
+              bc.name LIKE ? ESCAPE '\\'
+              OR (NOT EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id AND m.is_hidden_content = 1)
+                AND (c.title LIKE ? ESCAPE '\\'
+                  OR EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id AND m.deleted_at IS NULL AND m.is_hidden_content = 0 AND m.text LIKE ? ESCAPE '\\')
+                  OR EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id INNER JOIN attachments a ON a.message_id = m.id WHERE cm.card_id = c.id AND m.deleted_at IS NULL AND m.is_hidden_content = 0 AND a.original_name LIKE ? ESCAPE '\\')
+                  OR EXISTS (SELECT 1 FROM card_attachments ca WHERE ca.card_id = c.id AND ca.deleted_at IS NULL AND ca.original_name LIKE ? ESCAPE '\\')))
+            )
+          ORDER BY c.updated_at DESC LIMIT 100
+        `, boardId, like, like, like, like, like);
+      }
+      return database.getAllAsync<SearchResult>(`SELECT id, CASE WHEN is_hidden_content = 1 THEN 'Hidden Chit' ELSE text END AS title, 'Chat' AS context, 'message' AS kind FROM messages WHERE text LIKE ? ESCAPE '\\' ${includeArchived ? '' : 'AND archived_at IS NULL AND deleted_at IS NULL'} UNION ALL SELECT c.id, COALESCE(c.title, 'Related thoughts') AS title, b.name AS context, 'card' AS kind FROM cards c INNER JOIN boards b ON b.id = c.board_id WHERE c.title LIKE ? ESCAPE '\\' ${includeArchived ? '' : 'AND c.archived_at IS NULL AND b.archived_at IS NULL'} UNION ALL SELECT b.id, b.name AS title, 'Board' AS context, 'board' AS kind FROM boards b WHERE b.name LIKE ? ESCAPE '\\' ${includeArchived ? '' : 'AND b.archived_at IS NULL'} UNION ALL SELECT a.message_id AS id, CASE WHEN m.is_hidden_content = 1 THEN 'Hidden Chit' ELSE COALESCE(a.original_name, 'Attachment') END AS title, CASE WHEN m.is_hidden_content = 1 THEN 'Chat' ELSE 'File' END AS context, 'file' AS kind FROM attachments a INNER JOIN messages m ON m.id = a.message_id WHERE a.original_name LIKE ? ESCAPE '\\' ORDER BY title COLLATE NOCASE LIMIT 100`, like, like, like, like);
+    },
     getById: (id: string) => database.getFirstAsync<Board>('SELECT id, name, icon, accent, created_at AS createdAt, updated_at AS updatedAt, archived_at AS archivedAt, show_column_navigator = 1 AS showColumnNavigator FROM boards WHERE id = ? AND archived_at IS NULL', id),
     async create(input: { name: string; icon?: string | null; accent?: string | null }) {
       const now = Date.now(); const board: Board = { id: newId(), name: input.name, icon: input.icon ?? null, accent: input.accent ?? null, createdAt: now, updatedAt: now, archivedAt: null, showColumnNavigator: true };

@@ -5,7 +5,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  LayoutAnimation,
   Pressable,
   ScrollView,
   SectionList,
@@ -13,8 +12,6 @@ import {
   Text,
   TextInput,
   View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
 } from 'react-native';
 
 import { useAppDrawer } from '@/components/navigation/app-drawer';
@@ -41,10 +38,6 @@ import { spaceNoteAction } from '@/components/spaces/space-note-action';
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 type ViewMode = 'boards' | 'cards';
 
-// Cards search bar auto-hide: always visible within this distance of the top,
-// and toggles only after this much scrolling in one direction.
-const SEARCH_ALWAYS_VISIBLE_OFFSET = 24;
-const SEARCH_TOGGLE_TRAVEL = 28;
 // Height of the soft fade at the bottom of the sticky month headers.
 const SECTION_HEADER_FADE = 18;
 // Notes render as a two-column grid, so each list row is a pair of notes
@@ -193,49 +186,13 @@ export default function BoardsScreen() {
   // Cards) so nothing captured in Chat is invisible just because it hasn't
   // been filed into a board yet.
   const [unorganizedThoughts, setUnorganizedThoughts] = useState<CardListItem[]>([]);
-  const [cardSearch, setCardSearch] = useState('');
   // Which chip is active in the Cards view's horizontal filter row — 'all',
   // 'unorganized', or a specific board id. Not persisted like viewMode; it's a
   // lightweight, session-local refinement rather than a standing preference.
   const [cardFilter, setCardFilter] = useState<CardFilter>('all');
   const [cardToast, setCardToast] = useState<string | null>(null);
-  const cardSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { if (!cardToast) return; const timer = setTimeout(() => setCardToast(null), 1800); return () => clearTimeout(timer); }, [cardToast]);
-
-  // The Cards search bar tucks away while scrolling into the list (more room
-  // for notes) and comes back on any scroll back up, like a browser's address
-  // bar. It always shows at the top, and never hides while being used (focused
-  // or holding a query). The collapse is one native LayoutAnimation per toggle,
-  // not a per-frame resize of the list.
-  const [searchHidden, setSearchHidden] = useState(false);
-  const [searchFocused, setSearchFocused] = useState(false);
-  const searchHiddenRef = useRef(false);
-  const searchInUseRef = useRef(false);
-  useEffect(() => { searchInUseRef.current = searchFocused || Boolean(cardSearch); }, [searchFocused, cardSearch]);
-  const scrollState = useRef({ lastY: 0, travel: 0, ignoreUntil: 0 });
-  const setSearchVisibility = useCallback((hidden: boolean) => {
-    if (hidden === searchHiddenRef.current || (hidden && searchInUseRef.current)) return;
-    searchHiddenRef.current = hidden;
-    // Collapsing/expanding resizes the list, which can nudge its offset near the
-    // end; ignore scroll events briefly so that nudge can't toggle it back.
-    scrollState.current.ignoreUntil = Date.now() + 260;
-    scrollState.current.travel = 0;
-    LayoutAnimation.configureNext(LayoutAnimation.create(180, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity));
-    setSearchHidden(hidden);
-  }, []);
-  const handleCardScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const y = event.nativeEvent.contentOffset.y;
-    const state = scrollState.current;
-    const delta = y - state.lastY;
-    state.lastY = y;
-    if (y <= SEARCH_ALWAYS_VISIBLE_OFFSET) { setSearchVisibility(false); return; }
-    if (Date.now() < state.ignoreUntil) return;
-    // Require a little travel in one direction so tiny jitters don't toggle it.
-    state.travel = Math.sign(delta) === Math.sign(state.travel) ? state.travel + delta : delta;
-    if (state.travel > SEARCH_TOGGLE_TRAVEL) setSearchVisibility(true);
-    else if (state.travel < -SEARCH_TOGGLE_TRAVEL) setSearchVisibility(false);
-  }, [setSearchVisibility]);
 
   const load = useCallback(async () => {
     const [nextBoards, nextCount, titleRow] = await Promise.all([
@@ -249,10 +206,10 @@ export default function BoardsScreen() {
     setReady(true);
   }, [boardRepository, database, messageRepository]);
 
-  const loadCards = useCallback(async (searchTerm = '') => {
+  const loadCards = useCallback(async () => {
     const [cardRows, thoughtRows] = await Promise.all([
-      boardRepository.listAllCardSummaries({ searchTerm }),
-      messageRepository.listUnorganizedSummaries({ searchTerm }),
+      boardRepository.listAllCardSummaries(),
+      messageRepository.listUnorganizedSummaries(),
     ]);
     // A card whose thought is hidden in Chat is covered here too, the same as on its board.
     setCards(cardRows.map(({ isHidden, ...row }) => isHidden === 1
@@ -263,14 +220,13 @@ export default function BoardsScreen() {
   // Card deletes/archives/hides go through loadCards afterwards, so reconciling
   // here cancels notifications for removed cards and refreshes hidden text;
   // reminder changes made elsewhere (set, removed, fired) reload the list.
-  useEffect(() => subscribeToReminderChanges(() => void loadCards(cardSearch)), [cardSearch, loadCards]);
+  useEffect(() => subscribeToReminderChanges(() => void loadCards()), [loadCards]);
 
   useFocusEffect(useCallback(() => {
     void load();
-    void loadCards(cardSearch);
+    void loadCards();
     // Reload runs on every focus (e.g. returning from Card Details) regardless
     // of which tab is active, so a switch back to Cards never shows stale data.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, loadCards]));
 
   const changeViewMode = (next: ViewMode) => {
@@ -282,20 +238,11 @@ export default function BoardsScreen() {
   const addNote = async ({ text, attachment }: NoteSubmission) => {
     if (attachment) await messageRepository.createAttachmentMessage(attachment, text || null);
     else await messageRepository.createText(text);
-    await Promise.all([load(), loadCards(cardSearch)]);
+    await Promise.all([load(), loadCards()]);
     setCardToast('Note added');
   };
 
-  const queueCardSearch = useCallback((value: string) => {
-    if (cardSearchTimer.current) clearTimeout(cardSearchTimer.current);
-    cardSearchTimer.current = setTimeout(() => { void loadCards(value); }, 220);
-  }, [loadCards]);
-
-  useEffect(() => () => { if (cardSearchTimer.current) clearTimeout(cardSearchTimer.current); }, []);
-
-  // Chip counts reflect the currently search-filtered `cards`/`unorganizedThoughts`
-  // lists (not each board's static, unfiltered cardCount) so they stay honest
-  // about what a tap on that chip will actually show while a search is active.
+  // Chip counts reflect the loaded cards and unorganized thoughts.
   const cardFilterChips = useMemo<CardFilterChip[]>(() => {
     const perBoardCount = new Map<string, number>();
     for (const card of cards) if (card.boardId) perBoardCount.set(card.boardId, (perBoardCount.get(card.boardId) ?? 0) + 1);
@@ -343,7 +290,7 @@ export default function BoardsScreen() {
       const removableUris = await boardRepository.detachCard(item.id);
       void requestReminderSync();
       await Promise.all(removableUris.map((uri) => removeCardAttachmentFile(uri)));
-      await loadCards(cardSearch);
+      await loadCards();
       setCardToast('Moved back to Unorganized');
     };
 
@@ -356,7 +303,7 @@ export default function BoardsScreen() {
       accentColor: item.boardAccent,
       onConfirm: run,
     });
-  }, [boardRepository, cardSearch, confirm, loadCards]);
+  }, [boardRepository, confirm, loadCards]);
 
   const openCardActions = useCallback(async (item: CardListItem) => {
     // "Stick to Fridge" / "Remove from Fridge", looked up as the menu opens.
@@ -367,14 +314,14 @@ export default function BoardsScreen() {
         title: item.title,
         options: [
           ...(item.hidden ? [] : [{ label: 'Share Note', icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ messageId: item.id })) }]),
-          { label: item.pinned ? 'Unpin' : 'Pin', icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void messageRepository.setPinned(item.id, !item.pinned).then(() => loadCards(cardSearch)) },
+          { label: item.pinned ? 'Unpin' : 'Pin', icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void messageRepository.setPinned(item.id, !item.pinned).then(() => loadCards()) },
           ...spaceOption,
           {
             label: 'Archive thought', icon: 'archive-outline', onPress: () => confirm({
               type: 'default', icon: 'archive-outline', title: 'Archive thought?',
               message: 'You can restore it later from Archive.',
               confirmText: 'Archive thought',
-              onConfirm: () => messageRepository.archive(item.id).then(() => { void requestReminderSync(); return loadCards(cardSearch); }),
+              onConfirm: () => messageRepository.archive(item.id).then(() => { void requestReminderSync(); return loadCards(); }),
             }),
           },
           {
@@ -382,7 +329,7 @@ export default function BoardsScreen() {
               type: 'destructive', icon: 'trash-outline', title: 'Delete thought?',
               message: 'This can’t be undone.',
               confirmText: 'Delete thought',
-              onConfirm: () => messageRepository.softDelete(item.id).then(() => { void requestReminderSync(); return loadCards(cardSearch); }),
+              onConfirm: () => messageRepository.softDelete(item.id).then(() => { void requestReminderSync(); return loadCards(); }),
             }),
           },
         ],
@@ -393,7 +340,7 @@ export default function BoardsScreen() {
       title: item.title,
       options: [
         ...(item.hidden ? [] : [{ label: 'Share Note', icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ cardId: item.id })) }]),
-        { label: item.pinned ? 'Unpin' : 'Pin', icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void boardRepository.setPinned('card', item.id, !item.pinned).then(() => loadCards(cardSearch)) },
+        { label: item.pinned ? 'Unpin' : 'Pin', icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void boardRepository.setPinned('card', item.id, !item.pinned).then(() => loadCards()) },
         ...spaceOption,
         { label: 'Move back to Unorganized', icon: 'arrow-undo-outline', onPress: () => void moveCardBackToUnorganized(item) },
         {
@@ -401,7 +348,7 @@ export default function BoardsScreen() {
             type: 'default', icon: 'archive-outline', title: 'Archive card?',
             message: 'You can restore it later from Archive. Your original messages remain in Chat.',
             confirmText: 'Archive card', accentColor: item.boardAccent,
-            onConfirm: () => boardRepository.archiveCard(item.id).then(() => { void requestReminderSync(); return loadCards(cardSearch); }),
+            onConfirm: () => boardRepository.archiveCard(item.id).then(() => { void requestReminderSync(); return loadCards(); }),
           }),
         },
         {
@@ -413,13 +360,13 @@ export default function BoardsScreen() {
               const removableUris = await boardRepository.deleteCard(item.id);
       void requestReminderSync();
               await Promise.all(removableUris.map((uri) => removeCardAttachmentFile(uri)));
-              await loadCards(cardSearch);
+              await loadCards();
             },
           }),
         },
       ],
     });
-  }, [actionSheet, boardRepository, messageRepository, cardSearch, confirm, database, loadCards, moveCardBackToUnorganized]);
+  }, [actionSheet, boardRepository, messageRepository, confirm, database, loadCards, moveCardBackToUnorganized]);
 
   const openCreate = () => {
     setName('');
@@ -467,20 +414,27 @@ export default function BoardsScreen() {
     <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: theme.background }}>
       <AppHeader
         title={appTitle}
+        actionWidth={88}
         subtitle={viewMode === 'boards' ? pluralize(boards.length, 'board') : pluralize(cards.length + unorganizedThoughts.length, 'card')}
         leading={(
           <IconButton label="Open navigation" onPress={openDrawer}>
             <MenuIcon />
           </IconButton>
         )}
-        trailing={viewMode === 'boards' ? (
-          <IconButton label="Create board" onPress={openCreate}>
-            <HeaderIcon name="add" size={26} />
-          </IconButton>
-        ) : (
-          <IconButton label="Add note" onPress={() => setAddNoteOpen(true)}>
-            <HeaderIcon name="add" size={26} />
-          </IconButton>
+        trailing={(
+          <View style={styles.headerActions}>
+            <IconButton label={viewMode === 'cards' && cardFilter !== 'all' && cardFilter !== 'unorganized' ? `Search in ${boards.find((board) => board.id === cardFilter)?.name ?? 'board'}` : 'Search'} onPress={() => {
+              const selectedBoard = viewMode === 'cards' ? boards.find((board) => board.id === cardFilter) : undefined;
+              router.push(selectedBoard
+                ? { pathname: '/search', params: { source: 'board', boardId: selectedBoard.id, boardName: selectedBoard.name } }
+                : '/search');
+            }}>
+              <HeaderIcon name="search-outline" size={23} />
+            </IconButton>
+            <IconButton label={viewMode === 'boards' ? 'Create board' : 'Add note'} onPress={viewMode === 'boards' ? openCreate : () => setAddNoteOpen(true)}>
+              <HeaderIcon name="add" size={26} />
+            </IconButton>
+          </View>
         )}
       />
 
@@ -497,28 +451,9 @@ export default function BoardsScreen() {
             <EmptyState title="No cards yet" description="Notes you organize into your boards will appear here." />
           ) : (
             <>
-              <View
-                pointerEvents={searchHidden ? 'none' : 'auto'}
-                accessibilityElementsHidden={searchHidden}
-                importantForAccessibility={searchHidden ? 'no-hide-descendants' : 'auto'}
-                style={searchHidden ? styles.searchCollapsed : undefined}
-              >
-                <View style={[styles.searchBar, { borderColor: theme.borderSubtle, backgroundColor: theme.surface }]}>
-                  <Ionicons accessible={false} name="search" size={16} color={theme.textMuted} />
-                  <TextInput
-                    value={cardSearch}
-                    onChangeText={(value) => { setCardSearch(value); queueCardSearch(value); }}
-                    onFocus={() => { setSearchFocused(true); setSearchVisibility(false); }}
-                    onBlur={() => setSearchFocused(false)}
-                    placeholder="Search cards"
-                    placeholderTextColor={theme.textMuted}
-                    style={[styles.searchInput, { color: theme.textPrimary }]}
-                  />
-                </View>
-              </View>
               <CardFilterChips chips={cardFilterChips} filter={cardFilter} onChange={setCardFilter} />
               {cardSections.every((section) => section.data.length === 0) ? (
-                <EmptyState title="No matches" description="Try a different word or filter." />
+                <EmptyState title="No cards in this filter" description="Choose another board or All cards." />
               ) : (
                 <SectionList
                   style={styles.cardList}
@@ -562,8 +497,6 @@ export default function BoardsScreen() {
                   )}
                   renderSectionFooter={() => <View style={styles.sectionGap} />}
                   stickySectionHeadersEnabled
-                  onScroll={handleCardScroll}
-                  scrollEventThrottle={16}
                   contentContainerStyle={[styles.cardListContent, { paddingBottom: tabBarHeight + spacing.md }]}
                   initialNumToRender={12}
                   maxToRenderPerBatch={12}
@@ -723,18 +656,12 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: spacing.md, flexGrow: 1 },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  // Header → Tabs: 16 (see the vertical-rhythm table below every other gap
-  // in this cluster follows too — Tabs → Search 16, Search → Filters 12,
-  // Filters → first section 24).
+  // Header to tabs: 16. The filters sit directly below the tabs.
   switchWrap: { paddingHorizontal: spacing.md, paddingTop: 16, paddingBottom: 0 },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
   switchTrack: { flexDirection: 'row', height: 32, borderRadius: radii.control, padding: 3 },
   switchOption: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: radii.control - 2 },
   switchLabel: { fontSize: 13, fontWeight: '600' },
-  // Compact, quiet search control (44px, hairline border) — deliberately NOT
-  // the visually dominant element on this screen; the cards are.
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.xxs, height: 44, marginHorizontal: spacing.md, marginTop: 16, paddingHorizontal: spacing.sm + spacing.xxs, borderRadius: radii.pill, borderWidth: StyleSheet.hairlineWidth },
-  searchInput: { flex: 1, height: '100%', fontSize: 15, padding: 0 },
-  searchCollapsed: { height: 0, opacity: 0, overflow: 'hidden' },
   cardList: { flex: 1 },
   // Two equal columns; notes in a row stretch to the taller one so the grid stays tidy.
   noteRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12, marginBottom: 12 },
@@ -759,10 +686,8 @@ const styles = StyleSheet.create({
   // flex-column parent (the exact bug that was reserving a large empty gap
   // above the card list: an unbounded horizontal scroller in a flex column
   // stretching to fill available height instead of sizing to its chips).
-  // Margins here (not flex) carry the search→filters and filters→list gaps.
-  // The small bottom margin pairs with the section header's own paddingTop
-  // (spacing.xs) for a 12pt chips→heading gap — matching search→chips — and
-  // that padding travels with the header, so the gap is the same when stuck.
+  // A compact gap separates the tabs from filters; the section heading follows
+  // without the space once reserved for an inline search field.
   chipScroll: { height: 26, flexGrow: 0, flexShrink: 0, marginTop: 12, marginBottom: spacing.xxs },
   chipRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md },
   // Quiet by default — only the selected chip (theme.accent fill) is meant to
