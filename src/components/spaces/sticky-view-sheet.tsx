@@ -45,6 +45,7 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
   const maxSheetHeight = Math.min(window.height * 0.9, window.height - insets.top - 12);
   // Tagged with the note it belongs to, so a different note never shows a stale read.
   const [loaded, setLoaded] = useState<{ noteId: string; detail: SpaceNoteDetail } | null>(null);
+  const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
   const detail = loaded?.noteId === note.noteId ? loaded.detail : null;
   const space = SPACES[note.spaceId];
   const paper = paperColor(note.color);
@@ -77,6 +78,7 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
   const primaryThoughts = thoughts.filter((thought) =>
     (!isCard || thought.messageId === primaryMessageId) && thought.text && thought.text !== title && thought.text !== caption);
   const moreThoughts = isCard ? thoughts.filter((thought) => thought.messageId !== primaryMessageId) : [];
+  const moreExpanded = expandedNoteId === note.id;
   const onBoard = !isCard && !!note.boardId;
   const context = detail?.context ?? (isCard || onBoard ? null : 'Chat');
   const open = isCard ? { label: 'Open card', icon: 'open-outline' as const } : onBoard ? { label: 'Open board', icon: 'grid-outline' as const } : { label: 'Open in Chat', icon: 'chatbubble-outline' as const };
@@ -90,10 +92,6 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
     <View style={styles.header}>
       <Text style={[fonts.label, styles.where]}>ON YOUR {space.name.toUpperCase()}</Text>
       {context ? <Text numberOfLines={1} style={[fonts.ui, styles.context]}>{context}</Text> : null}
-      {isCard && thoughts.length > 1 ? <View style={styles.cardSummary}>
-        <Ionicons accessible={false} name="layers-outline" size={14} color={SPACE_UI.paper} />
-        <Text style={[fonts.uiSemi, styles.cardSummaryText]}>{thoughts.length} thoughts in this card</Text>
-      </View> : null}
     </View>
 
     {/* Room around the paper for its shadow, and above it for the fridge magnet. */}
@@ -132,25 +130,23 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
         {media ? null : <View pointerEvents="none" style={StyleSheet.absoluteFill}>{pin}</View>}
       </View> : null}
       {moreThoughts.length > 0 ? <View style={styles.moreThoughts}>
-        <View style={styles.moreHeading}>
-          <Text accessibilityRole="header" style={[fonts.uiSemi, styles.moreTitle]}>More thoughts in this card</Text>
-          <Text style={[fonts.ui, styles.moreCount]}>{moreThoughts.length}</Text>
-        </View>
-        {moreThoughts.map((thought) => <Pressable
-          key={thought.messageId}
+        <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Thought ${thought.number}: ${thought.text || 'Empty thought'}`}
-          accessibilityHint="Opens the card to read all its thoughts"
-          onPress={onOpen}
-          style={({ pressed }) => [styles.relatedThought, { borderLeftColor: paper.base }, pressed && styles.pressed]}
+          accessibilityLabel={`${moreExpanded ? 'Hide' : 'See'} ${moreThoughts.length} more ${moreThoughts.length === 1 ? 'thought' : 'thoughts'} in this card`}
+          accessibilityState={{ expanded: moreExpanded }}
+          onPress={() => setExpandedNoteId((current) => current === note.id ? null : note.id)}
+          style={({ pressed }) => [styles.moreToggle, pressed && styles.pressed]}
         >
-          <View style={styles.relatedHeading}>
-            <Ionicons accessible={false} name="chatbubble-outline" size={14} color={SPACE_UI.textMuted} />
-            <Text style={[fonts.uiSemi, styles.relatedLabel]}>Thought {thought.number}</Text>
-            <Ionicons accessible={false} name="chevron-forward" size={16} color={SPACE_UI.textMuted} />
-          </View>
-          <Text numberOfLines={3} style={[fonts.ui, styles.relatedText]}>{thought.text || 'Empty thought'}</Text>
-        </Pressable>)}
+          <Ionicons accessible={false} name="layers-outline" size={18} color={SPACE_UI.paper} />
+          <Text style={[fonts.uiSemi, styles.moreToggleText]}>{moreExpanded ? 'Hide' : 'See'} {moreThoughts.length} more {moreThoughts.length === 1 ? 'thought' : 'thoughts'}</Text>
+          <Ionicons accessible={false} name={moreExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={SPACE_UI.textMuted} />
+        </Pressable>
+        {moreExpanded ? <View style={styles.expandedThoughts}>
+          {moreThoughts.map((thought) => <View key={thought.messageId} style={styles.expandedThought}>
+            <Text style={[fonts.uiSemi, styles.thoughtLabel]}>THOUGHT {thought.number}</Text>
+            <Text selectable style={[fonts.ui, styles.expandedThoughtText]}>{thought.text || 'Empty thought'}</Text>
+          </View>)}
+        </View> : null}
       </View> : null}
     </ScrollView>
 
@@ -262,8 +258,6 @@ const styles = StyleSheet.create({
   header: { flexShrink: 0, gap: 2 },
   where: { fontSize: 11, letterSpacing: 1.6, color: SPACE_UI.textMuted },
   context: { fontSize: 14, color: SPACE_UI.textMuted },
-  cardSummary: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
-  cardSummaryText: { fontSize: 12, color: SPACE_UI.paper },
   scroll: { flexGrow: 0, flexShrink: 1, minHeight: 0, marginHorizontal: -20, marginTop: 6, marginBottom: 8 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 },
   paperUnder: { marginTop: 18, flexShrink: 0 },
@@ -288,14 +282,13 @@ const styles = StyleSheet.create({
   thought: { fontSize: 20, lineHeight: 27, color: PAPER_INK },
   thoughtSection: { flexShrink: 0, minWidth: 0 },
   thoughtDivider: { marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(42,38,34,0.18)' },
-  moreThoughts: { marginTop: 24, gap: 10 },
-  moreHeading: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
-  moreTitle: { flex: 1, fontSize: 14, color: SPACE_UI.paper },
-  moreCount: { fontSize: 12, color: SPACE_UI.textMuted },
-  relatedThought: { minHeight: 72, padding: 14, gap: 8, borderRadius: 12, borderLeftWidth: 3, backgroundColor: SPACE_UI.inkRaised },
-  relatedHeading: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  relatedLabel: { flex: 1, fontSize: 12, color: SPACE_UI.textMuted },
-  relatedText: { fontSize: 15, lineHeight: 21, color: SPACE_UI.paper },
+  moreThoughts: { marginTop: 12 },
+  moreToggle: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: SPACE_UI.inkRaised },
+  moreToggleText: { flex: 1, fontSize: 14, color: SPACE_UI.paper },
+  expandedThoughts: { paddingHorizontal: 12 },
+  expandedThought: { paddingVertical: 14, gap: 5, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: SPACE_UI.inkBorder },
+  thoughtLabel: { fontSize: 10, letterSpacing: 1, color: SPACE_UI.textMuted },
+  expandedThoughtText: { fontSize: 14, lineHeight: 20, color: SPACE_UI.paper },
   hidden: { alignItems: 'center', paddingVertical: 18 },
   hiddenIcon: { opacity: 0.55 },
   hiddenText: { marginTop: 4, fontSize: 22, lineHeight: 28, color: PAPER_INK, opacity: 0.7 },
