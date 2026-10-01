@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
@@ -29,6 +28,7 @@ import { useAttachmentExport } from '@/components/attachments/use-attachment-exp
 import { exportActionLabel, shareAttachment } from '@/services/attachment-export';
 import { exportFileName } from '@/services/attachment-export-naming';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
+import { SearchField } from '@/components/ui/search-field';
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { useTheme } from '@/components/theme-provider';
 import { radii, spacing } from '@/constants/theme';
@@ -320,24 +320,7 @@ export default function AttachmentsScreen() {
         renderItem={({ item }) => <AttachmentTile item={item} size={tileSize} selectingBackground={choosingBackground} onPress={() => choosingBackground ? selectPhoto(item) : setDetailItem(item)} onLongPress={() => { if (!choosingBackground) openItemMenu(item); }} />}
         ListHeaderComponent={
           <View style={styles.listHeader}>
-            <View style={[styles.searchField, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
-              <Ionicons accessible={false} name="search" size={16} color={theme.textMuted} />
-              <TextInput
-                accessibilityLabel="Search attachments"
-                value={searchInput}
-                onChangeText={setSearchInput}
-                placeholder="Search attachments"
-                placeholderTextColor={theme.textMuted}
-                selectionColor={theme.accent}
-                returnKeyType="search"
-                style={[styles.searchInput, { color: theme.textPrimary }]}
-              />
-              {searchInput ? (
-                <Pressable accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={8} onPress={() => setSearchInput('')}>
-                  <Ionicons accessible={false} name="close-circle" size={16} color={theme.textMuted} />
-                </Pressable>
-              ) : null}
-            </View>
+            <SearchField accessibilityLabel="Search attachments" value={searchInput} onChangeText={setSearchInput} placeholder="Search attachments" />
             {choosingBackground ? <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>Photos · Choose a photo to preview</Text> : <TypeFilterChips filter={filter} onChange={setFilter} />}
             {items.length ? <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Recent</Text> : null}
           </View>
@@ -371,13 +354,8 @@ export default function AttachmentsScreen() {
 }
 
 const styles = StyleSheet.create({
-  // No side padding of its own: the grid's content padding already insets the
-  // header by spacing.md, so the search field spans the same width as Cards'.
+  // The grid content already supplies the field's horizontal inset.
   listHeader: { paddingBottom: spacing.xs },
-  // Same field as the Cards tab search (index.native.tsx searchBar/searchInput)
-  // so search looks and feels identical wherever it appears.
-  searchField: { height: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.xxs, marginTop: 16, paddingHorizontal: spacing.sm + spacing.xxs, borderRadius: radii.pill, borderWidth: StyleSheet.hairlineWidth },
-  searchInput: { flex: 1, height: '100%', fontSize: 15, padding: 0 },
   // Bleeds to the screen edges so chips scroll edge to edge (like the Cards tab), while resting at the same inset.
   chipScroll: { height: 30, flexGrow: 0, flexShrink: 0, marginTop: spacing.sm, marginHorizontal: -spacing.md },
   chipRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md },

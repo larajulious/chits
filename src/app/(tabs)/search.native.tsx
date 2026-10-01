@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
 import { AppHeader, EmptyState, IconButton, Screen, HeaderIcon, MenuIcon } from '@/components/ui/primitives';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
+import { SearchField } from '@/components/ui/search-field';
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { useTheme } from '@/components/theme-provider';
 import { spacing } from '@/constants/theme';
@@ -63,13 +64,14 @@ function SearchContent({ scopedBoardId, boardName }: { scopedBoardId?: string; b
         : <IconButton label="Open navigation" onPress={openDrawer}><MenuIcon /></IconButton>}
       trailing={<IconButton label="Close search" onPress={goBack}><HeaderIcon name="close" size={24} /></IconButton>}
     />
-    <TextInput
-      value={term}
-      onChangeText={(value) => { setTerm(value); queueSearch(value); }}
-      placeholder={scopedBoardId ? 'Search cards in this board' : 'Search your thoughts'}
-      placeholderTextColor={theme.textMuted}
-      style={[styles.input, { borderColor: theme.borderSubtle, color: theme.textPrimary, backgroundColor: theme.background }]}
-    />
+    <View style={styles.searchWrap}>
+      <SearchField
+        accessibilityLabel={scopedBoardId ? 'Search cards in this board' : 'Search your thoughts'}
+        value={term}
+        onChangeText={(value) => { setTerm(value); queueSearch(value); }}
+        placeholder={scopedBoardId ? 'Search cards in this board' : 'Search your thoughts'}
+      />
+    </View>
     <Pressable accessibilityRole="button" onPress={() => { const next = !archived; setArchived(next); void search(term, next); }} style={[styles.filter, { backgroundColor: theme.surfaceElevated }]}>
       <Text style={[styles.filterText, { color: theme.textSecondary }]}>{archived ? 'Including archived' : 'Active items'}</Text>
     </Pressable>
@@ -82,4 +84,4 @@ function SearchContent({ scopedBoardId, boardName }: { scopedBoardId?: string; b
   </Screen>;
 }
 
-const styles = StyleSheet.create({ input: { minHeight: 46, margin: spacing.md, marginBottom: spacing.xs, paddingHorizontal: spacing.sm, borderRadius: 10, borderWidth: 1 }, filter: { alignSelf: 'flex-start', minHeight: 34, justifyContent: 'center', marginLeft: spacing.md, paddingHorizontal: spacing.sm, borderRadius: 16 }, filterText: { fontSize: 13, fontWeight: '600' }, list: { padding: spacing.md, gap: spacing.xs, flexGrow: 1 }, result: { paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth }, title: { fontSize: 16 }, context: { fontSize: 13, marginTop: 3 } });
+const styles = StyleSheet.create({ searchWrap: { marginHorizontal: spacing.md, marginBottom: spacing.xs }, filter: { alignSelf: 'flex-start', minHeight: 34, justifyContent: 'center', marginLeft: spacing.md, paddingHorizontal: spacing.sm, borderRadius: 16 }, filterText: { fontSize: 13, fontWeight: '600' }, list: { padding: spacing.md, gap: spacing.xs, flexGrow: 1 }, result: { paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth }, title: { fontSize: 16 }, context: { fontSize: 13, marginTop: 3 } });
