@@ -56,7 +56,7 @@
         {
           "backgroundColor": "#F7F8F6",
           "image": "./assets/images/app_splash_screen.png",
-          "imageWidth": 360,
+          "imageWidth": 600,
           "resizeMode": "contain"
         }
       ],
