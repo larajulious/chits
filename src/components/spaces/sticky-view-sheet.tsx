@@ -21,6 +21,7 @@ import { photoCaption, stickyText } from './sticky-note';
 
 type Props = {
   note: PinnedNote;
+  viewportHeight: number;
   onDismiss: () => void;
   /** Leaves Spaces for the note's home: Card Details, the thought's board, or the thought in Chat. */
   onOpen: () => void;
@@ -34,7 +35,7 @@ type Props = {
  * any other thoughts on a sticky below it. Opening the card or Chat is one more tap from here, not
  * the tap itself.
  */
-export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
+export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOptions }: Props) {
   const database = useSQLiteContext();
   const repository = useMemo(() => createSpaceRepository(database), [database]);
   const insets = useSafeAreaInsets();
@@ -43,12 +44,11 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const sheetWidth = Math.min(window.width - insets.left - insets.right, 600);
   const contentWidth = sheetWidth - 40;
-  // Android's edge-to-edge root is taller than the visible app viewport.
-  // Place the sheet above that clipped bottom region, including both insets.
+  // The Space root supplies the actual height available to this absolute sheet.
+  // Keep the action row outside the shrinking scroll region on short screens.
   const bottomOffset = Platform.OS === 'android' ? insets.top + insets.bottom + 16 : 0;
-  const visibleHeight = window.height - bottomOffset;
-  const maxSheetHeight = Math.min(visibleHeight * 0.9, visibleHeight - insets.top - 12);
-  const maxScrollHeight = Math.min(260, Math.max(120, maxSheetHeight - Math.max(insets.bottom, 12) - 210));
+  const visibleHeight = viewportHeight - bottomOffset;
+  const maxSheetHeight = Math.max(0, Math.min(visibleHeight * 0.9, visibleHeight - insets.top - 12));
   // Tagged with the note it belongs to, so a different note never shows a stale read.
   const [loaded, setLoaded] = useState<{ noteId: string; detail: SpaceNoteDetail } | null>(null);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
@@ -106,7 +106,7 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
     <ScrollView
       key={`${note.kind}:${note.noteId}`}
       ref={scrollRef}
-      style={[styles.scroll, { maxHeight: maxScrollHeight }]}
+      style={styles.scroll}
       contentContainerStyle={styles.scrollContent}
       contentInsetAdjustmentBehavior="never"
       showsVerticalScrollIndicator
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
   header: { flexShrink: 0, gap: 2 },
   where: { fontSize: 11, letterSpacing: 1.6, color: SPACE_UI.textMuted },
   context: { fontSize: 14, color: SPACE_UI.textMuted },
-  scroll: { flexGrow: 0, flexShrink: 1, minHeight: 0, marginHorizontal: -20, marginTop: 6, marginBottom: 8 },
+  scroll: { flexGrow: 0, flexShrink: 1, minHeight: 0, maxHeight: 260, marginHorizontal: -20, marginTop: 6, marginBottom: 8 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 },
   paperUnder: { marginTop: 18, flexShrink: 0 },
   tape: { alignSelf: 'center' },

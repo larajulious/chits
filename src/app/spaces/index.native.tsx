@@ -272,6 +272,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId }: { initialSpaceId: SpaceId; 
       <SheetDim label="Close note" onPress={closeView} />
       <StickyViewSheet
         note={viewing}
+        viewportHeight={screenSize.height}
         onDismiss={closeView}
         onOpen={() => { setViewingId(null); openNote(viewing); }}
         onOptions={() => { setViewingId(null); setSelectedId(viewing.id); }}
