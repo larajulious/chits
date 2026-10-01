@@ -11,6 +11,9 @@ export const MAX_SHARE_NOTE_IMAGES = 2;
 // it's drawn at (the on-screen preview, or 1080px for export), so the preview is
 // an exact miniature of the file.
 export const SHARE_NOTE_DESIGN_WIDTH = 360;
+// A 1080px-wide capture at this height uses about 50 MB of bitmap memory.
+// Above it, render complete checklist pages instead of risking a failed capture.
+export const MAX_SHARE_NOTE_IMAGE_HEIGHT = 12000;
 
 export const SHARE_NOTE_FORMATS = {
   portrait: { label: 'Portrait', width: 1080, height: 1350 },
@@ -28,13 +31,14 @@ export const SHARE_NOTE_MODES: { key: ShareNoteMode; label: string }[] = [
 ];
 
 export type ShareNoteImage = Pick<AttachmentLike, 'id' | 'storagePath' | 'width' | 'height'>;
+export type ShareNoteSubtask = { title: string; isCompleted: boolean };
 
 /** What a thought or card can contribute to a Share Note: its words and its photos, nothing else. */
 export type ShareNoteSource = {
   title: string | null;
   text: string | null;
   images: ShareNoteImage[];
-  subtasks: { title: string; isCompleted: boolean }[];
+  subtasks: ShareNoteSubtask[];
   /** Videos, audio notes and files on the note — never drawn, only mentioned. */
   unsupportedCount: number;
 };
@@ -58,18 +62,33 @@ export function buildShareNoteSource({ title, messages, cardAttachments = [], su
   return { title: titleAddsSomething ? cleanTitle : null, text, images, subtasks, unsupportedCount: attachments.length - images.length };
 }
 
-export function shareNoteText(source: ShareNoteSource, includeSubtasks: boolean): string | null {
-  if (!includeSubtasks || !source.subtasks.length) return source.text;
-  const checklist = source.subtasks.map((item) => `${item.isCompleted ? '☑' : '☐'} ${item.title}`).join('\n');
-  return [source.text, checklist].filter(Boolean).join('\n\n');
-}
-
 export const SHARE_NOTE_COPY = {
   empty: 'This note has no text or image to share yet.',
   unsupported: 'Only text and images can be used in Share Note for now.',
   imageLimit: 'You can include up to 2 images.',
   tooLong: 'This note is too long for this style. Try a shorter note or a different layout.',
 } as const;
+
+export type ChecklistPageRange = { start: number; end: number };
+
+/** Split only between complete rows; the original order and every state survive. */
+export function paginateChecklistRows(rowHeights: number[], firstPageOverhead: number, laterPageOverhead: number, maxHeight: number): ChecklistPageRange[] {
+  if (!rowHeights.length) return [];
+  const pages: ChecklistPageRange[] = [];
+  let start = 0;
+  let used = firstPageOverhead;
+  for (let index = 0; index < rowHeights.length; index++) {
+    const cost = Math.ceil(rowHeights[index]) + (index > start ? 7 : 0);
+    if (index > start && used + cost > maxHeight) {
+      pages.push({ start, end: index });
+      start = index;
+      used = laterPageOverhead;
+    }
+    used += Math.ceil(rowHeights[index]) + (index > start ? 7 : 0);
+  }
+  pages.push({ start, end: rowHeights.length });
+  return pages;
+}
 
 export type ShareNoteAvailability = { ok: true } | { ok: false; reason: 'empty' | 'unsupported'; message: string };
 

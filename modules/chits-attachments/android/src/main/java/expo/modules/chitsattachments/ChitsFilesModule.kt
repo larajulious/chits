@@ -85,6 +85,24 @@ class ChitsFilesModule : Module() {
       Uri.fromFile(destination).toString()
     }
 
+    AsyncFunction("shareImagesAsync") { uris: List<String> ->
+      if (uris.isEmpty()) return@AsyncFunction false
+      val pages = ArrayList(uris.map { Uri.parse(it) })
+      if (pages.any { it.scheme != "content" }) throw FileUnavailableException()
+      val clip = ClipData.newRawUri("Share Note", pages.first())
+      pages.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
+      val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+        type = "image/*"
+        putParcelableArrayListExtra(Intent.EXTRA_STREAM, pages)
+        clipData = clip
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      }
+      appContext.throwingActivity.startActivity(Intent.createChooser(intent, "Share Note").apply {
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      })
+      true
+    }.runOnQueue(Queues.MAIN)
+
     // Takes a content:// URI (expo-file-system's FileProvider) so the other app
     // gets a temporary read grant — no storage permission is involved.
     AsyncFunction("openWithAsync") { contentUri: String, mimeType: String? ->

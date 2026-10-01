@@ -31,7 +31,8 @@
             }
           }
         ]
-      }
+      },
+      "appleTeamId": "9JQLWTZ683"
     },
     "android": {
       "adaptiveIcon": {
@@ -55,8 +56,8 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#F7F8F6",
-          "image": "./assets/images/app_splash_screen.png",
-          "imageWidth": 600,
+          "image": "./assets/images/app_icon.png",
+          "imageWidth": 240,
           "resizeMode": "contain"
         }
       ],

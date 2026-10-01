@@ -29,6 +29,8 @@ type ChitsFilesNativeModule = {
   atomicWriteFileAsync(uri: string, contents: string): Promise<void>;
   /** Hard-links (or copies, if linking fails) the file into a cache folder under `fileName`, returning its file:// URI. */
   prepareNamedFileAsync(uri: string, fileName: string): Promise<string>;
+  /** Shares all generated Share Note image pages in one native sheet, in order. */
+  shareImagesAsync(uris: string[]): Promise<boolean>;
   /** iOS: file:// URI, presents "Open in…". Android: content:// URI, presents an app chooser. Resolves false when no app can open it. */
   openWithAsync(uri: string, mimeType: string | null): Promise<boolean>;
   /**

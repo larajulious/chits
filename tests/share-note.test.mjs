@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  availableShareNoteModes, buildShareNoteSource, defaultShareNoteMode, fitShareNoteText, initialShareNoteImages, MAX_SHARE_NOTE_IMAGES,
-  SHARE_NOTE_COPY, SHARE_NOTE_FORMATS, shareNoteAvailability, shareNoteFileName, shareNoteLayout, shareNoteText, toggleShareNoteImage,
+  availableShareNoteModes, buildShareNoteSource, defaultShareNoteMode, fitShareNoteText, initialShareNoteImages, MAX_SHARE_NOTE_IMAGES, MAX_SHARE_NOTE_IMAGE_HEIGHT,
+  paginateChecklistRows, SHARE_NOTE_COPY, SHARE_NOTE_FORMATS, shareNoteAvailability, shareNoteFileName, shareNoteLayout, toggleShareNoteImage,
 } from '../src/services/share-note.ts';
 import { SHARE_NOTE_FONT_METRICS, SHARE_NOTE_THEMES, getShareNoteTheme } from '../src/constants/chits-themes.ts';
 
@@ -28,10 +28,25 @@ test('a title that only repeats the note’s first words is dropped', () => {
   assert.equal(buildShareNoteSource({ title: '  ', messages: [{ text: 'Hi', attachments: [] }] }).title, null);
 });
 
-test('card checklist is optional and keeps completion and order in the share image text', () => {
+test('card checklist is included automatically with completion and source order', () => {
   const source = buildShareNoteSource({ messages: [{ text: 'Shopping', attachments: [] }], subtasks: [{ title: 'Buy groceries', isCompleted: true }, { title: 'Pick up laundry', isCompleted: false }] });
-  assert.equal(shareNoteText(source, false), 'Shopping');
-  assert.equal(shareNoteText(source, true), 'Shopping\n\n☑ Buy groceries\n☐ Pick up laundry');
+  assert.equal(source.text, 'Shopping');
+  assert.deepEqual(source.subtasks, [{ title: 'Buy groceries', isCompleted: true }, { title: 'Pick up laundry', isCompleted: false }]);
+  assert.deepEqual(availableShareNoteModes(source), { text: true, 'text-image': false, image: false });
+});
+
+test('checklist pages preserve all rows and order across common counts and long labels', () => {
+  for (const count of [1, 3, 10, 20, 30, 50]) {
+    const heights = Array.from({ length: count }, (_, index) => index % 4 === 0 ? 220 : 38);
+    const pages = paginateChecklistRows(heights, 700, 600, MAX_SHARE_NOTE_IMAGE_HEIGHT / 3);
+    const indices = pages.flatMap(({ start, end }) => Array.from({ length: end - start }, (_, offset) => start + offset));
+    assert.deepEqual(indices, Array.from({ length: count }, (_, index) => index), `${count} rows survive`);
+    assert.ok(pages.every(({ start, end }) => start < end), 'all pages contain complete rows');
+    for (const [index, page] of pages.entries()) {
+      const used = (index ? 600 : 700) + heights.slice(page.start, page.end).reduce((sum, height) => sum + height, 0) + (page.end - page.start - 1) * 7;
+      assert.ok(used <= MAX_SHARE_NOTE_IMAGE_HEIGHT / 3, `${count} rows page ${index + 1} fits`);
+    }
+  }
 });
 
 test('notes with nothing drawable explain why instead of opening an empty composer', () => {

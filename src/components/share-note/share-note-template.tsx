@@ -1,4 +1,4 @@
-import { memo, type ComponentProps } from 'react';
+import { memo, useEffect, useState, type ComponentProps } from 'react';
 import { Platform, StyleSheet, Text, View, type TextStyle } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { SHARE_NOTE_FONT_METRICS, type ShareNoteFontStyle, type ShareNoteTheme } from '@/constants/chits-themes';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
-import { fitShareNoteText, shareNoteLayout, SHARE_NOTE_DESIGN_WIDTH, type ShareNoteFormat, type ShareNoteImage, type ShareNoteLayout, type ShareNoteMode, type ShareNoteTextFit } from '@/services/share-note';
+import { fitShareNoteText, shareNoteLayout, SHARE_NOTE_DESIGN_WIDTH, type ShareNoteFormat, type ShareNoteImage, type ShareNoteLayout, type ShareNoteMode, type ShareNoteSubtask, type ShareNoteTextFit } from '@/services/share-note';
 
 // System faces only — nothing to download or fail to load before a capture.
 const FONTS: Record<ShareNoteFontStyle, TextStyle> = Platform.select({
@@ -39,7 +39,7 @@ const isDark = (hex: string) => {
   return r * 0.299 + g * 0.587 + b * 0.114 < 110;
 };
 
-export type ShareNoteContent = { title: string | null; text: string | null; images: ShareNoteImage[] };
+export type ShareNoteContent = { title: string | null; text: string | null; images: ShareNoteImage[]; subtasks?: ShareNoteSubtask[] };
 
 export type ShareNoteTemplateProps = {
   content: ShareNoteContent;
@@ -50,6 +50,8 @@ export type ShareNoteTemplateProps = {
   /** The drawn width in points; every design unit scales by width / 360. */
   width: number;
   onImageLoad?: (id: string) => void;
+  onCanvasReady?: (height: number) => void;
+  page?: { index: number; total: number };
 };
 
 /** Layout + text fit for a note, shared by the template and the composer's "too long" hint. */
@@ -70,7 +72,8 @@ export function measureShareNote({ content, theme, format, mode, showBranding }:
  * UI, so the file looks like a crafted card rather than a screenshot. Only
  * text and photos appear; everything else about the note stays private.
  */
-export const ShareNoteTemplate = memo(function ShareNoteTemplate({ content, theme, format, mode, showBranding, width, onImageLoad }: ShareNoteTemplateProps) {
+export const ShareNoteTemplate = memo(function ShareNoteTemplate({ content, theme, format, mode, showBranding, width, onImageLoad, onCanvasReady, page }: ShareNoteTemplateProps) {
+  if (content.subtasks?.length) return <ChecklistShareNoteTemplate content={content} theme={theme} format={format} mode={mode} showBranding={showBranding} width={width} onImageLoad={onImageLoad} onCanvasReady={onCanvasReady} page={page} />;
   const u = width / SHARE_NOTE_DESIGN_WIDTH;
   const { layout, fit } = measureShareNote({ content, theme, format, mode, showBranding });
   const { canvas, card, content: box } = layout;
@@ -134,6 +137,62 @@ export const ShareNoteTemplate = memo(function ShareNoteTemplate({ content, them
 
     {theme.mark === 'tape' ? <View style={[styles.absolute, { left: (canvas.width / 2 - 44) * u, top: (card.top - 11) * u, width: 88 * u, height: 24 * u, borderRadius: 3 * u, backgroundColor: colors.accent, opacity: 0.28, transform: [{ rotate: '-3deg' }] }]} /> : null}
     {theme.stickers ? <CornerStickers theme={theme} u={u} canvas={canvas} card={card} /> : null}
+  </View>;
+});
+
+function ChecklistRows({ subtasks, theme, u, onRowHeight }: { subtasks: ShareNoteSubtask[]; theme: ShareNoteTheme; u: number; onRowHeight?: (index: number, height: number) => void }) {
+  return <View style={{ gap: 7 * u }}>
+    {subtasks.map((item, index) => <View key={index} onLayout={onRowHeight ? ({ nativeEvent }) => onRowHeight(index, nativeEvent.layout.height / u) : undefined} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 * u, minHeight: 22 * u }}>
+      <Ionicons name={item.isCompleted ? 'checkbox-outline' : 'square-outline'} size={18 * u} color={theme.colors.accent} style={{ marginTop: 2 * u }} />
+      <Text style={[FONTS[theme.fontStyle], { flex: 1, flexShrink: 1, color: item.isCompleted ? theme.colors.textSecondary : theme.colors.textPrimary, fontSize: 15 * u, lineHeight: 22 * u, includeFontPadding: false }]}>{item.title}</Text>
+    </View>)}
+  </View>;
+}
+
+/** Actual row measurements at the export width decide page breaks before capture. */
+export function ChecklistMeasure({ subtasks, theme, format, width, onRowHeight }: { subtasks: ShareNoteSubtask[]; theme: ShareNoteTheme; format: ShareNoteFormat; width: number; onRowHeight: (index: number, height: number) => void }) {
+  const frame = shareNoteLayout({ format, mode: 'text', imageCount: 0, hasTitle: false, showMark: false, showBranding: false });
+  const u = width / SHARE_NOTE_DESIGN_WIDTH;
+  return <View style={{ width: frame.content.width * u }}><ChecklistRows subtasks={subtasks} theme={theme} u={u} onRowHeight={onRowHeight} /></View>;
+}
+
+/** Cards with checklists use natural text layout, so every row can wrap and grow. */
+const ChecklistShareNoteTemplate = memo(function ChecklistShareNoteTemplate({ content, theme, format, mode, showBranding, width, onImageLoad, onCanvasReady, page }: ShareNoteTemplateProps) {
+  const u = width / SHARE_NOTE_DESIGN_WIDTH;
+  const frame = shareNoteLayout({ format, mode, imageCount: content.images.length, hasTitle: Boolean(content.title), showMark: false, showBranding });
+  const [measuredContentHeight, setMeasuredContentHeight] = useState(0);
+  const cardHeight = Math.max(frame.card.height, Math.ceil(measuredContentHeight / u) + 4);
+  const canvas = { width: SHARE_NOTE_DESIGN_WIDTH, height: cardHeight + frame.card.top * 2 };
+  const { colors } = theme;
+  const darkCanvas = isDark(colors.background);
+  const imageCount = content.images.length;
+  const imageHeight = (format === 'story' ? 190 : format === 'square' ? 150 : 170) * u;
+  useEffect(() => { if (measuredContentHeight > 0) onCanvasReady?.(canvas.height); }, [canvas.height, measuredContentHeight, onCanvasReady]);
+
+  return <View collapsable={false} style={{ width, height: canvas.height * u, overflow: 'hidden', backgroundColor: colors.background }}>
+    {theme.backgroundType === 'gradient' ? <LinearGradient colors={[colors.background, colors.backgroundEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} /> : null}
+    <Decorations theme={theme} u={u} canvas={canvas} />
+    <View style={[styles.absolute, { left: (frame.card.left + 4) * u, top: (frame.card.top + 10) * u, width: (frame.card.width - 8) * u, height: cardHeight * u, borderRadius: 26 * u, backgroundColor: darkCanvas ? 'rgba(0,0,0,0.35)' : 'rgba(24,32,40,0.07)' }]} />
+    <View style={[styles.absolute, { left: frame.card.left * u, top: frame.card.top * u, width: frame.card.width * u, height: cardHeight * u, borderRadius: 26 * u, backgroundColor: colors.surface, overflow: 'hidden' }]}>
+      <View onLayout={({ nativeEvent }) => { const height = nativeEvent.layout.height; if (Math.abs(height - measuredContentHeight) > 0.5) setMeasuredContentHeight(height); }} style={{ width: frame.card.width * u, padding: frame.card.padding * u }}>
+        {content.title ? <Text style={[FONTS[theme.fontStyle], { color: colors.accent, fontSize: 16 * u, lineHeight: 22 * u, fontWeight: '800', marginBottom: 11 * u }]}>{content.title}</Text> : null}
+        {mode !== 'image' && content.text ? <Text numberOfLines={mode === 'text-image' ? 4 : 6} ellipsizeMode="tail" style={[FONTS[theme.fontStyle], { color: colors.textPrimary, fontSize: (mode === 'text-image' ? 14 : 16) * u, lineHeight: (mode === 'text-image' ? 20 : 22) * u, marginBottom: 14 * u, includeFontPadding: false }]}>{content.text}</Text> : null}
+        {imageCount ? <View style={{ flexDirection: 'row', gap: 10 * u, marginBottom: 16 * u }}>
+          {content.images.map((image) => {
+            const uri = resolveAttachmentUri(image.storagePath);
+            return <View key={image.id} style={{ width: imageCount === 1 ? frame.content.width * u : (frame.content.width - 10) / 2 * u, height: imageHeight, borderRadius: 14 * u, overflow: 'hidden', backgroundColor: colors.decoration }}>
+              {uri ? <Image source={{ uri }} contentFit="cover" cachePolicy="memory" style={StyleSheet.absoluteFill} onLoad={() => onImageLoad?.(image.id)} onError={() => onImageLoad?.(image.id)} /> : null}
+            </View>;
+          })}
+        </View> : null}
+        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.accent, opacity: 0.35, marginBottom: 12 * u }} />
+        <Text style={{ color: colors.accent, fontSize: 11 * u, lineHeight: 16 * u, fontWeight: '800', letterSpacing: 1.1 * u, marginBottom: 9 * u }}>{page && page.total > 1 ? `CHECKLIST · PAGE ${page.index + 1} OF ${page.total}` : 'CHECKLIST'}</Text>
+        <ChecklistRows subtasks={content.subtasks ?? []} theme={theme} u={u} />
+        {showBranding ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 * u, marginTop: 20 * u }}><Ionicons name="chatbubbles" size={11 * u} color={colors.accent} /><Text style={{ color: colors.textSecondary, fontSize: 10 * u, lineHeight: 14 * u, fontWeight: '600' }}>Shared from Chits</Text></View> : null}
+      </View>
+    </View>
+    {theme.mark === 'tape' ? <View style={[styles.absolute, { left: (canvas.width / 2 - 44) * u, top: (frame.card.top - 11) * u, width: 88 * u, height: 24 * u, borderRadius: 3 * u, backgroundColor: colors.accent, opacity: 0.28, transform: [{ rotate: '-3deg' }] }]} /> : null}
+    {theme.stickers ? <CornerStickers theme={theme} u={u} canvas={canvas} card={frame.card} /> : null}
   </View>;
 });
 

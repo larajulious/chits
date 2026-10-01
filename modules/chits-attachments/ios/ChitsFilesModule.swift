@@ -68,6 +68,24 @@ public final class ChitsFilesModule: Module {
       try ChitsLocalFiles.namedLink(to: Self.readableURL(uri), fileName: fileName).absoluteString
     }
 
+    AsyncFunction("shareImagesAsync") { (uris: [String], promise: Promise) in
+      guard !uris.isEmpty else { promise.resolve(false); return }
+      let urls = try uris.map { try Self.readableURL($0) }
+      guard let presenter = self.appContext?.utilities?.currentViewController() else {
+        throw MissingViewControllerException()
+      }
+      let controller = UIActivityViewController(activityItems: urls, applicationActivities: nil)
+      if let popover = controller.popoverPresentationController {
+        popover.sourceView = presenter.view
+        popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.maxY - 1, width: 1, height: 1)
+      }
+      controller.completionWithItemsHandler = { _, _, _, error in
+        if let error { promise.reject(error) } else { promise.resolve(true) }
+      }
+      presenter.present(controller, animated: true)
+    }
+    .runOnQueue(.main)
+
     AsyncFunction("openWithAsync") { (uri: String, mimeType: String?) -> Bool in
       let url = try Self.readableURL(uri)
       guard let presenter = self.appContext?.utilities?.currentViewController() else {

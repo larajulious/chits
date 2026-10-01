@@ -4,14 +4,14 @@ import type { ExportFailureCode } from '@/services/attachment-export-naming';
 import { SHARE_NOTE_FORMATS, type ShareNoteFormat } from '@/services/share-note';
 
 export type ShareNoteSaveOutcome = { status: 'saved'; savedTo: string } | { status: 'cancelled' } | { status: 'failed'; code: ExportFailureCode };
-export type ShareNoteImageFile = { uri: string; fileName: string; mimeType: 'image/png' | 'image/jpeg' };
+export type ShareNoteImageFile = { uri: string; fileName: string; mimeType: 'image/png' | 'image/jpeg'; temporaryDirectory?: string };
 
 // Share Note images are generated on device; the web preview has no capture.
 export function shareNoteExportWidth(format: ShareNoteFormat): number {
   return SHARE_NOTE_FORMATS[format].width / 3;
 }
 
-export async function captureShareNote(_view: View, _format: ShareNoteFormat, _hasPhotos: boolean, _name?: string): Promise<ShareNoteImageFile> {
+export async function captureShareNote(_view: View, _format: ShareNoteFormat, _hasPhotos: boolean, _name?: string, _imageHeight?: number): Promise<ShareNoteImageFile> {
   throw new Error('Share Note is available in the Chits iOS and Android app.');
 }
 
@@ -20,6 +20,10 @@ export async function saveShareNoteImage(_file: ShareNoteImageFile): Promise<Sha
 }
 
 export async function shareShareNoteImage(_file: ShareNoteImageFile): Promise<boolean> {
+  return false;
+}
+
+export async function shareShareNoteImages(_files: ShareNoteImageFile[]): Promise<boolean> {
   return false;
 }
 

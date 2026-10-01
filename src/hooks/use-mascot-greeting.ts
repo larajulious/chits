@@ -10,7 +10,7 @@ import { canShowMascotGreeting, claimMascotGreeting, subscribeToMascotSession } 
 
 const RECENT_KEY = 'mascot.recentGreetings';
 const SHOW_DELAY_MS = 650;
-const VISIBLE_MS = 5000;
+const VISIBLE_MS = 10000;
 
 type Greeting = { text: string; language: GreetingLanguage; period: GreetingPeriod };
 

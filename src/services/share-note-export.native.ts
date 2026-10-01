@@ -1,5 +1,5 @@
 import { PixelRatio, Platform, type View } from 'react-native';
-import { deleteAsync } from 'expo-file-system/legacy';
+import { cacheDirectory, copyAsync, deleteAsync, getContentUriAsync, makeDirectoryAsync } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { captureRef, releaseCapture } from 'react-native-view-shot';
 
@@ -11,7 +11,7 @@ import { SHARE_NOTE_FORMATS, shareNoteFileName, type ShareNoteFormat } from '@/s
 /** `savedTo` is the confirmation to show: where the image can now be found. */
 export type ShareNoteSaveOutcome = { status: 'saved'; savedTo: string } | { status: 'cancelled' } | { status: 'failed'; code: ExportFailureCode };
 
-export type ShareNoteImageFile = { uri: string; fileName: string; mimeType: 'image/png' | 'image/jpeg' };
+export type ShareNoteImageFile = { uri: string; fileName: string; mimeType: 'image/png' | 'image/jpeg'; temporaryDirectory?: string };
 
 /**
  * The width, in points, to draw the export canvas at so that it is exactly the
@@ -27,8 +27,9 @@ export function shareNoteExportWidth(format: ShareNoteFormat): number {
  * friendly name. Text-only notes are lossless PNG; with photos, a high-quality
  * JPEG keeps the file a sensible size.
  */
-export async function captureShareNote(view: View, format: ShareNoteFormat, hasPhotos: boolean, name?: string): Promise<ShareNoteImageFile> {
-  const { width, height } = SHARE_NOTE_FORMATS[format];
+export async function captureShareNote(view: View, format: ShareNoteFormat, hasPhotos: boolean, name?: string, imageHeight?: number): Promise<ShareNoteImageFile> {
+  const { width, height: formatHeight } = SHARE_NOTE_FORMATS[format];
+  const height = imageHeight ?? formatHeight;
   const scale = PixelRatio.get();
   const extension = hasPhotos ? 'jpg' : 'png';
   const raw = await captureRef(view, {
@@ -37,9 +38,23 @@ export async function captureShareNote(view: View, format: ShareNoteFormat, hasP
     ...(Platform.OS === 'ios' ? { width: width / scale, height: height / scale } : { width, height }),
   });
   const fileName = shareNoteFileName(new Date(), extension, name);
-  const named = await ChitsFiles.prepareNamedFileAsync(raw, fileName).catch(() => raw);
-  if (named !== raw) releaseCapture(raw);
-  return { uri: named, fileName, mimeType: hasPhotos ? 'image/jpeg' : 'image/png' };
+  if (!cacheDirectory) { releaseCapture(raw); throw new Error('Share Note cache is unavailable.'); }
+  // Each page gets a separate directory. A later capture must not remove an
+  // earlier page before Save or the native multi-image share sheet reads it.
+  const temporaryDirectory = `${cacheDirectory}chits-share-note-${Date.now()}-${Math.random().toString(36).slice(2)}/`;
+  try {
+    await makeDirectoryAsync(temporaryDirectory, { intermediates: true });
+    const uri = `${temporaryDirectory}${fileName}`;
+    // view-shot writes under iOS tmp/ReactNative, which Expo can read but may
+    // not move from because moving also needs write access to that directory.
+    await copyAsync({ from: raw, to: uri });
+    releaseCapture(raw);
+    return { uri, fileName, mimeType: hasPhotos ? 'image/jpeg' : 'image/png', temporaryDirectory };
+  } catch (error) {
+    releaseCapture(raw);
+    await deleteAsync(temporaryDirectory, { idempotent: true }).catch(() => undefined);
+    throw error;
+  }
 }
 
 /**
@@ -81,7 +96,20 @@ export async function shareShareNoteImage(file: ShareNoteImageFile): Promise<boo
   }
 }
 
+/** One native share sheet containing every page, in checklist order. */
+export async function shareShareNoteImages(files: ShareNoteImageFile[]): Promise<boolean> {
+  if (files.length === 1) return shareShareNoteImage(files[0]);
+  if (!files.length) return false;
+  try {
+    const uris = Platform.OS === 'android' ? await Promise.all(files.map((file) => getContentUriAsync(file.uri))) : files.map((file) => file.uri);
+    return await ChitsFiles.shareImagesAsync(uris);
+  } catch (error) {
+    console.warn('[share-note] multi-image share failed', { error });
+    return false;
+  }
+}
+
 /** Removes a generated image once it's no longer needed (the saved/shared copies are separate). */
 export function discardShareNoteImage(file: ShareNoteImageFile | null) {
-  if (file) void deleteAsync(file.uri, { idempotent: true }).catch(() => undefined);
+  if (file) void deleteAsync(file.temporaryDirectory ?? file.uri, { idempotent: true }).catch(() => undefined);
 }

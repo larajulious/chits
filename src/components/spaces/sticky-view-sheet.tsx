@@ -144,18 +144,18 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
           <Text selectable style={[fonts.ui, styles.expandedThoughtText]}>{thought.text || 'Empty thought'}</Text>
         </View>)}
       </View> : null}
+      {moreThoughts.length > 0 ? <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${moreExpanded ? 'Hide' : 'See'} ${moreThoughts.length} more ${moreThoughts.length === 1 ? 'thought' : 'thoughts'} in this card`}
+        accessibilityState={{ expanded: moreExpanded }}
+        onPress={() => setExpandedNoteId((current) => current === note.id ? null : note.id)}
+        style={({ pressed }) => [styles.moreToggle, pressed && styles.pressed]}
+      >
+        <Ionicons accessible={false} name="layers-outline" size={18} color={SPACE_UI.paper} />
+        <Text style={[fonts.uiSemi, styles.moreToggleText]}>{moreExpanded ? 'Hide' : 'See'} {moreThoughts.length} more {moreThoughts.length === 1 ? 'thought' : 'thoughts'}</Text>
+        <Ionicons accessible={false} name={moreExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={SPACE_UI.textMuted} />
+      </Pressable> : null}
     </ScrollView>
-    {moreThoughts.length > 0 ? <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${moreExpanded ? 'Hide' : 'See'} ${moreThoughts.length} more ${moreThoughts.length === 1 ? 'thought' : 'thoughts'} in this card`}
-      accessibilityState={{ expanded: moreExpanded }}
-      onPress={() => setExpandedNoteId((current) => current === note.id ? null : note.id)}
-      style={({ pressed }) => [styles.moreToggle, pressed && styles.pressed]}
-    >
-      <Ionicons accessible={false} name="layers-outline" size={18} color={SPACE_UI.paper} />
-      <Text style={[fonts.uiSemi, styles.moreToggleText]}>{moreExpanded ? 'Hide' : 'See'} {moreThoughts.length} more {moreThoughts.length === 1 ? 'thought' : 'thoughts'}</Text>
-      <Ionicons accessible={false} name={moreExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={SPACE_UI.textMuted} />
-    </Pressable> : null}
     <View style={styles.actions}>
       <Pressable accessibilityRole="button" accessibilityLabel={`Options for ${heading}`} onPress={onOptions} style={({ pressed }) => [styles.button, styles.secondary, pressed && styles.pressed]}>
         <Ionicons accessible={false} name="ellipsis-horizontal" size={20} color={SPACE_UI.paper} />
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
   thought: { fontSize: 20, lineHeight: 27, color: PAPER_INK },
   thoughtSection: { flexShrink: 0, minWidth: 0 },
   thoughtDivider: { marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(42,38,34,0.18)' },
-  moreToggle: { flexShrink: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8, paddingHorizontal: 12, borderRadius: 12, backgroundColor: SPACE_UI.inkRaised },
+  moreToggle: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, paddingHorizontal: 12, borderRadius: 12, backgroundColor: SPACE_UI.inkRaised },
   moreToggleText: { flex: 1, fontSize: 14, color: SPACE_UI.paper },
   expandedThoughts: { paddingHorizontal: 12 },
   expandedThought: { paddingVertical: 14, gap: 5, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: SPACE_UI.inkBorder },
