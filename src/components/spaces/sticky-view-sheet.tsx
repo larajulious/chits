@@ -63,15 +63,20 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
   const media = note.hidden ? null : note.media;
   const title = note.hidden ? null : note.title?.trim() || null;
   const caption = media ? photoCaption(note) : null;
-  // Until the full note loads, what the board already shows. A photo's own
-  // thought reads as its words (not "Photo"), and nothing is written twice:
-  // not a card title its first thought repeats, nor the print's caption.
-  const loadedThoughts = detail?.thoughts ?? (note.hidden ? [] : media
+  // The main paper/print represents one thought. Keep the remaining card
+  // thoughts separate, including ones whose text happens to match its title.
+  const loadedThoughts = note.hidden ? [] : detail?.thoughts ?? (media
     ? [{ messageId: media.messageId, text: '', caption: media.caption }]
     : [{ messageId: note.noteId, text: stickyText({ title: null, text: note.text }), caption: null }]);
-  const thoughts = loadedThoughts
-    .map((thought) => ({ messageId: thought.messageId, text: ((media && thought.messageId === media.messageId ? thought.caption : thought.text) ?? '').trim() }))
-    .filter((thought, index) => thought.text && !(index === 0 && thought.text === title) && thought.text !== caption);
+  const primaryMessageId = media?.messageId ?? loadedThoughts[0]?.messageId;
+  const thoughts = loadedThoughts.map((thought, index) => ({
+    messageId: thought.messageId,
+    number: index + 1,
+    text: ((media && thought.messageId === media.messageId ? thought.caption : thought.text) ?? '').trim(),
+  }));
+  const primaryThoughts = thoughts.filter((thought) =>
+    (!isCard || thought.messageId === primaryMessageId) && thought.text && thought.text !== title && thought.text !== caption);
+  const moreThoughts = isCard ? thoughts.filter((thought) => thought.messageId !== primaryMessageId) : [];
   const onBoard = !isCard && !!note.boardId;
   const context = detail?.context ?? (isCard || onBoard ? null : 'Chat');
   const open = isCard ? { label: 'Open card', icon: 'open-outline' as const } : onBoard ? { label: 'Open board', icon: 'grid-outline' as const } : { label: 'Open in Chat', icon: 'chatbubble-outline' as const };
@@ -85,6 +90,10 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
     <View style={styles.header}>
       <Text style={[fonts.label, styles.where]}>ON YOUR {space.name.toUpperCase()}</Text>
       {context ? <Text numberOfLines={1} style={[fonts.ui, styles.context]}>{context}</Text> : null}
+      {isCard && thoughts.length > 1 ? <View style={styles.cardSummary}>
+        <Ionicons accessible={false} name="layers-outline" size={14} color={SPACE_UI.paper} />
+        <Text style={[fonts.uiSemi, styles.cardSummaryText]}>{thoughts.length} thoughts in this card</Text>
+      </View> : null}
     </View>
 
     {/* Room around the paper for its shadow, and above it for the fridge magnet. */}
@@ -104,7 +113,7 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
         </View> : null}
       {/* Keep long paper upright: rotation expands its visual bounds beyond
           the scrollable area as additional thoughts increase its height. */}
-      {!media || thoughts.length ? <View style={media ? styles.paperUnder : undefined}>
+      {!media || primaryThoughts.length ? <View style={media ? styles.paperUnder : undefined}>
         <View style={[styles.paper, { backgroundColor: paper.base, experimental_backgroundImage: `linear-gradient(176deg, ${paper.base} 0%, ${paper.base} 82%, ${paper.curl} 100%)` }]}>
           <View style={styles.paperContent}>
             {note.hidden ? <View accessible accessibilityLabel="Hidden Chit. Open it in Chat to see it." style={styles.hidden}>
@@ -113,7 +122,7 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
               <Text style={[fonts.note, styles.hiddenHint]}>Open it in Chat to see it.</Text>
             </View> : <>
               {title && !media ? <Text accessibilityRole="header" selectable style={[fonts.note, styles.title]}>{title}</Text> : null}
-              {thoughts.map((thought, index) => <View key={thought.messageId} style={[styles.thoughtSection, (index > 0 || (title && !media)) ? styles.thoughtDivider : null]}>
+              {primaryThoughts.map((thought, index) => <View key={thought.messageId} style={[styles.thoughtSection, (index > 0 || (title && !media)) ? styles.thoughtDivider : null]}>
                 <Text selectable style={[fonts.note, styles.thought]}>{thought.text}</Text>
               </View>)}
             </>}
@@ -121,6 +130,27 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
         </View>
         {/* A print already carries the pin; the sticky under it just lies there. */}
         {media ? null : <View pointerEvents="none" style={StyleSheet.absoluteFill}>{pin}</View>}
+      </View> : null}
+      {moreThoughts.length > 0 ? <View style={styles.moreThoughts}>
+        <View style={styles.moreHeading}>
+          <Text accessibilityRole="header" style={[fonts.uiSemi, styles.moreTitle]}>More thoughts in this card</Text>
+          <Text style={[fonts.ui, styles.moreCount]}>{moreThoughts.length}</Text>
+        </View>
+        {moreThoughts.map((thought) => <Pressable
+          key={thought.messageId}
+          accessibilityRole="button"
+          accessibilityLabel={`Thought ${thought.number}: ${thought.text || 'Empty thought'}`}
+          accessibilityHint="Opens the card to read all its thoughts"
+          onPress={onOpen}
+          style={({ pressed }) => [styles.relatedThought, { borderLeftColor: paper.base }, pressed && styles.pressed]}
+        >
+          <View style={styles.relatedHeading}>
+            <Ionicons accessible={false} name="chatbubble-outline" size={14} color={SPACE_UI.textMuted} />
+            <Text style={[fonts.uiSemi, styles.relatedLabel]}>Thought {thought.number}</Text>
+            <Ionicons accessible={false} name="chevron-forward" size={16} color={SPACE_UI.textMuted} />
+          </View>
+          <Text numberOfLines={3} style={[fonts.ui, styles.relatedText]}>{thought.text || 'Empty thought'}</Text>
+        </Pressable>)}
       </View> : null}
     </ScrollView>
 
@@ -232,6 +262,8 @@ const styles = StyleSheet.create({
   header: { flexShrink: 0, gap: 2 },
   where: { fontSize: 11, letterSpacing: 1.6, color: SPACE_UI.textMuted },
   context: { fontSize: 14, color: SPACE_UI.textMuted },
+  cardSummary: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+  cardSummaryText: { fontSize: 12, color: SPACE_UI.paper },
   scroll: { flexGrow: 0, flexShrink: 1, minHeight: 0, marginHorizontal: -20, marginTop: 6, marginBottom: 8 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 },
   paperUnder: { marginTop: 18, flexShrink: 0 },
@@ -256,6 +288,14 @@ const styles = StyleSheet.create({
   thought: { fontSize: 20, lineHeight: 27, color: PAPER_INK },
   thoughtSection: { flexShrink: 0, minWidth: 0 },
   thoughtDivider: { marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(42,38,34,0.18)' },
+  moreThoughts: { marginTop: 24, gap: 10 },
+  moreHeading: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
+  moreTitle: { flex: 1, fontSize: 14, color: SPACE_UI.paper },
+  moreCount: { fontSize: 12, color: SPACE_UI.textMuted },
+  relatedThought: { minHeight: 72, padding: 14, gap: 8, borderRadius: 12, borderLeftWidth: 3, backgroundColor: SPACE_UI.inkRaised },
+  relatedHeading: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  relatedLabel: { flex: 1, fontSize: 12, color: SPACE_UI.textMuted },
+  relatedText: { fontSize: 15, lineHeight: 21, color: SPACE_UI.paper },
   hidden: { alignItems: 'center', paddingVertical: 18 },
   hiddenIcon: { opacity: 0.55 },
   hiddenText: { marginTop: 4, fontSize: 22, lineHeight: 28, color: PAPER_INK, opacity: 0.7 },
