@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { BackHandler, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
@@ -40,9 +40,15 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
   const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
   const fonts = useSpaceFonts();
+  const scrollRef = useRef<ScrollView>(null);
   const sheetWidth = Math.min(window.width - insets.left - insets.right, 600);
   const contentWidth = sheetWidth - 40;
-  const maxSheetHeight = Math.min(window.height * 0.9, window.height - insets.top - 12);
+  // Android's edge-to-edge root is taller than the visible app viewport.
+  // Place the sheet above that clipped bottom region, including both insets.
+  const bottomOffset = Platform.OS === 'android' ? insets.top + insets.bottom + 16 : 0;
+  const visibleHeight = window.height - bottomOffset;
+  const maxSheetHeight = Math.min(visibleHeight * 0.9, visibleHeight - insets.top - 12);
+  const maxScrollHeight = Math.min(260, Math.max(120, maxSheetHeight - Math.max(insets.bottom, 12) - 210));
   // Tagged with the note it belongs to, so a different note never shows a stale read.
   const [loaded, setLoaded] = useState<{ noteId: string; detail: SpaceNoteDetail } | null>(null);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
@@ -87,7 +93,9 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
   const tilt = Math.max(-1.5, Math.min(1.5, note.rotation / 2));
   const pin = <PinDecoration space={note.spaceId} color={magnetColor(noteSeed(note.id))} noteWidth={contentWidth} unit={1.2} seed={noteSeed(note.id)} />;
 
-  return <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, { width: sheetWidth, left: insets.left + (window.width - insets.left - insets.right - sheetWidth) / 2, maxHeight: maxSheetHeight, paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
+  return <>
+    {bottomOffset > 0 ? <View pointerEvents="none" style={[styles.navigationBackdrop, { height: bottomOffset }]} /> : null}
+    <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, { width: sheetWidth, left: insets.left + (window.width - insets.left - insets.right - sheetWidth) / 2, maxHeight: maxSheetHeight, bottom: bottomOffset, paddingBottom: Platform.OS === 'android' ? 12 : Math.max(insets.bottom, 12) + 8 }]}>
     <View style={styles.grabber} />
     <View style={styles.header}>
       <Text style={[fonts.label, styles.where]}>ON YOUR {space.name.toUpperCase()}</Text>
@@ -97,16 +105,17 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
     {/* Room around the paper for its shadow, and above it for the fridge magnet. */}
     <ScrollView
       key={`${note.kind}:${note.noteId}`}
-      style={styles.scroll}
+      ref={scrollRef}
+      style={[styles.scroll, { maxHeight: maxScrollHeight }]}
       contentContainerStyle={styles.scrollContent}
       contentInsetAdjustmentBehavior="never"
       showsVerticalScrollIndicator
       indicatorStyle="white"
     >
       {media?.attachment.type === 'audio'
-        ? <SheetTape media={media} caption={caption} color={note.color} width={Math.min(contentWidth, 360)} tilt={tilt} pin={pin} />
+        ? <SheetTape media={media} caption={caption} color={note.color} width={Math.min(contentWidth, 240)} tilt={tilt} pin={<PinDecoration space={note.spaceId} color={magnetColor(noteSeed(note.id))} noteWidth={Math.min(contentWidth, 240)} unit={1.2} seed={noteSeed(note.id)} />} />
         : media ? <View style={{ transform: [{ rotate: `${tilt}deg` }] }}>
-          <SheetPrint media={media} caption={caption} maxWidth={contentWidth} maxHeight={window.height * 0.42} />
+          <SheetPrint media={media} caption={caption} maxWidth={Math.min(contentWidth, 260)} maxHeight={Math.min(window.height * 0.28, 220)} />
           <View pointerEvents="none" style={StyleSheet.absoluteFill}>{pin}</View>
         </View> : null}
       {/* Keep long paper upright: rotation expands its visual bounds beyond
@@ -129,27 +138,24 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
         {/* A print already carries the pin; the sticky under it just lies there. */}
         {media ? null : <View pointerEvents="none" style={StyleSheet.absoluteFill}>{pin}</View>}
       </View> : null}
-      {moreThoughts.length > 0 ? <View style={styles.moreThoughts}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${moreExpanded ? 'Hide' : 'See'} ${moreThoughts.length} more ${moreThoughts.length === 1 ? 'thought' : 'thoughts'} in this card`}
-          accessibilityState={{ expanded: moreExpanded }}
-          onPress={() => setExpandedNoteId((current) => current === note.id ? null : note.id)}
-          style={({ pressed }) => [styles.moreToggle, pressed && styles.pressed]}
-        >
-          <Ionicons accessible={false} name="layers-outline" size={18} color={SPACE_UI.paper} />
-          <Text style={[fonts.uiSemi, styles.moreToggleText]}>{moreExpanded ? 'Hide' : 'See'} {moreThoughts.length} more {moreThoughts.length === 1 ? 'thought' : 'thoughts'}</Text>
-          <Ionicons accessible={false} name={moreExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={SPACE_UI.textMuted} />
-        </Pressable>
-        {moreExpanded ? <View style={styles.expandedThoughts}>
-          {moreThoughts.map((thought) => <View key={thought.messageId} style={styles.expandedThought}>
-            <Text style={[fonts.uiSemi, styles.thoughtLabel]}>THOUGHT {thought.number}</Text>
-            <Text selectable style={[fonts.ui, styles.expandedThoughtText]}>{thought.text || 'Empty thought'}</Text>
-          </View>)}
-        </View> : null}
+      {moreExpanded ? <View style={styles.expandedThoughts} onLayout={({ nativeEvent }) => scrollRef.current?.scrollTo({ y: nativeEvent.layout.y, animated: true })}>
+        {moreThoughts.map((thought) => <View key={thought.messageId} style={styles.expandedThought}>
+          <Text style={[fonts.uiSemi, styles.thoughtLabel]}>THOUGHT {thought.number}</Text>
+          <Text selectable style={[fonts.ui, styles.expandedThoughtText]}>{thought.text || 'Empty thought'}</Text>
+        </View>)}
       </View> : null}
     </ScrollView>
-
+    {moreThoughts.length > 0 ? <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${moreExpanded ? 'Hide' : 'See'} ${moreThoughts.length} more ${moreThoughts.length === 1 ? 'thought' : 'thoughts'} in this card`}
+      accessibilityState={{ expanded: moreExpanded }}
+      onPress={() => setExpandedNoteId((current) => current === note.id ? null : note.id)}
+      style={({ pressed }) => [styles.moreToggle, pressed && styles.pressed]}
+    >
+      <Ionicons accessible={false} name="layers-outline" size={18} color={SPACE_UI.paper} />
+      <Text style={[fonts.uiSemi, styles.moreToggleText]}>{moreExpanded ? 'Hide' : 'See'} {moreThoughts.length} more {moreThoughts.length === 1 ? 'thought' : 'thoughts'}</Text>
+      <Ionicons accessible={false} name={moreExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={SPACE_UI.textMuted} />
+    </Pressable> : null}
     <View style={styles.actions}>
       <Pressable accessibilityRole="button" accessibilityLabel={`Options for ${heading}`} onPress={onOptions} style={({ pressed }) => [styles.button, styles.secondary, pressed && styles.pressed]}>
         <Ionicons accessible={false} name="ellipsis-horizontal" size={20} color={SPACE_UI.paper} />
@@ -160,7 +166,8 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
         <Text style={[fonts.uiSemi, styles.buttonLabel, { color: SPACE_UI.accentText }]}>{open.label}</Text>
       </Pressable>
     </View>
-  </Animated.View>;
+  </Animated.View>
+  </>;
 }
 
 /**
@@ -253,6 +260,7 @@ const MEDIA_NAMES = { photo: 'Photo', video: 'Video', audio: 'Voice note' } as c
 const PRINT_BORDER = 12;
 
 const styles = StyleSheet.create({
+  navigationBackdrop: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: SPACE_UI.ink },
   sheet: { position: 'absolute', bottom: 0, overflow: 'hidden', paddingHorizontal: 20, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: SPACE_UI.ink, boxShadow: '0px -8px 30px rgba(0,0,0,0.35)' },
   grabber: { flexShrink: 0, alignSelf: 'center', width: 40, height: 4, borderRadius: 2, marginTop: 10, marginBottom: 14, backgroundColor: SPACE_UI.inkBorder },
   header: { flexShrink: 0, gap: 2 },
@@ -282,8 +290,7 @@ const styles = StyleSheet.create({
   thought: { fontSize: 20, lineHeight: 27, color: PAPER_INK },
   thoughtSection: { flexShrink: 0, minWidth: 0 },
   thoughtDivider: { marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(42,38,34,0.18)' },
-  moreThoughts: { marginTop: 12 },
-  moreToggle: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: SPACE_UI.inkRaised },
+  moreToggle: { flexShrink: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8, paddingHorizontal: 12, borderRadius: 12, backgroundColor: SPACE_UI.inkRaised },
   moreToggleText: { flex: 1, fontSize: 14, color: SPACE_UI.paper },
   expandedThoughts: { paddingHorizontal: 12 },
   expandedThought: { paddingVertical: 14, gap: 5, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: SPACE_UI.inkBorder },
