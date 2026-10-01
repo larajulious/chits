@@ -40,7 +40,7 @@ type BoardSummary = Board & { columnCount: number; cardCount: number };
 type ViewMode = 'boards' | 'cards';
 
 type CardSection = { key: string; title: string; pinned?: boolean; count: number; data: CardListItem[] };
-type CollectionCell = { kind: 'header'; section: CardSection } | { kind: 'note'; item: CardListItem };
+type CollectionCell = { kind: 'header'; section: CardSection } | { kind: 'note'; item: CardListItem; column: number };
 type UnorganizedSummaryRow = { id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; isHiddenContent: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number };
 
 function pluralize(count: number, singular: string) {
@@ -279,10 +279,10 @@ export default function BoardsScreen() {
     for (const section of cardSections) {
       stickyHeaderIndices.push(cells.length);
       cells.push({ kind: 'header', section });
-      for (const item of section.data) cells.push({ kind: 'note', item });
+      for (const [index, item] of section.data.entries()) cells.push({ kind: 'note', item, column: index % cardColumns });
     }
     return { cells, stickyHeaderIndices };
-  }, [cardSections]);
+  }, [cardSections, cardColumns]);
 
   // "Move back to Unorganized" — always confirmed first. Fetches a lightweight
   // preview (this row doesn't have message/comment/attachment counts loaded the
@@ -491,7 +491,7 @@ export default function BoardsScreen() {
                       <Text style={[styles.cardSectionCount, { color: theme.textMuted }]}>{cell.section.count}</Text>
                     </View>
                   ) : (
-                    <View style={styles.noteCell}>
+                    <View style={[styles.noteCell, cardColumns === 1 ? styles.noteCellSingle : cell.column === 0 ? styles.noteCellStart : styles.noteCellEnd]}>
                       <CardListRow
                         item={cell.item}
                         onPress={() => router.push(cell.item.kind === 'thought' ? `/chat?messageId=${cell.item.id}` : `/card/${cell.item.id}`)}
@@ -659,9 +659,12 @@ const styles = StyleSheet.create({
   switchOption: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: radii.control - 2 },
   switchLabel: { fontSize: 13, fontWeight: '600' },
   cardList: { flex: 1 },
-  noteCell: { paddingHorizontal: 6, paddingBottom: 12 },
-  cardListContent: { paddingHorizontal: 10, paddingTop: 0 },
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, minHeight: 48, paddingHorizontal: 6, paddingTop: 10, paddingBottom: 8 },
+  noteCell: { paddingBottom: 12 },
+  noteCellSingle: { paddingHorizontal: spacing.md },
+  noteCellStart: { paddingLeft: spacing.md, paddingRight: 6 },
+  noteCellEnd: { paddingLeft: 6, paddingRight: spacing.md },
+  cardListContent: { paddingTop: 0 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, minHeight: 48, paddingHorizontal: spacing.md, paddingTop: 10, paddingBottom: 8 },
   sectionHeaderTitle: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
   cardSectionMonth: { flexShrink: 1, fontSize: 17, lineHeight: 22, fontWeight: '700', letterSpacing: -0.2 },
   cardSectionCount: { fontSize: 12, fontWeight: '500', fontVariant: ['tabular-nums'] },
