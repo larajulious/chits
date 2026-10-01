@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.6 },
   content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   inner: { width: '100%', maxWidth: 520, alignSelf: 'center', alignItems: 'center', gap: spacing.lg },
-  icon: { width: 72, height: 72, borderRadius: 18 },
+  icon: { width: 112, height: 112, borderRadius: 26 },
   copy: { gap: spacing.xs },
   headline: { fontSize: 26, lineHeight: 32, textAlign: 'center' },
   body: { fontSize: 16, lineHeight: 23, textAlign: 'center' },
