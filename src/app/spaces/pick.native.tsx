@@ -17,6 +17,7 @@ import { DEFAULT_SPACE_ID, SPACE_LIST, STICKY_COLORS, type SpaceDefinition, type
 import { SPACE_UI } from '@/constants/spaces-theme';
 import { layout } from '@/constants/theme';
 import { createSpaceRepository } from '@/db/repositories';
+import { OnboardingMascot } from '@/features/onboarding/components/onboarding-mascot';
 
 // Cards share whatever height the screen has left, up to this tall, and never
 // below the minimum (where the tapes and a sample note still fit).
@@ -98,9 +99,12 @@ export default function PickSpaceScreen() {
   return <View style={[styles.root, { paddingTop: insets.top }]}>
     <StatusBar style="light" />
     <View style={styles.content}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
-        <Ionicons accessible={false} name="chevron-back" size={24} color={SPACE_UI.paper} style={{ marginLeft: -2 }} />
-      </Pressable>
+      <View style={[styles.topRow, compact && styles.topRowCompact]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
+          <Ionicons accessible={false} name="chevron-back" size={24} color={SPACE_UI.paper} style={{ marginLeft: -2 }} />
+        </Pressable>
+        <OnboardingMascot size={compact ? 60 : 76} />
+      </View>
       <LabelTape text={saved ? 'Spaces' : 'New · Spaces'} variant="red" size="sm" rotation={-2} decorative />
       <Text accessibilityRole="header" style={[fonts.uiHeavy, styles.title, compact && styles.titleCompact]}>{saved ? 'Where to?' : 'Pick a spot for your notes.'}</Text>
       <Text style={[fonts.ui, styles.intro, compact && styles.introCompact]}>Stick notes on it and move them around, like the real thing.</Text>
@@ -121,7 +125,9 @@ export default function PickSpaceScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: SPACE_UI.ink },
   content: { flex: 1, minHeight: 0, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, alignSelf: 'center', width: '100%', maxWidth: layout.maxContentWidth },
-  back: { width: 44, height: 44, borderRadius: 22, marginLeft: -6, marginBottom: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: SPACE_UI.inkRaised },
+  topRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 },
+  topRowCompact: { marginBottom: 4 },
+  back: { width: 44, height: 44, borderRadius: 22, marginLeft: -6, alignItems: 'center', justifyContent: 'center', backgroundColor: SPACE_UI.inkRaised },
   title: { marginTop: 14, fontSize: 36, lineHeight: 38, letterSpacing: -0.72, color: SPACE_UI.paper },
   titleCompact: { marginTop: 8, fontSize: 28, lineHeight: 31, letterSpacing: -0.56 },
   intro: { marginTop: 10, marginBottom: 22, fontSize: 15, lineHeight: 21, color: SPACE_UI.textMuted },
