@@ -33,6 +33,8 @@ import { LabelTape } from '@/components/spaces/label-tape';
 import { Toast } from '@/components/ui/primitives';
 import { spacing } from '@/constants/theme';
 import { createBoardRepository, createSpaceRepository } from '@/db/repositories';
+import { getCalendarItems } from '@/features/calendar/calendar-data';
+import { subscribeToReminderChanges } from '@/services/reminders';
 import { subscribeToSpaceChanges } from '@/services/space-changes';
 
 // Short, restrained transition for a row's fade and collapse on unpin.
@@ -86,14 +88,14 @@ function DrawerIcon({ name, color }: { name: IconName; color: string }) {
   );
 }
 
-function NavigationRow({ destination, pathname, close, badge = 0 }: { destination: Destination; pathname: string; close: () => void; badge?: number }) {
+function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'note' }: { destination: Destination; pathname: string; close: () => void; badge?: number; badgeNoun?: 'note' | 'reminder' }) {
   const router = useRouter();
   const { tokens } = useTheme();
   const active = isDestinationActive(pathname, destination);
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${destination.label}${badge ? `, ${badge} ${badge === 1 ? 'note' : 'notes'}` : ''}${active ? '. Current screen.' : ''}`}
+      accessibilityLabel={`${destination.label}${badge ? `, ${badge} ${badgeNoun}${badge === 1 ? '' : 's'}` : ''}${active ? '. Current screen.' : ''}`}
       accessibilityState={{ selected: active }}
       onPress={() => {
         close();
@@ -203,7 +205,13 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   const [appTitle, setAppTitle] = useState('Chits');
   const spaces = useMemo(() => createSpaceRepository(database), [database]);
   const [stuckCount, setStuckCount] = useState(0);
+  const [incomingReminderCount, setIncomingReminderCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+
+  const loadReminderCount = useCallback(async () => {
+    const items = await getCalendarItems(database);
+    setIncomingReminderCount(items.filter((item) => item.scheduledAt >= Date.now()).length);
+  }, [database]);
 
   const load = useCallback(async () => {
     const [nextPinned, nextRecent, titleRow, spaceCounts] = await Promise.all([
@@ -211,12 +219,13 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
       repository.listRecent(),
       database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', 'chat_title'),
       spaces.counts(),
+      loadReminderCount(),
     ]);
     setPinned(nextPinned);
     setStuckCount(Object.values(spaceCounts).reduce((sum, count) => sum + count, 0));
     setRecent(nextRecent);
     setAppTitle(titleRow?.value.trim() || 'Chits');
-  }, [database, repository, spaces]);
+  }, [database, repository, spaces, loadReminderCount]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -225,6 +234,12 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   }, [isOpen, load]);
   // A note stuck on or taken off a space while the drawer is open updates the badge.
   useEffect(() => (isOpen ? subscribeToSpaceChanges(() => { void load(); }) : undefined), [isOpen, load]);
+  useEffect(() => {
+    if (!isOpen) return;
+    const stop = subscribeToReminderChanges(() => { void loadReminderCount(); });
+    const clock = setInterval(() => { void loadReminderCount(); }, 60_000);
+    return () => { stop(); clearInterval(clock); };
+  }, [isOpen, loadReminderCount]);
 
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 1800); return () => clearTimeout(timer); }, [toast]);
 
@@ -251,7 +266,7 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
         <NavigationRow destination={boardsDestination} pathname={pathname} close={close} />
         <NavigationRow destination={spacesDestination} pathname={pathname} close={close} badge={stuckCount} />
-        <NavigationRow destination={calendarDestination} pathname={pathname} close={close} />
+        <NavigationRow destination={calendarDestination} pathname={pathname} close={close} badge={incomingReminderCount} badgeNoun="reminder" />
         <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
         {hasShortcuts ? <View style={[styles.divider, { backgroundColor: tokens.borderSubtle }]} /> : null}
         <PinnedSection items={pinned} close={close} onUnpin={unpinItem} />
