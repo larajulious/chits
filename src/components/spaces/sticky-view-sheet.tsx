@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { BackHandler, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
@@ -40,6 +40,9 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
   const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
   const fonts = useSpaceFonts();
+  const sheetWidth = Math.min(window.width - insets.left - insets.right, 600);
+  const contentWidth = sheetWidth - 40;
+  const maxSheetHeight = Math.min(window.height * 0.9, window.height - insets.top - 12);
   // Tagged with the note it belongs to, so a different note never shows a stale read.
   const [loaded, setLoaded] = useState<{ noteId: string; detail: SpaceNoteDetail } | null>(null);
   const detail = loaded?.noteId === note.noteId ? loaded.detail : null;
@@ -67,17 +70,17 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
     ? [{ messageId: media.messageId, text: '', caption: media.caption }]
     : [{ messageId: note.noteId, text: stickyText({ title: null, text: note.text }), caption: null }]);
   const thoughts = loadedThoughts
-    .map((thought) => ((media && thought.messageId === media.messageId ? thought.caption : thought.text) ?? '').trim())
-    .filter((thought, index) => thought && !(index === 0 && thought === title) && thought !== caption);
+    .map((thought) => ({ messageId: thought.messageId, text: ((media && thought.messageId === media.messageId ? thought.caption : thought.text) ?? '').trim() }))
+    .filter((thought, index) => thought.text && !(index === 0 && thought.text === title) && thought.text !== caption);
   const onBoard = !isCard && !!note.boardId;
   const context = detail?.context ?? (isCard || onBoard ? null : 'Chat');
   const open = isCard ? { label: 'Open card', icon: 'open-outline' as const } : onBoard ? { label: 'Open board', icon: 'grid-outline' as const } : { label: 'Open in Chat', icon: 'chatbubble-outline' as const };
-  const heading = note.hidden ? 'Hidden Chit' : title ?? caption ?? (media ? MEDIA_NAMES[media.attachment.type] : thoughts[0]?.split('\n')[0] ?? 'Note');
+  const heading = note.hidden ? 'Hidden Chit' : title ?? caption ?? (media ? MEDIA_NAMES[media.attachment.type] : thoughts[0]?.text.split('\n')[0] ?? 'Note');
   // A little of the sticky's own tilt, kept small enough to read comfortably.
   const tilt = Math.max(-1.5, Math.min(1.5, note.rotation / 2));
-  const pin = <PinDecoration space={note.spaceId} color={magnetColor(noteSeed(note.id))} noteWidth={window.width - 40} unit={1.2} seed={noteSeed(note.id)} />;
+  const pin = <PinDecoration space={note.spaceId} color={magnetColor(noteSeed(note.id))} noteWidth={contentWidth} unit={1.2} seed={noteSeed(note.id)} />;
 
-  return <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
+  return <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, { width: sheetWidth, left: insets.left + (window.width - insets.left - insets.right - sheetWidth) / 2, maxHeight: maxSheetHeight, paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
     <View style={styles.grabber} />
     <View style={styles.header}>
       <Text style={[fonts.label, styles.where]}>ON YOUR {space.name.toUpperCase()}</Text>
@@ -85,14 +88,23 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
     </View>
 
     {/* Room around the paper for its shadow, and above it for the fridge magnet. */}
-    <ScrollView style={[styles.scroll, { maxHeight: window.height * 0.62 }]} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      key={`${note.kind}:${note.noteId}`}
+      style={styles.scroll}
+      contentContainerStyle={styles.scrollContent}
+      contentInsetAdjustmentBehavior="never"
+      showsVerticalScrollIndicator
+      indicatorStyle="white"
+    >
       {media?.attachment.type === 'audio'
-        ? <SheetTape media={media} caption={caption} color={note.color} width={Math.min(window.width - 40, 360)} tilt={tilt} pin={pin} />
+        ? <SheetTape media={media} caption={caption} color={note.color} width={Math.min(contentWidth, 360)} tilt={tilt} pin={pin} />
         : media ? <View style={{ transform: [{ rotate: `${tilt}deg` }] }}>
-          <SheetPrint media={media} caption={caption} maxWidth={window.width - 40} maxHeight={window.height * 0.42} />
+          <SheetPrint media={media} caption={caption} maxWidth={contentWidth} maxHeight={window.height * 0.42} />
           <View pointerEvents="none" style={StyleSheet.absoluteFill}>{pin}</View>
         </View> : null}
-      {!media || thoughts.length ? <View style={[media ? styles.paperUnder : null, { transform: [{ rotate: `${media ? -tilt : tilt}deg` }] }]}>
+      {/* Keep long paper upright: rotation expands its visual bounds beyond
+          the scrollable area as additional thoughts increase its height. */}
+      {!media || thoughts.length ? <View style={media ? styles.paperUnder : undefined}>
         <View style={[styles.paper, { backgroundColor: paper.base, experimental_backgroundImage: `linear-gradient(176deg, ${paper.base} 0%, ${paper.base} 82%, ${paper.curl} 100%)` }]}>
           <View style={styles.paperContent}>
             {note.hidden ? <View accessible accessibilityLabel="Hidden Chit. Open it in Chat to see it." style={styles.hidden}>
@@ -101,10 +113,9 @@ export function StickyViewSheet({ note, onDismiss, onOpen, onOptions }: Props) {
               <Text style={[fonts.note, styles.hiddenHint]}>Open it in Chat to see it.</Text>
             </View> : <>
               {title && !media ? <Text accessibilityRole="header" selectable style={[fonts.note, styles.title]}>{title}</Text> : null}
-              {thoughts.map((thought, index) => <Fragment key={index}>
-                {index > 0 || (title && !media) ? <View style={styles.rule} /> : null}
-                <Text selectable style={[fonts.note, styles.thought]}>{thought}</Text>
-              </Fragment>)}
+              {thoughts.map((thought, index) => <View key={thought.messageId} style={[styles.thoughtSection, (index > 0 || (title && !media)) ? styles.thoughtDivider : null]}>
+                <Text selectable style={[fonts.note, styles.thought]}>{thought.text}</Text>
+              </View>)}
             </>}
           </View>
         </View>
@@ -216,14 +227,14 @@ const MEDIA_NAMES = { photo: 'Photo', video: 'Video', audio: 'Voice note' } as c
 const PRINT_BORDER = 12;
 
 const styles = StyleSheet.create({
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: SPACE_UI.ink, boxShadow: '0px -8px 30px rgba(0,0,0,0.35)' },
-  grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, marginTop: 10, marginBottom: 14, backgroundColor: SPACE_UI.inkBorder },
-  header: { gap: 2 },
+  sheet: { position: 'absolute', bottom: 0, overflow: 'hidden', paddingHorizontal: 20, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: SPACE_UI.ink, boxShadow: '0px -8px 30px rgba(0,0,0,0.35)' },
+  grabber: { flexShrink: 0, alignSelf: 'center', width: 40, height: 4, borderRadius: 2, marginTop: 10, marginBottom: 14, backgroundColor: SPACE_UI.inkBorder },
+  header: { flexShrink: 0, gap: 2 },
   where: { fontSize: 11, letterSpacing: 1.6, color: SPACE_UI.textMuted },
   context: { fontSize: 14, color: SPACE_UI.textMuted },
-  scroll: { marginHorizontal: -20, marginTop: 6, marginBottom: 8 },
+  scroll: { flexGrow: 0, flexShrink: 1, minHeight: 0, marginHorizontal: -20, marginTop: 6, marginBottom: 8 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 },
-  paperUnder: { marginTop: 18 },
+  paperUnder: { marginTop: 18, flexShrink: 0 },
   tape: { alignSelf: 'center' },
   deck: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 20 },
   play: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: SPACE_UI.accent },
@@ -239,19 +250,20 @@ const styles = StyleSheet.create({
   picture: { overflow: 'hidden', backgroundColor: '#2A2622' },
   printCaption: { minHeight: 46, justifyContent: 'center', paddingVertical: 6, paddingHorizontal: 2 },
   printCaptionText: { fontSize: 21, lineHeight: 26, color: PAPER_INK },
-  paper: { borderRadius: 3, boxShadow: '0px 10px 14px rgba(0,0,0,0.35)' },
+  paper: { flexShrink: 0, borderRadius: 3, boxShadow: '0px 10px 14px rgba(0,0,0,0.35)' },
   paperContent: { paddingHorizontal: 20, paddingTop: 28, paddingBottom: 22 },
   title: { fontSize: 27, lineHeight: 32, color: PAPER_INK },
   thought: { fontSize: 20, lineHeight: 27, color: PAPER_INK },
-  rule: { height: 1, marginVertical: 12, backgroundColor: PAPER_INK, opacity: 0.18 },
+  thoughtSection: { flexShrink: 0, minWidth: 0 },
+  thoughtDivider: { marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(42,38,34,0.18)' },
   hidden: { alignItems: 'center', paddingVertical: 18 },
   hiddenIcon: { opacity: 0.55 },
   hiddenText: { marginTop: 4, fontSize: 22, lineHeight: 28, color: PAPER_INK, opacity: 0.7 },
   hiddenHint: { fontSize: 16, lineHeight: 21, color: PAPER_INK, opacity: 0.55 },
-  actions: { flexDirection: 'row', gap: 10 },
-  button: { flex: 1, height: 52, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  actions: { flexShrink: 0, flexDirection: 'row', gap: 10 },
+  button: { flex: 1, minHeight: 52, paddingHorizontal: 10, paddingVertical: 12, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   secondary: { backgroundColor: SPACE_UI.inkRaised },
   primary: { backgroundColor: SPACE_UI.accent },
-  buttonLabel: { fontSize: 15 },
+  buttonLabel: { flexShrink: 1, fontSize: 15, textAlign: 'center' },
   pressed: { opacity: 0.7 },
 });
