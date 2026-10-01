@@ -34,21 +34,22 @@ test('only the identity is stored, and anything unknown falls back to Default', 
   for (const value of [null, undefined, '', 'Calm', 'sunset', '{"id":"calm"}']) assert.equal(resolveThemeIdentity(value), 'default', String(value));
 });
 
-test('Default keeps the classic Chits look exactly, in the user’s accent color', () => {
+test('Default uses the logo palette while honoring the user’s accent color', () => {
   for (const scheme of ['light', 'dark']) {
     for (const accent of Object.keys(chatThemes)) {
       const tokens = getThemeTokens('default', accent, scheme);
-      const tinted = accent === 'light';
+      const tinted = accent === 'light' || accent === 'logo';
       assert.equal(tokens.accent, chatThemes[accent][scheme].accent);
       assert.equal(tokens.bubble, tinted ? tokens.accentSoft : tokens.accent);
       assert.equal(tokens.bubbleText, tinted ? tokens.textPrimary : tokens.accentText);
       assert.equal(tokens.chatBackground, tokens.background);
-      assert.equal(tokens.cardPaper, scheme === 'dark' ? tokens.surface : '#FBFAF6');
+      assert.equal(tokens.cardPaper, scheme === 'dark' ? tokens.surface : '#FFFDF6');
       assert.equal(tokens.cardBase, scheme === 'dark' ? tokens.surface : '#FFFFFF');
     }
   }
-  assert.equal(getThemeTokens('default', 'light', 'light').background, '#FFFFFF');
-  assert.equal(getThemeTokens('default', 'light', 'dark').background, '#121311');
+  assert.equal(getThemeTokens('default', 'logo', 'light').background, '#F7F8F6');
+  assert.equal(getThemeTokens('default', 'logo', 'dark').background, '#171612');
+  assert.equal(CHITS_THEMES.default.shareNote.colors.decoration, '#FDC102');
 });
 
 test('personality themes bring their own palette; the Default accent setting does not leak into them', () => {

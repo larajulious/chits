@@ -3,18 +3,19 @@ import { Platform, type ColorSchemeName } from 'react-native';
 import { CHITS_THEMES, type AppPalette, type ChitsThemeIdentity, type HeadingFont } from '@/constants/chits-themes';
 
 const lightTokens = {
-  background: '#FFFFFF', surface: '#F9F9F9', surfaceElevated: '#F0F0F0',
-  textPrimary: '#0D0D0D', textSecondary: '#5D5D5D', textMuted: '#6E6E6E',
-  borderSubtle: '#E5E5E5', accent: '#0D0D0D', danger: '#B53A35', success: '#36785B',
+  background: '#F7F8F6', surface: '#FFFFFF', surfaceElevated: '#F0F1EE',
+  textPrimary: '#24231F', textSecondary: '#5F5C52', textMuted: '#6E6A60',
+  borderSubtle: '#E5E4DE', accent: '#8A6500', danger: '#B53A35', success: '#36785B',
 } as const;
 const darkTokens = {
-  background: '#121311', surface: '#1B1D1A', surfaceElevated: '#262925',
-  textPrimary: '#F3F2EC', textSecondary: '#C6C7BF', textMuted: '#96988F',
-  borderSubtle: '#363934', accent: '#4E8468', danger: '#EE8B82', success: '#68A982',
+  background: '#171612', surface: '#211F19', surfaceElevated: '#2D2A22',
+  textPrimary: '#F7F5EB', textSecondary: '#CBC5B4', textMuted: '#A39C8A',
+  borderSubtle: '#3C382E', accent: '#FDC102', danger: '#EE8B82', success: '#68A982',
 } as const;
 export const tokens = lightTokens;
 
 export const chatThemes = {
+  logo: { name: 'Chits Yellow', light: { accent: '#8A6500', accentSoft: '#FFF2C7', accentStrong: '#765400', accentText: '#FFFFFF', accentBorder: '#E9CD70' }, dark: { accent: '#FDC102', accentSoft: '#3D3216', accentStrong: '#FFD65C', accentText: '#24200F', accentBorder: '#806723' } },
   light: { name: 'Light', light: { accent: '#0D0D0D', accentSoft: '#F0F0F0', accentStrong: '#0D0D0D', accentText: '#FFFFFF', accentBorder: '#D9D9D9' }, dark: { accent: '#ECECEC', accentSoft: '#303030', accentStrong: '#ECECEC', accentText: '#171717', accentBorder: '#606060' } },
   green: { name: 'Chits Green', light: { accent: '#3D6E5C', accentSoft: '#E5F0EA', accentStrong: '#2D5949', accentText: '#FFFFFF', accentBorder: '#93B7A5' }, dark: { accent: '#4E8468', accentSoft: '#1E3027', accentStrong: '#75A98A', accentText: '#FFFFFF', accentBorder: '#507460' } },
   blue: { name: 'Ocean Blue', light: { accent: '#3D6D9B', accentSoft: '#E6EFF7', accentStrong: '#2D557A', accentText: '#FFFFFF', accentBorder: '#94B5CF' }, dark: { accent: '#5F8EB8', accentSoft: '#1E2D3A', accentStrong: '#83AFD7', accentText: '#FFFFFF', accentBorder: '#597A98' } },
@@ -43,13 +44,13 @@ export function getThemeTokens(identity: ChitsThemeIdentity, accentKey: ChatThem
   const palette = CHITS_THEMES[identity].palette;
   if (palette) return palette[mode];
   const base = { ...(mode === 'dark' ? darkTokens : lightTokens), ...chatThemes[accentKey][mode] };
-  // The neutral "Light" accent draws your thoughts on a soft tint; a colored accent fills them.
-  const tinted = accentKey === 'light';
+  // Light and Chits Yellow draw thoughts on a soft tint; other colors fill them.
+  const tinted = accentKey === 'light' || accentKey === 'logo';
   return {
     ...base,
     bubble: tinted ? base.accentSoft : base.accent, bubbleText: tinted ? base.textPrimary : base.accentText,
     chatBackground: base.background,
-    cardPaper: mode === 'dark' ? base.surface : '#FBFAF6', cardBase: mode === 'dark' ? base.surface : '#FFFFFF',
+    cardPaper: mode === 'dark' ? base.surface : '#FFFDF6', cardBase: mode === 'dark' ? base.surface : '#FFFFFF',
   };
 }
 

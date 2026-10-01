@@ -92,7 +92,7 @@ export default function SettingsScreen() {
             const selected = themeKey === key;
             const color = key === 'light' ? '#E9E9E9' : themes[key].light.accent;
             return <Pressable key={key} accessibilityRole="radio" accessibilityLabel={themes[key].name} accessibilityState={{ selected, disabled: busy }} disabled={busy} onPress={() => void change(() => setThemeKey(key))} style={({ pressed }) => [styles.swatchTarget, { borderColor: selected ? tokens.textPrimary : 'transparent' }, pressed && styles.pressed]}>
-              <View style={[styles.swatch, { backgroundColor: color }]}>{selected ? <Ionicons accessible={false} name="checkmark" size={18} color={key === 'light' ? '#0D0D0D' : '#FFFFFF'} /> : null}</View>
+              <View style={[styles.swatch, { backgroundColor: color }]}>{selected ? <Ionicons accessible={false} name="checkmark" size={18} color={key === 'light' ? '#0D0D0D' : themes[key].light.accentText} /> : null}</View>
             </Pressable>;
           })}</View>
           <Text accessibilityLiveRegion="polite" style={[styles.description, { color: tokens.textSecondary }]}>{themes[themeKey].name}</Text>

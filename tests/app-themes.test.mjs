@@ -19,8 +19,8 @@ const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - 
 
 test('the added app color themes keep text readable in light and dark', () => {
   const added = ['teal', 'plum', 'honey', 'cherry', 'midnight'];
-  assert.equal(Object.keys(themes).length, 12);
-  assert.equal(new Set(Object.values(themes).map((theme) => theme.name)).size, 12);
+  assert.equal(Object.keys(themes).length, 13);
+  assert.equal(new Set(Object.values(themes).map((theme) => theme.name)).size, 13);
   for (const key of added) {
     assert.ok(themes[key], key);
     for (const scheme of ['light', 'dark']) {

@@ -93,7 +93,7 @@ export type ChitsTheme = {
   category: ThemeCollectionId;
   name: string;
   description: string;
-  /** null for Default: its palette is the classic Chits one, tinted by the user's accent color. */
+  /** null for Default: its palette uses the logo colors, tinted by the user's accent choice. */
   palette: { light: AppPalette; dark: AppPalette } | null;
   look: ChitsLook;
   shareNote: ShareNoteTheme;
@@ -160,10 +160,10 @@ const BASE_LOOK: ChitsLook = { headingWeight: '600', cardShadowOpacity: 0.07, ch
 
 export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
   default: {
-    id: 'default', category: 'personalities', name: 'Default', description: 'The classic Chits look', palette: null, look: BASE_LOOK,
+    id: 'default', category: 'personalities', name: 'Default', description: 'Off-white paper and Chits yellow', palette: null, look: BASE_LOOK,
     shareNote: {
       id: 'default', name: 'Chits', mood: 'Classic sticky note', backgroundType: 'solid',
-      colors: { background: '#E3EEE7', backgroundEnd: '#E3EEE7', surface: '#FFFDF6', textPrimary: '#1D2B24', textSecondary: '#5C6B63', accent: '#3D6E5C', decoration: '#C9DDD0' },
+      colors: { background: '#F7F8F6', backgroundEnd: '#F7F8F6', surface: '#FFFDF6', textPrimary: '#24231F', textSecondary: '#5F5C52', accent: '#8A6500', decoration: '#FDC102' },
       fontStyle: 'casual', decorationStyle: 'none', mark: 'tape', align: 'left',
     },
   },

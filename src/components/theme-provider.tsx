@@ -25,7 +25,7 @@ type StoredTheme = { identity: ChitsThemeIdentity; themeKey: ChatThemeKey; appea
 // open here (SQLiteProvider renders children only after init), and reading it
 // later would paint one frame in Default before switching to the saved theme.
 function readStoredTheme(database: SQLiteDatabase): StoredTheme {
-  const stored: StoredTheme = { identity: 'default', themeKey: 'light', appearance: 'light' };
+  const stored: StoredTheme = { identity: 'default', themeKey: 'logo', appearance: 'light' };
   try {
     const rows = database.getAllSync<{ key: string; value: string }>('SELECT key, value FROM app_settings WHERE key IN (?, ?, ?)', THEME_SETTING_KEY, 'chat_color_theme', 'app_appearance');
     for (const row of rows) {
