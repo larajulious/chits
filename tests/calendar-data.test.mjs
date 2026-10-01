@@ -48,6 +48,6 @@ test('migration adds completion and message reminders while retaining existing c
   `);
   await migration.migrateDatabase(db);
   assert.deepEqual({ ...await db.getFirstAsync('SELECT scheduled_at, notification_id, completed_at FROM card_reminders') }, { scheduled_at: 1000, notification_id: 'old-notification', completed_at: null });
-  assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 22);
+  assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, migration.LATEST_SCHEMA_VERSION);
   assert.ok(await db.getFirstAsync("SELECT name FROM sqlite_master WHERE name = 'message_reminders'"));
 });

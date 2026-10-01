@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import {
   availableShareNoteModes, buildShareNoteSource, defaultShareNoteMode, fitShareNoteText, initialShareNoteImages, MAX_SHARE_NOTE_IMAGES,
-  SHARE_NOTE_COPY, SHARE_NOTE_FORMATS, shareNoteAvailability, shareNoteFileName, shareNoteLayout, toggleShareNoteImage,
+  SHARE_NOTE_COPY, SHARE_NOTE_FORMATS, shareNoteAvailability, shareNoteFileName, shareNoteLayout, shareNoteText, toggleShareNoteImage,
 } from '../src/services/share-note.ts';
 import { SHARE_NOTE_FONT_METRICS, SHARE_NOTE_THEMES, getShareNoteTheme } from '../src/constants/chits-themes.ts';
 
@@ -26,6 +26,12 @@ test('a thought or card maps to its text and photos only', () => {
 test('a title that only repeats the note’s first words is dropped', () => {
   assert.equal(buildShareNoteSource({ title: 'Lisbon in May', messages: [{ text: 'Lisbon in May and June', attachments: [] }] }).title, null);
   assert.equal(buildShareNoteSource({ title: '  ', messages: [{ text: 'Hi', attachments: [] }] }).title, null);
+});
+
+test('card checklist is optional and keeps completion and order in the share image text', () => {
+  const source = buildShareNoteSource({ messages: [{ text: 'Shopping', attachments: [] }], subtasks: [{ title: 'Buy groceries', isCompleted: true }, { title: 'Pick up laundry', isCompleted: false }] });
+  assert.equal(shareNoteText(source, false), 'Shopping');
+  assert.equal(shareNoteText(source, true), 'Shopping\n\n☑ Buy groceries\n☐ Pick up laundry');
 });
 
 test('notes with nothing drawable explain why instead of opening an empty composer', () => {

@@ -16,7 +16,7 @@ import { layout as layoutTokens, radii, spacing } from '@/constants/theme';
 import { getShareNoteTheme, shareNoteThemeForIdentity } from '@/constants/chits-themes';
 import {
   availableShareNoteModes, DEFAULT_SHARE_NOTE_FORMAT, defaultShareNoteMode, initialShareNoteImages, SHARE_NOTE_COPY, SHARE_NOTE_FORMATS,
-  SHARE_NOTE_MODES, shareNoteAvailability, toggleShareNoteImage, type ShareNoteFormat, type ShareNoteMode, type ShareNoteSource,
+  SHARE_NOTE_MODES, shareNoteAvailability, shareNoteText, toggleShareNoteImage, type ShareNoteFormat, type ShareNoteMode, type ShareNoteSource,
 } from '@/services/share-note';
 import { captureShareNote, discardShareNoteImage, saveShareNoteImage, shareNoteExportWidth, shareShareNoteImage, type ShareNoteImageFile } from '@/services/share-note-export';
 import { loadShareNoteSource } from '@/services/share-note-source';
@@ -50,6 +50,7 @@ export default function ShareNoteScreen() {
   const [format, setFormat] = useState<ShareNoteFormat>(DEFAULT_SHARE_NOTE_FORMAT);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showBranding, setShowBranding] = useState(true);
+  const [includeSubtasks, setIncludeSubtasks] = useState(false);
   const [limitReached, setLimitReached] = useState(false);
   const [busy, setBusy] = useState<Busy>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -61,7 +62,7 @@ export default function ShareNoteScreen() {
     void (target ? loadShareNoteSource(database, target) : Promise.resolve(null)).catch(() => null).then((loaded) => {
       if (cancelled) return;
       setSource(loaded);
-      if (loaded) { setMode(defaultShareNoteMode(loaded)); setSelectedIds(initialShareNoteImages(loaded)); }
+      if (loaded) { setMode(defaultShareNoteMode(loaded)); setSelectedIds(initialShareNoteImages(loaded)); setIncludeSubtasks(Boolean(loaded.subtasks.length && !loaded.text)); }
     });
     return () => { cancelled = true; };
   }, [database, messageId, cardId]);
@@ -72,9 +73,9 @@ export default function ShareNoteScreen() {
   const shareTheme = getShareNoteTheme(themeId);
   const content = useMemo<ShareNoteContent>(() => ({
     title: mode === 'image' ? null : source?.title ?? null,
-    text: mode === 'image' ? null : source?.text ?? null,
+    text: mode === 'image' || !source ? null : shareNoteText(source, includeSubtasks),
     images: mode === 'text' || !source ? [] : selectedIds.flatMap((id) => source.images.filter((image) => image.id === id)),
-  }), [mode, selectedIds, source]);
+  }), [mode, selectedIds, source, includeSubtasks]);
   const { layout, fit } = measureShareNote({ content, theme: shareTheme, format, mode, showBranding });
   const canExport = Boolean(content.text || content.title || content.images.length);
 
@@ -82,7 +83,7 @@ export default function ShareNoteScreen() {
   const exportRef = useRef<View>(null);
   const loadedImages = useRef(new Set<string>());
   const generated = useRef<{ key: string; file: ShareNoteImageFile } | null>(null);
-  const designKey = JSON.stringify([mode, themeId, format, selectedIds, showBranding]);
+  const designKey = JSON.stringify([mode, themeId, format, selectedIds, showBranding, includeSubtasks, source?.text, source?.subtasks]);
   useEffect(() => () => discardShareNoteImage(generated.current?.file ?? null), []);
   const markImageLoaded = useCallback((id: string) => { loadedImages.current.add(id); }, []);
   // A photo that leaves the design unmounts; when it comes back it must load again before a capture.
@@ -192,6 +193,7 @@ export default function ShareNoteScreen() {
 
         <ControlSection title="CONTENT" hint={modeHint}>
           <SegmentedControl label="Content" value={mode} onChange={setMode} options={SHARE_NOTE_MODES.map((option) => ({ ...option, disabled: !modes[option.key] }))} />
+          {mode !== 'image' && source.subtasks.length ? <ToggleRow label={`Include checklist (${source.subtasks.length})`} value={includeSubtasks} onChange={setIncludeSubtasks} /> : null}
         </ControlSection>
 
         {mode !== 'text' && source.images.length ? <ControlSection title="IMAGES" hint={limitReached ? SHARE_NOTE_COPY.imageLimit : imageHint} hintEmphasis={limitReached}>

@@ -36,6 +36,7 @@ function fixture() {
     CREATE TABLE card_comments (id TEXT PRIMARY KEY, card_id TEXT);
     CREATE TABLE card_messages (card_id TEXT, message_id TEXT);
     CREATE TABLE card_reminders (card_id TEXT);
+    CREATE TABLE card_subtasks (id TEXT PRIMARY KEY, card_id TEXT REFERENCES cards(id));
     INSERT INTO messages VALUES ('message', 'Keep my original words'), ('message-2', 'Second photo');
     INSERT INTO attachments VALUES ('photo', 'message', 'photo', 'chits-attachments/chat/photo.jpg'), ('photo-2', 'message-2', 'photo', 'chits-attachments/chat/second.jpg');
     INSERT INTO cards VALUES ('card');

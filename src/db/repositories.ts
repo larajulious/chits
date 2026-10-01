@@ -37,6 +37,8 @@ const CARD_TITLE_SQL = `COALESCE(NULLIF(TRIM(c.title), ''), (SELECT COALESCE(NUL
 // they can never disagree; CARD_ATTACHMENT_ITEMS_SQL below is the matching rows.
 const CARD_ATTACHMENT_COUNT_SQL = `((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id)
         + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.deleted_at IS NULL))`;
+const CARD_SUBTASK_TOTAL_SQL = '(SELECT COUNT(*) FROM card_subtasks st WHERE st.card_id = c.id)';
+const CARD_SUBTASK_DONE_SQL = '(SELECT COUNT(*) FROM card_subtasks st WHERE st.card_id = c.id AND st.is_completed = 1)';
 // The rows behind CARD_ATTACHMENT_COUNT_SQL, as AttachmentLike + `cardId`, sortable
 // into Card Details' own order with CARD_ATTACHMENT_ORDER_SQL: each linked
 // thought's attachments (by thought position), then the card's directly-attached ones.
@@ -56,11 +58,13 @@ const CHAT_CARD_ATTACHMENT_PREVIEW_LIMIT = 4;
 // query is ever needed. Shared by the per-column and whole-board summary queries.
 // `isHidden` is 1 when any thought organized into the card is hidden in Chat, so
 // the board can cover it the same way Chat does.
-type CardSummaryRow = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; reminderAt: number | null; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaPath: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null; isHidden: number };
+type CardSummaryRow = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; subtaskCount: number; completedSubtaskCount: number; reminderAt: number | null; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaPath: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null; isHidden: number };
 const CARD_SUMMARY_SELECT_SQL = `SELECT c.id, c.column_id AS columnId, ${CARD_TITLE_SQL} AS title, c.position,
       (SELECT m.text FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id ORDER BY cm.position ASC LIMIT 1) AS preview,
       ${CARD_ATTACHMENT_COUNT_SQL} AS attachmentCount,
       (SELECT COUNT(*) FROM card_messages cm WHERE cm.card_id = c.id) AS messageCount,
+      ${CARD_SUBTASK_TOTAL_SQL} AS subtaskCount,
+      ${CARD_SUBTASK_DONE_SQL} AS completedSubtaskCount,
       ${UPCOMING_REMINDER_SQL} AS reminderAt,
       EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id AND m.is_hidden_content = 1) AS isHidden,
       ma.id AS mediaId, ma.message_id AS mediaMessageId, ma.type AS mediaType,
@@ -165,6 +169,68 @@ export function createAttachmentRepository(database: SQLiteDatabase) {
 
 function newId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export type CardSubtask = {
+  id: string; cardId: string; title: string; isCompleted: boolean; position: number;
+  createdAt: number; updatedAt: number; completedAt: number | null;
+};
+type CardSubtaskRow = Omit<CardSubtask, 'isCompleted'> & { isCompleted: number };
+const subtaskFromRow = (row: CardSubtaskRow): CardSubtask => ({ ...row, isCompleted: row.isCompleted === 1 });
+const CARD_SUBTASK_SELECT = 'SELECT id, card_id AS cardId, title, is_completed AS isCompleted, position, created_at AS createdAt, updated_at AS updatedAt, completed_at AS completedAt FROM card_subtasks';
+
+export function createCardSubtaskRepository(database: SQLiteDatabase) {
+  return {
+    async list(cardId: string): Promise<CardSubtask[]> {
+      const rows = await database.getAllAsync<CardSubtaskRow>(`${CARD_SUBTASK_SELECT} WHERE card_id = ? ORDER BY position ASC, created_at ASC, id ASC`, cardId);
+      return rows.map(subtaskFromRow);
+    },
+    async add(cardId: string, title: string): Promise<CardSubtask> {
+      const clean = title.trim();
+      if (!clean) throw new Error('Write a subtask first.');
+      const now = Date.now();
+      const id = newId();
+      let position = 0;
+      await database.withExclusiveTransactionAsync(async (tx) => {
+        const card = await tx.getFirstAsync<{ id: string }>('SELECT id FROM cards WHERE id = ? AND archived_at IS NULL', cardId);
+        if (!card) throw new Error('That card is no longer available.');
+        const next = await tx.getFirstAsync<{ position: number }>('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM card_subtasks WHERE card_id = ?', cardId);
+        position = next?.position ?? 0;
+        await tx.runAsync('INSERT INTO card_subtasks (id, card_id, title, is_completed, position, created_at, updated_at, completed_at) VALUES (?, ?, ?, 0, ?, ?, ?, NULL)', id, cardId, clean, position, now, now);
+        await tx.runAsync('UPDATE cards SET updated_at = ? WHERE id = ?', now, cardId);
+      });
+      return { id, cardId, title: clean, isCompleted: false, position, createdAt: now, updatedAt: now, completedAt: null };
+    },
+    async rename(cardId: string, id: string, title: string): Promise<void> {
+      const clean = title.trim();
+      if (!clean) throw new Error('Subtask cannot be empty.');
+      const now = Date.now();
+      const result = await database.runAsync('UPDATE card_subtasks SET title = ?, updated_at = ? WHERE id = ? AND card_id = ? AND EXISTS (SELECT 1 FROM cards WHERE id = ? AND archived_at IS NULL)', clean, now, id, cardId, cardId);
+      if (result.changes !== 1) throw new Error('That subtask is no longer available.');
+    },
+    async toggle(cardId: string, id: string): Promise<CardSubtask> {
+      let updated: CardSubtaskRow | null = null;
+      const now = Date.now();
+      await database.withExclusiveTransactionAsync(async (tx) => {
+        const result = await tx.runAsync('UPDATE card_subtasks SET is_completed = 1 - is_completed, completed_at = CASE WHEN is_completed = 0 THEN ? ELSE NULL END, updated_at = ? WHERE id = ? AND card_id = ? AND EXISTS (SELECT 1 FROM cards WHERE id = ? AND archived_at IS NULL)', now, now, id, cardId, cardId);
+        if (result.changes !== 1) throw new Error('That subtask is no longer available.');
+        updated = await tx.getFirstAsync<CardSubtaskRow>(`${CARD_SUBTASK_SELECT} WHERE id = ?`, id);
+      });
+      if (!updated) throw new Error('That subtask is no longer available.');
+      return subtaskFromRow(updated);
+    },
+    async remove(cardId: string, id: string): Promise<void> {
+      const result = await database.runAsync('DELETE FROM card_subtasks WHERE id = ? AND card_id = ?', id, cardId);
+      if (result.changes !== 1) throw new Error('That subtask is no longer available.');
+    },
+    async reorder(cardId: string, orderedIds: string[]): Promise<void> {
+      await database.withExclusiveTransactionAsync(async (tx) => {
+        const current = await tx.getAllAsync<{ id: string }>('SELECT id FROM card_subtasks WHERE card_id = ? ORDER BY position ASC, created_at ASC, id ASC', cardId);
+        if (current.length !== orderedIds.length || new Set(orderedIds).size !== current.length || current.some((row) => !orderedIds.includes(row.id))) throw new Error('The checklist changed. Try again.');
+        for (const [position, id] of orderedIds.entries()) await tx.runAsync('UPDATE card_subtasks SET position = ?, updated_at = ? WHERE id = ? AND card_id = ?', position, Date.now(), id, cardId);
+      });
+    },
+  };
 }
 
 async function insertChatTimelineEvent(database: Pick<SQLiteDatabase, 'runAsync'>, input: { type: TimelineEventType; relatedBoardId: string; metadata: Record<string, unknown> }) {
@@ -453,6 +519,7 @@ export function createBoardRepository(database: SQLiteDatabase) {
       await clearChatBackgroundForPaths(transaction, removableUris);
       await transaction.runAsync('DELETE FROM card_attachments WHERE card_id = ?', cardId);
       await transaction.runAsync('DELETE FROM card_comments WHERE card_id = ?', cardId);
+      await transaction.runAsync('DELETE FROM card_subtasks WHERE card_id = ?', cardId);
       await transaction.runAsync('DELETE FROM card_messages WHERE card_id = ?', cardId);
       // The foreign key cascades too; explicit so no reminder row can outlive its card.
       await transaction.runAsync('DELETE FROM card_reminders WHERE card_id = ?', cardId);
@@ -695,7 +762,7 @@ export function createBoardRepository(database: SQLiteDatabase) {
     listAllCardSummaries: (options: { searchTerm?: string } = {}) => {
       const term = options.searchTerm?.trim();
       const like = term ? `%${term.replace(/[%_]/g, '\\$&')}%` : null;
-      return database.getAllAsync<{ id: string; title: string; preview: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; updatedAt: number; pinned: number; photoCount: number; videoCount: number; fileCount: number; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number | null; isHidden: number; reminderAt: number | null }>(`
+      return database.getAllAsync<{ id: string; title: string; preview: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; updatedAt: number; pinned: number; photoCount: number; videoCount: number; fileCount: number; subtaskCount: number; completedSubtaskCount: number; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number | null; isHidden: number; reminderAt: number | null }>(`
         WITH card_media AS (
           SELECT cm.card_id AS cardId, a.type AS mediaType, a.storage_path AS path, a.duration AS duration, a.created_at AS createdAt,
             CASE a.type WHEN 'photo' THEN 1 WHEN 'video' THEN 2 WHEN 'audio' THEN 3 ELSE 9 END AS priority
@@ -721,6 +788,8 @@ export function createBoardRepository(database: SQLiteDatabase) {
           ((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id AND a.type = 'photo') + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.type = 'photo')) AS photoCount,
           ((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id AND a.type = 'video') + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.type = 'video')) AS videoCount,
           ((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id AND a.type = 'file') + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.type = 'file')) AS fileCount,
+          ${CARD_SUBTASK_TOTAL_SQL} AS subtaskCount,
+          ${CARD_SUBTASK_DONE_SQL} AS completedSubtaskCount,
           cmr.mediaType AS previewMediaType, cmr.path AS thumbnailPath, cmr.duration AS mediaDuration, cmr.mediaCount AS mediaCount,
           EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id AND m.is_hidden_content = 1) AS isHidden,
           ${UPCOMING_REMINDER_SQL} AS reminderAt

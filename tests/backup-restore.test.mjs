@@ -17,6 +17,7 @@ async function fixture(t, populated = true) {
       INSERT INTO cards VALUES ('card','board','column','My card',2.5,789,123,456,1,99);
       INSERT INTO card_messages VALUES ('card','message',7.5);
       INSERT INTO card_comments VALUES ('comment','card','Keep comment',123,456,NULL);
+      INSERT INTO card_subtasks VALUES ('task-1','card','First step',1,4,123,456,456),('task-2','card','Second step',0,8,123,456,NULL);
       INSERT INTO timeline_events VALUES ('event','card_created',123,'message','card','board','{}','unique');
       INSERT INTO card_reminders (card_id, scheduled_at, notification_id, created_at, updated_at) VALUES ('card',4102444800000,'OLD-DEVICE-ID',123,456);
       INSERT INTO message_reminders (message_id, scheduled_at, notification_id, created_at, updated_at) VALUES ('message',4102444800000,'OLD-MESSAGE-DEVICE-ID',123,456);
@@ -42,7 +43,7 @@ async function validateCreated(db) {
   return { created, checked };
 }
 function content(db) {
-  return Object.fromEntries(['messages','boards','board_columns','cards','card_messages','card_comments','timeline_events','attachments','card_attachments','app_settings','space_placements'].map((table) => [table, db.prepare(`SELECT * FROM ${table} ORDER BY 1`).all()]));
+  return Object.fromEntries(['messages','boards','board_columns','cards','card_messages','card_comments','card_subtasks','timeline_events','attachments','card_attachments','app_settings','space_placements'].map((table) => [table, db.prepare(`SELECT * FROM ${table} ORDER BY 1`).all()]));
 }
 
 test('fresh installation creates one validated backup and restores an empty database', async (t) => {

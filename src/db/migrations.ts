@@ -209,6 +209,24 @@ const migrations: Migration[] = [{
       CREATE INDEX IF NOT EXISTS idx_message_reminders_scheduled ON message_reminders(completed_at, scheduled_at);
     `);
   },
+}, {
+  version: 23,
+  up: async (database) => {
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS card_subtasks (
+        id TEXT PRIMARY KEY NOT NULL,
+        card_id TEXT NOT NULL,
+        title TEXT NOT NULL CHECK (length(trim(title)) > 0),
+        is_completed INTEGER NOT NULL DEFAULT 0 CHECK (is_completed IN (0, 1)),
+        position INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        completed_at INTEGER,
+        FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_card_subtasks_order ON card_subtasks(card_id, position, created_at);
+    `);
+  },
 }];
 
 /** The schema version this build of Chits understands (the last migration). */

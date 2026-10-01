@@ -34,6 +34,7 @@ export type ShareNoteSource = {
   title: string | null;
   text: string | null;
   images: ShareNoteImage[];
+  subtasks: { title: string; isCompleted: boolean }[];
   /** Videos, audio notes and files on the note — never drawn, only mentioned. */
   unsupportedCount: number;
 };
@@ -48,13 +49,19 @@ type SourceMessage = Pick<Message, 'text'> & { attachments: SourceAttachment[] }
  * card's own). A title is kept only when it adds something the text doesn't
  * already say (an untitled card's title is just its first words).
  */
-export function buildShareNoteSource({ title, messages, cardAttachments = [] }: { title?: string | null; messages: SourceMessage[]; cardAttachments?: SourceAttachment[] }): ShareNoteSource {
+export function buildShareNoteSource({ title, messages, cardAttachments = [], subtasks = [] }: { title?: string | null; messages: SourceMessage[]; cardAttachments?: SourceAttachment[]; subtasks?: ShareNoteSource['subtasks'] }): ShareNoteSource {
   const text = messages.map((message) => message.text?.trim() ?? '').filter(Boolean).join('\n\n') || null;
   const attachments = [...messages.flatMap((message) => message.attachments), ...cardAttachments];
   const images = attachments.filter((attachment) => attachment.type === 'photo').map(({ id, storagePath, width, height }) => ({ id, storagePath, width, height }));
   const cleanTitle = title?.trim() || null;
   const titleAddsSomething = cleanTitle && !(text ?? '').startsWith(cleanTitle.replace(/…$/, ''));
-  return { title: titleAddsSomething ? cleanTitle : null, text, images, unsupportedCount: attachments.length - images.length };
+  return { title: titleAddsSomething ? cleanTitle : null, text, images, subtasks, unsupportedCount: attachments.length - images.length };
+}
+
+export function shareNoteText(source: ShareNoteSource, includeSubtasks: boolean): string | null {
+  if (!includeSubtasks || !source.subtasks.length) return source.text;
+  const checklist = source.subtasks.map((item) => `${item.isCompleted ? '☑' : '☐'} ${item.title}`).join('\n');
+  return [source.text, checklist].filter(Boolean).join('\n\n');
 }
 
 export const SHARE_NOTE_COPY = {
@@ -67,7 +74,7 @@ export const SHARE_NOTE_COPY = {
 export type ShareNoteAvailability = { ok: true } | { ok: false; reason: 'empty' | 'unsupported'; message: string };
 
 export function shareNoteAvailability(source: ShareNoteSource): ShareNoteAvailability {
-  if (source.text || source.images.length) return { ok: true };
+  if (source.text || source.images.length || source.subtasks.length) return { ok: true };
   return source.unsupportedCount
     ? { ok: false, reason: 'unsupported', message: SHARE_NOTE_COPY.unsupported }
     : { ok: false, reason: 'empty', message: SHARE_NOTE_COPY.empty };
@@ -75,7 +82,7 @@ export function shareNoteAvailability(source: ShareNoteSource): ShareNoteAvailab
 
 /** Which content modes this note can actually fill. */
 export function availableShareNoteModes(source: ShareNoteSource): Record<ShareNoteMode, boolean> {
-  const hasText = Boolean(source.text || source.title);
+  const hasText = Boolean(source.text || source.title || source.subtasks.length);
   const hasImage = source.images.length > 0;
   return { text: hasText, 'text-image': hasText && hasImage, image: hasImage };
 }

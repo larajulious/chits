@@ -133,7 +133,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
   const mediaPhrase = mediaAccessibilityPhrase(item);
   const overflowPhrase = overflowCount > 0 ? `${overflowCount} more attachment${overflowCount === 1 ? '' : 's'}.` : '';
   const reminderLabel = item.reminderAt ? formatReminder(new Date(item.reminderAt), new Date()) : null;
-  const accessibleLabel = `${item.hidden ? 'Hidden note' : `Note. ${accessibleTitle(item)}`}. ${mediaPhrase ? `${mediaPhrase} ` : ''}${overflowPhrase ? `${overflowPhrase} ` : ''}${item.pinned ? 'Pinned. ' : ''}${reminderLabel ? `Reminder ${reminderLabel}. ` : ''}${item.boardName ?? 'Unorganized'}${item.columnName ? `, ${item.columnName}` : ''}.`;
+  const accessibleLabel = `${item.hidden ? 'Hidden note' : `Note. ${accessibleTitle(item)}`}. ${mediaPhrase ? `${mediaPhrase} ` : ''}${overflowPhrase ? `${overflowPhrase} ` : ''}${item.pinned ? 'Pinned. ' : ''}${!item.hidden && item.subtaskCount ? `${item.completedSubtaskCount} of ${item.subtaskCount} subtasks completed. ` : ''}${reminderLabel ? `Reminder ${reminderLabel}. ` : ''}${item.boardName ?? 'Unorganized'}${item.columnName ? `, ${item.columnName}` : ''}.`;
 
   return (
     <Pressable
@@ -205,6 +205,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
         </View>
         <View style={styles.footerMeta}>
           {item.pinned ? <Ionicons accessible={false} name="pin" size={12} color={theme.textMuted} /> : null}
+          {!item.hidden && item.subtaskCount ? <View style={styles.fileBadge}><Ionicons accessible={false} name="checkbox-outline" size={13} color={theme.textMuted} /><Text style={[styles.fileBadgeText, { color: theme.textMuted }]}>{item.completedSubtaskCount}/{item.subtaskCount}</Text></View> : null}
           {showFileBadge ? <View style={styles.fileBadge}><Ionicons accessible={false} name="attach" size={13} color={theme.textMuted} /><Text style={[styles.fileBadgeText, { color: theme.textMuted }]}>{item.fileCount}</Text></View> : null}
           <Text style={[styles.date, { color: theme.textMuted }]}>{formatCardDate(item.updatedAt)}</Text>
         </View>

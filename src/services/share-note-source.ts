@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { createBoardRepository, createMessageRepository } from '@/db/repositories';
+import { createBoardRepository, createCardSubtaskRepository, createMessageRepository } from '@/db/repositories';
 import { buildShareNoteSource, type ShareNoteSource } from '@/services/share-note';
 
 export type ShareNoteTarget = { messageId: string } | { cardId: string };
@@ -15,12 +15,13 @@ export async function loadShareNoteSource(database: SQLiteDatabase, target: Shar
     return message ? buildShareNoteSource({ messages: [message] }) : null;
   }
   const boards = createBoardRepository(database);
-  const [detail, messages, cardAttachments] = await Promise.all([
+  const [detail, messages, cardAttachments, subtasks] = await Promise.all([
     boards.getCardDetail(target.cardId),
     boards.listCardMessages(target.cardId),
     boards.listCardAttachments(target.cardId),
+    createCardSubtaskRepository(database).list(target.cardId),
   ]);
-  return detail ? buildShareNoteSource({ title: detail.explicitTitle, messages, cardAttachments }) : null;
+  return detail ? buildShareNoteSource({ title: detail.explicitTitle, messages, cardAttachments, subtasks }) : null;
 }
 
 /** The route that opens the Share Note composer for a thought or card. */

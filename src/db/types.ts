@@ -68,6 +68,7 @@ export interface CardListItem {
   // Upcoming reminder shown by this list (ms), or null. Chat thought reminders
   // use message_reminders and appear in Calendar.
   reminderAt: number | null;
+  subtaskCount: number; completedSubtaskCount: number;
   photoCount: number; videoCount: number; fileCount: number;
   // The single, deterministic media preview for this card/thought — resolved
   // once, in SQL, by priority (photo > video > audio) across BOTH a card's

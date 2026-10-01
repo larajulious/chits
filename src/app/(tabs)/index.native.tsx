@@ -79,6 +79,7 @@ function unorganizedToCardListItem(row: UnorganizedSummaryRow): CardListItem {
     id: row.id, kind: 'thought', title, preview,
     boardId: null, boardName: null, boardAccent: null, columnId: null, columnName: null,
     createdAt: row.createdAt, updatedAt: row.updatedAt, pinned: row.pinned === 1, hidden, reminderAt: null,
+    subtaskCount: 0, completedSubtaskCount: 0,
     photoCount: row.photoCount, videoCount: row.videoCount, fileCount: row.fileCount,
     previewMediaType: hidden ? null : row.previewMediaType, thumbnailPath: hidden ? null : row.thumbnailPath, mediaDuration: hidden ? null : row.mediaDuration, mediaCount: hidden ? 0 : row.mediaCount,
   };

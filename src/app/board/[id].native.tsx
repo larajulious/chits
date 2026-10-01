@@ -27,7 +27,7 @@ type Column = { id: string; name: string; position: number };
 // `columns` for the carousel's FlatList `data`, but never stored, given an id, or
 // touched by any business logic (column counts, drag targets, navigator position).
 type CarouselItem = { kind: 'column'; column: Column } | { kind: 'add' };
-type Card = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; reminderAt: number | null; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaPath: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null; isHidden: number };
+type Card = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; subtaskCount: number; completedSubtaskCount: number; reminderAt: number | null; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaPath: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null; isHidden: number };
 type DragState = { card: Card; sourceColumnId: string; destinationColumnId: string; fromIndex: number; toIndex: number; height: number; startY: number; overlayTop: number; startScrollY: number };
 const EDGE_ZONE = 52;
 const EDGE_DWELL_MS = 450;
@@ -206,8 +206,8 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
   const hidden = card.isHidden === 1;
   const media: Attachment | null = !hidden && card.mediaId && card.mediaMessageId && card.mediaType && card.mediaPath ? { id: card.mediaId, messageId: card.mediaMessageId, type: card.mediaType, storagePath: card.mediaPath, originalName: null, mimeType: card.mediaMimeType, size: card.mediaSize, duration: card.mediaDuration, width: card.mediaWidth, height: card.mediaHeight, createdAt: card.mediaCreatedAt ?? 0 } : null;
   const reminderLabel = card.reminderAt ? formatReminder(new Date(card.reminderAt), new Date()) : null;
-  const hasMetadata = Boolean(card.attachmentCount || card.messageCount > 1 || reminderLabel);
-  const accessibleMetadata = [card.messageCount > 1 ? `${card.messageCount} thoughts` : null, card.attachmentCount ? `${card.attachmentCount} attachments` : null, reminderLabel ? `Reminder ${reminderLabel}` : null].filter(Boolean).join(', ');
+  const hasMetadata = Boolean(card.attachmentCount || card.messageCount > 1 || (!hidden && card.subtaskCount) || reminderLabel);
+  const accessibleMetadata = [card.messageCount > 1 ? `${card.messageCount} thoughts` : null, card.attachmentCount ? `${card.attachmentCount} attachments` : null, !hidden && card.subtaskCount ? `${card.completedSubtaskCount} of ${card.subtaskCount} subtasks completed` : null, reminderLabel ? `Reminder ${reminderLabel}` : null].filter(Boolean).join(', ');
   // Long-press anywhere on the card activates drag, but a touch that begins on the
   // handle (which owns its own faster long-press) or the footer controls (Move /
   // reorder buttons, which must stay independently and immediately tappable) must
@@ -293,6 +293,7 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
         {reminderLabel ? <View style={styles.metaItem}><Ionicons accessible={false} name="notifications-outline" size={13} color={theme.textMuted} /><Text style={[styles.metaText, { color: theme.textMuted }]}>{reminderLabel}</Text></View> : null}
         {card.messageCount > 1 ? <View style={styles.metaItem}><Ionicons accessible={false} name="layers-outline" size={14} color={theme.textMuted} /><Text style={[styles.metaText, { color: theme.textMuted }]}>{card.messageCount} thoughts</Text></View> : null}
         {card.attachmentCount ? <View style={styles.metaItem}><Ionicons accessible={false} name="attach-outline" size={14} color={theme.textMuted} /><Text style={[styles.metaText, { color: theme.textMuted }]}>{card.attachmentCount} {card.attachmentCount === 1 ? 'attachment' : 'attachments'}</Text></View> : null}
+        {!hidden && card.subtaskCount ? <View style={styles.metaItem}><Ionicons accessible={false} name="checkbox-outline" size={14} color={theme.textMuted} /><Text style={[styles.metaText, { color: theme.textMuted }]}>{card.completedSubtaskCount}/{card.subtaskCount}</Text></View> : null}
       </View> : null}
 
       <View style={[styles.cardDivider, { backgroundColor: theme.borderSubtle }]} />
@@ -651,7 +652,7 @@ export default function BoardScreen() {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return;
     }
-    const newCard: Card = { id: cardId, columnId: targetColumn.id, title: text.trim().slice(0, 120) || null, position, preview: text.trim(), attachmentCount: 0, messageCount: 1, reminderAt: null, mediaId: null, mediaMessageId: null, mediaType: null, mediaPath: null, mediaMimeType: null, mediaSize: null, mediaDuration: null, mediaWidth: null, mediaHeight: null, mediaCreatedAt: null, isHidden: 0 };
+    const newCard: Card = { id: cardId, columnId: targetColumn.id, title: text.trim().slice(0, 120) || null, position, preview: text.trim(), attachmentCount: 0, messageCount: 1, subtaskCount: 0, completedSubtaskCount: 0, reminderAt: null, mediaId: null, mediaMessageId: null, mediaType: null, mediaPath: null, mediaMimeType: null, mediaSize: null, mediaDuration: null, mediaWidth: null, mediaHeight: null, mediaCreatedAt: null, isHidden: 0 };
     setCards((current) => [...current, newCard]);
     setColumnCounts((current) => ({ ...current, [targetColumn.id]: (current[targetColumn.id] ?? 0) + 1 }));
     setJustAddedCardId(cardId);

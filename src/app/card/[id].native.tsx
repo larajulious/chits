@@ -17,6 +17,7 @@ import { subscribeToAttachmentChanges } from '@/services/attachment-changes';
 import { AttachmentContent } from '@/components/chat/message-row';
 import { MessageContentRenderer } from '@/components/chat/message-note-cards';
 import { AddCardAttachmentSheet } from '@/components/boards/add-card-attachment-sheet';
+import { CardSubtasks } from '@/components/boards/card-subtasks.native';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { spaceNoteAction, type SpaceNoteAction } from '@/components/spaces/space-note-action';
 import { subscribeToSpaceChanges } from '@/services/space-changes';
@@ -530,6 +531,8 @@ export default function CardDetailScreen() {
             {index < messages.length - 1 ? <View style={styles.contentThoughtDivider} /> : null}
           </View>)}
         </View>
+
+        {!covered ? <CardSubtasks cardId={id} scrollRef={scrollRef} /> : null}
 
         {/* One quiet row: "Remind me", or the reminder's time once set. */}
         <Pressable
