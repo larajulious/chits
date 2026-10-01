@@ -4,17 +4,14 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ComponentProps,
   type PropsWithChildren,
-  type ReactNode,
 } from 'react';
 import {
   AccessibilityInfo,
   Animated,
   Easing,
-  Keyboard,
   LayoutAnimation,
   Modal,
   PanResponder,
@@ -22,7 +19,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
@@ -39,8 +35,7 @@ import { spacing } from '@/constants/theme';
 import { createBoardRepository, createSpaceRepository } from '@/db/repositories';
 import { subscribeToSpaceChanges } from '@/services/space-changes';
 
-// Short, restrained transition — no bounce — reused for both the Pinned header's
-// search/close swap and a row's fade+collapse on unpin.
+// Short, restrained transition for a row's fade and collapse on unpin.
 const PINNED_TRANSITION = LayoutAnimation.create(180, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity);
 
 type DrawerContextValue = { openDrawer: () => void; closeDrawer: () => void };
@@ -60,8 +55,7 @@ const DrawerContext = createContext<DrawerContextValue | null>(null);
 // PHASE: REDESIGN CHITS BOTTOM NAVIGATION); Archive moved here into the side
 // drawer alongside Settings (see PHASE: GLOBAL ATTACHMENTS SCREEN) — Boards is
 // listed again here too since the drawer is reachable from every screen, not
-// just Boards itself. Search stays its own top-corner action rather than a
-// third list row, matching its existing placement.
+// just Boards itself.
 const boardsDestination: Destination = { label: 'Notes', path: '/', icon: 'reader-outline' };
 // Spaces: notes stuck on a fridge, desk, cork board or wall. Its own word (and a
 // magnet, not a pin) so it's never confused with the PINNED shortcuts below.
@@ -161,14 +155,12 @@ function ShortcutRow({ item, close, onUnpin }: { item: ContextItem; close: () =>
   );
 }
 
-// Shared header row for every drawer section, so PINNED and RECENT sit at the
-// same height whether or not they carry a trailing action.
-function SectionHeader({ label, action }: { label: string; action?: ReactNode }) {
+// Shared header row for every drawer section.
+function SectionHeader({ label }: { label: string }) {
   const { tokens } = useTheme();
   return (
     <View style={styles.sectionHeader}>
       <Text accessibilityRole="header" style={[styles.sectionLabel, { color: tokens.textMuted }]}>{label}</Text>
-      {action}
     </View>
   );
 }
@@ -188,67 +180,12 @@ function RecentSection({ items, close }: { items: ContextItem[]; close: () => vo
   );
 }
 
-function matchesPinnedQuery(item: ContextItem, query: string) {
-  return `${item.title} ${item.context}`.toLowerCase().includes(query.toLowerCase());
-}
-
 function PinnedSection({ items, close, onUnpin }: { items: ContextItem[]; close: () => void; onUnpin: (item: ContextItem) => void }) {
-  const { tokens } = useTheme();
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const searchInputRef = useRef<TextInput>(null);
-  const [hadItems, setHadItems] = useState(items.length > 0);
-  // Unpinning the last item drops this section to zero-length rather than
-  // unmounting it (it just renders null below) — reset search state right in that
-  // same render so a later re-pin doesn't resurrect a stale open search field.
-  if ((items.length > 0) !== hadItems) {
-    setHadItems(items.length > 0);
-    if (items.length === 0) { setSearchOpen(false); setQuery(''); }
-  }
-
   if (!items.length) return null;
-
-  const openSearch = () => { LayoutAnimation.configureNext(PINNED_TRANSITION); setSearchOpen(true); };
-  const closeSearch = () => { LayoutAnimation.configureNext(PINNED_TRANSITION); setSearchOpen(false); setQuery(''); Keyboard.dismiss(); };
-  const trimmed = query.trim();
-  const filtered = trimmed ? items.filter((item) => matchesPinnedQuery(item, trimmed)) : items;
-
   return (
     <View style={styles.section}>
-      {searchOpen ? (
-        <View style={styles.sectionHeader}>
-          <View style={[styles.pinnedSearchField, { backgroundColor: tokens.surfaceElevated, borderColor: tokens.borderSubtle }]}>
-            <Ionicons accessible={false} name="search-outline" size={15} color={tokens.textMuted} />
-            <TextInput
-              ref={searchInputRef}
-              accessibilityLabel="Search pinned items"
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search pinned items…"
-              placeholderTextColor={tokens.textMuted}
-              selectionColor={tokens.accent}
-              returnKeyType="search"
-              autoFocus
-              style={[styles.pinnedSearchInput, { color: tokens.textPrimary }]}
-            />
-          </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Close pinned search" hitSlop={10} onPress={closeSearch} style={styles.pinnedSearchClose}>
-            <Ionicons accessible={false} name="close" size={18} color={tokens.textSecondary} />
-          </Pressable>
-        </View>
-      ) : (
-        <SectionHeader
-          label="PINNED"
-          action={(
-            <Pressable accessibilityRole="button" accessibilityLabel="Search pinned items" hitSlop={10} onPress={openSearch} style={styles.pinnedSearchButton}>
-              <Ionicons accessible={false} name="search-outline" size={17} color={tokens.textMuted} />
-            </Pressable>
-          )}
-        />
-      )}
-      {trimmed && filtered.length === 0
-        ? <Text style={[styles.pinnedNoResults, { color: tokens.textMuted }]}>No pinned items found.</Text>
-        : filtered.map((item) => <ShortcutRow key={`${item.kind}-${item.id}`} item={item} close={close} onUnpin={() => onUnpin(item)} />)}
+      <SectionHeader label="PINNED" />
+      {items.map((item) => <ShortcutRow key={`${item.kind}-${item.id}`} item={item} close={close} onUnpin={() => onUnpin(item)} />)}
     </View>
   );
 }
@@ -256,7 +193,6 @@ function PinnedSection({ items, close, onUnpin }: { items: ContextItem[]; close:
 function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }) {
   const database = useSQLiteContext();
   const repository = useMemo(() => createBoardRepository(database), [database]);
-  const router = useRouter();
   const pathname = usePathname();
   const { tokens } = useTheme();
   const [pinned, setPinned] = useState<ContextItem[]>([]);
@@ -311,17 +247,6 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
     <SafeAreaView accessibilityViewIsModal style={[styles.drawer, { backgroundColor: tokens.surface, borderColor: tokens.borderSubtle }]}>
       <View style={styles.top}>
         <Text accessibilityRole="header" style={[styles.title, { color: tokens.textPrimary }]}>{appTitle}</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Search"
-          onPress={() => {
-            close();
-            router.navigate('/search');
-          }}
-          hitSlop={8}
-          style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}>
-          <Ionicons accessible={false} name="search-outline" size={22} color={tokens.textSecondary} />
-        </Pressable>
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
         <NavigationRow destination={boardsDestination} pathname={pathname} close={close} />
@@ -419,7 +344,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   title: { fontSize: 21, fontWeight: '600' },
-  headerAction: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
   drawerContent: { paddingTop: spacing.sm, paddingBottom: spacing.lg },
   item: {
     minHeight: 52,
@@ -453,17 +377,10 @@ const styles = StyleSheet.create({
   contextCopy: { flex: 1, minWidth: 0 },
   contextTitle: { fontSize: 15, fontWeight: '500' },
   contextMeta: { fontSize: 12, marginTop: 2 },
-  // Same 44pt-ish footprint as the drawer's other header actions (headerAction),
-  // just inline with the PINNED label instead of top-right.
-  pinnedSearchButton: { width: 44, height: 44, marginRight: -spacing.sm, alignItems: 'center', justifyContent: 'center' },
-  pinnedSearchField: { flex: 1, minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, borderRadius: 18, borderWidth: 1 },
-  pinnedSearchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
-  pinnedSearchClose: { width: 44, height: 44, marginRight: -spacing.sm, alignItems: 'center', justifyContent: 'center' },
   pinnedRow: { paddingRight: spacing.xxs },
   // Icon stays visually compact (16dp); hitSlop below brings the actual touch
   // target up to the 44dp minimum without the row looking crowded.
   unpinButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
   unpinPressed: { opacity: 0.55 },
-  pinnedNoResults: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, fontSize: 13 },
   pressed: { opacity: 0.62 },
 });

@@ -55,24 +55,12 @@ function NavigationRow({ destination, pathname, close }: { destination: Destinat
 }
 
 function DrawerContent({ close }: { close: () => void }) {
-  const router = useRouter();
   const pathname = usePathname();
   const { tokens } = useTheme();
   return (
     <SafeAreaView accessibilityViewIsModal style={[styles.drawer, { backgroundColor: tokens.surface, borderColor: tokens.borderSubtle }]}>
       <View style={styles.top}>
         <Text accessibilityRole="header" style={[styles.title, { color: tokens.textPrimary }]}>Chits</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Search"
-          onPress={() => {
-            close();
-            router.navigate('/search');
-          }}
-          hitSlop={8}
-          style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}>
-          <Ionicons accessible={false} name="search-outline" size={22} color={tokens.textSecondary} />
-        </Pressable>
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
         <NavigationRow destination={boardsDestination} pathname={pathname} close={close} />
@@ -122,7 +110,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   title: { fontSize: 21, fontWeight: '600' },
-  headerAction: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
   drawerContent: { paddingTop: spacing.sm, paddingBottom: spacing.lg },
   footer: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: spacing.xs },
   item: {
