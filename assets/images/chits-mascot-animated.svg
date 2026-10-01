@@ -63,20 +63,29 @@
   <g id="character">
     <!-- Legs (behind body) -->
     <g id="legs" fill="#1C1B1F" stroke="#1C1B1F" stroke-linecap="round">
+      <!-- Warm edges keep the dark limbs visible on dark surfaces. -->
+      <line x1="530" y1="960" x2="495" y2="1080" stroke="#E9D7A5" stroke-width="92"/>
       <line x1="530" y1="960" x2="495" y2="1080" stroke-width="44"/>
+      <ellipse cx="490" cy="1095" rx="90" ry="64" fill="#E9D7A5" stroke="none"/>
       <ellipse cx="490" cy="1095" rx="66" ry="40"/>
+      <line x1="745" y1="950" x2="785" y2="1060" stroke="#E9D7A5" stroke-width="92"/>
       <line x1="745" y1="950" x2="785" y2="1060" stroke-width="44"/>
+      <ellipse cx="822" cy="1074" rx="96" ry="64" transform="rotate(-8 822 1074)" fill="#E9D7A5" stroke="none"/>
       <ellipse cx="822" cy="1074" rx="72" ry="40" transform="rotate(-8 822 1074)"/>
     </g>
 
     <g id="body-sway">
       <!-- Arms (behind body) -->
       <g id="arm-left" fill="none" stroke="#1C1B1F" stroke-linecap="round" stroke-width="46">
+        <path d="M250 740 Q175 780 160 860" stroke="#E9D7A5" stroke-width="94"/>
         <path d="M250 740 Q175 780 160 860"/>
+        <circle cx="166" cy="875" r="64" fill="#E9D7A5" stroke="none"/>
         <circle cx="166" cy="875" r="40" fill="#1C1B1F" stroke="none"/>
       </g>
       <g id="arm-right" fill="none" stroke="#1C1B1F" stroke-linecap="round" stroke-width="46">
+        <path d="M1040 690 Q1105 660 1128 585" stroke="#E9D7A5" stroke-width="94"/>
         <path d="M1040 690 Q1105 660 1128 585"/>
+        <circle cx="1140" cy="560" r="66" fill="#E9D7A5" stroke="none"/>
         <circle cx="1140" cy="560" r="42" fill="#1C1B1F" stroke="none"/>
       </g>
 
