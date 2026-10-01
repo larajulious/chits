@@ -13,20 +13,20 @@ import {
 import {
   AccessibilityInfo,
   Animated,
+  Easing,
   Keyboard,
   LayoutAnimation,
   Modal,
   PanResponder,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { usePathname, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
@@ -173,13 +173,9 @@ function SectionHeader({ label, action }: { label: string; action?: ReactNode })
   );
 }
 
-function DrawerBackdrop({ close, reduceTransparency, darkMode }: { close: () => void; reduceTransparency: boolean; darkMode: boolean }) {
+function DrawerBackdrop({ close, darkMode }: { close: () => void; darkMode: boolean }) {
   const tint = darkMode ? 'rgba(0,0,0,0.18)' : 'rgba(0,0,0,0.30)';
-  const tapTarget = <Pressable accessibilityRole="button" accessibilityLabel="Dismiss navigation" style={StyleSheet.absoluteFill} onPress={close} />;
-  if (Platform.OS === 'ios' && !reduceTransparency && isGlassEffectAPIAvailable()) {
-    return <GlassView glassEffectStyle="regular" colorScheme="dark" tintColor={tint} style={styles.backdrop}>{tapTarget}</GlassView>;
-  }
-  return <View style={[styles.backdrop, { backgroundColor: tint }]}>{tapTarget}</View>;
+  return <Pressable accessibilityRole="button" accessibilityLabel="Dismiss navigation" onPress={close} style={[styles.backdrop, { backgroundColor: tint }]} />;
 }
 
 function RecentSection({ items, close }: { items: ContextItem[]; close: () => void }) {
@@ -349,38 +345,33 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
 
 export function AppDrawerProvider({ children }: PropsWithChildren) {
   const { scheme } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
+  const drawerWidth = Math.min(windowWidth * 0.78, 340);
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const [reduceTransparency, setReduceTransparency] = useState(false);
   const [progress] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-    void AccessibilityInfo.isReduceTransparencyEnabled().then(setReduceTransparency);
     const motion = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-    const transparency = AccessibilityInfo.addEventListener('reduceTransparencyChanged', setReduceTransparency);
-    return () => {
-      motion.remove();
-      transparency.remove();
-    };
+    return () => motion.remove();
   }, []);
 
   const animate = useCallback((toValue: 0 | 1, done?: () => void) => {
-    Animated.timing(progress, { toValue, duration: reduceMotion ? 0 : 180, useNativeDriver: true })
+    Animated.timing(progress, { toValue, duration: reduceMotion ? 0 : 220, easing: toValue ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic), useNativeDriver: true })
       .start(({ finished }) => { if (finished) done?.(); });
   }, [progress, reduceMotion]);
   const openDrawer = useCallback(() => {
     if (mounted) return;
     setMounted(true);
     setIsOpen(true);
-    requestAnimationFrame(() => animate(1));
-  }, [animate, mounted]);
+  }, [mounted]);
   const closeDrawer = useCallback(() => {
     if (!mounted) return;
+    setIsOpen(false);
     animate(0, () => {
       setMounted(false);
-      setIsOpen(false);
     });
   }, [animate, mounted]);
   const responder = useMemo(() => PanResponder.create({
@@ -392,14 +383,14 @@ export function AppDrawerProvider({ children }: PropsWithChildren) {
   return (
     <DrawerContext.Provider value={value}>
       <View style={styles.root} {...responder.panHandlers}>{children}</View>
-      <Modal transparent visible={mounted} animationType="none" onRequestClose={closeDrawer}>
+      <Modal transparent visible={mounted} animationType="none" onShow={() => { if (isOpen) animate(1); }} onRequestClose={closeDrawer}>
         <SafeAreaProvider>
           <View style={styles.modal}>
-            <Animated.View style={[styles.drawerShell, { transform: [{ translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [-380, 0] }) }] }]}>
-              <DrawerContent close={closeDrawer} isOpen={isOpen} />
-            </Animated.View>
             <Animated.View style={[styles.backdropShell, { opacity: progress }]}>
-              <DrawerBackdrop close={closeDrawer} reduceTransparency={reduceTransparency} darkMode={scheme === 'dark'} />
+              <DrawerBackdrop close={closeDrawer} darkMode={scheme === 'dark'} />
+            </Animated.View>
+            <Animated.View style={[styles.drawerShell, { width: drawerWidth, transform: [{ translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [-drawerWidth, 0] }) }] }]}>
+              <DrawerContent close={closeDrawer} isOpen={isOpen} />
             </Animated.View>
           </View>
         </SafeAreaProvider>
@@ -410,18 +401,14 @@ export function AppDrawerProvider({ children }: PropsWithChildren) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  modal: { flex: 1, flexDirection: 'row' },
+  modal: { flex: 1 },
   drawerShell: {
-    width: '78%',
-    maxWidth: 340,
-    height: '100%',
-    shadowColor: '#000',
-    shadowOpacity: 0.16,
-    shadowRadius: 18,
-    shadowOffset: { width: 4, height: 0 },
-    elevation: 12,
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
   },
-  backdropShell: { flex: 1 },
+  backdropShell: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   backdrop: { flex: 1 },
   drawer: { flex: 1, borderRightWidth: StyleSheet.hairlineWidth },
   top: {
