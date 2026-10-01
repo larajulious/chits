@@ -135,8 +135,6 @@ function ViewSwitch({ mode, onChange }: { mode: ViewMode; onChange: (next: ViewM
             onPress={() => onChange(option)}
             style={[styles.switchOption, selected && { backgroundColor: theme.surface }]}
           >
-            {/* Filled when selected, outline otherwise. */}
-            <Ionicons accessible={false} name={option === 'boards' ? (selected ? 'grid' : 'grid-outline') : (selected ? 'albums' : 'albums-outline')} size={15} color={selected ? theme.textPrimary : theme.textMuted} />
             <Text style={[styles.switchLabel, { color: selected ? theme.textPrimary : theme.textMuted }]}>
               {option === 'boards' ? 'Boards' : 'Cards'}
             </Text>
@@ -660,7 +658,7 @@ const styles = StyleSheet.create({
   switchWrap: { paddingHorizontal: spacing.md, paddingTop: 16, paddingBottom: 0 },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
   switchTrack: { flexDirection: 'row', height: 32, borderRadius: radii.control, padding: 3 },
-  switchOption: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: radii.control - 2 },
+  switchOption: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: radii.control - 2 },
   switchLabel: { fontSize: 13, fontWeight: '600' },
   cardList: { flex: 1 },
   // Two equal columns; notes in a row stretch to the taller one so the grid stays tidy.
