@@ -251,7 +251,7 @@ function QuickFilterRow({ pinned, onSelect }: { pinned: Message[]; onSelect: (me
 export default function ChatScreen() {
   const database = useSQLiteContext();
   const repository = useMemo(() => createMessageRepository(database), [database]);
-  const { messageId, prefill } = useLocalSearchParams<{ messageId?: string; prefill?: string }>();
+  const { messageId, prefill, focusInput } = useLocalSearchParams<{ messageId?: string; prefill?: string; focusInput?: string }>();
   const router = useRouter();
   const { tokens: theme, topBar } = useTheme();
   const { confirm } = useAppDialog();
@@ -548,6 +548,15 @@ export default function ChatScreen() {
     });
     return () => cancelAnimationFrame(frame);
   }, [prefill, router]);
+  useFocusEffect(useCallback(() => {
+    if (focusInput !== '1') return;
+    // Let the Chat transition and composer mount before opening the keyboard.
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+      router.setParams({ focusInput: undefined });
+    }, 320);
+    return () => clearTimeout(timer);
+  }, [focusInput, router]));
 
   useEffect(() => () => { const pending = attachmentDraftRef.current; if (pending) void pending.remove().catch(() => undefined); }, []);
   useEffect(() => () => {

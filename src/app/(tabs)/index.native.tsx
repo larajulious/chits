@@ -34,6 +34,7 @@ import { GettingStartedCard } from '@/features/onboarding/components/checklist-c
 import type { Board, CardListItem, MessageType } from '@/db/types';
 import { removeCardAttachmentFile } from '@/services/card-attachment-storage';
 import { spaceNoteAction } from '@/components/spaces/space-note-action';
+import { StickyGreeting } from '@/components/mascot/sticky-greeting.native';
 
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 type ViewMode = 'boards' | 'cards';
@@ -648,6 +649,7 @@ export default function BoardsScreen() {
       </FormSheet>
       <Toast message={cardToast} />
       <AddNoteSheet visible={addNoteOpen} onClose={() => setAddNoteOpen(false)} onSubmit={addNote} />
+      {!createOpen && !addNoteOpen ? <StickyGreeting bottom={tabBarHeight + spacing.sm} /> : null}
     </Screen>
   );
 }

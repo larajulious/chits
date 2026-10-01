@@ -15,6 +15,7 @@ import { DatabaseProvider } from '@/db/provider';
 import { consumeResetNotice, subscribeToAppReset } from '@/services/app-reset';
 import { observeReminderNotifications, registerReminderDatabase, requestReminderSync } from '@/services/reminders';
 import { OnboardingLayer } from '@/features/onboarding/onboarding-layer';
+import { updateMascotAppState } from '@/services/mascot-session';
 
 // Shows the message a reset asked for (e.g. "Restore complete") once the fresh
 // tree — with its reopened database — has mounted.
@@ -57,6 +58,10 @@ function ReminderCoordinator() {
 
 function ThemedApp() {
   const { scheme, tokens, topBar } = useTheme();
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', updateMascotAppState);
+    return () => subscription.remove();
+  }, []);
   // Status-bar icons sit on the theme's top bar when there is one, otherwise on the page.
   const statusBarStyle = topBar ? (topBar.dark ? 'light' : 'dark') : scheme === 'dark' ? 'light' : 'dark';
   return (

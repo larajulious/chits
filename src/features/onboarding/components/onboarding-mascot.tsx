@@ -17,7 +17,7 @@ function loadMascotHtml(): Promise<string> {
 }
 
 /** The supplied SVG's own CSS animation plays locally, with a still SVG fallback. */
-export function OnboardingMascot({ size, style }: { size: number; style?: StyleProp<ViewStyle> }) {
+export function OnboardingMascot({ size, style, accessible = true }: { size: number; style?: StyleProp<ViewStyle>; accessible?: boolean }) {
   const [html, setHtml] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -26,7 +26,7 @@ export function OnboardingMascot({ size, style }: { size: number; style?: StyleP
     return () => { mounted = false; };
   }, []);
 
-  return <View accessible accessibilityRole="image" accessibilityLabel="Chits mascot, a waving sticky note" pointerEvents="none" style={[{ width: size, height: size }, style]}>
+  return <View accessible={accessible} accessibilityRole="image" accessibilityLabel="Sticky, Chits mascot" pointerEvents="none" style={[{ width: size, height: size }, style]}>
     {!ready ? <Image source={MASCOT} contentFit="contain" style={StyleSheet.absoluteFill} /> : null}
     {html ? <WebView
       source={{ html }}
