@@ -395,12 +395,14 @@ export default function UnorganizedScreen() {
   const { tokens: theme } = useTheme();
   const headerInk = useHeaderInk();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const { addToCard, messageId, boardId } = useLocalSearchParams<{ addToCard?: string; messageId?: string; boardId?: string }>();
+  const { addToCard, messageId, boardId, openBoardPicker } = useLocalSearchParams<{ addToCard?: string; messageId?: string; boardId?: string; openBoardPicker?: string }>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [boards, setBoards] = useState<BoardSummary[]>([]);
   const [recentBoardIds, setRecentBoardIds] = useState<string[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  // A single thought launched from the Cards menu starts in the existing board
+  // picker. The sheet waits until load() has resolved boards and selection.
+  const [sheetOpen, setSheetOpen] = useState(() => openBoardPicker === '1' && Boolean(messageId));
   // The board this "Add to board" pass targets: pinned to the triggering board when
   // `boardId` arrives (e.g. from Board Details, which already has board context and
   // should skip straight to column selection), otherwise set once the user picks a
@@ -570,7 +572,7 @@ export default function UnorganizedScreen() {
     </View> : null}
 
     <AddToBoardSheet
-      visible={sheetOpen}
+      visible={sheetOpen && ready && selected.length > 0}
       boards={boards}
       recentBoardIds={recentBoardIds}
       selectedCount={selected.length}

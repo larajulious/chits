@@ -311,6 +311,7 @@ export default function BoardsScreen() {
       actionSheet({
         title: item.title,
         options: [
+          { label: 'Add to board', icon: 'albums-outline', onPress: () => router.push({ pathname: '/unorganized', params: { messageId: item.id, openBoardPicker: '1' } }) },
           ...(item.hidden ? [] : [{ label: 'Share Note', icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ messageId: item.id })) }]),
           { label: item.pinned ? 'Unpin' : 'Pin', icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void messageRepository.setPinned(item.id, !item.pinned).then(() => loadCards()) },
           ...spaceOption,
