@@ -30,7 +30,7 @@ export type StyleTokens = {
   id: AppStyle;
   /** display = screen titles and headings; body = UI text; paragraph = longer prose. */
   font: { display: FontFaces; body: FontFaces; paragraph: FontFaces };
-  radius: { card: Corners; control: number; pill: number; nav: number };
+  radius: { card: Corners; control: number; pill: number; nav: number; panel: number; tile: number };
   /** 0 = no outline (Classic's hairlines stay as they were). */
   outline: { width: number };
   elevation: 'soft' | 'edge';
@@ -43,17 +43,17 @@ export type StyleTokens = {
   chatButton: 'circle' | 'bubble';
   mascotEmptyStates: boolean;
   /** Classic's soft shadows, by how high the surface floats. */
-  shadow: { card: SoftShadow; bubble: SoftShadow; nav: SoftShadow; chat: SoftShadow };
+  shadow: { card: SoftShadow; bubble: SoftShadow; guide: SoftShadow; nav: SoftShadow; chat: SoftShadow };
 
   header: { minHeight: number; align: 'center' | 'left'; titleSize: number; titleLineHeight?: number; countSize: number; countBeside: boolean; iconButton: { size: number; radius: number; filled: boolean; edge: number } };
   segmented: { height: number; radius: number; padding: number; optionRadius: number; labelSize: number; edge: number };
   chip: { height: number; radius: number; paddingHorizontal: number; labelSize: number; countSize: number; activeEdge: number };
-  noteCard: { radius: Corners; padding: { top: number; horizontal: number; bottom: number }; edge: number; columnGap: number; rowGap: number; pillOutline: number; pillRadius: number; pillSize: number };
+  noteCard: { radius: Corners; detailRadius: { media: number; badge: number; tile: number; strip: number }; padding: { top: number; horizontal: number; bottom: number }; edge: number; columnGap: number; rowGap: number; pillOutline: number; pillRadius: number; pillSize: number };
   tape: { width: number; height: number; radius: number; edge: number; overhang: number; maxAngle: number };
   fold: number;
   nav: { height: number; radius: number; edge: number; marginHorizontal: number; marginBottom: number; labelSize: number; activePill: { width: number; height: number } | null };
   chat: { width: number; height: number; radius: Corners; outline: number; edge: number; raise: number; iconSize: number };
-  tip: { radius: number; edge: number; textSize: number; textLineHeight: number; mascotSize: number; mascotTilt: number };
+  tip: { radius: number; edge: number; textSize: number; textLineHeight: number; mascotSize: number; mascotTilt: number; dismissSize: number; tail: number; guideRadius: number; actionRadius: number };
   emptyState: { titleSize: number; bodySize: number; bodyLineHeight: number; maxWidth: number | null; mascotWidth: number; button: { height: number; radius: number; edge: number } };
   button: { radius: number; edge: number };
 };
@@ -68,7 +68,7 @@ export const STYLE_PRESETS: Record<AppStyle, StyleTokens> = {
   classic: {
     id: 'classic',
     font: { display: null, body: null, paragraph: null },
-    radius: { card: corners(18), control: 12, pill: 999, nav: 28 },
+    radius: { card: corners(18), control: 12, pill: 999, nav: 28, panel: 18, tile: 16 },
     outline: { width: 0 },
     elevation: 'soft',
     edgeDepth: 0,
@@ -80,18 +80,19 @@ export const STYLE_PRESETS: Record<AppStyle, StyleTokens> = {
     shadow: {
       card: { opacity: 0.04, radius: 7, offsetY: 2, elevation: 1 },
       bubble: { opacity: 0.1, radius: 12, offsetY: 4, elevation: 4 },
+      guide: { opacity: 0.12, radius: 12, offsetY: 4, elevation: 5 },
       nav: { opacity: 0.1, radius: 16, offsetY: 6, elevation: 8 },
       chat: { opacity: 0.22, radius: 12, offsetY: 6, elevation: 10 },
     },
     header: { minHeight: 52, align: 'center', titleSize: 17, countSize: 11, countBeside: false, iconButton: { size: 44, radius: 22, filled: false, edge: 0 } },
     segmented: { height: 32, radius: 12, padding: 3, optionRadius: 10, labelSize: 13, edge: 0 },
     chip: { height: 30, radius: 999, paddingHorizontal: 10, labelSize: 12, countSize: 11, activeEdge: 0 },
-    noteCard: { radius: corners(18), padding: { top: 13, horizontal: 13, bottom: 8 }, edge: 0, columnGap: 12, rowGap: 12, pillOutline: 0, pillRadius: 0, pillSize: 12 },
+    noteCard: { radius: corners(18), detailRadius: { media: 12, badge: 6, tile: 11, strip: 10 }, padding: { top: 13, horizontal: 13, bottom: 8 }, edge: 0, columnGap: 12, rowGap: 12, pillOutline: 0, pillRadius: 0, pillSize: 12 },
     tape: { width: 0, height: 0, radius: 0, edge: 0, overhang: 0, maxAngle: 0 },
     fold: 0,
     nav: { height: 64, radius: 28, edge: 0, marginHorizontal: 16, marginBottom: 0, labelSize: 11, activePill: null },
     chat: { width: 58, height: 58, radius: corners(29), outline: 0, edge: 0, raise: 22, iconSize: 23 },
-    tip: { radius: 18, edge: 0, textSize: 14, textLineHeight: 19, mascotSize: 68, mascotTilt: 0 },
+    tip: { radius: 18, edge: 0, textSize: 14, textLineHeight: 19, mascotSize: 68, mascotTilt: 0, dismissSize: 44, tail: 0, guideRadius: 16, actionRadius: 15 },
     emptyState: { titleSize: 20, bodySize: 15, bodyLineHeight: 22, maxWidth: null, mascotWidth: 0, button: { height: 44, radius: 12, edge: 0 } },
     button: { radius: 12, edge: 0 },
   },
@@ -102,7 +103,7 @@ export const STYLE_PRESETS: Record<AppStyle, StyleTokens> = {
       body: faces('Nunito_700Bold', 'Nunito_700Bold', 'Nunito_700Bold', 'Nunito_700Bold', 'Nunito_800ExtraBold'),
       paragraph: faces('Nunito_600SemiBold', 'Nunito_600SemiBold', 'Nunito_700Bold', 'Nunito_700Bold', 'Nunito_800ExtraBold'),
     },
-    radius: { card: corners(16, 16, 6, 16), control: 14, pill: 17, nav: 26 },
+    radius: { card: corners(16, 16, 6, 16), control: 14, pill: 17, nav: 26, panel: 18, tile: 14 },
     outline: { width: 2 },
     elevation: 'edge',
     edgeDepth: 3,
@@ -114,18 +115,19 @@ export const STYLE_PRESETS: Record<AppStyle, StyleTokens> = {
     shadow: {
       card: { opacity: 0, radius: 0, offsetY: 0, elevation: 0 },
       bubble: { opacity: 0, radius: 0, offsetY: 0, elevation: 0 },
+      guide: { opacity: 0, radius: 0, offsetY: 0, elevation: 0 },
       nav: { opacity: 0, radius: 0, offsetY: 0, elevation: 0 },
       chat: { opacity: 0, radius: 0, offsetY: 0, elevation: 0 },
     },
     header: { minHeight: 64, align: 'left', titleSize: 30, titleLineHeight: 36, countSize: 14, countBeside: true, iconButton: { size: 44, radius: 14, filled: true, edge: 3 } },
     segmented: { height: 38, radius: 18, padding: 5, optionRadius: 13, labelSize: 14, edge: 3 },
     chip: { height: 34, radius: 17, paddingHorizontal: 13, labelSize: 13, countSize: 12, activeEdge: 2 },
-    noteCard: { radius: corners(16, 16, 6, 16), padding: { top: 20, horizontal: 14, bottom: 12 }, edge: 4, columnGap: 12, rowGap: 18, pillOutline: 1.5, pillRadius: 10, pillSize: 11 },
+    noteCard: { radius: corners(16, 16, 6, 16), detailRadius: { media: 10, badge: 6, tile: 10, strip: 10 }, padding: { top: 20, horizontal: 14, bottom: 12 }, edge: 4, columnGap: 12, rowGap: 18, pillOutline: 1.5, pillRadius: 10, pillSize: 11 },
     tape: { width: 42, height: 15, radius: 4, edge: 2, overhang: 7, maxAngle: 3 },
     fold: 18,
     nav: { height: 72, radius: 26, edge: 4, marginHorizontal: 16, marginBottom: 18, labelSize: 12, activePill: { width: 52, height: 30 } },
     chat: { width: 68, height: 58, radius: corners(24, 24, 24, 8), outline: 2.5, edge: 5, raise: 34, iconSize: 23 },
-    tip: { radius: 18, edge: 3, textSize: 16, textLineHeight: 21, mascotSize: 68, mascotTilt: 6 },
+    tip: { radius: 18, edge: 3, textSize: 16, textLineHeight: 21, mascotSize: 68, mascotTilt: 6, dismissSize: 40, tail: 12, guideRadius: 18, actionRadius: 14 },
     emptyState: { titleSize: 25, bodySize: 16, bodyLineHeight: 23, maxWidth: 290, mascotWidth: 150, button: { height: 52, radius: 16, edge: 4 } },
     button: { radius: 14, edge: 3 },
   },

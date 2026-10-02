@@ -9,7 +9,6 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -22,7 +21,8 @@ import { PhotoAttachmentViewer } from '@/components/attachments/photo-attachment
 import { subscribeToAttachmentChanges } from '@/services/attachment-changes';
 import { AttachmentContent } from '@/components/chat/message-row';
 import { isPdfAttachment } from '@/services/pdf-attachment';
-import { AppHeader, EmptyState, IconButton, PrimaryButton, Screen, SecondaryButton, Toast, HeaderIcon, MenuIcon } from '@/components/ui/primitives';
+import { AppHeader, AppText, Chip, ChipRow, EmptyState, Icon, IconButton, PressableSurface, PrimaryButton, Screen, SecondaryButton, Toast, HeaderIcon, MenuIcon } from '@/components/ui/primitives';
+import type { IconName } from '@/components/ui/icon';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
 import { exportActionLabel, shareAttachment } from '@/services/attachment-export';
@@ -31,7 +31,7 @@ import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { SearchField } from '@/components/ui/search-field';
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { useTheme } from '@/components/theme-provider';
-import { radii, spacing } from '@/constants/theme';
+import { spacing } from '@/constants/theme';
 import { createAttachmentRepository } from '@/db/repositories';
 import type { AttachmentFilterType, AttachmentLike, AttachmentSummary } from '@/db/types';
 
@@ -73,7 +73,7 @@ function fileExtension(item: AttachmentSummary) {
   return item.originalName?.split('.').pop()?.toUpperCase() ?? null;
 }
 
-function fileTileIcon(item: AttachmentSummary): React.ComponentProps<typeof Ionicons>['name'] {
+function fileTileIcon(item: AttachmentSummary): IconName {
   if (isPdfAttachment(item)) return 'document-text-outline';
   const value = `${item.mimeType ?? ''} ${item.originalName ?? ''}`.toLowerCase();
   if (value.includes('zip') || value.includes('archive') || value.includes('.rar')) return 'archive-outline';
@@ -83,25 +83,12 @@ function fileTileIcon(item: AttachmentSummary): React.ComponentProps<typeof Ioni
 }
 
 function TypeFilterChips({ filter, onChange }: { filter: TypeFilter; onChange: (next: TypeFilter) => void }) {
-  const { tokens: theme } = useTheme();
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chipRow}>
-      {TYPE_FILTERS.map((chip) => {
-        const selected = chip.key === filter;
-        return (
-          <Pressable
-            key={chip.key}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            accessibilityLabel={`Filter by ${chip.label}`}
-            onPress={() => onChange(chip.key)}
-            style={[styles.chip, { backgroundColor: selected ? theme.accentSoft : 'transparent', borderColor: selected ? theme.accentBorder : 'transparent' }]}
-          >
-            <Text style={[styles.chipLabel, { color: selected ? theme.accentStrong : theme.textSecondary }]}>{chip.label}</Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
+    <ChipRow style={styles.chipScroll}>
+      {TYPE_FILTERS.map((chip) => (
+        <Chip key={chip.key} label={chip.label} selected={chip.key === filter} accessibilityLabel={`Filter by ${chip.label}`} onPress={() => onChange(chip.key)} />
+      ))}
+    </ChipRow>
   );
 }
 
@@ -114,8 +101,9 @@ function TypeFilterChips({ filter, onChange }: { filter: TypeFilter; onChange: (
 // those), so they get compact custom tiles here instead, matching the same
 // pattern card-list-row.native.tsx already uses for its own audio thumbnail.
 function AttachmentTile({ item, size, onPress, onLongPress, selectingBackground = false }: { item: AttachmentSummary; size: number; onPress: () => void; onLongPress: () => void; selectingBackground?: boolean }) {
-  const { tokens: theme } = useTheme();
+  const { tokens: theme, styleTokens } = useTheme();
   const tileStyle = { width: size, height: size };
+  const radius = styleTokens.radius.tile;
   let content: React.ReactNode;
   let accessibilityLabel: string;
   if (item.type === 'photo' || item.type === 'video') {
@@ -124,8 +112,8 @@ function AttachmentTile({ item, size, onPress, onLongPress, selectingBackground 
   } else if (item.type === 'audio') {
     content = (
       <View style={[styles.tileFill, { backgroundColor: theme.accentSoft }]}>
-        <Ionicons accessible={false} name="mic" size={22} color={theme.accentStrong} />
-        {item.duration ? <Text style={[styles.tileMeta, { color: theme.accentStrong }]}>{formatDurationSeconds(item.duration)}</Text> : null}
+        <Icon name="mic" size={22} color={theme.accentStrong} />
+        {item.duration ? <AppText weight="600" style={[styles.tileMeta, { color: theme.accentStrong }]}>{formatDurationSeconds(item.duration)}</AppText> : null}
       </View>
     );
     accessibilityLabel = `Audio note${item.duration ? `, ${formatDurationSeconds(item.duration)}` : ''}`;
@@ -133,15 +121,17 @@ function AttachmentTile({ item, size, onPress, onLongPress, selectingBackground 
     const size2 = formatFileSize(item.size);
     content = (
       <View style={[styles.tileFill, styles.filePadding, { backgroundColor: theme.surfaceElevated }]}>
-        <Ionicons accessible={false} name={fileTileIcon(item)} size={22} color={theme.textSecondary} />
-        <Text numberOfLines={2} style={[styles.tileFileName, { color: theme.textPrimary }]}>{item.originalName ?? 'Document'}</Text>
-        <Text numberOfLines={1} style={[styles.tileMeta, { color: theme.textMuted }]}>{[fileExtension(item), size2].filter(Boolean).join(' · ')}</Text>
+        <Icon name={fileTileIcon(item)} size={22} color={theme.textSecondary} />
+        <AppText weight="600" numberOfLines={2} style={[styles.tileFileName, { color: theme.textPrimary }]}>{item.originalName ?? 'Document'}</AppText>
+        <AppText weight="600" numberOfLines={1} style={[styles.tileMeta, { color: theme.textMuted }]}>{[fileExtension(item), size2].filter(Boolean).join(' · ')}</AppText>
       </View>
     );
     accessibilityLabel = `${isPdfAttachment(item) ? 'PDF' : 'File'}, ${item.originalName ?? 'document'}`;
   }
   return (
-    <Pressable
+    // The outline and edge sit on the outer surface; the inner view clips the
+    // picture to the corners, so the edge itself is never clipped.
+    <PressableSurface
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={selectingBackground ? 'Opens Chat Background Preview.' : 'Opens details. Hold for more actions.'}
@@ -150,15 +140,18 @@ function AttachmentTile({ item, size, onPress, onLongPress, selectingBackground 
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={350}
-      style={({ pressed }) => [styles.tile, tileStyle, { backgroundColor: theme.surfaceElevated }, pressed && styles.tilePressed]}
+      fill={theme.surfaceElevated}
+      radius={radius}
+      pressedStyle={styles.tilePressed}
+      style={tileStyle}
     >
-      {content}
-    </Pressable>
+      <View style={[styles.tileClip, { borderRadius: Math.max(0, radius - styleTokens.outline.width) }]}>{content}</View>
+    </PressableSurface>
   );
 }
 
 function AttachmentDetailModal({ item, onClose, onViewCard }: { item: AttachmentSummary; onClose: () => void; onViewCard: (cardId: string) => void }) {
-  const { tokens: theme } = useTheme();
+  const { tokens: theme, styleTokens } = useTheme();
   const download = useAttachmentExport();
   const [shareFailed, setShareFailed] = useState(false);
   useEffect(() => { if (!shareFailed) return; const timer = setTimeout(() => setShareFailed(false), 2400); return () => clearTimeout(timer); }, [shareFailed]);
@@ -175,7 +168,7 @@ function AttachmentDetailModal({ item, onClose, onViewCard }: { item: Attachment
           />
           <ScrollView contentContainerStyle={styles.detailContent}>
             <Text style={[styles.detailContext, { color: theme.textMuted }]}>{contextLine}</Text>
-            <View style={styles.detailMediaWrap}>
+            <View style={[styles.detailMediaWrap, { borderRadius: styleTokens.radius.panel }]}>
               <AttachmentContent attachment={attachment} variant="detail" />
             </View>
             <Text numberOfLines={2} style={[styles.detailFileName, { color: theme.textSecondary }]}>{exportFileName(attachment)}{item.size ? ` · ${formatFileSize(item.size)}` : ''}</Text>
@@ -189,8 +182,9 @@ function AttachmentDetailModal({ item, onClose, onViewCard }: { item: Attachment
   );
 }
 
-function emptyStateFor(filter: TypeFilter, hasSearch: boolean) {
+function emptyStateFor(filter: TypeFilter, hasSearch: boolean, mascot: boolean) {
   if (hasSearch) return { title: 'No attachments found', description: 'Try a different search term.' };
+  if (filter === 'all' && mascot) return { title: 'Nothing clipped yet', description: 'Photos, videos, audio and files you add to your notes will show up here.' };
   if (filter === 'all') return { title: 'No attachments yet', description: 'Photos, videos, audio and files you attach to your notes will appear here.' };
   const label = filter === 'photo' ? 'photos' : filter === 'video' ? 'videos' : filter === 'audio' ? 'audio' : 'files';
   return { title: `No ${label} yet`, description: `${label[0].toUpperCase()}${label.slice(1)} you attach to your notes will appear here.` };
@@ -204,7 +198,7 @@ export default function AttachmentsScreen() {
   const { isCurrentBackground } = useChatBackground();
   const deletion = useAttachmentDeletion();
   const { openDrawer } = useAppDrawer();
-  const { tokens: theme } = useTheme();
+  const { tokens: theme, styleTokens } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const tabBarHeight = useBottomTabBarHeight();
   const repository = useMemo(() => createAttachmentRepository(database), [database]);
@@ -301,7 +295,11 @@ export default function AttachmentsScreen() {
     router.dismissTo({ pathname: '/settings', params: { chatAppearanceSelection } });
   };
   const selectPhoto = (item: AttachmentSummary) => returnToAppearance(JSON.stringify({ ...attachmentBackgroundImage(item), dim: DEFAULT_BACKGROUND_DIM, blur: false }));
-  const empty = emptyStateFor(choosingBackground ? 'photo' : filter, Boolean(searchTerm));
+  const empty = emptyStateFor(choosingBackground ? 'photo' : filter, Boolean(searchTerm), styleTokens.mascotEmptyStates);
+  // Sticky's empty Attachments points to where attachments come from.
+  const emptyAction = styleTokens.mascotEmptyStates && !choosingBackground && filter === 'all' && !searchTerm
+    ? { label: 'Attach something in Chat', onPress: () => router.navigate({ pathname: '/chat', params: { focusInput: '1' } }) }
+    : undefined;
 
   return (
     <Screen edges={['top', 'left', 'right']}>
@@ -321,21 +319,21 @@ export default function AttachmentsScreen() {
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <SearchField accessibilityLabel="Search attachments" value={searchInput} onChangeText={setSearchInput} placeholder="Search attachments" />
-            {choosingBackground ? <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>Photos · Choose a photo to preview</Text> : <TypeFilterChips filter={filter} onChange={setFilter} />}
-            {items.length ? <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Recent</Text> : null}
+            {choosingBackground ? <AppText weight="700" style={[styles.sectionLabel, { color: theme.textSecondary }]}>Photos · Choose a photo to preview</AppText> : <TypeFilterChips filter={filter} onChange={setFilter} />}
+            {items.length ? <AppText weight="700" style={[styles.sectionLabel, { color: theme.textMuted }]}>Recent</AppText> : null}
           </View>
         }
         ListEmptyComponent={
           !ready
             ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null)
-            : <EmptyState title={empty.title} description={empty.description} />
+            : <EmptyState pose={searchTerm ? 'search' : 'paperclip'} title={empty.title} description={empty.description} action={emptyAction} />
         }
         ListFooterComponent={
           hasMore ? (
             <View style={styles.footer}>
               {loadingMore ? <ChitsLoader size="small" /> : (
                 <Pressable accessibilityRole="button" accessibilityLabel="Load more attachments" onPress={() => void loadMore()} style={styles.loadMoreButton}>
-                  <Text style={[styles.loadMoreText, { color: theme.accent }]}>Load more</Text>
+                  <AppText weight="700" style={[styles.loadMoreText, { color: theme.accent }]}>Load more</AppText>
                 </Pressable>
               )}
             </View>
@@ -357,26 +355,23 @@ const styles = StyleSheet.create({
   // The grid content already supplies the field's horizontal inset.
   listHeader: { paddingBottom: spacing.xs },
   // Bleeds to the screen edges so chips scroll edge to edge (like the Cards tab), while resting at the same inset.
-  chipScroll: { height: 30, flexGrow: 0, flexShrink: 0, marginTop: 8, marginBottom: 2, marginHorizontal: -spacing.md },
-  chipRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md },
-  chip: { flexDirection: 'row', alignItems: 'center', height: 30, paddingHorizontal: 10, borderRadius: radii.pill, borderWidth: StyleSheet.hairlineWidth },
-  chipLabel: { fontSize: 12, fontWeight: '600' },
-  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginTop: spacing.md, marginBottom: spacing.xs },
+  chipScroll: { marginTop: 8, marginBottom: 2, marginHorizontal: -spacing.md },
+  sectionLabel: { fontSize: 11, letterSpacing: 0.5, marginTop: spacing.md, marginBottom: spacing.xs },
   gridContent: { paddingHorizontal: spacing.md, flexGrow: 1 },
   gridRow: { gap: GRID_GAP, marginBottom: GRID_GAP },
-  tile: { borderRadius: radii.compactCard, overflow: 'hidden' },
+  tileClip: { flex: 1, overflow: 'hidden' },
   tilePressed: { opacity: 0.7 },
   tileFill: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', gap: 4 },
   filePadding: { paddingHorizontal: 6 },
-  tileFileName: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
-  tileMeta: { fontSize: 10, fontWeight: '600' },
+  tileFileName: { fontSize: 11, textAlign: 'center' },
+  tileMeta: { fontSize: 10 },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl },
   footer: { paddingVertical: spacing.md, alignItems: 'center' },
   loadMoreButton: { minHeight: 40, paddingHorizontal: spacing.md, alignItems: 'center', justifyContent: 'center' },
-  loadMoreText: { fontSize: 14, fontWeight: '700' },
+  loadMoreText: { fontSize: 14 },
   detailScreen: { flex: 1 },
   detailContent: { padding: spacing.md, gap: spacing.md },
   detailContext: { fontSize: 13, fontWeight: '600' },
-  detailMediaWrap: { borderRadius: radii.contentCard, overflow: 'hidden' },
+  detailMediaWrap: { overflow: 'hidden' },
   detailFileName: { fontSize: 13, lineHeight: 18 },
 });

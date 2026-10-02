@@ -1,10 +1,13 @@
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AttachmentContent } from '@/components/chat/message-row';
 import { useTheme } from '@/components/theme-provider';
-import { radii, spacing, type ThemeTokens } from '@/constants/theme';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
+import { NoteCard, NoteCategory, useNoteColors } from '@/components/ui/note-card';
+import { mix } from '@/constants/style-tokens';
+import { spacing, type ThemeTokens } from '@/constants/theme';
 import { tintWithAccent } from '@/constants/board-appearance';
 import { formatReminder } from '@/services/reminder-time';
 import type { AttachmentLike, CardListItem } from '@/db/types';
@@ -117,8 +120,18 @@ function paperColors(accent: string | null, dark: boolean, theme: Pick<ThemeToke
 // content, so a quick thought is as compact as it should be. Memoized since this list
 // can grow into the hundreds.
 export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: { item: CardListItem; onPress: () => void; onMore: () => void }) {
-  const { scheme, tokens: theme, look } = useTheme();
+  const { scheme, tokens, styleTokens } = useTheme();
   const dark = scheme === 'dark';
+  const accent = item.hidden ? null : item.boardAccent;
+  // Sticky notes are tinted paper whatever the page, so their text uses the
+  // note's own ink rather than the page's text colors.
+  const note = useNoteColors(accent);
+  const tinted = styleTokens.card.tinted;
+  const theme = tinted ? {
+    ...tokens, textPrimary: note.cardInk, textSecondary: note.cardInkMuted, textMuted: note.cardInkMuted,
+    surfaceElevated: mix(note.cardTint, '#FFFFFF', 0.55), accentSoft: mix(note.cardTint, '#FFFFFF', 0.55), accentStrong: note.cardInk,
+  } : tokens;
+  const r = styleTokens.noteCard.detailRadius;
   const media = item.hidden ? null : getCardPreviewMedia(item);
   const picture = media && media.type !== 'audio' ? media : null;
   const audio = media?.type === 'audio' ? media : null;
@@ -126,7 +139,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
   const content = noteContent(item, Boolean(media));
   const showFileBadge = item.fileCount > 0 && content.kind !== 'file' && !item.hidden;
 
-  const paper = paperColors(item.hidden ? null : item.boardAccent, dark, theme);
+  const paper = paperColors(accent, dark, tokens);
   // Half-width notes: the board name alone reads cleanly; the column is in the label for screen readers.
   const location = item.boardName ?? 'Unorganized';
   const mediaPhrase = mediaAccessibilityPhrase(item);
@@ -135,50 +148,48 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
   const accessibleLabel = `${item.hidden ? 'Hidden note' : `Note. ${accessibleTitle(item)}`}. ${mediaPhrase ? `${mediaPhrase} ` : ''}${overflowPhrase ? `${overflowPhrase} ` : ''}${item.pinned ? 'Pinned. ' : ''}${!item.hidden && item.subtaskCount ? `${item.completedSubtaskCount} of ${item.subtaskCount} subtasks completed. ` : ''}${reminderLabel ? `Reminder ${reminderLabel}. ` : ''}${item.boardName ?? 'Unorganized'}${item.columnName ? `, ${item.columnName}` : ''}.`;
 
   return (
-    <Pressable
+    <NoteCard
+      id={item.id}
+      accent={accent}
+      paper={paper.paper}
+      border={paper.edge}
       accessibilityRole="button"
       accessibilityLabel={accessibleLabel}
       accessibilityHint={item.kind === 'thought' ? 'Opens in Chat' : 'Opens card details'}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.note,
-        { backgroundColor: paper.paper, borderColor: paper.edge },
-        !dark && [styles.paperShadow, { shadowOpacity: look.cardShadowOpacity }],
-        pressed && styles.pressed,
-      ]}
     >
       <View style={styles.noteContent}>
       {picture ? (
         // pointerEvents="none": the whole note is the tap target (Card
         // Details / Chat); the picture must not open its own viewer.
-        <View pointerEvents="none" style={[styles.picture, { backgroundColor: theme.surfaceElevated }]}>
+        <View pointerEvents="none" style={[styles.picture, { borderRadius: r.media, backgroundColor: theme.surfaceElevated }]}>
           <AttachmentContent attachment={picture} variant="grid" />
-          {picture.type === 'video' ? <View style={styles.videoPlay}><Ionicons accessible={false} name="play" size={20} color="#FFFFFF" /></View> : null}
-          {picture.type === 'video' && picture.duration ? <View style={styles.durationBadge}><Text style={styles.durationBadgeText}>{formatDurationSeconds(picture.duration)}</Text></View> : null}
-          {overflowCount > 0 ? <View style={styles.overflowBadge}><Text style={styles.overflowBadgeText}>+{overflowCount}</Text></View> : null}
+          {picture.type === 'video' ? <View style={styles.videoPlay}><Icon name="play" size={20} color="#FFFFFF" /></View> : null}
+          {picture.type === 'video' && picture.duration ? <View style={[styles.durationBadge, { borderRadius: r.badge }]}><AppText weight="600" style={styles.durationBadgeText}>{formatDurationSeconds(picture.duration)}</AppText></View> : null}
+          {overflowCount > 0 ? <View style={styles.overflowBadge}><AppText weight="700" style={styles.overflowBadgeText}>+{overflowCount}</AppText></View> : null}
         </View>
       ) : null}
 
       {content.kind === 'hidden' ? (
         <View style={styles.hiddenRow}>
-          <View style={[styles.hiddenIcon, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name="eye-off-outline" size={16} color={theme.textMuted} /></View>
+          <View style={[styles.hiddenIcon, { backgroundColor: theme.surfaceElevated }]}><Icon name="eye-off-outline" size={16} color={theme.textMuted} /></View>
           <View style={styles.flexCopy}>
-            <Text style={[styles.hiddenTitle, { color: theme.textSecondary }]}>Hidden Chit</Text>
-            <Text style={[styles.hiddenCopy, { color: theme.textMuted }]}>Content is hidden</Text>
+            <AppText weight="600" style={[styles.hiddenTitle, { color: theme.textSecondary }]}>Hidden Chit</AppText>
+            <AppText style={[styles.hiddenCopy, { color: theme.textMuted }]}>Content is hidden</AppText>
           </View>
         </View>
       ) : content.kind === 'file' ? (
         <View style={styles.fileRow}>
-          <View style={[styles.fileIcon, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name={/\.pdf$/i.test(content.name) ? 'document-text-outline' : 'document-outline'} size={20} color={theme.textSecondary} /></View>
+          <View style={[styles.fileIcon, { borderRadius: r.tile, backgroundColor: theme.surfaceElevated }]}><Icon name={/\.pdf$/i.test(content.name) ? 'document-text-outline' : 'document-outline'} size={20} color={theme.textSecondary} /></View>
           <View style={styles.flexCopy}>
-            <Text numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{content.name}</Text>
-            <Text style={[styles.fileMeta, { color: theme.textMuted }]}>{fileKindLabel(content.name, item.fileCount)}</Text>
+            <AppText weight="600" numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{content.name}</AppText>
+            <AppText style={[styles.fileMeta, { color: theme.textMuted }]}>{fileKindLabel(content.name, item.fileCount)}</AppText>
           </View>
         </View>
       ) : (
         <>
-          {content.title ? <Text numberOfLines={3} style={[styles.title, { color: theme.textPrimary }]}>{content.title}</Text> : null}
-          {content.body ? <Text numberOfLines={content.title ? 5 : 8} style={[content.title ? styles.bodyUnderTitle : styles.body, { color: content.title ? theme.textSecondary : theme.textPrimary }]}>{content.body}</Text> : null}
+          {content.title ? <AppText variant="display" weight="700" numberOfLines={3} style={[styles.title, { color: theme.textPrimary }]}>{content.title}</AppText> : null}
+          {content.body ? <AppText variant="paragraph" numberOfLines={content.title ? 5 : 8} style={[content.title ? styles.bodyUnderTitle : styles.body, { color: content.title ? theme.textSecondary : theme.textPrimary }]}>{content.body}</AppText> : null}
         </>
       )}
 
@@ -186,60 +197,56 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
         <View style={styles.checklist}>
           {item.subtaskPreview.map((subtask) => (
             <View key={subtask.id} style={styles.checklistRow}>
-              <Ionicons accessible={false} name={subtask.isCompleted ? 'checkbox' : 'square-outline'} size={15} color={theme.textMuted} />
-              <Text numberOfLines={2} style={[styles.checklistText, { color: subtask.isCompleted ? theme.textMuted : theme.textPrimary }, subtask.isCompleted && styles.completedText]}>{subtask.title}</Text>
+              <Icon name={subtask.isCompleted ? 'checkbox' : 'square-outline'} size={15} color={theme.textMuted} />
+              <AppText variant="paragraph" numberOfLines={2} style={[styles.checklistText, { color: subtask.isCompleted ? theme.textMuted : theme.textPrimary }, subtask.isCompleted && styles.completedText]}>{subtask.title}</AppText>
             </View>
           ))}
-          {item.subtaskCount > 4 ? <Text style={[styles.checklistMore, { color: theme.textMuted }]}>+{item.subtaskCount - 4} more</Text> : null}
-          <Text style={[styles.checklistProgress, { color: theme.textMuted }]}>{item.subtaskCount - item.completedSubtaskCount} remaining</Text>
+          {item.subtaskCount > 4 ? <AppText style={[styles.checklistMore, { color: theme.textMuted }]}>+{item.subtaskCount - 4} more</AppText> : null}
+          <AppText style={[styles.checklistProgress, { color: theme.textMuted }]}>{item.subtaskCount - item.completedSubtaskCount} remaining</AppText>
         </View>
       ) : null}
 
       {audio ? (
-        <View style={[styles.audioPill, { backgroundColor: theme.accentSoft }]}>
+        <View style={[styles.audioPill, { borderRadius: r.strip, backgroundColor: theme.accentSoft }]}>
           <View style={styles.waveform}>{[7, 14, 10, 18, 9, 14, 6].map((height, index) => <View key={index} style={[styles.waveformBar, { height, backgroundColor: theme.accentStrong }]} />)}</View>
-          <Text style={[styles.audioText, { color: theme.accentStrong }]}>Voice note{audio.duration ? ` · ${formatDurationSeconds(audio.duration)}` : ''}</Text>
+          <AppText weight="700" style={[styles.audioText, { color: theme.accentStrong }]}>Voice note{audio.duration ? ` · ${formatDurationSeconds(audio.duration)}` : ''}</AppText>
         </View>
       ) : null}
       {/* Secondary metadata, not a due date: a small muted bell and time. */}
       {reminderLabel ? (
         <View style={styles.reminderLine}>
-          <Ionicons accessible={false} name="notifications-outline" size={12} color={theme.textMuted} />
-          <Text numberOfLines={1} style={[styles.reminderText, { color: theme.textMuted }]}>{reminderLabel}</Text>
+          <Icon name="notifications-outline" size={12} color={theme.textMuted} />
+          <AppText weight="600" numberOfLines={1} style={[styles.reminderText, { color: theme.textMuted }]}>{reminderLabel}</AppText>
         </View>
       ) : null}
       </View>
 
       <View style={styles.footer}>
         <View style={styles.footerLeft}>
-          <Text numberOfLines={1} style={[styles.location, { color: theme.textSecondary }]}>{location}</Text>
+          <NoteCategory label={location} color={theme.textSecondary} />
         </View>
         <View style={styles.footerMeta}>
-          {item.pinned ? <Ionicons accessible={false} name="pin" size={12} color={theme.textMuted} /> : null}
-          {showFileBadge ? <View style={styles.fileBadge}><Ionicons accessible={false} name="attach" size={13} color={theme.textMuted} /><Text style={[styles.fileBadgeText, { color: theme.textMuted }]}>{item.fileCount}</Text></View> : null}
-          <Text style={[styles.date, { color: theme.textMuted }]}>{formatCardDate(item.updatedAt)}</Text>
+          {item.pinned ? <Icon name="pin" size={12} color={theme.textMuted} /> : null}
+          {showFileBadge ? <View style={styles.fileBadge}><Icon name="attach" size={13} color={theme.textMuted} /><AppText weight="600" style={[styles.fileBadgeText, { color: theme.textMuted }]}>{item.fileCount}</AppText></View> : null}
+          <AppText style={[styles.date, { color: theme.textMuted }]}>{formatCardDate(item.updatedAt)}</AppText>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Card actions" hitSlop={10} onPress={(event) => { event.stopPropagation(); onMore(); }} style={styles.more}>
-          <Ionicons accessible={false} name="ellipsis-horizontal" size={17} color={theme.textMuted} />
+          <Icon name="ellipsis-horizontal" size={17} color={theme.textMuted} />
         </Pressable>
       </View>
-    </Pressable>
+    </NoteCard>
   );
 });
 
 const styles = StyleSheet.create({
-  note: { minWidth: 0, paddingHorizontal: 13, paddingTop: 13, paddingBottom: 8, borderRadius: radii.contentCard, borderWidth: StyleSheet.hairlineWidth },
-  // A soft lift so the note reads as paper on the page, not a table row.
-  paperShadow: { shadowColor: '#000000', shadowOpacity: 0.04, shadowRadius: 7, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
-  pressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
   noteContent: { minWidth: 0, alignSelf: 'stretch' },
-  picture: { height: 118, marginBottom: 10, borderRadius: 12, overflow: 'hidden' },
-  videoPlay: { position: 'absolute', alignSelf: 'center', top: 39, width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.55)' },
-  durationBadge: { position: 'absolute', left: 7, bottom: 7, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.62)' },
-  durationBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '600' },
-  overflowBadge: { position: 'absolute', right: 8, bottom: 8, minWidth: 26, height: 20, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.62)' },
-  overflowBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
-  title: { fontSize: 16, lineHeight: 22, fontWeight: '700', letterSpacing: -0.1 },
+  picture: { height: 118, marginBottom: 10, overflow: 'hidden' },
+  videoPlay: { position: 'absolute', alignSelf: 'center', top: 39, width: 40, height: 40, borderRadius: 40 / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.55)' },
+  durationBadge: { position: 'absolute', left: 7, bottom: 7, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: 'rgba(0,0,0,0.62)' },
+  durationBadgeText: { color: '#FFFFFF', fontSize: 10 },
+  overflowBadge: { position: 'absolute', right: 8, bottom: 8, minWidth: 26, height: 20, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 20 / 2, backgroundColor: 'rgba(0,0,0,0.62)' },
+  overflowBadgeText: { color: '#FFFFFF', fontSize: 11 },
+  title: { fontSize: 16, lineHeight: 22, letterSpacing: -0.1 },
   body: { fontSize: 15.5, lineHeight: 22 },
   bodyUnderTitle: { marginTop: 5, fontSize: 14, lineHeight: 20 },
   checklist: { marginTop: 12, gap: 6 },
@@ -250,25 +257,25 @@ const styles = StyleSheet.create({
   checklistProgress: { fontSize: 11, marginTop: 2 },
   flexCopy: { flex: 1, minWidth: 0 },
   hiddenRow: { gap: spacing.xs },
-  hiddenIcon: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 17 },
-  hiddenTitle: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  hiddenIcon: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 34 / 2 },
+  hiddenTitle: { fontSize: 15, lineHeight: 20 },
   hiddenCopy: { fontSize: 12, lineHeight: 16 },
   fileRow: { gap: spacing.xs },
-  fileIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 11 },
-  fileName: { fontSize: 14, lineHeight: 19, fontWeight: '600' },
+  fileIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  fileName: { fontSize: 14, lineHeight: 19 },
   fileMeta: { marginTop: 1, fontSize: 12, lineHeight: 16 },
-  audioPill: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 34, marginTop: 10, paddingHorizontal: 9, borderRadius: 10 },
+  audioPill: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 34, marginTop: 10, paddingHorizontal: 9 },
   waveform: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  // Fully rounded bar ends (radius ≥ half the 2pt width).
   waveformBar: { width: 2, borderRadius: 2, opacity: 0.8 },
-  audioText: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  audioText: { fontSize: 12, fontVariant: ['tabular-nums'] },
   reminderLine: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 },
-  reminderText: { flexShrink: 1, fontSize: 11.5, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  reminderText: { flexShrink: 1, fontSize: 11.5, fontVariant: ['tabular-nums'] },
   footer: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 12 },
   footerLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 5 },
   footerMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  location: { flexShrink: 1, fontSize: 12, fontWeight: '600' },
   fileBadge: { flexDirection: 'row', alignItems: 'center', gap: 1 },
-  fileBadgeText: { fontSize: 11, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  fileBadgeText: { fontSize: 11, fontVariant: ['tabular-nums'] },
   date: { fontSize: 11.5, fontVariant: ['tabular-nums'] },
   more: { width: 26, height: 28, alignItems: 'center', justifyContent: 'center', marginRight: -6 },
 });

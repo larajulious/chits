@@ -2,10 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { AccessibilityInfo, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { cancelAnimation, Easing, Extrapolation, interpolate, runOnJS, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { useTheme } from '@/components/theme-provider';
+import { ChatButtonFace } from './chat-button-face';
 import { createChatTransitionLifecycle, type ChatReturnPath } from '@/services/chat-transition-lifecycle';
 
 export type ChatOrigin = { x: number; y: number; size: number };
@@ -36,7 +36,7 @@ const ChatTransitionContext = createContext<ChatTransitionContextValue | null>(n
 // scenes immediately, with the entire Chat still rendered; there is no separate
 // content/composer fade and no reverse mask pulse before navigation.
 export function ChatTransitionProvider({ children }: PropsWithChildren) {
-  const { tokens: theme } = useTheme();
+  const { tokens: theme, styleTokens } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -139,8 +139,8 @@ export function ChatTransitionProvider({ children }: PropsWithChildren) {
       {children}
       {overlayVisible ? <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: theme.chatBackground }, maskStyle]} />
-        {origin ? <Animated.View style={[styles.travelButton, { left: origin.x - origin.size / 2, top: origin.y - origin.size / 2, width: origin.size, height: origin.size, borderRadius: origin.size / 2, backgroundColor: theme.accent }, buttonStyle]}>
-          <Ionicons accessible={false} name="chatbox" size={23} color={theme.accentText} />
+        {origin ? <Animated.View style={[styles.travelButton, { left: origin.x - styleTokens.chat.width / 2, top: origin.y - styleTokens.chat.height / 2, width: styleTokens.chat.width, height: styleTokens.chat.height }, buttonStyle]}>
+          <ChatButtonFace travelling />
         </Animated.View> : null}
       </View> : null}
     </View>
@@ -151,4 +151,4 @@ export function useChatTransition() {
   if (!context) throw new Error('useChatTransition must be used within ChatTransitionProvider');
   return context;
 }
-const styles = StyleSheet.create({ screen: { flex: 1 }, travelButton: { position: 'absolute', alignItems: 'center', justifyContent: 'center' } });
+const styles = StyleSheet.create({ screen: { flex: 1 }, travelButton: { position: 'absolute' } });

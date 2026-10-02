@@ -1,4 +1,3 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { FlashList } from '@shopify/flash-list';
 import { router, useFocusEffect } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
@@ -19,7 +18,7 @@ import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
-import { AppHeader, EmptyState, IconButton, Screen, Toast, HeaderIcon, MenuIcon } from '@/components/ui/primitives';
+import { AppHeader, AppText, Chip, ChipRow, EmptyState, Icon, IconButton, PressableSurface, Screen, SegmentedControl, Surface, Toast, HeaderIcon, MenuIcon } from '@/components/ui/primitives';
 import { AddNoteSheet, type NoteSubmission } from '@/components/boards/add-note-sheet';
 import { groupRecentNotes } from '@/services/card-grouping';
 import { detachConfirmationMessage } from '@/services/detach-card';
@@ -28,7 +27,7 @@ import { BoardAppearanceFields } from '@/components/boards/board-appearance-fiel
 import { CardListRow } from '@/components/boards/card-list-row.native';
 import { shareNoteHref } from '@/services/share-note-source';
 import { resolveBoardIcon, type BoardIconName } from '@/constants/board-appearance';
-import { radii, spacing } from '@/constants/theme';
+import { spacing } from '@/constants/theme';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
 import { GettingStartedCard } from '@/features/onboarding/components/checklist-card';
 import type { Board, CardListItem, MessageType } from '@/db/types';
@@ -85,57 +84,26 @@ type CardFilter = 'all' | 'unorganized' | (string & {});
 type CardFilterChip = { key: CardFilter; label: string; count: number };
 
 function CardFilterChips({ chips, filter, onChange }: { chips: CardFilterChip[]; filter: CardFilter; onChange: (next: CardFilter) => void }) {
-  const { tokens: theme } = useTheme();
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chipRow}>
-      {chips.map((chip) => {
-        const selected = chip.key === filter;
-        return (
-          <Pressable
-            key={chip.key}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            accessibilityLabel={`Filter by ${chip.label}, ${pluralize(chip.count, 'card')}`}
-            onPress={() => onChange(chip.key)}
-            style={[
-              styles.chip,
-              { backgroundColor: selected ? theme.accentSoft : 'transparent', borderColor: selected ? theme.accentBorder : 'transparent' },
-            ]}
-          >
-            <Text numberOfLines={1} style={[styles.chipLabel, { color: selected ? theme.accentStrong : theme.textSecondary }]}>
-              {chip.label} <Text style={[styles.chipCountInline, { color: selected ? theme.accentStrong : theme.textMuted, opacity: 0.72 }]}>{chip.count}</Text>
-            </Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
+    <ChipRow style={styles.chipScroll}>
+      {chips.map((chip) => (
+        <Chip
+          key={chip.key}
+          label={chip.label}
+          count={chip.count}
+          selected={chip.key === filter}
+          accessibilityLabel={`Filter by ${chip.label}, ${pluralize(chip.count, 'card')}`}
+          onPress={() => onChange(chip.key)}
+        />
+      ))}
+    </ChipRow>
   );
 }
 
-function ViewSwitch({ mode, onChange }: { mode: ViewMode; onChange: (next: ViewMode) => void }) {
-  const { tokens: theme } = useTheme();
-  return (
-    <View style={[styles.switchTrack, { backgroundColor: theme.surfaceElevated }]}>
-      {(['cards', 'boards'] as const).map((option) => {
-        const selected = option === mode;
-        return (
-          <Pressable
-            key={option}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            accessibilityLabel={option === 'boards' ? 'Boards view' : 'Cards view'}
-            onPress={() => onChange(option)}
-            style={[styles.switchOption, selected && { backgroundColor: theme.surface }]}
-          >
-            <Text style={[styles.switchLabel, { color: selected ? theme.textPrimary : theme.textMuted }]}>
-              {option === 'boards' ? 'Boards' : 'Cards'}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
+const VIEW_OPTIONS: { key: ViewMode; label: string; accessibilityLabel: string }[] = [
+  { key: 'cards', label: 'Cards', accessibilityLabel: 'Cards view' },
+  { key: 'boards', label: 'Boards', accessibilityLabel: 'Boards view' },
+];
 
 export default function BoardsScreen() {
   const { width, fontScale } = useWindowDimensions();
@@ -145,7 +113,13 @@ export default function BoardsScreen() {
   const messageRepository = useMemo(() => createMessageRepository(database), [database]);
   const { openDrawer } = useAppDrawer();
   const { actionSheet, confirm } = useAppDialog();
-  const { tokens: theme } = useTheme();
+  const { tokens: theme, styleTokens, styleColors } = useTheme();
+  // Sticky balances the masonry columns by height and spaces them evenly;
+  // Classic keeps its alternating columns exactly as they were.
+  const balanced = styleTokens.card.tinted;
+  const { columnGap, rowGap } = styleTokens.noteCard;
+  // Half a gap outside each balanced column, so columns sit at the screen inset.
+  const listInset = spacing.md - columnGap / 2;
   // The floating bottom nav is absolutely positioned over this screen (see
   // PHASE: REDESIGN CHITS BOTTOM NAVIGATION) rather than reserving its own flex
   // space, so this screen's own scroll content has to reserve the matching
@@ -283,6 +257,9 @@ export default function BoardsScreen() {
     }
     return { cells, stickyHeaderIndices };
   }, [cardSections, cardColumns]);
+  const noteCellStyle = (column: number) => balanced
+    ? { paddingHorizontal: cardColumns === 1 ? spacing.md : columnGap / 2, paddingBottom: rowGap }
+    : [styles.noteCell, cardColumns === 1 ? styles.noteCellSingle : column === 0 ? styles.noteCellStart : styles.noteCellEnd];
 
   // "Move back to Unorganized" — always confirmed first. Fetches a lightweight
   // preview (this row doesn't have message/comment/attachment counts loaded the
@@ -431,7 +408,7 @@ export default function BoardsScreen() {
           </IconButton>
         )}
         trailing={(
-          <View style={styles.headerActions}>
+          <View style={[styles.headerActions, styleTokens.header.iconButton.filled && styles.headerActionsTiled]}>
             <IconButton label={viewMode === 'cards' && cardFilter !== 'all' && cardFilter !== 'unorganized' ? `Search in ${boards.find((board) => board.id === cardFilter)?.name ?? 'board'}` : 'Search'} onPress={() => {
               const selectedBoard = viewMode === 'cards' ? boards.find((board) => board.id === cardFilter) : undefined;
               router.push(selectedBoard
@@ -440,7 +417,7 @@ export default function BoardsScreen() {
             }}>
               <HeaderIcon name="search-outline" size={23} />
             </IconButton>
-            <IconButton label={viewMode === 'boards' ? 'Create board' : 'Add note'} onPress={viewMode === 'boards' ? openCreate : () => setAddNoteOpen(true)}>
+            <IconButton accent label={viewMode === 'boards' ? 'Create board' : 'Add note'} onPress={viewMode === 'boards' ? openCreate : () => setAddNoteOpen(true)}>
               <HeaderIcon name="add" size={26} />
             </IconButton>
           </View>
@@ -452,23 +429,22 @@ export default function BoardsScreen() {
       {!ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : (
       <View style={styles.flex}>
         <View style={styles.switchWrap}>
-          <ViewSwitch mode={viewMode} onChange={changeViewMode} />
+          <SegmentedControl options={VIEW_OPTIONS} value={viewMode} onChange={changeViewMode} />
         </View>
 
         {viewMode === 'cards' ? (
           totalCardCount === 0 ? (
-            <View style={styles.emptyWrap}>
-              <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>Your thoughts will show up here.</Text>
-              <Text style={[styles.emptyDescription, { color: theme.textSecondary }]}>Send yourself something in Chat and it becomes a note you can organize later.</Text>
-              <Pressable accessibilityRole="button" onPress={() => router.push('/chat?focusInput=1')} style={[styles.emptyCreateButton, { backgroundColor: theme.accent }]}>
-                <Text style={[styles.emptyCreateText, { color: theme.accentText }]}>Start a Chit</Text>
-              </Pressable>
-            </View>
+            <EmptyState
+              pose="no-notes"
+              title="Your thoughts will show up here."
+              description="Send yourself something in Chat and it becomes a note you can organize later."
+              action={{ label: 'Start a Chit', onPress: () => router.push('/chat?focusInput=1') }}
+            />
           ) : (
             <>
               <CardFilterChips chips={cardFilterChips} filter={cardFilter} onChange={setCardFilter} />
               {collection.cells.length === 0 ? (
-                <EmptyState title="No cards in this filter" description="Choose another board or All cards." />
+                <EmptyState pose="search" title="No cards in this filter" description="Choose another board or All cards." />
               ) : (
                 <FlashList
                   key={`cards-${cardColumns}`}
@@ -476,22 +452,22 @@ export default function BoardsScreen() {
                   data={collection.cells}
                   masonry
                   numColumns={cardColumns}
-                  optimizeItemArrangement={false}
+                  optimizeItemArrangement={balanced}
                   overrideItemLayout={(layout, cell) => { layout.span = cell.kind === 'header' ? cardColumns : 1; }}
                   keyExtractor={(cell) => cell.kind === 'header' ? `section-${cell.section.key}` : `${cell.item.kind}-${cell.item.id}`}
                   getItemType={(cell) => cell.kind}
                   stickyHeaderIndices={collection.stickyHeaderIndices}
-                  extraData={theme}
+                  extraData={styleTokens}
                   renderItem={({ item: cell }) => cell.kind === 'header' ? (
-                    <View accessibilityRole="header" accessibilityLabel={`${cell.section.title}, ${cell.section.count} ${cell.section.count === 1 ? 'note' : 'notes'}`} style={[styles.sectionHeaderRow, { backgroundColor: theme.background }]}>
+                    <View accessibilityRole="header" accessibilityLabel={`${cell.section.title}, ${cell.section.count} ${cell.section.count === 1 ? 'note' : 'notes'}`} style={[styles.sectionHeaderRow, { backgroundColor: theme.background }, balanced && cardColumns > 1 && { marginHorizontal: -listInset }]}>
                       <View style={styles.sectionHeaderTitle}>
-                        {cell.section.pinned ? <Ionicons accessible={false} name="pin" size={14} color={theme.textSecondary} /> : null}
-                        <Text numberOfLines={1} style={[styles.cardSectionMonth, { color: theme.textPrimary }]}>{cell.section.title}</Text>
+                        {cell.section.pinned ? <Icon name="pin" size={14} color={theme.textSecondary} /> : null}
+                        <AppText variant="display" weight="700" numberOfLines={1} style={[styles.cardSectionMonth, { color: theme.textPrimary }]}>{cell.section.title}</AppText>
                       </View>
-                      <Text style={[styles.cardSectionCount, { color: theme.textMuted }]}>{cell.section.count}</Text>
+                      <AppText weight="500" style={[styles.cardSectionCount, { color: theme.textMuted }]}>{cell.section.count}</AppText>
                     </View>
                   ) : (
-                    <View style={[styles.noteCell, cardColumns === 1 ? styles.noteCellSingle : cell.column === 0 ? styles.noteCellStart : styles.noteCellEnd]}>
+                    <View style={noteCellStyle(cell.column)}>
                       <CardListRow
                         item={cell.item}
                         onPress={() => router.push(cell.item.kind === 'thought' ? `/chat?messageId=${cell.item.id}` : `/card/${cell.item.id}`)}
@@ -499,48 +475,49 @@ export default function BoardsScreen() {
                       />
                     </View>
                   )}
-                  contentContainerStyle={[styles.cardListContent, { paddingBottom: tabBarHeight + spacing.md }]}
+                  contentContainerStyle={[styles.cardListContent, balanced && cardColumns > 1 && { paddingHorizontal: listInset }, { paddingBottom: tabBarHeight + spacing.md }]}
                 />
               )}
             </>
           )
         ) : (
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.md }]}>
-        <Text style={[styles.intro, { color: theme.textSecondary }]}>
+        <AppText style={[styles.intro, { color: styleTokens.mascotEmptyStates ? styleColors.textSecondary : theme.textSecondary }]}>
           Keep related thoughts together and easy to find.
-        </Text>
+        </AppText>
 
-        <Pressable
+        <PressableSurface
           accessibilityRole="button"
           accessibilityLabel={`${pluralize(unorganizedCount, 'unorganized thought')}. Open Unorganized.`}
           onPress={() => router.push('/unorganized')}
-          style={({ pressed }) => [
-            styles.unorganized,
-            { backgroundColor: theme.accentSoft, borderColor: theme.accentBorder },
-            pressed && styles.pressed,
-          ]}
+          fill={styleTokens.card.tinted ? styleColors.cardTint : theme.accentSoft}
+          border={theme.accentBorder}
+          radius={styleTokens.radius.panel}
+          edge={styleTokens.noteCard.edge || false}
+          pressedStyle={styles.pressed}
+          style={styles.unorganized}
         >
-          <View style={[styles.unorganizedMark, { backgroundColor: theme.surface }]}>
-            <Ionicons accessible={false} name="file-tray-outline" size={20} color={theme.accentStrong} />
-          </View>
+          <Surface fill={styleTokens.card.tinted ? styleColors.controlFill : theme.surface} radius={styleTokens.radius.control} edge={false} style={styles.unorganizedMark}>
+            <Icon name="file-tray-outline" size={20} color={styleTokens.card.tinted ? theme.textPrimary : theme.accentStrong} />
+          </Surface>
           <View style={styles.rowCopy}>
-            <Text style={[styles.unorganizedTitle, { color: theme.textPrimary }]}>Unorganized</Text>
-            <Text style={[styles.rowDetail, { color: theme.textSecondary }]}>
+            <AppText variant="display" weight="700" style={[styles.unorganizedTitle, { color: styleTokens.card.tinted ? styleColors.cardInk : theme.textPrimary }]}>Unorganized</AppText>
+            <AppText style={[styles.rowDetail, { color: styleTokens.card.tinted ? styleColors.cardInkMuted : theme.textSecondary }]}>
               {unorganizedCount === 0 ? 'All caught up' : `${pluralize(unorganizedCount, 'thought')} waiting`}
-            </Text>
+            </AppText>
           </View>
-          <Ionicons accessible={false} name="chevron-forward" size={20} color={theme.textMuted} />
-        </Pressable>
+          <Icon name="chevron-forward" size={20} color={styleTokens.card.tinted ? styleColors.cardInk : theme.textMuted} />
+        </PressableSurface>
 
         <View style={styles.sectionHeader}>
-          <Text accessibilityRole="header" style={[styles.sectionTitle, { color: theme.textMuted }]}>YOUR BOARDS</Text>
+          <AppText accessibilityRole="header" weight={styleTokens.card.tinted ? '800' : '700'} style={[styles.sectionTitle, { color: theme.textMuted }]}>YOUR BOARDS</AppText>
           {boards.length > 0 ? (
-            <Text style={[styles.sectionCount, { color: theme.textMuted }]}>{boards.length}</Text>
+            <AppText style={[styles.sectionCount, { color: theme.textMuted }]}>{boards.length}</AppText>
           ) : null}
         </View>
 
         {boards.length > 0 ? (
-          <View style={[styles.boardList, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
+          <Surface fill={styleTokens.card.tinted ? styleColors.controlFill : theme.surface} border={theme.borderSubtle} radius={styleTokens.radius.panel} style={styles.boardList}>
             {boards.map((board, index) => {
               const detail = `${pluralize(board.columnCount, 'column')} · ${pluralize(board.cardCount, 'card')}`;
               return (
@@ -551,35 +528,28 @@ export default function BoardsScreen() {
                   onPress={() => router.push(`/board/${board.id}`)}
                   style={({ pressed }) => [
                     styles.boardRow,
-                    index < boards.length - 1 && { borderBottomColor: theme.borderSubtle, borderBottomWidth: StyleSheet.hairlineWidth },
+                    index < boards.length - 1 && { borderBottomColor: styleTokens.outline.width ? styleColors.outline : theme.borderSubtle, borderBottomWidth: styleTokens.outline.width || StyleSheet.hairlineWidth },
                     pressed && styles.pressed,
                   ]}
                 >
-                  <View style={[styles.boardMark, { backgroundColor: board.accent ?? theme.accentSoft }]}>
-                    <Ionicons
-                      accessible={false}
+                  <Surface fill={board.accent ?? theme.accentSoft} radius={styleTokens.radius.control} outline={styleTokens.outline.width ? undefined : false} edge={false} style={styles.boardMark}>
+                    <Icon
                       name={resolveBoardIcon(board.icon)}
                       size={19}
                       color={board.accent ? '#FFFFFF' : theme.accentStrong}
                     />
-                  </View>
+                  </Surface>
                   <View style={styles.rowCopy}>
-                    <Text numberOfLines={1} style={[styles.boardName, { color: theme.textPrimary }]}>{board.name}</Text>
-                    <Text style={[styles.rowDetail, { color: theme.textSecondary }]}>{detail}</Text>
+                    <AppText weight="600" numberOfLines={1} style={[styles.boardName, { color: theme.textPrimary }]}>{board.name}</AppText>
+                    <AppText style={[styles.rowDetail, { color: styleTokens.mascotEmptyStates ? styleColors.textSecondary : theme.textSecondary }]}>{detail}</AppText>
                   </View>
-                  <Ionicons accessible={false} name="chevron-forward" size={19} color={theme.textMuted} />
+                  <Icon name="chevron-forward" size={19} color={theme.textMuted} />
                 </Pressable>
               );
             })}
-          </View>
+          </Surface>
         ) : (
-          <View style={styles.emptyWrap}>
-            <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>No boards yet.</Text>
-            <Text style={[styles.emptyDescription, { color: theme.textSecondary }]}>Organize your Chits when you’re ready.</Text>
-            <Pressable accessibilityRole="button" onPress={openCreate} style={({ pressed }) => [styles.emptyCreateButton, { backgroundColor: theme.accent }, pressed && styles.pressed]}>
-              <Text style={[styles.emptyCreateText, { color: theme.accentText }]}>Create board</Text>
-            </Pressable>
-          </View>
+          <EmptyState pose="empty-board" title="No boards yet." description="Organize your Chits when you’re ready." action={{ label: 'Create board', onPress: openCreate }} />
         )}
       </ScrollView>
         )}
@@ -655,9 +625,7 @@ const styles = StyleSheet.create({
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   switchWrap: { paddingHorizontal: spacing.md, paddingTop: 12, paddingBottom: 0 },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
-  switchTrack: { flexDirection: 'row', height: 32, borderRadius: radii.control, padding: 3 },
-  switchOption: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: radii.control - 2 },
-  switchLabel: { fontSize: 13, fontWeight: '600' },
+  headerActionsTiled: { gap: spacing.xs },
   cardList: { flex: 1 },
   noteCell: { paddingBottom: 12 },
   noteCellSingle: { paddingHorizontal: spacing.md },
@@ -666,39 +634,23 @@ const styles = StyleSheet.create({
   cardListContent: { paddingTop: 0 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, minHeight: 48, paddingHorizontal: spacing.md, paddingTop: 10, paddingBottom: 8 },
   sectionHeaderTitle: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  cardSectionMonth: { flexShrink: 1, fontSize: 17, lineHeight: 22, fontWeight: '700', letterSpacing: -0.2 },
-  cardSectionCount: { fontSize: 12, fontWeight: '500', fontVariant: ['tabular-nums'] },
-  // Fixed, content-only height — flexGrow/flexShrink pinned to 0 so this
-  // horizontal ScrollView can never inherit leftover vertical space from its
-  // flex-column parent (the exact bug that was reserving a large empty gap
-  // above the card list: an unbounded horizontal scroller in a flex column
-  // stretching to fill available height instead of sizing to its chips).
-  // A compact gap separates the tabs from filters; the section heading follows
-  // without the space once reserved for an inline search field.
-  chipScroll: { height: 30, flexGrow: 0, flexShrink: 0, marginTop: 8, marginBottom: 2 },
-  chipRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md },
-  // Filters remain secondary to the notes: a soft accent marks selection.
-  chip: { flexDirection: 'row', alignItems: 'center', height: 30, paddingHorizontal: 10, borderRadius: radii.pill, borderWidth: StyleSheet.hairlineWidth },
-  chipLabel: { fontSize: 12, fontWeight: '600' },
-  chipCountInline: { fontSize: 11, fontWeight: '500' },
+  cardSectionMonth: { flexShrink: 1, fontSize: 17, lineHeight: 22, letterSpacing: -0.2 },
+  cardSectionCount: { fontSize: 12, fontVariant: ['tabular-nums'] },
+  // A compact gap separates the tabs from filters (ChipRow sizes itself to its chips).
+  chipScroll: { marginTop: 8, marginBottom: 2 },
   intro: { fontSize: 14, lineHeight: 20, marginBottom: spacing.md },
-  unorganized: { minHeight: 76, flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: spacing.sm, borderWidth: StyleSheet.hairlineWidth, borderRadius: 18 },
-  unorganizedMark: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  unorganized: { minHeight: 76, flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: spacing.sm },
+  unorganizedMark: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   rowCopy: { flex: 1, minWidth: 0 },
-  unorganizedTitle: { fontSize: 16, fontWeight: '700' },
+  unorganizedTitle: { fontSize: 16 },
   rowDetail: { marginTop: 3, fontSize: 13, lineHeight: 18 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.lg, marginBottom: spacing.xs, paddingHorizontal: spacing.xxs },
-  sectionTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
+  sectionTitle: { fontSize: 11, letterSpacing: 0.8 },
   sectionCount: { fontSize: 12, fontVariant: ['tabular-nums'] },
-  boardList: { overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderRadius: 18 },
+  boardList: { overflow: 'hidden' },
   boardRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md },
-  boardMark: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  boardName: { fontSize: 16, fontWeight: '600' },
-  emptyWrap: { flex: 1, minHeight: 220, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl, gap: spacing.xs },
-  emptyTitle: { fontSize: 20, fontWeight: '600', textAlign: 'center' },
-  emptyDescription: { fontSize: 15, lineHeight: 22, textAlign: 'center', marginBottom: spacing.sm },
-  emptyCreateButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.lg, borderRadius: 12 },
-  emptyCreateText: { fontWeight: '700', fontSize: 15 },
+  boardMark: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  boardName: { fontSize: 16 },
   pressed: { opacity: 0.58 },
   sheetContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.md, gap: spacing.xs },
   handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginBottom: spacing.xs },

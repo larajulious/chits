@@ -1,6 +1,5 @@
-import { useContext, useRef, useState, type ComponentProps } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { useContext, useRef, useState } from 'react';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BottomTabBarHeightCallbackContext, type BottomTabBarProps } from 'expo-router/tabs';
@@ -8,13 +7,15 @@ import Animated, { Easing, Extrapolation, interpolate, useAnimatedStyle, useShar
 
 import { useTheme } from '@/components/theme-provider';
 import { NAV_FADE_RANGE, useChatTransition } from '@/components/navigation/chat-transition';
+import { AppText } from '@/components/ui/app-text';
+import { ChatButtonFace } from '@/components/navigation/chat-button-face';
+import { Icon, type IconName } from '@/components/ui/icon';
+import { surfaceStyle } from '@/components/ui/surface';
 import { spacing } from '@/constants/theme';
 
-const CHAT_BUTTON_SIZE = 58;
-// How far the Chat button pokes above the nav surface's own top edge — the
-// remainder of the button's height sinks down into the surface itself.
-const CHAT_OVERLAP = 22;
-const NAV_SURFACE_HEIGHT = 64;
+// Sizes come from the style (styleTokens.nav / .chat): Classic's 64pt pill
+// with a round 58pt Chat button poking 22pt above it, or Sticky's outlined
+// 72pt bar with a speech-bubble Chat button raised 34pt above it.
 
 // The custom bottom-tab-bar for the app's 3 global destinations (Boards, Chat,
 // Attachments) — see PHASE: REDESIGN CHITS BOTTOM NAVIGATION and PHASE: REDESIGN
@@ -31,7 +32,10 @@ const NAV_SURFACE_HEIGHT = 64;
 // (not just hidden — see the early return below) so Chat's own composer can use
 // that space instead of a floating bar sitting over it.
 export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
-  const { tokens: theme } = useTheme();
+  const { tokens: theme, styleTokens, styleColors } = useTheme();
+  const nav = styleTokens.nav;
+  const chat = styleTokens.chat;
+  const bubble = styleTokens.chatButton === 'bubble';
   const reportHeight = useContext(BottomTabBarHeightCallbackContext);
   const { progress, openingToken, openChat } = useChatTransition();
   const chatButtonRef = useRef<View>(null);
@@ -108,7 +112,8 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
       // Android is different: its inset is a real system bar (3-button
       // Back/Home/Recents, or the gesture handle's touch zone), so the pill
       // must clear all of it or its buttons end up underneath the system's.
-      style={[styles.wrap, { paddingBottom: Platform.OS === 'android' && insets.bottom > 0 ? insets.bottom + spacing.xxs : Math.min(insets.bottom, spacing.xs) || spacing.xs }]}
+      // Sticky floats the bar a fixed 18pt off the bottom (its edge needs the room).
+      style={[styles.wrap, { paddingHorizontal: nav.marginHorizontal, paddingBottom: Platform.OS === 'android' && insets.bottom > 0 ? insets.bottom + spacing.xxs : nav.marginBottom || Math.min(insets.bottom, spacing.xs) || spacing.xs }]}
       onLayout={(event) => reportHeight?.(event.nativeEvent.layout.height)}
     >
       {/* Purely a layout container — caps the nav's width and centers it on
@@ -120,8 +125,13 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
             surface — extremely subtle, absolutely positioned so it paints past
             the wrapper's own (small) bottom padding toward the home indicator
             without adding any layout height of its own. */}
-        <LinearGradient pointerEvents="none" colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0)']} style={styles.feather} />
-        <Animated.View style={[styles.surface, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, navFadeStyle]}>
+        {styleTokens.elevation === 'soft' ? <LinearGradient pointerEvents="none" colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0)']} style={[styles.feather, { top: nav.height }]} /> : null}
+        <Animated.View style={[
+          styles.surface,
+          { height: nav.height },
+          surfaceStyle(styleTokens, styleColors, { fill: bubble ? styleColors.controlFill : theme.surface, radius: nav.radius, border: theme.borderSubtle, shadow: 'nav', edge: nav.edge || false }),
+          navFadeStyle,
+        ]}>
           <NavItem
             label="Notes"
             icon="reader-outline"
@@ -130,7 +140,7 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
             onPress={() => go(boardsRoute?.name)}
           />
           <View style={styles.centerSlot} pointerEvents="none">
-            <Text numberOfLines={1} style={[styles.centerLabel, { color: theme.textMuted }]}>Chat</Text>
+            <AppText numberOfLines={1} weight={bubble ? '800' : '600'} style={{ fontSize: nav.labelSize, color: bubble ? styleColors.textSecondary : theme.textMuted }}>Chat</AppText>
           </View>
           <NavItem
             label="Attachments"
@@ -152,10 +162,10 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
           onPressIn={() => { pressScale.set(withTiming(0.94, { duration: 60 })); }}
           onPressOut={() => { pressScale.set(withTiming(1, { duration: 70, easing: Easing.out(Easing.quad) })); }}
           onPress={openChatBalloon}
-          style={styles.chatButtonHit}
+          style={[styles.chatButtonHit, { top: -chat.raise, width: chat.width, height: chat.height }]}
         >
-          <Animated.View entering={enterButtonSettle} style={[styles.chatButton, { backgroundColor: theme.accent }, pressedStyle]}>
-            <Ionicons accessible={false} name="chatbox" size={23} color={theme.accentText} />
+          <Animated.View entering={enterButtonSettle} style={[styles.chatButton, pressedStyle]}>
+            <ChatButtonFace />
           </Animated.View>
         </Pressable>
       </View>
@@ -184,8 +194,10 @@ function enterButtonSettle() {
   };
 }
 
-function NavItem({ label, icon, focused, accessibilityLabel, onPress }: { label: string; icon: ComponentProps<typeof Ionicons>['name']; focused: boolean; accessibilityLabel: string; onPress: () => void }) {
-  const { tokens: theme } = useTheme();
+function NavItem({ label, icon, focused, accessibilityLabel, onPress }: { label: string; icon: IconName; focused: boolean; accessibilityLabel: string; onPress: () => void }) {
+  const { tokens: theme, styleTokens, styleColors } = useTheme();
+  const nav = styleTokens.nav;
+  const pill = nav.activePill;
   return (
     <Pressable
       accessibilityRole="tab"
@@ -194,8 +206,13 @@ function NavItem({ label, icon, focused, accessibilityLabel, onPress }: { label:
       onPress={onPress}
       style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
     >
-      <Ionicons accessible={false} name={icon} size={23} color={focused ? theme.accent : theme.textMuted} />
-      <Text style={[styles.itemLabel, { color: focused ? theme.textPrimary : theme.textMuted }, focused && styles.itemLabelActive]}>{label}</Text>
+      {pill ? (
+        // Sticky: the current destination's icon sits in an outlined accent pill.
+        <View style={[styles.activePill, { width: pill.width, height: pill.height, borderRadius: pill.height / 2 }, focused && { backgroundColor: styleColors.accentFill, borderWidth: styleTokens.outline.width, borderColor: styleColors.outline }]}>
+          <Icon name={icon} size={22} color={focused ? styleColors.onAccent : styleColors.textSecondary} />
+        </View>
+      ) : <Icon name={icon} size={23} color={focused ? theme.accent : theme.textMuted} />}
+      <AppText weight={pill ? (focused ? '800' : '700') : focused ? '700' : '500'} style={{ fontSize: nav.labelSize, color: focused ? theme.textPrimary : pill ? styleColors.textSecondary : theme.textMuted }}>{label}</AppText>
     </Pressable>
   );
 }
@@ -204,41 +221,16 @@ function NavItem({ label, icon, focused, accessibilityLabel, onPress }: { label:
 // around it (`wrap`, `navRow`) is a purely structural, transparent layout
 // container so the screen stays visible behind/around the floating nav.
 const NAV_MAX_WIDTH = 560;
-const NAV_HORIZONTAL_MARGIN = 16;
 
 const styles = StyleSheet.create({
-  wrap: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent', paddingHorizontal: NAV_HORIZONTAL_MARGIN, paddingTop: spacing.xs },
+  wrap: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent', paddingTop: spacing.xs },
   navRow: { width: '100%', maxWidth: NAV_MAX_WIDTH, alignSelf: 'center' },
-  surface: {
-    height: NAV_SURFACE_HEIGHT,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 28,
-    borderWidth: StyleSheet.hairlineWidth,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-  },
-  feather: { position: 'absolute', top: NAV_SURFACE_HEIGHT, left: 0, right: 0, height: 18 },
+  surface: { flexDirection: 'row', alignItems: 'center' },
+  feather: { position: 'absolute', left: 0, right: 0, height: 18 },
   item: { flex: 1, height: '100%', alignItems: 'center', justifyContent: 'center', gap: 3 },
   itemPressed: { opacity: 0.55 },
-  itemLabel: { fontSize: 11, fontWeight: '500' },
-  itemLabelActive: { fontWeight: '700' },
+  activePill: { alignItems: 'center', justifyContent: 'center' },
   centerSlot: { flex: 1, height: '100%', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 10 },
-  centerLabel: { fontSize: 11, fontWeight: '600' },
-  chatButtonHit: { position: 'absolute', top: -CHAT_OVERLAP, alignSelf: 'center', width: CHAT_BUTTON_SIZE, height: CHAT_BUTTON_SIZE },
-  chatButton: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: CHAT_BUTTON_SIZE / 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.22,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 10,
-  },
+  chatButtonHit: { position: 'absolute', alignSelf: 'center' },
+  chatButton: { width: '100%', height: '100%' },
 });
