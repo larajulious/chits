@@ -95,9 +95,9 @@ function TypeFilterChips({ filter, onChange }: { filter: TypeFilter; onChange: (
             accessibilityState={{ selected }}
             accessibilityLabel={`Filter by ${chip.label}`}
             onPress={() => onChange(chip.key)}
-            style={[styles.chip, { backgroundColor: selected ? theme.accent : theme.surfaceElevated, borderColor: selected ? theme.accent : theme.borderSubtle }]}
+            style={[styles.chip, { backgroundColor: selected ? theme.accentSoft : 'transparent', borderColor: selected ? theme.accentBorder : 'transparent' }]}
           >
-            <Text style={[styles.chipLabel, { color: selected ? theme.accentText : theme.textSecondary }]}>{chip.label}</Text>
+            <Text style={[styles.chipLabel, { color: selected ? theme.accentStrong : theme.textSecondary }]}>{chip.label}</Text>
           </Pressable>
         );
       })}
@@ -357,9 +357,9 @@ const styles = StyleSheet.create({
   // The grid content already supplies the field's horizontal inset.
   listHeader: { paddingBottom: spacing.xs },
   // Bleeds to the screen edges so chips scroll edge to edge (like the Cards tab), while resting at the same inset.
-  chipScroll: { height: 30, flexGrow: 0, flexShrink: 0, marginTop: spacing.sm, marginHorizontal: -spacing.md },
+  chipScroll: { height: 30, flexGrow: 0, flexShrink: 0, marginTop: 8, marginBottom: 2, marginHorizontal: -spacing.md },
   chipRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md },
-  chip: { height: 26, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, borderRadius: radii.pill, borderWidth: StyleSheet.hairlineWidth },
+  chip: { flexDirection: 'row', alignItems: 'center', height: 30, paddingHorizontal: 10, borderRadius: radii.pill, borderWidth: StyleSheet.hairlineWidth },
   chipLabel: { fontSize: 12, fontWeight: '600' },
   sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginTop: spacing.md, marginBottom: spacing.xs },
   gridContent: { paddingHorizontal: spacing.md, flexGrow: 1 },
