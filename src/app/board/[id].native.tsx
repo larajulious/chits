@@ -6,7 +6,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppHeader, EmptyState, IconButton, Screen, useHeaderInk, TopBarBackground } from '@/components/ui/primitives';
+import { AppHeader, EmptyState, IconButton, Screen, useHeaderInk, TopBarBackground, HeaderGlyph } from '@/components/ui/primitives';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { AttachmentContent } from '@/components/chat/message-row';
@@ -674,9 +674,9 @@ export default function BoardScreen() {
   // One board-level error rather than per-column ones: a failed initial load means
   // there's no board/columns/cards to show at all, so there's nothing column-specific
   // to localize the error to.
-  if (boardStatus === 'error') return <Screen><AppHeader title="Board" leading={<IconButton label="Go back" onPress={() => router.back()}><AppText style={[styles.back, { color: headerInk.ink }]}>‹</AppText></IconButton>} /><EmptyState title="Couldn’t load this board" description="Something went wrong loading it." /><Pressable accessibilityRole="button" accessibilityLabel="Try again" onPress={() => void load()} style={({ pressed }) => [styles.retryButton, { backgroundColor: theme.accent }, pressed && styles.addPressed]}><AppText style={[styles.retryButtonText, { color: theme.accentText }]}>Try again</AppText></Pressable></Screen>;
+  if (boardStatus === 'error') return <Screen><AppHeader title="Board" leading={<IconButton label="Go back" onPress={() => router.back()}><HeaderGlyph style={styles.back}>‹</HeaderGlyph></IconButton>} /><EmptyState title="Couldn’t load this board" description="Something went wrong loading it." /><Pressable accessibilityRole="button" accessibilityLabel="Try again" onPress={() => void load()} style={({ pressed }) => [styles.retryButton, { backgroundColor: theme.accent }, pressed && styles.addPressed]}><AppText style={[styles.retryButtonText, { color: theme.accentText }]}>Try again</AppText></Pressable></Screen>;
   if (board === undefined) return <Screen>{showBoardLoader ? <View style={styles.boardLoader}><ChitsLoader label="Loading board…" /></View> : null}</Screen>;
-  if (!board) return <Screen><AppHeader title="Board" leading={<IconButton label="Go back" onPress={() => router.back()}><AppText style={[styles.back, { color: headerInk.ink }]}>‹</AppText></IconButton>} /><EmptyState title="Board unavailable" description="It may have been archived." /></Screen>;
+  if (!board) return <Screen><AppHeader title="Board" leading={<IconButton label="Go back" onPress={() => router.back()}><HeaderGlyph style={styles.back}>‹</HeaderGlyph></IconButton>} /><EmptyState title="Board unavailable" description="It may have been archived." /></Screen>;
   // Instant count for a column: prefer the live loaded array once it's actually been
   // fetched, otherwise the lightweight board-open summary — never waits on card
   // hydration just to show "N cards".

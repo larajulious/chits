@@ -1,5 +1,5 @@
 import type { PropsWithChildren, ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { useTheme } from '@/components/theme-provider';
 import { layout, spacing, tokens } from '@/constants/theme';
@@ -7,9 +7,9 @@ import { AppText } from './app-text';
 import { ChitsLoader } from './chits-loader';
 import { HeaderChromeContext, IconButton } from './controls';
 import { PressableSurface, Surface, useStickySheet } from './surface';
-import { TopBarBackground, useHeaderInk } from './top-bar';
+import { HeaderGlyph, TopBarBackground, useHeaderInk } from './top-bar';
 
-export { HeaderIcon, MenuIcon, TopBarBackground, useHeaderInk } from './top-bar';
+export { HeaderGlyph, HeaderIcon, MenuIcon, TopBarBackground, useHeaderInk } from './top-bar';
 export { AppText, useFontStyle } from './app-text';
 export { Button, Chip, ChipRow, IconButton, SegmentedControl } from './controls';
 export { EmptyState } from './empty-state';
@@ -40,7 +40,7 @@ export function AppHeader({ title, subtitle, leading, trailing, actionWidth = la
   </HeaderChromeContext.Provider>;
   return <View style={[styles.header, { minHeight: h.minHeight, borderBottomColor: border, borderBottomWidth: StyleSheet.hairlineWidth }]}><TopBarBackground /><View style={[styles.headerSide, { width: actionWidth }]}>{leading}</View><View style={styles.headerCopy}><AppText accessibilityRole="header" accessibilityLabel={title} variant="title" numberOfLines={1} ellipsizeMode="tail" style={[styles.headerTitle, { color: ink, fontSize: h.titleSize }]}>{title}</AppText>{subtitle ? <AppText accessibilityLabel={subtitle} style={[styles.headerSubtitle, { color: inkMuted, fontSize: h.countSize }]}>{subtitle}</AppText> : null}</View><View style={[styles.headerSide, styles.headerSideTrailing, { width: actionWidth }]}>{trailing}</View></View>;
 }
-export function BackHeader({ title, onBack, trailing }: { title: string; onBack: () => void; trailing?: ReactNode }) { const { ink } = useHeaderInk(); return <AppHeader title={title} leading={<IconButton label="Go back" onPress={onBack}><Text style={[styles.backIcon, { color: ink }]}>‹</Text></IconButton>} trailing={trailing} />; }
+export function BackHeader({ title, onBack, trailing }: { title: string; onBack: () => void; trailing?: ReactNode }) { return <AppHeader title={title} leading={<IconButton label="Go back" onPress={onBack}><HeaderGlyph style={styles.backIcon}>‹</HeaderGlyph></IconButton>} trailing={trailing} />; }
 export function Divider() { const { tokens: theme } = useTheme(); return <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />; }
 export function LoadingState({ label = 'Preparing Chits…' }: { label?: string }) { return <SafeAreaView style={[styles.screen, styles.loadingScreen, { backgroundColor: tokens.background }]}><ChitsLoader size="large" label={label} /></SafeAreaView>; }
 export function FloatingSurface({ children, style }: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) { const { tokens: theme, styleTokens, styleColors } = useTheme(); return <Surface fill={styleTokens.outline.width ? styleColors.controlFill : theme.surface} border={theme.borderSubtle} radius={styleTokens.radius.panel} shadow="floating" style={style}>{children}</Surface>; }

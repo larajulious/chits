@@ -1,11 +1,12 @@
 import { memo, useContext, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, type StyleProp, type TextStyle } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Decorations } from '@/components/share-note/share-note-template';
 import { useTheme } from '@/components/theme-provider';
+import { AppText } from './app-text';
 import { TileInkContext } from './controls';
 import { Icon, type IconName } from './icon';
 import { TOP_BAR_IMAGE_SCRIM } from '@/constants/chits-themes';
@@ -28,6 +29,17 @@ export function HeaderIcon({ name, size, muted = false }: { name: IconName; size
   const { ink, inkMuted } = useHeaderInk();
   const tileInk = useContext(TileInkContext);
   return <Icon name={name} size={size} color={tileInk ?? (muted ? inkMuted : ink)} />;
+}
+
+/**
+ * A text glyph (the "‹" back arrow) in a header button: the header's ink, or
+ * the tile's when Sticky draws the button as a tile — so it stays readable on
+ * the tile whatever the header band behind it.
+ */
+export function HeaderGlyph({ children, style }: { children: string; style?: StyleProp<TextStyle> }) {
+  const { ink } = useHeaderInk();
+  const tileInk = useContext(TileInkContext);
+  return <AppText accessible={false} style={[style, { color: tileInk ?? ink }]}>{children}</AppText>;
 }
 
 /**
