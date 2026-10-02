@@ -49,8 +49,8 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
   const shapes = useSpaceShapes();
   const { styleTokens, styleColors } = useTheme();
   const stickySurface = useStickySurface();
-  // Sticky: the actions are a pinned footer bar — an ink rule across the
-  // sheet, on its paper, with edged buttons — so the note scrolls under it.
+  // Sticky: the actions are a footer bar — an ink rule across the sheet, on
+  // its paper, with edged buttons — below the note, which scrolls above it.
   const stickyFooter = styleTokens.elevation === 'edge';
   const scrollRef = useRef<ScrollView>(null);
   const [actionsHeight, setActionsHeight] = useState(52);
@@ -108,9 +108,20 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
   const tilt = Math.max(-1.5, Math.min(1.5, note.rotation / 2));
   const pin = <PinDecoration space={note.spaceId} color={magnetColor(noteSeed(note.id))} noteWidth={contentWidth} unit={1.2} seed={noteSeed(note.id)} />;
 
+  const actionButtons = <>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Options for ${heading}`} onPress={onOptions} style={({ pressed }) => [styles.button, styles.secondary, stickySurface({ fill: styleColors.controlFill, radius: styleTokens.button.radius, edge: styleTokens.button.edge }, pressed), !stickyFooter && pressed && styles.pressed]}>
+      <Icon name="ellipsis-horizontal" size={20} color={ui.paper} />
+      <Text style={[fonts.uiSemi, styles.buttonLabel, { color: ui.paper }]}>Options</Text>
+    </Pressable>
+    <Pressable accessibilityRole="button" onPress={onOpen} style={({ pressed }) => [styles.button, styles.primary, stickySurface({ fill: styleColors.accentFill, radius: styleTokens.button.radius, edge: styleTokens.button.edge }, pressed), !stickyFooter && pressed && styles.pressed]}>
+      <Icon name={open.icon} size={19} color={ui.accentText} />
+      <Text style={[fonts.uiSemi, styles.buttonLabel, { color: ui.accentText }]}>{open.label}</Text>
+    </Pressable>
+  </>;
+
   return <>
     {bottomOffset > 0 ? <View pointerEvents="none" style={[styles.navigationBackdrop, { height: bottomOffset }]} /> : null}
-    <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, shapes.sheet, { width: sheetWidth, left: insets.left + (window.width - insets.left - insets.right - sheetWidth) / 2, maxHeight: maxSheetHeight, bottom: bottomOffset, paddingBottom: stickyFooter ? actionsHeight : footerInset + actionsHeight + 8 }]}>
+    <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, shapes.sheet, { width: sheetWidth, left: insets.left + (window.width - insets.left - insets.right - sheetWidth) / 2, maxHeight: maxSheetHeight, bottom: bottomOffset, paddingBottom: stickyFooter ? 0 : footerInset + actionsHeight + 8 }]}>
     <View style={styles.grabber} />
     <View style={styles.header}>
       <Text style={[fonts.label, styles.where]}>ON YOUR {space.name.toUpperCase()}</Text>
@@ -171,24 +182,22 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
         <Icon name={moreExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={ui.textMuted} />
       </Pressable> : null}
     </ScrollView>
-    <View
+    {stickyFooter
+      // Sticky: the actions are the sheet's last row (in the layout, not
+      // positioned over it), so the sheet's height always includes them and
+      // only the note above shrinks on a short screen.
+      ? <View style={[styles.actionsRow, styles.footerBar, { paddingBottom: footerInset, backgroundColor: ui.ink, borderTopWidth: styleTokens.outline.width, borderTopColor: styleColors.outline }]}>
+      {actionButtons}
+      </View>
+      : <View
       onLayout={({ nativeEvent }) => {
         const height = Math.ceil(nativeEvent.layout.height);
         setActionsHeight((current) => current === height ? current : height);
       }}
-      style={[styles.actions, stickyFooter
-        ? { left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 14, paddingBottom: footerInset, backgroundColor: ui.ink, borderTopWidth: styleTokens.outline.width, borderTopColor: styleColors.outline }
-        : { bottom: footerInset }]}
+      style={[styles.actions, { bottom: footerInset }]}
     >
-      <Pressable accessibilityRole="button" accessibilityLabel={`Options for ${heading}`} onPress={onOptions} style={({ pressed }) => [styles.button, styles.secondary, stickySurface({ fill: styleColors.controlFill, radius: styleTokens.button.radius, edge: styleTokens.button.edge }, pressed), !stickyFooter && pressed && styles.pressed]}>
-        <Icon name="ellipsis-horizontal" size={20} color={ui.paper} />
-        <Text style={[fonts.uiSemi, styles.buttonLabel, { color: ui.paper }]}>Options</Text>
-      </Pressable>
-      <Pressable accessibilityRole="button" onPress={onOpen} style={({ pressed }) => [styles.button, styles.primary, stickySurface({ fill: styleColors.accentFill, radius: styleTokens.button.radius, edge: styleTokens.button.edge }, pressed), !stickyFooter && pressed && styles.pressed]}>
-        <Icon name={open.icon} size={19} color={ui.accentText} />
-        <Text style={[fonts.uiSemi, styles.buttonLabel, { color: ui.accentText }]}>{open.label}</Text>
-      </Pressable>
-    </View>
+      {actionButtons}
+    </View>}
   </Animated.View>
   </>;
 }
@@ -327,6 +336,9 @@ const createStyles = (ui: SpaceUI) => StyleSheet.create({
   hiddenText: { marginTop: 4, fontSize: 22, lineHeight: 28, color: PAPER_INK, opacity: 0.7 },
   hiddenHint: { fontSize: 16, lineHeight: 21, color: PAPER_INK, opacity: 0.55 },
   actions: { position: 'absolute', left: 20, right: 20, flexDirection: 'row', gap: 10 },
+  actionsRow: { flexDirection: 'row', gap: 10 },
+  // Spans the sheet edge to edge (it has 20pt side padding).
+  footerBar: { flexShrink: 0, marginHorizontal: -20, paddingHorizontal: 20, paddingTop: 14 },
   button: { flex: 1, minHeight: 52, paddingHorizontal: 10, paddingVertical: 12, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   secondary: { backgroundColor: ui.inkRaised },
   primary: { backgroundColor: ui.accent },
