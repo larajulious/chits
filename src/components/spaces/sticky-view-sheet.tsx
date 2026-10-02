@@ -42,6 +42,7 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
   const window = useWindowDimensions();
   const fonts = useSpaceFonts();
   const scrollRef = useRef<ScrollView>(null);
+  const [actionsHeight, setActionsHeight] = useState(52);
   const sheetWidth = Math.min(window.width - insets.left - insets.right, 600);
   const contentWidth = sheetWidth - 40;
   // The Space root supplies the actual height available to this absolute sheet.
@@ -49,6 +50,9 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
   const bottomOffset = Platform.OS === 'android' ? insets.top + insets.bottom + 16 : 0;
   const visibleHeight = viewportHeight - bottomOffset;
   const maxSheetHeight = Math.max(0, Math.min(visibleHeight * 0.9, visibleHeight - insets.top - 12));
+  // Reserve the measured footer inside the capped sheet, then anchor its
+  // actions there so short notes and small viewports cannot clip them.
+  const footerInset = Platform.OS === 'android' ? 12 : Math.max(insets.bottom, 12) + 8;
   // Tagged with the note it belongs to, so a different note never shows a stale read.
   const [loaded, setLoaded] = useState<{ noteId: string; detail: SpaceNoteDetail } | null>(null);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
@@ -95,7 +99,7 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
 
   return <>
     {bottomOffset > 0 ? <View pointerEvents="none" style={[styles.navigationBackdrop, { height: bottomOffset }]} /> : null}
-    <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, { width: sheetWidth, left: insets.left + (window.width - insets.left - insets.right - sheetWidth) / 2, maxHeight: maxSheetHeight, bottom: bottomOffset, paddingBottom: Platform.OS === 'android' ? 12 : Math.max(insets.bottom, 12) + 8 }]}>
+    <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, { width: sheetWidth, left: insets.left + (window.width - insets.left - insets.right - sheetWidth) / 2, maxHeight: maxSheetHeight, bottom: bottomOffset, paddingBottom: footerInset + actionsHeight + 8 }]}>
     <View style={styles.grabber} />
     <View style={styles.header}>
       <Text style={[fonts.label, styles.where]}>ON YOUR {space.name.toUpperCase()}</Text>
@@ -156,7 +160,13 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
         <Ionicons accessible={false} name={moreExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={SPACE_UI.textMuted} />
       </Pressable> : null}
     </ScrollView>
-    <View style={styles.actions}>
+    <View
+      onLayout={({ nativeEvent }) => {
+        const height = Math.ceil(nativeEvent.layout.height);
+        setActionsHeight((current) => current === height ? current : height);
+      }}
+      style={[styles.actions, { bottom: footerInset }]}
+    >
       <Pressable accessibilityRole="button" accessibilityLabel={`Options for ${heading}`} onPress={onOptions} style={({ pressed }) => [styles.button, styles.secondary, pressed && styles.pressed]}>
         <Ionicons accessible={false} name="ellipsis-horizontal" size={20} color={SPACE_UI.paper} />
         <Text style={[fonts.uiSemi, styles.buttonLabel, { color: SPACE_UI.paper }]}>Options</Text>
@@ -300,7 +310,7 @@ const styles = StyleSheet.create({
   hiddenIcon: { opacity: 0.55 },
   hiddenText: { marginTop: 4, fontSize: 22, lineHeight: 28, color: PAPER_INK, opacity: 0.7 },
   hiddenHint: { fontSize: 16, lineHeight: 21, color: PAPER_INK, opacity: 0.55 },
-  actions: { flexShrink: 0, flexDirection: 'row', gap: 10 },
+  actions: { position: 'absolute', left: 20, right: 20, flexDirection: 'row', gap: 10 },
   button: { flex: 1, minHeight: 52, paddingHorizontal: 10, paddingVertical: 12, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   secondary: { backgroundColor: SPACE_UI.inkRaised },
   primary: { backgroundColor: SPACE_UI.accent },

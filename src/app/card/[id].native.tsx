@@ -740,8 +740,8 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   // generous left inset places the writing after the margin rule.
   contentBody: { marginTop: spacing.sm, minHeight: 200, paddingTop: 24, paddingBottom: 28, paddingLeft: 46, paddingRight: spacing.md, borderRadius: radii.contentCard, borderWidth: StyleSheet.hairlineWidth },
   paperShadow: { shadowColor: '#000000', shadowRadius: 7, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
-  paperRule: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth },
-  paperMargin: { position: 'absolute', top: 0, bottom: 0, left: 30, width: StyleSheet.hairlineWidth },
+  paperRule: { position: 'absolute', left: 0, right: 0, height: 1 },
+  paperMargin: { position: 'absolute', top: 0, bottom: 0, left: 30, width: 1 },
   contentHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   hiddenTitle: { color: tokens.textMuted },
   hiddenCover: { minHeight: 132, alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: radii.contentCard, backgroundColor: tokens.surfaceElevated },
