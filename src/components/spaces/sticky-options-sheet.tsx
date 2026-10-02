@@ -6,10 +6,10 @@ import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SPACE_CAPACITY, SPACE_LIST, SPACES, STICKY_COLORS, type SpaceId } from '@/constants/spaces';
-import { paperColor, SPACE_UI } from '@/constants/spaces-theme';
+import { paperColor } from '@/constants/spaces-theme';
 import type { PinnedNote } from '@/db/types';
 import { useSpaceFonts } from './space-fonts';
-import { useSpaceShapes } from '@/components/spaces/ink-surface';
+import { useSpaceShapes, useSpaceStyles, useSpaceUI, type SpaceUI } from '@/components/spaces/ink-surface';
 import { photoCaption, stickyText } from './sticky-note';
 
 type Props = {
@@ -30,9 +30,11 @@ const MEDIA_NAMES = { photo: 'Photo', video: 'Video', audio: 'Voice note' } as c
 const SWATCH_TILTS = [-4, 3, -2, 4, -3];
 
 function Tile({ icon, label, onPress, danger = false }: { icon: IconName; label: string; onPress: () => void; danger?: boolean }) {
+  const ui = useSpaceUI();
+  const styles = useSpaceStyles(createStyles);
   const fonts = useSpaceFonts();
   const shapes = useSpaceShapes();
-  const color = danger ? SPACE_UI.dangerText : SPACE_UI.paper;
+  const color = danger ? ui.dangerText : ui.paper;
   return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => [styles.tile, danger ? styles.tileDanger : styles.tileRaised, shapes.control, pressed && styles.pressed]}>
     <Icon name={icon} size={22} color={color} />
     <Text numberOfLines={2} style={[fonts.uiSemi, styles.tileLabel, { color }]}>{label}</Text>
@@ -46,6 +48,8 @@ function Tile({ icon, label, onPress, danger = false }: { icon: IconName; label:
  * the dimmed surface by the screen, which lifts the note itself above the dim.
  */
 export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onOpen, onBringToFront, onMove, onRemove, onReminder }: Props) {
+  const ui = useSpaceUI();
+  const styles = useSpaceStyles(createStyles);
   const insets = useSafeAreaInsets();
   const fonts = useSpaceFonts();
   const shapes = useSpaceShapes();
@@ -65,7 +69,7 @@ export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onOpen, o
     <Text style={[fonts.ui, styles.subtitle]}>On your {space.name}</Text>
     {moving ? <View style={styles.moveList}>
       <Pressable accessibilityRole="button" accessibilityLabel="Back to options" onPress={() => setMoving(false)} style={({ pressed }) => [styles.moveRow, shapes.control, pressed && styles.pressed]}>
-        <Icon name="chevron-back" size={20} color={SPACE_UI.paper} />
+        <Icon name="chevron-back" size={20} color={ui.paper} />
         <Text style={[fonts.uiSemi, styles.moveLabel]}>Move to…</Text>
       </Pressable>
       {SPACE_LIST.filter((item) => item.id !== note.spaceId).map((item) => {
@@ -107,37 +111,38 @@ export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onOpen, o
 
 /** The dim over the surface behind a sheet; tapping it closes the sheet. */
 export function SheetDim({ onPress, label = 'Close options' }: { onPress: () => void; label?: string }) {
+  const styles = useSpaceStyles(createStyles);
   return <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(160)} style={[StyleSheet.absoluteFill, styles.dim]}>
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={StyleSheet.absoluteFill} />
   </Animated.View>;
 }
 
-const styles = StyleSheet.create({
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: SPACE_UI.ink, boxShadow: '0px -8px 30px rgba(0,0,0,0.35)' },
+const createStyles = (ui: SpaceUI) => StyleSheet.create({
+  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: ui.ink, boxShadow: '0px -8px 30px rgba(0,0,0,0.35)' },
   // Ink at 55%.
   dim: { backgroundColor: 'rgba(23,24,28,0.55)' },
-  grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, marginTop: 10, marginBottom: 16, backgroundColor: SPACE_UI.inkBorder },
-  title: { fontSize: 22, lineHeight: 27, color: SPACE_UI.paper },
-  subtitle: { marginTop: 2, fontSize: 14, color: SPACE_UI.textMuted },
-  section: { marginTop: 20, fontSize: 11, letterSpacing: 1.6, color: SPACE_UI.textMuted },
+  grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, marginTop: 10, marginBottom: 16, backgroundColor: ui.inkBorder },
+  title: { fontSize: 22, lineHeight: 27, color: ui.paper },
+  subtitle: { marginTop: 2, fontSize: 14, color: ui.textMuted },
+  section: { marginTop: 20, fontSize: 11, letterSpacing: 1.6, color: ui.textMuted },
   swatches: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, marginBottom: 18 },
   swatchTarget: { width: 58, height: 58, alignItems: 'center', justifyContent: 'center' },
   // Selected: a 3pt ink gap inside a 2pt paper ring.
   ring: { padding: 3, borderRadius: 7, borderWidth: 2, borderColor: 'transparent' },
-  ringSelected: { borderColor: SPACE_UI.paper },
+  ringSelected: { borderColor: ui.paper },
   swatch: { width: 44, height: 44, borderRadius: 2, boxShadow: '0px 2px 3px rgba(0,0,0,0.3)' },
   printGap: { height: 18 },
   grid: { gap: 10 },
   gridRow: { flexDirection: 'row', gap: 10 },
   tile: { flex: 1, height: 78, borderRadius: 16, padding: 12, justifyContent: 'space-between' },
-  tileRaised: { backgroundColor: SPACE_UI.inkRaised },
-  tileDanger: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: SPACE_UI.dangerBorder },
+  tileRaised: { backgroundColor: ui.inkRaised },
+  tileDanger: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: ui.dangerBorder },
   tileLabel: { fontSize: 14, lineHeight: 17 },
   moveList: { marginTop: 14, gap: 8 },
   moveRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, borderRadius: 14 },
-  moveTarget: { justifyContent: 'space-between', backgroundColor: SPACE_UI.inkRaised },
-  moveLabel: { fontSize: 16, color: SPACE_UI.paper },
-  moveCount: { fontSize: 11, letterSpacing: 1.2, color: SPACE_UI.textMuted },
+  moveTarget: { justifyContent: 'space-between', backgroundColor: ui.inkRaised },
+  moveLabel: { fontSize: 16, color: ui.paper },
+  moveCount: { fontSize: 11, letterSpacing: 1.2, color: ui.textMuted },
   pressed: { opacity: 0.7 },
   disabled: { opacity: 0.4 },
 });

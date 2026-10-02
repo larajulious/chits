@@ -10,12 +10,11 @@ import * as Haptics from 'expo-haptics';
 import { LabelTape } from '@/components/spaces/label-tape';
 import { MagnetButton } from '@/components/spaces/magnet-button';
 import { useSpaceFonts } from '@/components/spaces/space-fonts';
-import { useSpaceShapes } from '@/components/spaces/ink-surface';
+import { useSpaceShapes, useSpaceStyles, useSpaceUI, type SpaceUI } from '@/components/spaces/ink-surface';
 import { SpaceSurface } from '@/components/spaces/space-surface';
 import { StickyPaper } from '@/components/spaces/sticky-note';
 import { Toast } from '@/components/ui/primitives';
 import { DEFAULT_SPACE_ID, SPACE_LIST, STICKY_COLORS, type SpaceDefinition, type SpaceId } from '@/constants/spaces';
-import { SPACE_UI } from '@/constants/spaces-theme';
 import { layout } from '@/constants/theme';
 import { createMessageRepository, createSpaceRepository } from '@/db/repositories';
 import { OnboardingMascot } from '@/features/onboarding/components/onboarding-mascot';
@@ -32,6 +31,8 @@ const SAMPLES = [
 ];
 
 const SpaceCard = memo(function SpaceCard({ space, selected, count, onPress }: { space: SpaceDefinition; selected: boolean; count: number; onPress: () => void }) {
+  const ui = useSpaceUI();
+  const styles = useSpaceStyles(createStyles);
   const fonts = useSpaceFonts();
   const shapes = useSpaceShapes();
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
@@ -45,7 +46,7 @@ const SpaceCard = memo(function SpaceCard({ space, selected, count, onPress }: {
     accessibilityState={{ selected }}
     onPress={onPress}
     onLayout={({ nativeEvent: { layout } }) => setSize((current) => (current && current.width === layout.width && current.height === layout.height ? current : { width: layout.width, height: layout.height }))}
-    style={({ pressed }) => [styles.card, shapes.card, { borderColor: selected ? SPACE_UI.paper : 'transparent' }, pressed && styles.pressed]}
+    style={({ pressed }) => [styles.card, shapes.card, { borderColor: selected ? ui.paper : 'transparent' }, pressed && styles.pressed]}
   >
     {size ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.cardClip, shapes.cardClip]}>
       {/* The surface at phone scale, cropped to the card. */}
@@ -68,6 +69,8 @@ const SpaceCard = memo(function SpaceCard({ space, selected, count, onPress }: {
  * (selected_space_id) and opens that space; the dock switches any time after.
  */
 export default function PickSpaceScreen() {
+  const ui = useSpaceUI();
+  const styles = useSpaceStyles(createStyles);
   const database = useSQLiteContext();
   const { messageId, chitsGuided } = useLocalSearchParams<{ messageId?: string; chitsGuided?: string }>();
   const [guidedPending, setGuidedPending] = useState(chitsGuided === '1');
@@ -123,7 +126,7 @@ export default function PickSpaceScreen() {
     <View style={styles.content}>
       <View style={[styles.topRow, compact && styles.topRowCompact]}>
         <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={({ pressed }) => [styles.back, shapes.round, pressed && styles.pressed]}>
-          <Icon name="chevron-back" size={24} color={SPACE_UI.paper} style={{ marginLeft: -2 }} />
+          <Icon name="chevron-back" size={24} color={ui.paper} style={{ marginLeft: -2 }} />
         </Pressable>
         <OnboardingMascot size={compact ? 60 : 76} />
       </View>
@@ -144,29 +147,29 @@ export default function PickSpaceScreen() {
   </View>;
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: SPACE_UI.ink },
+const createStyles = (ui: SpaceUI) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: ui.ink },
   content: { flex: 1, minHeight: 0, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, alignSelf: 'center', width: '100%', maxWidth: layout.maxContentWidth },
   topRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 },
   topRowCompact: { marginBottom: 4 },
-  back: { width: 44, height: 44, borderRadius: 22, marginLeft: -6, alignItems: 'center', justifyContent: 'center', backgroundColor: SPACE_UI.inkRaised },
-  title: { marginTop: 14, fontSize: 36, lineHeight: 38, letterSpacing: -0.72, color: SPACE_UI.paper },
+  back: { width: 44, height: 44, borderRadius: 22, marginLeft: -6, alignItems: 'center', justifyContent: 'center', backgroundColor: ui.inkRaised },
+  title: { marginTop: 14, fontSize: 36, lineHeight: 38, letterSpacing: -0.72, color: ui.paper },
   titleCompact: { marginTop: 8, fontSize: 28, lineHeight: 31, letterSpacing: -0.56 },
-  intro: { marginTop: 10, marginBottom: 22, fontSize: 15, lineHeight: 21, color: SPACE_UI.textMuted },
+  intro: { marginTop: 10, marginBottom: 22, fontSize: 15, lineHeight: 21, color: ui.textMuted },
   introCompact: { marginTop: 6, marginBottom: 14 },
   cards: { flex: 1, minHeight: 0, gap: 10 },
-  card: { flex: 1, minHeight: CARD_MIN_HEIGHT, maxHeight: CARD_MAX_HEIGHT, borderRadius: 18, borderWidth: 3, backgroundColor: SPACE_UI.inkRaised },
+  card: { flex: 1, minHeight: CARD_MIN_HEIGHT, maxHeight: CARD_MAX_HEIGHT, borderRadius: 18, borderWidth: 3, backgroundColor: ui.inkRaised },
   cardClip: { borderRadius: 15, overflow: 'hidden' },
   sample: { position: 'absolute' },
   cardLabel: { position: 'absolute', left: 12, top: 12 },
   cardLabelShort: { top: 6 },
   cardDescription: { position: 'absolute', left: 12, bottom: 8, maxWidth: '62%', borderRadius: 7, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: 'rgba(18,19,21,0.78)' },
-  cardDescriptionText: { color: SPACE_UI.paper, fontSize: 11, lineHeight: 14 },
+  cardDescriptionText: { color: ui.paper, fontSize: 11, lineHeight: 14 },
   cardCount: { position: 'absolute', right: 12, bottom: 8 },
   check: { position: 'absolute', right: -8, top: -8 },
   footer: { paddingHorizontal: 20, paddingTop: 12, alignSelf: 'center', width: '100%', maxWidth: layout.maxContentWidth, gap: 10 },
-  primary: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: SPACE_UI.accent },
-  primaryText: { fontSize: 17, color: SPACE_UI.accentText },
-  helper: { fontSize: 13, textAlign: 'center', color: SPACE_UI.textMuted },
+  primary: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: ui.accent },
+  primaryText: { fontSize: 17, color: ui.accentText },
+  helper: { fontSize: 13, textAlign: 'center', color: ui.textMuted },
   pressed: { opacity: 0.8 },
 });

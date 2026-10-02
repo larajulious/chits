@@ -9,7 +9,7 @@ import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SPACES } from '@/constants/spaces';
-import { magnetColor, noteSeed, PAPER_INK, paperColor, SPACE_UI } from '@/constants/spaces-theme';
+import { magnetColor, noteSeed, PAPER_INK, paperColor } from '@/constants/spaces-theme';
 import { createSpaceRepository } from '@/db/repositories';
 import { PhotoAttachmentViewer } from '@/components/attachments/photo-attachment-viewer';
 import type { PinnedNote, SpaceNoteDetail, SpaceNoteMedia } from '@/db/types';
@@ -17,7 +17,7 @@ import { resolveAttachmentUri } from '@/services/attachment-storage';
 import { PinDecoration } from './pin-decoration';
 import { Cassette, formatTapeTime } from './space-cassette';
 import { useSpaceFonts } from './space-fonts';
-import { useSpaceShapes } from '@/components/spaces/ink-surface';
+import { useSpaceShapes, useSpaceStyles, useSpaceUI, type SpaceUI } from '@/components/spaces/ink-surface';
 import { photoCaption, stickyText } from './sticky-note';
 
 type Props = {
@@ -37,6 +37,8 @@ type Props = {
  * the tap itself.
  */
 export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOptions }: Props) {
+  const ui = useSpaceUI();
+  const styles = useSpaceStyles(createStyles);
   const database = useSQLiteContext();
   const repository = useMemo(() => createSpaceRepository(database), [database]);
   const insets = useSafeAreaInsets();
@@ -157,9 +159,9 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
         onPress={() => setExpandedNoteId((current) => current === note.id ? null : note.id)}
         style={({ pressed }) => [styles.moreToggle, pressed && styles.pressed]}
       >
-        <Icon name="layers-outline" size={18} color={SPACE_UI.paper} />
+        <Icon name="layers-outline" size={18} color={ui.paper} />
         <Text style={[fonts.uiSemi, styles.moreToggleText]}>{moreExpanded ? 'Hide' : 'See'} {moreThoughts.length} more {moreThoughts.length === 1 ? 'thought' : 'thoughts'}</Text>
-        <Icon name={moreExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={SPACE_UI.textMuted} />
+        <Icon name={moreExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={ui.textMuted} />
       </Pressable> : null}
     </ScrollView>
     <View
@@ -170,12 +172,12 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
       style={[styles.actions, { bottom: footerInset }]}
     >
       <Pressable accessibilityRole="button" accessibilityLabel={`Options for ${heading}`} onPress={onOptions} style={({ pressed }) => [styles.button, styles.secondary, shapes.control, pressed && styles.pressed]}>
-        <Icon name="ellipsis-horizontal" size={20} color={SPACE_UI.paper} />
-        <Text style={[fonts.uiSemi, styles.buttonLabel, { color: SPACE_UI.paper }]}>Options</Text>
+        <Icon name="ellipsis-horizontal" size={20} color={ui.paper} />
+        <Text style={[fonts.uiSemi, styles.buttonLabel, { color: ui.paper }]}>Options</Text>
       </Pressable>
       <Pressable accessibilityRole="button" onPress={onOpen} style={({ pressed }) => [styles.button, styles.primary, shapes.control, pressed && styles.pressed]}>
-        <Icon name={open.icon} size={19} color={SPACE_UI.accentText} />
-        <Text style={[fonts.uiSemi, styles.buttonLabel, { color: SPACE_UI.accentText }]}>{open.label}</Text>
+        <Icon name={open.icon} size={19} color={ui.accentText} />
+        <Text style={[fonts.uiSemi, styles.buttonLabel, { color: ui.accentText }]}>{open.label}</Text>
       </Pressable>
     </View>
   </Animated.View>
@@ -188,6 +190,7 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
  * video plays right here.
  */
 function SheetPrint({ media, caption, maxWidth, maxHeight }: { media: SpaceNoteMedia; caption: string | null; maxWidth: number; maxHeight: number }) {
+  const styles = useSpaceStyles(createStyles);
   const fonts = useSpaceFonts();
   const [viewerOpen, setViewerOpen] = useState(false);
   const { attachment } = media;
@@ -222,6 +225,8 @@ function SheetVideo({ storagePath }: { storagePath: string }) {
  * turn while it plays. It stops when the sheet closes.
  */
 function SheetTape({ media, caption, color, width, tilt, pin }: { media: SpaceNoteMedia; caption: string | null; color: string; width: number; tilt: number; pin: ReactNode }) {
+  const ui = useSpaceUI();
+  const styles = useSpaceStyles(createStyles);
   const fonts = useSpaceFonts();
   const player = useAudioPlayer(resolveAttachmentUri(media.attachment.storagePath) ?? '', { updateInterval: 250 });
   const status = useAudioPlayerStatus(player);
@@ -253,7 +258,7 @@ function SheetTape({ media, caption, color, width, tilt, pin }: { media: SpaceNo
         disabled={disabled}
         onPress={() => void toggle()}
         style={({ pressed }) => [styles.play, disabled && styles.disabled, pressed && styles.pressed]}>
-        <Icon name={status.playing ? 'pause' : 'play'} size={24} color={SPACE_UI.accentText} style={status.playing ? undefined : styles.playGlyph} />
+        <Icon name={status.playing ? 'pause' : 'play'} size={24} color={ui.accentText} style={status.playing ? undefined : styles.playGlyph} />
       </Pressable>
       <View style={styles.deckTrack}>
         <View accessible accessibilityRole="progressbar" accessibilityLabel="Playback" accessibilityValue={{ min: 0, max: Math.max(1, Math.round(duration)), now: Math.round(currentTime) }} style={styles.track}>
@@ -271,28 +276,28 @@ function SheetTape({ media, caption, color, width, tilt, pin }: { media: SpaceNo
 const MEDIA_NAMES = { photo: 'Photo', video: 'Video', audio: 'Voice note' } as const;
 const PRINT_BORDER = 12;
 
-const styles = StyleSheet.create({
-  navigationBackdrop: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: SPACE_UI.ink },
-  sheet: { position: 'absolute', bottom: 0, overflow: 'hidden', paddingHorizontal: 20, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: SPACE_UI.ink, boxShadow: '0px -8px 30px rgba(0,0,0,0.35)' },
-  grabber: { flexShrink: 0, alignSelf: 'center', width: 40, height: 4, borderRadius: 2, marginTop: 10, marginBottom: 14, backgroundColor: SPACE_UI.inkBorder },
+const createStyles = (ui: SpaceUI) => StyleSheet.create({
+  navigationBackdrop: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: ui.ink },
+  sheet: { position: 'absolute', bottom: 0, overflow: 'hidden', paddingHorizontal: 20, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: ui.ink, boxShadow: '0px -8px 30px rgba(0,0,0,0.35)' },
+  grabber: { flexShrink: 0, alignSelf: 'center', width: 40, height: 4, borderRadius: 2, marginTop: 10, marginBottom: 14, backgroundColor: ui.inkBorder },
   header: { flexShrink: 0, gap: 2 },
-  where: { fontSize: 11, letterSpacing: 1.6, color: SPACE_UI.textMuted },
-  context: { fontSize: 14, color: SPACE_UI.textMuted },
+  where: { fontSize: 11, letterSpacing: 1.6, color: ui.textMuted },
+  context: { fontSize: 14, color: ui.textMuted },
   scroll: { flexGrow: 0, flexShrink: 1, minHeight: 0, maxHeight: 260, marginHorizontal: -20, marginTop: 6, marginBottom: 8 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 },
   paperUnder: { marginTop: 18, flexShrink: 0 },
   tape: { alignSelf: 'center' },
   deck: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 20 },
-  play: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: SPACE_UI.accent },
+  play: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: ui.accent },
   // The play triangle's weight sits left of its box; nudge it to look centered.
   playGlyph: { marginLeft: 3 },
   deckTrack: { flex: 1, gap: 8 },
-  track: { height: 4, borderRadius: 2, overflow: 'hidden', backgroundColor: SPACE_UI.inkRaised },
-  trackFill: { height: 4, backgroundColor: SPACE_UI.paper },
+  track: { height: 4, borderRadius: 2, overflow: 'hidden', backgroundColor: ui.inkRaised },
+  trackFill: { height: 4, backgroundColor: ui.paper },
   times: { flexDirection: 'row', justifyContent: 'space-between' },
-  timeText: { fontSize: 11, letterSpacing: 1, color: SPACE_UI.textMuted },
+  timeText: { fontSize: 11, letterSpacing: 1, color: ui.textMuted },
   disabled: { opacity: 0.45 },
-  print: { alignSelf: 'center', padding: PRINT_BORDER, paddingBottom: 0, borderRadius: 3, backgroundColor: SPACE_UI.paperWhite, boxShadow: '0px 10px 14px rgba(0,0,0,0.35)' },
+  print: { alignSelf: 'center', padding: PRINT_BORDER, paddingBottom: 0, borderRadius: 3, backgroundColor: ui.paperWhite, boxShadow: '0px 10px 14px rgba(0,0,0,0.35)' },
   picture: { overflow: 'hidden', backgroundColor: '#2A2622' },
   printCaption: { minHeight: 46, justifyContent: 'center', paddingVertical: 6, paddingHorizontal: 2 },
   printCaptionText: { fontSize: 21, lineHeight: 26, color: PAPER_INK },
@@ -302,20 +307,20 @@ const styles = StyleSheet.create({
   thought: { fontSize: 20, lineHeight: 27, color: PAPER_INK },
   thoughtSection: { flexShrink: 0, minWidth: 0 },
   thoughtDivider: { marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(42,38,34,0.18)' },
-  moreToggle: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, paddingHorizontal: 12, borderRadius: 12, backgroundColor: SPACE_UI.inkRaised },
-  moreToggleText: { flex: 1, fontSize: 14, color: SPACE_UI.paper },
+  moreToggle: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, paddingHorizontal: 12, borderRadius: 12, backgroundColor: ui.inkRaised },
+  moreToggleText: { flex: 1, fontSize: 14, color: ui.paper },
   expandedThoughts: { paddingHorizontal: 12 },
-  expandedThought: { paddingVertical: 14, gap: 5, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: SPACE_UI.inkBorder },
-  thoughtLabel: { fontSize: 10, letterSpacing: 1, color: SPACE_UI.textMuted },
-  expandedThoughtText: { fontSize: 14, lineHeight: 20, color: SPACE_UI.paper },
+  expandedThought: { paddingVertical: 14, gap: 5, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: ui.inkBorder },
+  thoughtLabel: { fontSize: 10, letterSpacing: 1, color: ui.textMuted },
+  expandedThoughtText: { fontSize: 14, lineHeight: 20, color: ui.paper },
   hidden: { alignItems: 'center', paddingVertical: 18 },
   hiddenIcon: { opacity: 0.55 },
   hiddenText: { marginTop: 4, fontSize: 22, lineHeight: 28, color: PAPER_INK, opacity: 0.7 },
   hiddenHint: { fontSize: 16, lineHeight: 21, color: PAPER_INK, opacity: 0.55 },
   actions: { position: 'absolute', left: 20, right: 20, flexDirection: 'row', gap: 10 },
   button: { flex: 1, minHeight: 52, paddingHorizontal: 10, paddingVertical: 12, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  secondary: { backgroundColor: SPACE_UI.inkRaised },
-  primary: { backgroundColor: SPACE_UI.accent },
+  secondary: { backgroundColor: ui.inkRaised },
+  primary: { backgroundColor: ui.accent },
   buttonLabel: { flexShrink: 1, fontSize: 15, textAlign: 'center' },
   pressed: { opacity: 0.7 },
 });

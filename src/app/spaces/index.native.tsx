@@ -31,7 +31,7 @@ import { createSpaceRepository } from '@/db/repositories';
 import type { PinnedNote, SpaceCandidate } from '@/db/types';
 import { subscribeToSpaceChanges } from '@/services/space-changes';
 import { ChitsGuide } from '@/components/mascot/chits-guide.native';
-import { STICKY_PILL, useInkSurface } from '@/components/spaces/ink-surface';
+import { useInkSurface } from '@/components/spaces/ink-surface';
 
 const EMPTY_COUNTS = Object.fromEntries(SPACE_IDS.map((id) => [id, 0])) as Record<SpaceId, number>;
 
@@ -52,7 +52,7 @@ export default function SpacesScreen() {
 
 function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { initialSpaceId: SpaceId; focusNoteId?: string; guided: boolean; relationship: boolean }) {
   const database = useSQLiteContext();
-  const { tokens: theme, styleTokens } = useTheme();
+  const { tokens: theme, styleTokens, styleColors } = useTheme();
   const inkSurface = useInkSurface();
   const sticky = styleTokens.elevation === 'edge';
   const repository = useMemo(() => createSpaceRepository(database), [database]);
@@ -269,12 +269,12 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
       </View>
     </View>
 
-    <View accessibilityRole="radiogroup" accessibilityLabel="Space" style={[styles.dock, { bottom: dockBottom }, inkSurface({ fill: SPACE_UI.paperWhite, radius: styleTokens.nav.radius, edge: styleTokens.nav.edge })]}>
+    <View accessibilityRole="radiogroup" accessibilityLabel="Space" style={[styles.dock, { bottom: dockBottom }, inkSurface({ fill: styleColors.controlFill, radius: styleTokens.nav.radius, edge: styleTokens.nav.edge })]}>
       {SPACE_LIST.map((item) => {
         const active = item.id === spaceId;
-        return <Pressable key={item.id} accessibilityRole="radio" accessibilityLabel={`${item.name}, ${counts[item.id]} ${counts[item.id] === 1 ? 'note' : 'notes'}`} accessibilityState={{ selected: active }} onPress={() => switchSpace(item.id)} style={({ pressed }) => [active ? styles.dockPill : styles.dockIcon, active && inkSurface({ fill: STICKY_PILL, radius: styles.dockPill.height / 2, edge: false }), pressed && styles.pressed]}>
-          <MaterialCommunityIcons accessible={false} name={DOCK_ICONS[item.id]} size={active ? 20 : 23} color={active ? SPACE_UI.ink : sticky ? SPACE_UI.inkBorder : SPACE_UI.dockIcon} />
-          {active ? <Text numberOfLines={1} style={[fonts.uiSemi, styles.dockLabel]}>{DOCK_LABELS[item.id]}</Text> : null}
+        return <Pressable key={item.id} accessibilityRole="radio" accessibilityLabel={`${item.name}, ${counts[item.id]} ${counts[item.id] === 1 ? 'note' : 'notes'}`} accessibilityState={{ selected: active }} onPress={() => switchSpace(item.id)} style={({ pressed }) => [active ? styles.dockPill : styles.dockIcon, active && inkSurface({ fill: styleColors.accentFill, radius: styles.dockPill.height / 2, edge: false }), pressed && styles.pressed]}>
+          <MaterialCommunityIcons accessible={false} name={DOCK_ICONS[item.id]} size={active ? 20 : 23} color={sticky ? (active ? styleColors.onAccent : styleColors.textSecondary) : active ? SPACE_UI.ink : SPACE_UI.dockIcon} />
+          {active ? <Text numberOfLines={1} style={[fonts.uiSemi, styles.dockLabel, sticky && { color: styleColors.onAccent }]}>{DOCK_LABELS[item.id]}</Text> : null}
         </Pressable>;
       })}
     </View>
@@ -326,10 +326,10 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
 
 /** A round paper button floating over the surface. */
 function RoundButton({ icon, label, onPress, disabled = false }: { icon: 'chevron-back' | 'share-outline' | 'chatbox-outline'; label: string; onPress: () => void; disabled?: boolean }) {
-  const { styleTokens } = useTheme();
+  const { tokens, styleTokens, styleColors } = useTheme();
   const inkSurface = useInkSurface();
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.round, inkSurface({ fill: SPACE_UI.paperWhite, radius: styleTokens.header.iconButton.radius, edge: styleTokens.header.iconButton.edge }, pressed), disabled && styles.disabled, pressed && styles.pressed]}>
-    <Icon name={icon} size={icon === 'chevron-back' ? 24 : 21} color={SPACE_UI.ink} style={icon === 'chevron-back' ? { marginLeft: -2 } : undefined} />
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.round, inkSurface({ fill: styleColors.controlFill, radius: styleTokens.header.iconButton.radius, edge: styleTokens.header.iconButton.edge }, pressed), disabled && styles.disabled, pressed && styles.pressed]}>
+    <Icon name={icon} size={icon === 'chevron-back' ? 24 : 21} color={styleTokens.outline.width ? tokens.textPrimary : SPACE_UI.ink} style={icon === 'chevron-back' ? { marginLeft: -2 } : undefined} />
   </Pressable>;
 }
 

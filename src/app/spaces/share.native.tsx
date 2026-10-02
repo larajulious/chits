@@ -9,12 +9,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { showPermissionSettingsPrompt } from '@/components/permissions/permission-settings-prompt';
 import { useSpaceFonts } from '@/components/spaces/space-fonts';
-import { useSpaceShapes } from '@/components/spaces/ink-surface';
+import { useSpaceShapes, useSpaceStyles, useSpaceUI, type SpaceUI } from '@/components/spaces/ink-surface';
 import { SpaceShareCanvas } from '@/components/spaces/space-share-canvas';
 import { ChitsLoader } from '@/components/ui/chits-loader';
 import { Toast } from '@/components/ui/primitives';
 import { resolveSpaceId, SPACES, DEFAULT_SPACE_ID } from '@/constants/spaces';
-import { SPACE_UI } from '@/constants/spaces-theme';
 import { createSpaceRepository } from '@/db/repositories';
 import type { PinnedNote } from '@/db/types';
 import { captureShareNote, discardShareNoteImage, saveShareNoteImage, shareNoteExportWidth, shareShareNoteImage, type ShareNoteImageFile } from '@/services/share-note-export';
@@ -30,6 +29,8 @@ const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() 
  * so it's crisp and never a screenshot of the app.
  */
 export default function ShareSpaceScreen() {
+  const ui = useSpaceUI();
+  const styles = useSpaceStyles(createStyles);
   const database = useSQLiteContext();
   const params = useLocalSearchParams<{ space?: string }>();
   const spaceId = resolveSpaceId(params.space) ?? DEFAULT_SPACE_ID;
@@ -110,7 +111,7 @@ export default function ShareSpaceScreen() {
     <View style={[styles.cover, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={({ pressed }) => [styles.round, shapes.round, pressed && styles.pressed]}>
-          <Icon name="close" size={22} color={SPACE_UI.paper} />
+          <Icon name="close" size={22} color={ui.paper} />
         </Pressable>
         <Text accessibilityRole="header" numberOfLines={1} style={[fonts.uiHeavy, styles.title]}>Share your {space.name}</Text>
         <View style={styles.headerSpacer} />
@@ -124,19 +125,19 @@ export default function ShareSpaceScreen() {
             <Text style={[fonts.uiSemi, styles.optionTitle]}>Hide note text</Text>
             <Text style={[fonts.ui, styles.optionDetail]}>Your notes’ words are left out of the image; the board and notes stay.</Text>
           </View>
-          <Switch accessibilityLabel="Hide note text" value={hideText} onValueChange={(value) => { void Haptics.selectionAsync(); setHideText(value); }} trackColor={{ true: SPACE_UI.accent, false: SPACE_UI.switchOff }} thumbColor={Platform.OS === 'android' ? SPACE_UI.paperWhite : undefined} ios_backgroundColor={SPACE_UI.switchOff} />
+          <Switch accessibilityLabel="Hide note text" value={hideText} onValueChange={(value) => { void Haptics.selectionAsync(); setHideText(value); }} trackColor={{ true: ui.accent, false: ui.switchOff }} thumbColor={Platform.OS === 'android' ? ui.paperWhite : undefined} ios_backgroundColor={ui.switchOff} />
         </View>
       </ScrollView>}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
         {busy ? <View accessibilityLiveRegion="polite" style={styles.busyRow}><ChitsLoader size="small" /><Text style={[fonts.ui, styles.busyText]}>{BUSY_LABEL[busy]}</Text></View> : null}
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => void run('save')} style={({ pressed }) => [styles.action, styles.save, shapes.button, disabled && styles.disabled, pressed && styles.pressed]}>
-            <Icon name="download-outline" size={19} color={SPACE_UI.paper} />
-            <Text style={[fonts.uiSemi, styles.actionText, { color: SPACE_UI.paper }]}>Save image</Text>
+            <Icon name="download-outline" size={19} color={ui.paper} />
+            <Text style={[fonts.uiSemi, styles.actionText, { color: ui.paper }]}>Save image</Text>
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => void run('share')} style={({ pressed }) => [styles.action, styles.share, shapes.button, disabled && styles.disabled, pressed && styles.pressed]}>
-            <Icon name={Platform.OS === 'ios' ? 'share-outline' : 'share-social-outline'} size={19} color={SPACE_UI.accentText} />
-            <Text style={[fonts.uiSemi, styles.actionText, { color: SPACE_UI.accentText }]}>Share</Text>
+            <Icon name={Platform.OS === 'ios' ? 'share-outline' : 'share-social-outline'} size={19} color={ui.accentText} />
+            <Text style={[fonts.uiSemi, styles.actionText, { color: ui.accentText }]}>Share</Text>
           </Pressable>
         </View>
       </View>
@@ -145,28 +146,28 @@ export default function ShareSpaceScreen() {
   </View>;
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: SPACE_UI.ink },
+const createStyles = (ui: SpaceUI) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: ui.ink },
   exportStage: { position: 'absolute', top: 0, left: 0 },
   // Opaque and full-screen (status bar included), so the export canvas beneath never shows.
-  cover: { flex: 1, backgroundColor: SPACE_UI.ink },
+  cover: { flex: 1, backgroundColor: ui.ink },
   header: { height: 60, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
-  round: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: SPACE_UI.inkRaised },
-  title: { flex: 1, fontSize: 20, textAlign: 'center', color: SPACE_UI.paper },
+  round: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: ui.inkRaised },
+  title: { flex: 1, fontSize: 20, textAlign: 'center', color: ui.paper },
   headerSpacer: { width: 44 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 24 },
-  option: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8, padding: 16, borderRadius: 16, backgroundColor: SPACE_UI.inkRaised },
+  option: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8, padding: 16, borderRadius: 16, backgroundColor: ui.inkRaised },
   optionCopy: { flex: 1 },
-  optionTitle: { fontSize: 16, color: SPACE_UI.paper },
-  optionDetail: { marginTop: 2, fontSize: 13, lineHeight: 18, color: SPACE_UI.textMuted },
+  optionTitle: { fontSize: 16, color: ui.paper },
+  optionDetail: { marginTop: 2, fontSize: 13, lineHeight: 18, color: ui.textMuted },
   footer: { paddingHorizontal: 20, paddingTop: 12, gap: 10 },
   busyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  busyText: { fontSize: 13, color: SPACE_UI.textMuted },
+  busyText: { fontSize: 13, color: ui.textMuted },
   actions: { flexDirection: 'row', gap: 12 },
   action: { flex: 1, height: 56, borderRadius: 28, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' },
-  save: { borderWidth: 1.5, borderColor: SPACE_UI.paper },
-  share: { backgroundColor: SPACE_UI.accent },
+  save: { borderWidth: 1.5, borderColor: ui.paper },
+  share: { backgroundColor: ui.accent },
   actionText: { fontSize: 16 },
   disabled: { opacity: 0.45 },
   pressed: { opacity: 0.75 },
