@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
+import { AppState, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Clipboard from 'expo-clipboard';
@@ -22,6 +21,9 @@ import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { spaceNoteAction, type SpaceNoteAction } from '@/components/spaces/space-note-action';
 import { subscribeToSpaceChanges } from '@/services/space-changes';
 import { useTheme } from '@/components/theme-provider';
+import { useStickySurface } from '@/components/ui/surface';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
 import { AppHeader, EmptyState, IconButton, Screen, Toast, HeaderIcon } from '@/components/ui/primitives';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { radii, spacing, type ThemeTokens } from '@/constants/theme';
@@ -50,7 +52,7 @@ type Comment = { id: string; cardId: string; text: string; createdAt: number; up
 // making that entry point visible, matching the established pattern.
 function AttachmentActionsButton({ onPress, style, iconColor }: { onPress: () => void; style: StyleProp<ViewStyle>; iconColor: string }) {
   return <Pressable accessibilityRole="button" accessibilityLabel="Attachment actions" hitSlop={8} onPress={onPress} style={style}>
-    <Ionicons accessible={false} name="ellipsis-horizontal" size={17} color={iconColor} />
+    <Icon name="ellipsis-horizontal" size={17} color={iconColor} />
   </Pressable>;
 }
 const messageFallback = (message: Message) => {
@@ -66,7 +68,9 @@ export default function CardDetailScreen() {
   const database = useSQLiteContext();
   const { id } = useLocalSearchParams<{ id: string }>();
   const repository = useMemo(() => createBoardRepository(database), [database]);
-  const { tokens: theme, scheme, look } = useTheme();
+  const { tokens: theme, scheme, look, styleTokens, styleColors } = useTheme();
+  const sticky = useStickySurface();
+  const panel = sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.panel });
   const { confirm, actionSheet } = useAppDialog();
   const { openBackgroundPreview, isCurrentBackground } = useChatBackground();
   const attachmentDeletion = useAttachmentDeletion();
@@ -486,30 +490,30 @@ export default function CardDetailScreen() {
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView ref={scrollRef} style={styles.flex} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          {covered ? <View style={styles.titleRow}><Text style={[styles.title, styles.hiddenTitle]}>Hidden Chit</Text></View> : titleEditing ? <View style={styles.editor}>
+          {covered ? <View style={styles.titleRow}><AppText variant="display" style={[styles.title, styles.hiddenTitle]}>Hidden Chit</AppText></View> : titleEditing ? <View style={styles.editor}>
             <TextInput autoFocus accessibilityLabel="Card title" value={titleDraft} onChangeText={setTitleDraft} placeholder="Card title" placeholderTextColor={theme.textMuted} maxLength={120} returnKeyType="done" onSubmitEditing={() => void saveTitle()} style={[styles.titleInput, { borderColor: contentAccentSolid }]} />
             <View style={styles.editActions}>
-              <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => void saveTitle()} style={[styles.editSave, { backgroundColor: contentAccentSolid }, savingEdit && styles.disabled]}><Text style={[styles.editSaveText, { color: contentAccentOn }]}>{savingEdit ? 'Saving…' : 'Save title'}</Text></Pressable>
-              <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => { setTitleDraft(detail.explicitTitle ?? ''); setTitleEditing(false); }} style={styles.editCancel}><Text style={styles.editCancelText}>Cancel</Text></Pressable>
+              <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => void saveTitle()} style={[styles.editSave, { backgroundColor: contentAccentSolid }, sticky({ fill: contentAccentSolid, radius: styleTokens.button.radius, edge: false }), savingEdit && styles.disabled]}><AppText style={[styles.editSaveText, { color: contentAccentOn }]}>{savingEdit ? 'Saving…' : 'Save title'}</AppText></Pressable>
+              <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => { setTitleDraft(detail.explicitTitle ?? ''); setTitleEditing(false); }} style={styles.editCancel}><AppText style={styles.editCancelText}>Cancel</AppText></Pressable>
             </View>
           </View> : displayTitle ? <Pressable accessibilityRole="button" accessibilityLabel="Edit card title" onPress={startTitleEdit} style={({ pressed }) => [styles.titleRow, pressed && styles.pressed]}>
-            <Text style={styles.title}>{displayTitle}</Text>
-            <View style={styles.titleEditButton}><Ionicons accessible={false} name="create-outline" size={17} color={contentAccentStrong} /></View>
-          </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel={detail.explicitTitle ? 'Edit card title' : 'Add a card title'} onPress={startTitleEdit} style={({ pressed }) => [styles.addTitle, pressed && styles.pressed]}><Ionicons accessible={false} name={detail.explicitTitle ? 'create-outline' : 'add'} size={17} color={contentAccentStrong} /><Text style={[styles.editHint, { color: contentAccentStrong }]}>{detail.explicitTitle ? 'Edit title' : 'Add title'}</Text></Pressable>}
+            <AppText variant="display" style={styles.title}>{displayTitle}</AppText>
+            <View style={styles.titleEditButton}><Icon name="create-outline" size={17} color={contentAccentStrong} /></View>
+          </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel={detail.explicitTitle ? 'Edit card title' : 'Add a card title'} onPress={startTitleEdit} style={({ pressed }) => [styles.addTitle, pressed && styles.pressed]}><Icon name={detail.explicitTitle ? 'create-outline' : 'add'} size={17} color={contentAccentStrong} /><AppText style={[styles.editHint, { color: contentAccentStrong }]}>{detail.explicitTitle ? 'Edit title' : 'Add title'}</AppText></Pressable>}
         </View>
 
         {notice ? <View accessibilityRole="alert" style={styles.noticePanel}>
-          <Ionicons accessible={false} name="information-circle-outline" size={19} color={theme.accent} />
-          <View style={styles.noticeCopy}><Text style={styles.notice}>{notice}</Text></View>
+          <Icon name="information-circle-outline" size={19} color={theme.accent} />
+          <View style={styles.noticeCopy}><AppText style={styles.notice}>{notice}</AppText></View>
         </View> : null}
 
         <View style={[styles.sectionHeader, styles.contentSectionHeader]}>
-          <Text accessibilityRole="header" style={styles.sectionTitle}>CONTENT</Text>
+          <AppText accessibilityRole="header" style={styles.sectionTitle}>CONTENT</AppText>
           <View style={styles.contentHeaderActions}>
-            {!covered ? <Pressable accessibilityRole="button" accessibilityLabel="Share Note" hitSlop={8} onPress={openShareNote} style={styles.inlineEdit}><Ionicons accessible={false} name="images-outline" size={16} color={contentAccentStrong} /></Pressable> : null}
-            {contentHidden && !covered ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" hitSlop={8} onPress={() => setTemporarilyRevealed(false)} style={styles.inlineEdit}><Ionicons accessible={false} name="eye-off-outline" size={16} color={theme.textMuted} /><Text style={[styles.inlineEditText, { color: theme.textMuted }]}>Hide again</Text></Pressable> : null}
-            {singleThoughtEditable ? <Pressable accessibilityRole="button" accessibilityLabel="Edit content" hitSlop={8} onPress={() => openContentEditor(messages[0])}><Text style={[styles.inlineEditText, { color: contentAccentStrong }]}>Edit</Text></Pressable>
-              : messages.length > 1 ? <View style={styles.countBadge}><Text style={styles.countText}>{messages.length}</Text></View> : null}
+            {!covered ? <Pressable accessibilityRole="button" accessibilityLabel="Share Note" hitSlop={8} onPress={openShareNote} style={styles.inlineEdit}><Icon name="images-outline" size={16} color={contentAccentStrong} /></Pressable> : null}
+            {contentHidden && !covered ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" hitSlop={8} onPress={() => setTemporarilyRevealed(false)} style={styles.inlineEdit}><Icon name="eye-off-outline" size={16} color={theme.textMuted} /><AppText style={[styles.inlineEditText, { color: theme.textMuted }]}>Hide again</AppText></Pressable> : null}
+            {singleThoughtEditable ? <Pressable accessibilityRole="button" accessibilityLabel="Edit content" hitSlop={8} onPress={() => openContentEditor(messages[0])}><AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>Edit</AppText></Pressable>
+              : messages.length > 1 ? <View style={styles.countBadge}><AppText style={styles.countText}>{messages.length}</AppText></View> : null}
           </View>
         </View>
 
@@ -518,7 +522,7 @@ export default function CardDetailScreen() {
             const height = Math.ceil(nativeEvent.layout.height);
             setPaperHeight((current) => current === height ? current : height);
           }}
-          style={[styles.contentBody, { backgroundColor: paperColor, borderColor: paperEdge }, scheme !== 'dark' && [styles.paperShadow, { shadowOpacity: look.cardShadowOpacity }]]}
+          style={[styles.contentBody, { backgroundColor: paperColor, borderColor: paperEdge }, scheme !== 'dark' && [styles.paperShadow, { shadowOpacity: look.cardShadowOpacity }], sticky({ fill: styleColors.controlFill, radius: styleTokens.noteCard.radius, edge: styleTokens.noteCard.edge, edgeColor: detail.boardAccent ?? styleColors.outline })]}
         >
           <View pointerEvents="none" accessible={false} style={StyleSheet.absoluteFill}>
             {Array.from({ length: Math.min(320, Math.max(0, Math.floor((Math.max(200, paperHeight) - 58) / 22) + 1)) }, (_, index) =>
@@ -526,16 +530,16 @@ export default function CardDetailScreen() {
             <View style={[styles.paperMargin, { backgroundColor: scheme === 'dark' ? 'rgba(233,163,163,0.46)' : '#E9A3A3' }]} />
           </View>
           {covered ? <Pressable accessibilityRole="button" accessibilityLabel="Hidden content. Double tap to reveal." onPress={() => setTemporarilyRevealed(true)} style={({ pressed }) => [styles.hiddenCover, pressed && styles.pressed]}>
-            <Ionicons accessible={false} name="eye-off-outline" size={24} color={theme.textMuted} />
-            <Text style={styles.hiddenCoverTitle}>Content hidden</Text>
-            <Text style={styles.hiddenCoverCopy}>Tap to reveal</Text>
+            <Icon name="eye-off-outline" size={24} color={theme.textMuted} />
+            <AppText style={styles.hiddenCoverTitle}>Content hidden</AppText>
+            <AppText style={styles.hiddenCoverCopy}>Tap to reveal</AppText>
           </Pressable> : messages.map((message, index) => <View key={message.id} style={index > 0 && styles.thought}>
             {messages.length > 1 ? <View style={styles.thoughtHeader}>
-              <Text style={styles.thoughtLabel}>THOUGHT {index + 1}</Text>
-              {message.text ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit thought ${index + 1}`} hitSlop={8} onPress={() => openContentEditor(message)} style={styles.inlineEdit}><Ionicons accessible={false} name="create-outline" size={16} color={contentAccentStrong} /><Text style={[styles.inlineEditText, { color: contentAccentStrong }]}>Edit</Text></Pressable> : null}
+              <AppText style={styles.thoughtLabel}>THOUGHT {index + 1}</AppText>
+              {message.text ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit thought ${index + 1}`} hitSlop={8} onPress={() => openContentEditor(message)} style={styles.inlineEdit}><Icon name="create-outline" size={16} color={contentAccentStrong} /><AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>Edit</AppText></Pressable> : null}
             </View> : null}
             <MessageContentRenderer message={message} mode="detail" accentColor={detail.boardAccent ?? undefined} renderAttachments={() => <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} onLongPress={attachment.type === 'photo' ? () => openPhotoActions(attachment) : undefined} overlay={attachment.type === 'photo' ? <AttachmentActionsButton onPress={() => openPhotoActions(attachment)} style={styles.attachmentActionsOverlay} iconColor="#FFFFFF" /> : undefined} /></View>)}</View>} />
-            {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={`Add a description to ${messageFallback(message)}`} onPress={() => openContentEditor(message)} style={styles.addDescription}><Ionicons accessible={false} name="add" size={16} color={contentAccentStrong} /><Text style={[styles.inlineEditText, { color: contentAccentStrong }]}>Add description</Text></Pressable> : null}
+            {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={`Add a description to ${messageFallback(message)}`} onPress={() => openContentEditor(message)} style={styles.addDescription}><Icon name="add" size={16} color={contentAccentStrong} /><AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>Add description</AppText></Pressable> : null}
             {index < messages.length - 1 ? <View style={styles.contentThoughtDivider} /> : null}
           </View>)}
         </View>
@@ -547,47 +551,47 @@ export default function CardDetailScreen() {
           accessibilityRole="button"
           accessibilityLabel={reminder ? `Reminder, ${reminder.scheduledAt < renderedAt ? 'Overdue. ' : ''}${formatReminder(new Date(reminder.scheduledAt), new Date())}${notificationsAllowed ? '' : '. Notifications are off'}. Change or remove` : 'Remind me. Get notified about this card'}
           onPress={openReminderSheet}
-          style={({ pressed }) => [styles.reminderRow, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.reminderRow, panel, pressed && styles.pressed]}
         >
           <View style={[styles.reminderIcon, { backgroundColor: theme.surfaceElevated }]}>
-            <Ionicons accessible={false} name={reminder ? 'notifications' : 'notifications-outline'} size={17} color={reminder ? contentAccentStrong : theme.textSecondary} />
+            <Icon name={reminder ? 'notifications' : 'notifications-outline'} size={17} color={reminder ? contentAccentStrong : theme.textSecondary} />
           </View>
           <View style={styles.flexCopy}>
-            <Text style={styles.actionTitle}>{reminder ? formatReminder(new Date(reminder.scheduledAt), new Date()) : 'Remind me'}</Text>
-            <Text style={styles.actionCopy}>{reminder ? reminder.scheduledAt < renderedAt ? 'Overdue · Change or remove' : notificationsAllowed ? 'Reminder' : 'Notifications are off' : 'Get notified about this card'}</Text>
+            <AppText style={styles.actionTitle}>{reminder ? formatReminder(new Date(reminder.scheduledAt), new Date()) : 'Remind me'}</AppText>
+            <AppText style={styles.actionCopy}>{reminder ? reminder.scheduledAt < renderedAt ? 'Overdue · Change or remove' : notificationsAllowed ? 'Reminder' : 'Notifications are off' : 'Get notified about this card'}</AppText>
           </View>
-          <Ionicons accessible={false} name="chevron-forward" size={16} color={theme.textMuted} />
+          <Icon name="chevron-forward" size={16} color={theme.textMuted} />
         </Pressable>
 
-        <View style={styles.sectionHeader}><Text accessibilityRole="header" style={styles.sectionTitle}>DETAILS</Text></View>
-        <View style={styles.detailsCard}>
+        <View style={styles.sectionHeader}><AppText accessibilityRole="header" style={styles.sectionTitle}>DETAILS</AppText></View>
+        <View style={[styles.detailsCard, panel]}>
           <View style={styles.detailGroup}>
             <Pressable accessibilityRole="link" accessibilityLabel={`Open board ${detail.boardName}`} onPress={() => router.push({ pathname: '/board/[id]', params: { id: detail.boardId } })} style={({ pressed }) => [styles.detailRow, styles.detailLinkRow, pressed && styles.pressed]}>
-              <Text style={styles.detailLabel}>Board</Text><Text style={[styles.detailValue, styles.detailLinkValue]}>{detail.boardName}</Text>
-              <Ionicons accessible={false} name="chevron-forward" size={16} color={theme.textMuted} />
+              <AppText style={styles.detailLabel}>Board</AppText><AppText style={[styles.detailValue, styles.detailLinkValue]}>{detail.boardName}</AppText>
+              <Icon name="chevron-forward" size={16} color={theme.textMuted} />
             </Pressable>
             <Pressable accessibilityRole="link" accessibilityLabel={`Open column ${detail.columnName} in ${detail.boardName}`} onPress={() => router.push({ pathname: '/board/[id]', params: { id: detail.boardId, highlightColumnId: detail.columnId } })} style={({ pressed }) => [styles.detailRow, styles.detailLinkRow, pressed && styles.pressed]}>
-              <Text style={styles.detailLabel}>Column</Text><Text style={[styles.detailValue, styles.detailLinkValue]}>{detail.columnName}</Text>
-              <Ionicons accessible={false} name="chevron-forward" size={16} color={theme.textMuted} />
+              <AppText style={styles.detailLabel}>Column</AppText><AppText style={[styles.detailValue, styles.detailLinkValue]}>{detail.columnName}</AppText>
+              <Icon name="chevron-forward" size={16} color={theme.textMuted} />
             </Pressable>
           </View>
           <View style={styles.detailDivider} />
           <View style={styles.detailGroup}>
-            <View style={styles.detailRow}><Text style={styles.detailLabel}>Created</Text><Text style={styles.detailValue}>{createdLabel}</Text></View>
-            {editedAt ? <View style={styles.detailRow}><Text style={styles.detailLabel}>Edited</Text><Text style={styles.detailValue}>{detailDate(editedAt)}</Text></View> : null}
-            {detail.pinned ? <View style={styles.detailRow}><Text style={styles.detailLabel}>Pinned</Text><Text style={styles.detailValue}>Yes</Text></View> : null}
+            <View style={styles.detailRow}><AppText style={styles.detailLabel}>Created</AppText><AppText style={styles.detailValue}>{createdLabel}</AppText></View>
+            {editedAt ? <View style={styles.detailRow}><AppText style={styles.detailLabel}>Edited</AppText><AppText style={styles.detailValue}>{detailDate(editedAt)}</AppText></View> : null}
+            {detail.pinned ? <View style={styles.detailRow}><AppText style={styles.detailLabel}>Pinned</AppText><AppText style={styles.detailValue}>Yes</AppText></View> : null}
           </View>
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text accessibilityRole="header" style={styles.sectionTitle}>ATTACHMENTS</Text>
-          {cardAttachments.length ? <View style={styles.countBadge}><Text style={styles.countText}>{cardAttachments.length}</Text></View> : null}
+          <AppText accessibilityRole="header" style={styles.sectionTitle}>ATTACHMENTS</AppText>
+          {cardAttachments.length ? <View style={styles.countBadge}><AppText style={styles.countText}>{cardAttachments.length}</AppText></View> : null}
         </View>
         {cardAttachments.length === 0 ? <View style={styles.commentsEmpty}>
-          <Text style={styles.commentsEmptyTitle}>No attachments yet.</Text>
+          <AppText style={styles.commentsEmptyTitle}>No attachments yet.</AppText>
           <Pressable accessibilityRole="button" accessibilityLabel="Add attachment" disabled={attachmentBusy} onPress={openAddAttachment} style={styles.addDescription}>
-            {showAttachmentLoader ? <ChitsLoader size="small" /> : <Ionicons accessible={false} name="add" size={16} color={contentAccentStrong} />}
-            <Text style={[styles.inlineEditText, { color: contentAccentStrong }]}>Add attachment</Text>
+            {showAttachmentLoader ? <ChitsLoader size="small" /> : <Icon name="add" size={16} color={contentAccentStrong} />}
+            <AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>Add attachment</AppText>
           </Pressable>
         </View> : <>
           {cardAttachments.some((attachment) => attachment.type !== 'file') ? <View style={styles.attachmentGrid}>
@@ -597,18 +601,18 @@ export default function CardDetailScreen() {
             {cardAttachments.filter((attachment) => attachment.type === 'file').map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} onLongPress={() => openCardAttachmentActions(attachment)} overlay={<AttachmentActionsButton onPress={() => openCardAttachmentActions(attachment)} style={styles.attachmentActionsInline} iconColor={theme.textMuted} />} /></View>)}
           </View> : null}
           <Pressable accessibilityRole="button" accessibilityLabel="Add attachment" disabled={attachmentBusy} onPress={openAddAttachment} style={styles.addAttachmentRow}>
-            {showAttachmentLoader ? <ChitsLoader size="small" /> : <Ionicons accessible={false} name="add" size={16} color={contentAccentStrong} />}
-            <Text style={[styles.inlineEditText, { color: contentAccentStrong }]}>Add attachment</Text>
+            {showAttachmentLoader ? <ChitsLoader size="small" /> : <Icon name="add" size={16} color={contentAccentStrong} />}
+            <AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>Add attachment</AppText>
           </Pressable>
         </>}
 
         <View style={styles.sectionHeader}>
-          <Text accessibilityRole="header" style={styles.sectionTitle}>COMMENTS</Text>
-          {comments.length ? <View style={styles.countBadge}><Text style={styles.countText}>{comments.length}</Text></View> : null}
+          <AppText accessibilityRole="header" style={styles.sectionTitle}>COMMENTS</AppText>
+          {comments.length ? <View style={styles.countBadge}><AppText style={styles.countText}>{comments.length}</AppText></View> : null}
         </View>
         {comments.length === 0 ? <View style={styles.commentsEmpty}>
-          <Text style={styles.commentsEmptyTitle}>No comments yet.</Text>
-          <Text style={styles.commentsEmptyCopy}>Add context, updates, or notes here.</Text>
+          <AppText style={styles.commentsEmptyTitle}>No comments yet.</AppText>
+          <AppText style={styles.commentsEmptyCopy}>Add context, updates, or notes here.</AppText>
         </View> : <View style={styles.commentList}>
           {comments.map((comment, index) => { const isBeingEdited = editingCommentId === comment.id; return <View key={comment.id}>
             <Pressable
@@ -619,58 +623,58 @@ export default function CardDetailScreen() {
               delayLongPress={350}
               style={({ pressed }) => [styles.commentBody, isBeingEdited && styles.commentBeingEdited, pressed && !isBeingEdited && styles.pressed]}
             >
-              <Text style={styles.commentText}>{comment.text}</Text>
+              <AppText style={styles.commentText}>{comment.text}</AppText>
               <View style={styles.commentMetaRow}>
-                <Text style={styles.commentMeta}>{isBeingEdited ? 'Editing…' : `${commentTimeLabel(comment.createdAt)}${comment.updatedAt !== comment.createdAt ? ' · Edited' : ''}`}</Text>
-                {isBeingEdited ? null : <Pressable accessibilityRole="button" accessibilityLabel="Comment options" hitSlop={8} onPress={() => openCommentActions(comment)} style={styles.commentMore}><Ionicons accessible={false} name="ellipsis-horizontal" size={16} color={theme.textMuted} /></Pressable>}
+                <AppText style={styles.commentMeta}>{isBeingEdited ? 'Editing…' : `${commentTimeLabel(comment.createdAt)}${comment.updatedAt !== comment.createdAt ? ' · Edited' : ''}`}</AppText>
+                {isBeingEdited ? null : <Pressable accessibilityRole="button" accessibilityLabel="Comment options" hitSlop={8} onPress={() => openCommentActions(comment)} style={styles.commentMore}><Icon name="ellipsis-horizontal" size={16} color={theme.textMuted} /></Pressable>}
               </View>
             </Pressable>
             {index < comments.length - 1 ? <View style={styles.thoughtDivider} /> : null}
           </View>; })}
         </View>}
 
-        <View style={styles.sectionHeader}><Text accessibilityRole="header" style={styles.sectionTitle}>CARD ACTIONS</Text></View>
-        <View style={styles.cardActions}>
+        <View style={styles.sectionHeader}><AppText accessibilityRole="header" style={styles.sectionTitle}>CARD ACTIONS</AppText></View>
+        <View style={[styles.cardActions, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.panel, clip: true })]}>
           {!covered ? <>
             <Pressable accessibilityRole="button" accessibilityHint="Turn this card into an image you can share or save." onPress={openShareNote} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
-              <Ionicons accessible={false} name="images-outline" size={18} color={theme.textSecondary} />
-              <View style={styles.flexCopy}><Text style={styles.actionTitle}>Share Note</Text><Text style={styles.actionCopy}>Turn this card into an image you can share or save.</Text></View>
+              <Icon name="images-outline" size={18} color={theme.textSecondary} />
+              <View style={styles.flexCopy}><AppText style={styles.actionTitle}>Share Note</AppText><AppText style={styles.actionCopy}>Turn this card into an image you can share or save.</AppText></View>
             </Pressable>
             <View style={styles.actionDivider} />
           </> : null}
           {spaceAction ? <>
             <Pressable accessibilityRole="button" onPress={confirmSpaceAction} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
-              <Ionicons accessible={false} name={spaceAction.icon} size={18} color={theme.textSecondary} />
-              <View style={styles.flexCopy}><Text style={styles.actionTitle}>{spaceAction.label}</Text><Text style={styles.actionCopy}>{spaceAction.icon === 'magnet-outline' ? 'Put this card on a space as a sticky note you can move around.' : 'Take this card’s sticky note off its space.'}</Text></View>
+              <Icon name={spaceAction.icon} size={18} color={theme.textSecondary} />
+              <View style={styles.flexCopy}><AppText style={styles.actionTitle}>{spaceAction.label}</AppText><AppText style={styles.actionCopy}>{spaceAction.icon === 'magnet-outline' ? 'Put this card on a space as a sticky note you can move around.' : 'Take this card’s sticky note off its space.'}</AppText></View>
             </Pressable>
             <View style={styles.actionDivider} />
           </> : null}
           <Pressable accessibilityRole="button" onPress={() => void setContentHidden(!contentHidden)} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
-            <Ionicons accessible={false} name={contentHidden ? 'eye-outline' : 'eye-off-outline'} size={18} color={theme.textSecondary} />
-            <View style={styles.flexCopy}><Text style={styles.actionTitle}>{contentHidden ? 'Show content' : 'Hide content'}</Text><Text style={styles.actionCopy}>{contentHidden ? 'Make this card and its Chits visible again.' : 'Cover this card on the board and its Chits in Chat.'}</Text></View>
+            <Icon name={contentHidden ? 'eye-outline' : 'eye-off-outline'} size={18} color={theme.textSecondary} />
+            <View style={styles.flexCopy}><AppText style={styles.actionTitle}>{contentHidden ? 'Show content' : 'Hide content'}</AppText><AppText style={styles.actionCopy}>{contentHidden ? 'Make this card and its Chits visible again.' : 'Cover this card on the board and its Chits in Chat.'}</AppText></View>
           </Pressable>
           <View style={styles.actionDivider} />
           <Pressable accessibilityRole="button" accessibilityLabel="Move back to Unorganized" accessibilityHint="Remove this card from its board and return its linked Chit to Unorganized." onPress={moveBackToUnorganized} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
-            <Ionicons accessible={false} name="arrow-undo-outline" size={18} color={theme.textSecondary} />
-            <View style={styles.flexCopy}><Text style={styles.actionTitle}>Move back to Unorganized</Text><Text style={styles.actionCopy}>Keeps your original Chits — just removes this card.</Text></View>
+            <Icon name="arrow-undo-outline" size={18} color={theme.textSecondary} />
+            <View style={styles.flexCopy}><AppText style={styles.actionTitle}>Move back to Unorganized</AppText><AppText style={styles.actionCopy}>Keeps your original Chits — just removes this card.</AppText></View>
           </Pressable>
           <View style={styles.actionDivider} />
           <Pressable accessibilityRole="button" onPress={archive} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
-            <Ionicons accessible={false} name="archive-outline" size={18} color={theme.textSecondary} />
-            <View style={styles.flexCopy}><Text style={styles.actionTitle}>Archive card</Text><Text style={styles.actionCopy}>Hide it while keeping it recoverable.</Text></View>
+            <Icon name="archive-outline" size={18} color={theme.textSecondary} />
+            <View style={styles.flexCopy}><AppText style={styles.actionTitle}>Archive card</AppText><AppText style={styles.actionCopy}>Hide it while keeping it recoverable.</AppText></View>
           </Pressable>
           <View style={styles.actionDivider} />
           <Pressable accessibilityRole="button" onPress={destroy} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
-            <Ionicons accessible={false} name="trash-outline" size={18} color={theme.danger} />
-            <View style={styles.flexCopy}><Text style={styles.deleteTitle}>Delete card</Text><Text style={styles.actionCopy}>Original thoughts remain available in Chat.</Text></View>
+            <Icon name="trash-outline" size={18} color={theme.danger} />
+            <View style={styles.flexCopy}><AppText style={styles.deleteTitle}>Delete card</AppText><AppText style={styles.actionCopy}>Original thoughts remain available in Chat.</AppText></View>
           </Pressable>
         </View>
       </ScrollView>
 
       <View style={[styles.stickyComposer, { paddingBottom: insets.bottom + spacing.xs, backgroundColor: theme.background, borderTopColor: theme.borderSubtle }]}>
         {editingCommentId ? <View style={styles.composerEditBar}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Cancel edit" hitSlop={8} onPress={cancelCommentEdit} style={styles.composerEditCancel}><Ionicons accessible={false} name="close" size={16} color={theme.textMuted} /><Text style={styles.composerEditCancelText}>Cancel</Text></Pressable>
-          <Text style={[styles.composerEditLabel, { color: contentAccentStrong }]}>Editing comment</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Cancel edit" hitSlop={8} onPress={cancelCommentEdit} style={styles.composerEditCancel}><Icon name="close" size={16} color={theme.textMuted} /><AppText style={styles.composerEditCancelText}>Cancel</AppText></Pressable>
+          <AppText style={[styles.composerEditLabel, { color: contentAccentStrong }]}>Editing comment</AppText>
         </View> : null}
         <View style={styles.stickyComposerRow}>
           <TextInput
@@ -689,9 +693,9 @@ export default function CardDetailScreen() {
             accessibilityState={{ disabled: !(editingCommentId ? commentEditDraft : commentDraft).trim() || savingComment }}
             disabled={!(editingCommentId ? commentEditDraft : commentDraft).trim() || savingComment}
             onPress={() => void (editingCommentId ? saveCommentEdit() : sendComment())}
-            style={({ pressed }) => [styles.commentSend, { backgroundColor: (editingCommentId ? commentEditDraft : commentDraft).trim() ? contentAccentSolid : theme.surfaceElevated }, pressed && Boolean((editingCommentId ? commentEditDraft : commentDraft).trim()) && styles.pressed]}
+            style={({ pressed }) => [styles.commentSend, { backgroundColor: (editingCommentId ? commentEditDraft : commentDraft).trim() ? contentAccentSolid : theme.surfaceElevated }, sticky({ fill: (editingCommentId ? commentEditDraft : commentDraft).trim() ? contentAccentSolid : theme.surfaceElevated, radius: styleTokens.radius.control, edge: false }), pressed && Boolean((editingCommentId ? commentEditDraft : commentDraft).trim()) && styles.pressed]}
           >
-            <Ionicons accessible={false} name={editingCommentId ? 'checkmark' : 'arrow-up'} size={18} color={(editingCommentId ? commentEditDraft : commentDraft).trim() ? contentAccentOn : theme.textMuted} />
+            <Icon name={editingCommentId ? 'checkmark' : 'arrow-up'} size={18} color={(editingCommentId ? commentEditDraft : commentDraft).trim() ? contentAccentOn : theme.textMuted} />
           </Pressable>
         </View>
       </View>

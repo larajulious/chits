@@ -1,19 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { useTheme } from '@/components/theme-provider';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { spacing } from '@/constants/theme';
 import { AttachmentDraftPreview } from '@/components/chat/attachment-draft-preview';
@@ -144,8 +135,8 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
           onPress={() => void attach(option.key)}
           style={({ pressed }) => [styles.attachChip, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, busy && styles.disabled, pressed && styles.pressed]}
         >
-          <Ionicons accessible={false} name={option.icon} size={17} color={theme.textSecondary} />
-          <Text style={[styles.attachLabel, { color: theme.textPrimary }]}>{option.label}</Text>
+          <Icon name={option.icon} size={17} color={theme.textSecondary} />
+          <AppText style={[styles.attachLabel, { color: theme.textPrimary }]}>{option.label}</AppText>
         </Pressable>
       ))}
       {staging ? <ActivityIndicator accessibilityLabel="Preparing attachment" size="small" color={theme.textMuted} /> : null}
@@ -153,8 +144,8 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   );
 
   const contextLine = boardName && columnName
-    ? <Text accessibilityLabel={`Adding to ${boardName}, ${columnName}`} style={[styles.context, { color: theme.textSecondary }]}>Adding to <Text style={{ color: theme.textPrimary, fontWeight: '700' }}>{boardName}</Text>  ›  <Text style={{ color: theme.textPrimary, fontWeight: '700' }}>{columnName}</Text></Text>
-    : <Text style={[styles.context, { color: theme.textSecondary }]}>Saved to <Text style={{ color: theme.textPrimary, fontWeight: '700' }}>Unorganized</Text> — add it to a board anytime.</Text>;
+    ? <AppText accessibilityLabel={`Adding to ${boardName}, ${columnName}`} style={[styles.context, { color: theme.textSecondary }]}>Adding to <AppText style={{ color: theme.textPrimary, fontWeight: '700' }}>{boardName}</AppText>  ›  <AppText style={{ color: theme.textPrimary, fontWeight: '700' }}>{columnName}</AppText></AppText>
+    : <AppText style={[styles.context, { color: theme.textSecondary }]}>Saved to <AppText style={{ color: theme.textPrimary, fontWeight: '700' }}>Unorganized</AppText> — add it to a board anytime.</AppText>;
 
   const submit = async () => {
     if (!canAdd) return;
@@ -186,17 +177,17 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
             {/* Same header pattern as Edit Note: exit on the left, Add (✓) on the right. */}
             <View style={[styles.fullHeader, { borderBottomColor: theme.borderSubtle }]}>
               <Pressable accessibilityRole="button" accessibilityLabel="Exit full screen" hitSlop={8} disabled={saving} onPress={toggleFullscreen} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
-                <Ionicons accessible={false} name="contract-outline" size={22} color={theme.textPrimary} />
+                <Icon name="contract-outline" size={22} color={theme.textPrimary} />
               </Pressable>
-              <Text accessibilityRole="header" style={[styles.fullTitle, { color: theme.textPrimary }]}>Add note</Text>
+              <AppText accessibilityRole="header" style={[styles.fullTitle, { color: theme.textPrimary }]}>Add note</AppText>
               <Pressable accessibilityRole="button" accessibilityLabel="Add note" accessibilityState={{ disabled: !canAdd }} disabled={!canAdd} hitSlop={8} onPress={() => void submit()} style={({ pressed }) => [styles.headerButton, pressed && canAdd && styles.pressed]}>
-                {saving ? <ActivityIndicator accessibilityLabel="Adding note" size="small" color={theme.accent} /> : <Ionicons accessible={false} name="checkmark" size={24} color={canAdd ? theme.accent : theme.textMuted} />}
+                {saving ? <ActivityIndicator accessibilityLabel="Adding note" size="small" color={theme.accent} /> : <Icon name="checkmark" size={24} color={canAdd ? theme.accent : theme.textMuted} />}
               </Pressable>
             </View>
             <View style={styles.fullContext}>{contextLine}</View>
             {noteInput}
             <View style={[styles.fullFooter, { borderTopColor: theme.borderSubtle }]}>
-              {error ? <Text accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</Text> : null}
+              {error ? <AppText accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</AppText> : null}
               {attachmentArea}
             </View>
           </SafeAreaView>
@@ -208,19 +199,19 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
                 <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
                 <View style={styles.content}>
                   <View style={styles.titleRow}>
-                    <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Add note</Text>
+                    <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Add note</AppText>
                     <Pressable accessibilityRole="button" accessibilityLabel="Write in full screen" hitSlop={8} disabled={busy} onPress={toggleFullscreen} style={({ pressed }) => [styles.expandButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>
-                      <Ionicons accessible={false} name="expand-outline" size={18} color={theme.textSecondary} />
+                      <Icon name="expand-outline" size={18} color={theme.textSecondary} />
                     </Pressable>
                   </View>
                   {contextLine}
                   {noteInput}
                   {attachmentArea}
-                  {error ? <Text accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</Text> : null}
+                  {error ? <AppText accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</AppText> : null}
 
                   <View style={styles.actions}>
                     <Pressable accessibilityRole="button" disabled={busy} onPress={close} style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
-                      <Text style={[styles.cancelText, { color: theme.textSecondary }]}>Cancel</Text>
+                      <AppText style={[styles.cancelText, { color: theme.textSecondary }]}>Cancel</AppText>
                     </Pressable>
                     <Pressable
                       accessibilityRole="button"
@@ -230,7 +221,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
                       onPress={() => void submit()}
                       style={({ pressed }) => [styles.addButton, { backgroundColor: theme.accent }, !canAdd && styles.disabled, pressed && canAdd && styles.pressed]}
                     >
-                      {saving ? <ActivityIndicator accessibilityLabel="Adding note" size="small" color={theme.accentText} /> : <Text style={[styles.addText, { color: theme.accentText }]}>Add</Text>}
+                      {saving ? <ActivityIndicator accessibilityLabel="Adding note" size="small" color={theme.accentText} /> : <AppText style={[styles.addText, { color: theme.accentText }]}>Add</AppText>}
                     </Pressable>
                   </View>
                 </View>

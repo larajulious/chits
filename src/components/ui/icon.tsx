@@ -1,4 +1,5 @@
 import type { ComponentProps, ComponentType } from 'react';
+import { View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Archive from 'lucide-react-native/icons/archive';
 import Bell from 'lucide-react-native/icons/bell';
@@ -33,6 +34,42 @@ import Star from 'lucide-react-native/icons/star';
 import StickyNote from 'lucide-react-native/icons/sticky-note';
 import User from 'lucide-react-native/icons/user';
 import X from 'lucide-react-native/icons/x';
+import GalleryVerticalEnd from 'lucide-react-native/icons/gallery-vertical-end';
+import CircleAlert from 'lucide-react-native/icons/circle-alert';
+import ArrowLeft from 'lucide-react-native/icons/arrow-left';
+import ArrowDown from 'lucide-react-native/icons/arrow-down';
+import ArrowRight from 'lucide-react-native/icons/arrow-right';
+import Undo2 from 'lucide-react-native/icons/undo-2';
+import ArrowUp from 'lucide-react-native/icons/arrow-up';
+import Calendar from 'lucide-react-native/icons/calendar';
+import MessageCircle from 'lucide-react-native/icons/message-circle';
+import CircleCheck from 'lucide-react-native/icons/circle-check';
+import CircleX from 'lucide-react-native/icons/circle-x';
+import Compass from 'lucide-react-native/icons/compass';
+import Shrink from 'lucide-react-native/icons/shrink';
+import Copy from 'lucide-react-native/icons/copy';
+import SquarePen from 'lucide-react-native/icons/square-pen';
+import Expand from 'lucide-react-native/icons/expand';
+import Eye from 'lucide-react-native/icons/eye';
+import LayoutGrid from 'lucide-react-native/icons/layout-grid';
+import CircleQuestionMark from 'lucide-react-native/icons/circle-question-mark';
+import Images from 'lucide-react-native/icons/images';
+import Info from 'lucide-react-native/icons/info';
+import Layers from 'lucide-react-native/icons/layers';
+import List from 'lucide-react-native/icons/list';
+import Magnet from 'lucide-react-native/icons/magnet';
+import ExternalLink from 'lucide-react-native/icons/external-link';
+import Pause from 'lucide-react-native/icons/pause';
+import Pencil from 'lucide-react-native/icons/pencil';
+import RefreshCw from 'lucide-react-native/icons/refresh-cw';
+import Minus from 'lucide-react-native/icons/minus';
+import Settings from 'lucide-react-native/icons/settings';
+import Share from 'lucide-react-native/icons/share';
+import ArrowLeftRight from 'lucide-react-native/icons/arrow-left-right';
+import Trash from 'lucide-react-native/icons/trash';
+import Video from 'lucide-react-native/icons/video';
+import Volume1 from 'lucide-react-native/icons/volume-1';
+import TriangleAlert from 'lucide-react-native/icons/triangle-alert';
 
 import { useTheme } from '@/components/theme-provider';
 
@@ -42,7 +79,7 @@ type DrawnIcon = ComponentType<{ size?: number; color?: string; fill?: string; s
 // Ionicons glyph → the stroke-drawn equivalent Sticky uses. `filled` mirrors
 // Ionicons' solid glyphs. Anything not listed keeps its Ionicons glyph.
 const DRAWN: Partial<Record<IconName, { icon: DrawnIcon; filled?: boolean }>> = {
-  'add': { icon: Plus },
+  'add': { icon: Plus }, 'add-outline': { icon: Plus },
   'archive-outline': { icon: Archive },
   'attach': { icon: Paperclip }, 'attach-outline': { icon: Paperclip },
   'book-outline': { icon: Book },
@@ -73,17 +110,64 @@ const DRAWN: Partial<Record<IconName, { icon: DrawnIcon; filled?: boolean }>> = 
   'search-outline': { icon: Search },
   'square-outline': { icon: Square },
   'star-outline': { icon: Star },
+  'albums-outline': { icon: GalleryVerticalEnd },
+  'alert-circle-outline': { icon: CircleAlert },
+  'arrow-back': { icon: ArrowLeft },
+  'arrow-back-outline': { icon: ArrowLeft },
+  'arrow-down': { icon: ArrowDown },
+  'arrow-down-outline': { icon: ArrowDown },
+  'arrow-forward-outline': { icon: ArrowRight },
+  'arrow-undo-outline': { icon: Undo2 },
+  'arrow-up': { icon: ArrowUp },
+  'arrow-up-outline': { icon: ArrowUp },
+  'calendar-outline': { icon: Calendar },
+  'chatbox-outline': { icon: MessageSquare },
+  'chatbubble-outline': { icon: MessageCircle },
+  'checkmark-circle-outline': { icon: CircleCheck },
+  'close-circle': { icon: CircleX },
+  'close-circle-outline': { icon: CircleX },
+  'compass-outline': { icon: Compass },
+  'contract-outline': { icon: Shrink },
+  'copy': { icon: Copy },
+  'copy-outline': { icon: Copy },
+  'create-outline': { icon: SquarePen },
+  'expand-outline': { icon: Expand },
+  'eye-outline': { icon: Eye },
+  'grid': { icon: LayoutGrid },
+  'help-circle-outline': { icon: CircleQuestionMark },
+  'images': { icon: Images },
+  'images-outline': { icon: Images },
+  'information-circle-outline': { icon: Info },
+  'layers-outline': { icon: Layers },
+  'list-outline': { icon: List },
+  'magnet-outline': { icon: Magnet },
+  'mic-outline': { icon: Mic },
+  'open-outline': { icon: ExternalLink },
+  'pause': { icon: Pause, filled: true },
+  'pencil-outline': { icon: Pencil },
+  'refresh': { icon: RefreshCw },
+  'remove': { icon: Minus },
+  'settings-outline': { icon: Settings },
+  'share-outline': { icon: Share },
+  'swap-horizontal-outline': { icon: ArrowLeftRight },
+  'trash-outline': { icon: Trash },
+  'videocam-outline': { icon: Video },
+  'volume-medium-outline': { icon: Volume1 },
+  'warning-outline': { icon: TriangleAlert },
 };
 
 /**
  * An icon in the active style: the Ionicons glyph under Classic (unchanged),
  * a stroke-drawn one at the style's stroke width with round caps and joins
- * under Sticky. Decorative by default, like every icon beside a label here.
+ * under Sticky. Decorative unless given an accessibilityLabel.
  */
-export function Icon({ name, size, color, accessible = false }: { name: IconName; size: number; color: string; accessible?: boolean }) {
+export function Icon({ name, size, color, style, accessibilityLabel }: { name: IconName; size: number; color: string; style?: StyleProp<TextStyle>; accessibilityLabel?: string }) {
   const { styleTokens } = useTheme();
   const drawn = styleTokens.iconStroke > 0 ? DRAWN[name] : undefined;
-  if (!drawn) return <Ionicons accessible={accessible} name={name} size={size} color={color} />;
+  const accessible = Boolean(accessibilityLabel);
+  if (!drawn) return <Ionicons accessible={accessible} accessibilityLabel={accessibilityLabel} name={name} size={size} color={color} style={style} />;
   const Drawn = drawn.icon;
-  return <Drawn size={size} color={color} fill={drawn.filled ? color : 'none'} strokeWidth={styleTokens.iconStroke} strokeLinecap="round" strokeLinejoin="round" />;
+  return <View accessible={accessible} accessibilityLabel={accessibilityLabel} accessibilityRole={accessible ? 'image' : undefined} style={style as StyleProp<ViewStyle>}>
+    <Drawn size={size} color={color} fill={drawn.filled ? color : 'none'} strokeWidth={styleTokens.iconStroke} strokeLinecap="round" strokeLinejoin="round" />
+  </View>;
 }

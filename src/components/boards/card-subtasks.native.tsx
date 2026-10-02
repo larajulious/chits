@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useRef, useState, type RefObject } from 'react';
-import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
 import { radii, spacing } from '@/constants/theme';
 import { createCardSubtaskRepository, type CardSubtask } from '@/db/repositories';
 
@@ -92,13 +93,13 @@ export function CardSubtasks({ cardId, scrollRef }: { cardId: string; scrollRef:
 
   return <View onLayout={(event) => { sectionY.current = event.nativeEvent.layout.y; }}>
     <View style={styles.header}>
-      <Text accessibilityRole="header" style={[styles.heading, { color: tokens.textMuted }]}>SUBTASKS</Text>
-      {items.length ? <Text style={[styles.progress, { color: tokens.textSecondary }]}>{completed} / {items.length}</Text> : null}
+      <AppText accessibilityRole="header" style={[styles.heading, { color: tokens.textMuted }]}>SUBTASKS</AppText>
+      {items.length ? <AppText style={[styles.progress, { color: tokens.textSecondary }]}>{completed} / {items.length}</AppText> : null}
     </View>
     <View onLayout={(event) => { listY.current = event.nativeEvent.layout.y; }} style={[styles.list, { borderColor: tokens.borderSubtle, backgroundColor: tokens.surface }]}>
       {items.map((item, index) => <View key={item.id} onLayout={(event) => { rowY.current.set(item.id, event.nativeEvent.layout.y); }} style={[styles.row, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: tokens.borderSubtle }]}>
         <Pressable accessibilityRole="checkbox" accessibilityLabel={item.title} accessibilityState={{ checked: item.isCompleted }} onPress={() => toggle(item)} style={styles.checkboxTarget}>
-          <Ionicons accessible={false} name={item.isCompleted ? 'checkbox' : 'square-outline'} size={22} color={item.isCompleted ? tokens.accentStrong : tokens.textMuted} />
+          <Icon name={item.isCompleted ? 'checkbox' : 'square-outline'} size={22} color={item.isCompleted ? tokens.accentStrong : tokens.textMuted} />
         </Pressable>
         {editingId === item.id ? <TextInput
           autoFocus multiline accessibilityLabel="Edit subtask" value={editDraft} onChangeText={setEditDraft}
@@ -106,14 +107,14 @@ export function CardSubtasks({ cardId, scrollRef }: { cardId: string; scrollRef:
           onSubmitEditing={() => { void saveEdit(); Keyboard.dismiss(); }} returnKeyType="done" submitBehavior="submit"
           selectionColor={tokens.accent} style={[styles.input, { color: tokens.textPrimary }]}
         /> : <Pressable accessibilityRole="button" accessibilityLabel={`Edit subtask, ${item.title}`} onPress={() => { setEditingId(item.id); setEditDraft(item.title); }} onLongPress={() => openActions(item)} style={styles.titleTarget}>
-          <Text style={[styles.title, { color: item.isCompleted ? tokens.textMuted : tokens.textPrimary }, item.isCompleted && styles.done]}>{item.title}</Text>
+          <AppText style={[styles.title, { color: item.isCompleted ? tokens.textMuted : tokens.textPrimary }, item.isCompleted && styles.done]}>{item.title}</AppText>
         </Pressable>}
         <Pressable accessibilityRole="button" accessibilityLabel={`Options for ${item.title}`} hitSlop={6} onPress={() => openActions(item)} style={styles.more}>
-          <Ionicons accessible={false} name="ellipsis-horizontal" size={18} color={tokens.textMuted} />
+          <Icon name="ellipsis-horizontal" size={18} color={tokens.textMuted} />
         </Pressable>
       </View>)}
       {adding ? <View onLayout={(event) => { rowY.current.set('new', event.nativeEvent.layout.y); scrollToRow('new'); }} style={[styles.row, items.length > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: tokens.borderSubtle }]}>
-        <Ionicons accessible={false} name="square-outline" size={22} color={tokens.textMuted} style={styles.draftCheckbox} />
+        <Icon name="square-outline" size={22} color={tokens.textMuted} style={styles.draftCheckbox} />
         <TextInput ref={addRef} autoFocus multiline accessibilityLabel="New subtask" placeholder="Add a subtask" placeholderTextColor={tokens.textMuted}
           value={draft} onChangeText={setDraft} onFocus={() => scrollToRow('new')} onBlur={() => void saveNew(false)}
           onSubmitEditing={() => void saveNew(true)} returnKeyType="done" submitBehavior="submit" selectionColor={tokens.accent}
@@ -121,10 +122,10 @@ export function CardSubtasks({ cardId, scrollRef }: { cardId: string; scrollRef:
       </View> : null}
     </View>
     {!adding ? <Pressable accessibilityRole="button" onPress={() => { setAdding(true); setError(null); }} style={styles.add}>
-      <Ionicons accessible={false} name="add" size={18} color={tokens.accentStrong} />
-      <Text style={[styles.addText, { color: tokens.accentStrong }]}>Add subtask</Text>
+      <Icon name="add" size={18} color={tokens.accentStrong} />
+      <AppText style={[styles.addText, { color: tokens.accentStrong }]}>Add subtask</AppText>
     </Pressable> : null}
-    {error ? <Text accessibilityRole="alert" style={[styles.error, { color: tokens.danger }]}>{error}</Text> : null}
+    {error ? <AppText accessibilityRole="alert" style={[styles.error, { color: tokens.danger }]}>{error}</AppText> : null}
   </View>;
 }
 

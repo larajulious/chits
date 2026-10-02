@@ -1,9 +1,11 @@
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useRef, type ComponentProps } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
 import { BottomSheetSurface } from '@/components/ui/primitives';
 import { spacing } from '@/constants/theme';
 
@@ -18,8 +20,8 @@ type Props = {
 function Row({ icon, label, onPress }: { icon: ComponentProps<typeof Ionicons>['name']; label: string; onPress: () => void }) {
   const { tokens: theme } = useTheme();
   return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
-    <Ionicons accessible={false} name={icon} size={20} color={theme.textPrimary} />
-    <Text style={[styles.rowLabel, { color: theme.textPrimary }]}>{label}</Text>
+    <Icon name={icon} size={20} color={theme.textPrimary} />
+    <AppText style={[styles.rowLabel, { color: theme.textPrimary }]}>{label}</AppText>
   </Pressable>;
 }
 
@@ -50,7 +52,7 @@ export function AddCardAttachmentSheet({ visible, onClose, onPick }: Props) {
       <SafeAreaView edges={['bottom']} style={styles.sheet}>
         <BottomSheetSurface>
           <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
-          <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Add attachment</Text>
+          <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Add attachment</AppText>
           <View style={styles.group}>
             <Row icon="image-outline" label="Photo" onPress={() => choose('photo')} />
             <Row icon="videocam-outline" label="Video" onPress={() => choose('video')} />

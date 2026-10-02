@@ -1,4 +1,3 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { updateMessageReminder, updateTimelineReminders } from '@/services/chat-reminder-state';
 import { canMergeTimelineRefresh } from '@/services/timeline-refresh';
 import { removeMessageReminder, requestReminderSync, setMessageReminder, subscribeToReminderChanges } from '@/services/reminders';
-import { AccessibilityInfo, ActivityIndicator, AppState, BackHandler, FlatList, Keyboard, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, AppState, BackHandler, FlatList, Keyboard, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 
 import { AttachmentDraftPreview } from '@/components/chat/attachment-draft-preview';
@@ -22,6 +21,9 @@ import { spaceNoteAction, type SpaceNoteAction } from '@/components/spaces/space
 import { shareNoteHref } from '@/services/share-note-source';
 import { MessageRow } from '@/components/chat/message-row';
 import { useTheme } from '@/components/theme-provider';
+import { useStickySurface } from '@/components/ui/surface';
+import { AppText, useFontStyle } from '@/components/ui/app-text';
+import { Icon, type IconName } from '@/components/ui/icon';
 import { CONTENT_RANGE, useChatTransition } from '@/components/navigation/chat-transition';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { ChatComposerSurface } from '@/components/chat/chat-composer-surface';
@@ -122,12 +124,12 @@ function ChitsRow({ event, onPress }: { event: TimelineEvent; onPress: () => voi
   const time = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(event.createdAt);
   return <View style={styles.chitsWrap}>
     <Pressable accessibilityRole="button" accessibilityLabel={`Chits: ${copy.title}${copy.detail ? `. ${copy.detail}` : ''}. ${time}`} onPress={onPress} style={({ pressed }) => [styles.chitsBubble, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.chitsPressed]}>
-      <View style={[styles.chitsIcon, { backgroundColor: theme.accentSoft }]}><Ionicons accessible={false} name={copy.icon} size={15} color={theme.accentStrong} /></View>
+      <View style={[styles.chitsIcon, { backgroundColor: theme.accentSoft }]}><Icon name={copy.icon} size={15} color={theme.accentStrong} /></View>
       <View style={styles.chitsCopy}>
-        <Text style={[styles.chitsTitle, { color: theme.textPrimary }]}>{copy.title}</Text>
-        {copy.detail ? <Text numberOfLines={1} style={[styles.chitsDetail, { color: theme.textSecondary }]}>{copy.detail}</Text> : null}
+        <AppText style={[styles.chitsTitle, { color: theme.textPrimary }]}>{copy.title}</AppText>
+        {copy.detail ? <AppText numberOfLines={1} style={[styles.chitsDetail, { color: theme.textSecondary }]}>{copy.detail}</AppText> : null}
       </View>
-      <Text style={[styles.chitsTime, { color: theme.textMuted }]}>{time}</Text>
+      <AppText style={[styles.chitsTime, { color: theme.textMuted }]}>{time}</AppText>
     </Pressable>
   </View>;
 }
@@ -181,10 +183,10 @@ function SearchResultRow({ item, onPress }: { item: TimelineItem; onPress: () =>
     const copy = eventCopy(item.event);
     const flatText = copy.detail ? `${copy.title} · ${copy.detail}` : copy.title;
     return <Pressable accessibilityRole="button" accessibilityLabel={`Chits: ${flatText}. ${searchResultDateLabel(item.event.createdAt)}`} onPress={onPress} style={({ pressed }) => [styles.searchResultRow, pressed && styles.searchResultPressed]}>
-      <Ionicons accessible={false} name={copy.icon} size={15} color={theme.textMuted} style={styles.searchResultIcon} />
+      <Icon name={copy.icon} size={15} color={theme.textMuted} style={styles.searchResultIcon} />
       <View style={styles.searchResultCopy}>
-        <Text numberOfLines={2} style={[styles.searchResultText, { color: theme.textMuted }]}>{flatText}</Text>
-        <Text style={[styles.searchResultMeta, { color: theme.textMuted }]}>{searchResultDateLabel(item.event.createdAt)}</Text>
+        <AppText numberOfLines={2} style={[styles.searchResultText, { color: theme.textMuted }]}>{flatText}</AppText>
+        <AppText style={[styles.searchResultMeta, { color: theme.textMuted }]}>{searchResultDateLabel(item.event.createdAt)}</AppText>
       </View>
     </Pressable>;
   }
@@ -194,9 +196,9 @@ function SearchResultRow({ item, onPress }: { item: TimelineItem; onPress: () =>
   const accessibleKind = kind ? `${kind}. ` : !message.isHiddenContent && !message.text?.trim() && message.attachments[0] ? `${searchResultPreview(message)}. ` : '';
   return <Pressable accessibilityRole="button" accessibilityLabel={`${accessibleKind}${preview}. ${searchResultDateLabel(message.createdAt)}`} onPress={onPress} style={({ pressed }) => [styles.searchResultRow, pressed && styles.searchResultPressed]}>
     <View style={styles.searchResultCopy}>
-      {kind ? <Text style={[styles.searchResultKind, { color: theme.accent }]}>{kind}</Text> : null}
-      <Text numberOfLines={2} style={[styles.searchResultText, { color: theme.textPrimary }]}>{preview}</Text>
-      <Text style={[styles.searchResultMeta, { color: theme.textMuted }]}>{searchResultDateLabel(message.createdAt)}</Text>
+      {kind ? <AppText style={[styles.searchResultKind, { color: theme.accent }]}>{kind}</AppText> : null}
+      <AppText numberOfLines={2} style={[styles.searchResultText, { color: theme.textPrimary }]}>{preview}</AppText>
+      <AppText style={[styles.searchResultMeta, { color: theme.textMuted }]}>{searchResultDateLabel(message.createdAt)}</AppText>
     </View>
   </Pressable>;
 }
@@ -217,12 +219,12 @@ function DateSeparator({ label }: { label: string }) {
   const { tokens: theme } = useTheme();
   return <View style={styles.dateSeparator}>
     <View style={[styles.dateSeparatorLine, { backgroundColor: theme.borderSubtle }]} />
-    <View style={[styles.dateSeparatorPill, { backgroundColor: theme.surfaceElevated }]}><Text style={[styles.dateSeparatorText, { color: theme.textSecondary }]}>{label}</Text></View>
+    <View style={[styles.dateSeparatorPill, { backgroundColor: theme.surfaceElevated }]}><AppText style={[styles.dateSeparatorText, { color: theme.textSecondary }]}>{label}</AppText></View>
     <View style={[styles.dateSeparatorLine, { backgroundColor: theme.borderSubtle }]} />
   </View>;
 }
 
-function quickFilterIcon(message: Message): React.ComponentProps<typeof Ionicons>['name'] {
+function quickFilterIcon(message: Message): IconName {
   if (message.isHiddenContent) return 'eye-off-outline';
   const attachment = message.attachments[0];
   if (attachment?.type === 'audio') return 'mic-outline';
@@ -244,8 +246,8 @@ function QuickFilterRow({ pinned, onSelect }: { pinned: Message[]; onSelect: (me
   const { tokens: theme } = useTheme();
   return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickFilterScroller} contentContainerStyle={styles.quickFilterList}>
     {pinned.map((message) => <Pressable key={message.id} accessibilityRole="button" accessibilityLabel={`Pinned: ${quickFilterPreview(message)}`} onPress={() => onSelect(message)} style={({ pressed }) => [styles.quickFilterChip, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.chitsPressed]}>
-      <Ionicons accessible={false} name={quickFilterIcon(message)} size={14} color={theme.accentStrong} />
-      <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.quickFilterText, { color: theme.textPrimary }]}>{quickFilterPreview(message)}</Text>
+      <Icon name={quickFilterIcon(message)} size={14} color={theme.accentStrong} />
+      <AppText numberOfLines={1} ellipsizeMode="tail" style={[styles.quickFilterText, { color: theme.textPrimary }]}>{quickFilterPreview(message)}</AppText>
     </Pressable>)}
   </ScrollView>;
 }
@@ -255,7 +257,9 @@ export default function ChatScreen() {
   const repository = useMemo(() => createMessageRepository(database), [database]);
   const { messageId, prefill, focusInput, chitsOrganized, chitsRelationship } = useLocalSearchParams<{ messageId?: string; prefill?: string; focusInput?: string; chitsOrganized?: string; chitsRelationship?: string }>();
   const router = useRouter();
-  const { tokens: theme, topBar } = useTheme();
+  const { tokens: theme, topBar, styleTokens, styleColors } = useTheme();
+  const sticky = useStickySurface();
+  const inputFont = useFontStyle('body');
   const { confirm } = useAppDialog();
   const { background, isCurrentBackground } = useChatBackground();
   // Background, timeline, header and composer form one visual unit. After the
@@ -1022,7 +1026,7 @@ export default function ChatScreen() {
           initialNumToRender={PAGE_SIZE}
           showsVerticalScrollIndicator={false}
           maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-          ListHeaderComponent={showOlderLoading ? <View accessibilityLabel="Loading older messages" style={styles.olderStatus}><ActivityIndicator size="small" color={theme.textMuted} /></View> : olderError ? <Pressable accessibilityRole="button" accessibilityLabel="Couldn’t load older messages. Retry" onPress={() => void loadOlder()} style={styles.olderStatus}><Text style={[styles.olderError, { color: theme.textSecondary }]}>Couldn’t load older messages. Tap to retry.</Text></Pressable> : null}
+          ListHeaderComponent={showOlderLoading ? <View accessibilityLabel="Loading older messages" style={styles.olderStatus}><ActivityIndicator size="small" color={theme.textMuted} /></View> : olderError ? <Pressable accessibilityRole="button" accessibilityLabel="Couldn’t load older messages. Retry" onPress={() => void loadOlder()} style={styles.olderStatus}><AppText style={[styles.olderError, { color: theme.textSecondary }]}>Couldn’t load older messages. Tap to retry.</AppText></Pressable> : null}
           // The floating composer overlays the list rather than reserving space in
           // the normal layout flow, so the list's own scrollable content must reserve
           // that space itself — as a real footer cell, not contentContainerStyle
@@ -1054,22 +1058,22 @@ export default function ChatScreen() {
         />}</View>
         {searchOpen && searchQuery.trim() ? <View style={[styles.searchOverlay, { backgroundColor: theme.chatBackground }]}>
           {showSearchLoader ? <View style={styles.initialLoader}><ChitsLoader size="small" /></View>
-          : searchResults.length === 0 ? <View style={[styles.noResults, { paddingTop: headerHeight }]}><Text style={[styles.noResultsText, { color: theme.textSecondary }]}>No matching Chits.</Text></View>
+          : searchResults.length === 0 ? <View style={[styles.noResults, { paddingTop: headerHeight }]}><AppText style={[styles.noResultsText, { color: theme.textSecondary }]}>No matching Chits.</AppText></View>
           : <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.searchResultsList, { paddingTop: headerHeight, paddingBottom: spacing.lg + (keyboardVisible ? 0 : insets.bottom) }]}>
               {searchResults.map((item) => <SearchResultRow key={timelineKey(item)} item={item} onPress={() => openSearchResult(item)} />)}
             </ScrollView>}
         </View> : null}
         {!searchOpen ? <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.chatBackground}00`, `${theme.chatBackground}10`, `${theme.chatBackground}80`, `${theme.chatBackground}EF`, theme.chatBackground]} locations={[0, 0.2, 0.5, 0.8, 1]} style={[styles.bottomFade, { height: Math.min(composerHeight, MIN_COMPOSER_INPUT_HEIGHT + spacing.sm + composerBottomPadding) }]} /> : null}
-        {!searchOpen && showJumpToLatest && !suggestion ? <Pressable accessibilityRole="button" accessibilityLabel="Jump to latest message" onPress={jumpToLatest} style={({ pressed }) => [styles.jumpToLatest, { bottom: composerHeight + (editing ? 52 : spacing.md), backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, pressed && styles.sendPressed]}><Ionicons accessible={false} name="arrow-down" size={20} color={theme.textPrimary} /></Pressable> : null}
-        {!searchOpen && editing && <View style={[styles.editing, { bottom: composerHeight + spacing.xs, backgroundColor: theme.surfaceElevated }]}><Text style={[styles.editingText, { color: theme.textSecondary }]}>{editing.attachments.length ? 'Editing description' : 'Editing thought'}</Text><Pressable accessibilityRole="button" onPress={cancelEditing}><Text style={[styles.cancel, { color: theme.accent }]}>Cancel</Text></Pressable></View>}
+        {!searchOpen && showJumpToLatest && !suggestion ? <Pressable accessibilityRole="button" accessibilityLabel="Jump to latest message" onPress={jumpToLatest} style={({ pressed }) => [styles.jumpToLatest, { bottom: composerHeight + (editing ? 52 : spacing.md), backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.control }, pressed), pressed && styles.sendPressed]}><Icon name="arrow-down" size={20} color={theme.textPrimary} /></Pressable> : null}
+        {!searchOpen && editing && <View style={[styles.editing, { bottom: composerHeight + spacing.xs, backgroundColor: theme.surfaceElevated }]}><AppText style={[styles.editingText, { color: theme.textSecondary }]}>{editing.attachments.length ? 'Editing description' : 'Editing thought'}</AppText><Pressable accessibilityRole="button" onPress={cancelEditing}><AppText style={[styles.cancel, { color: theme.accent }]}>Cancel</AppText></Pressable></View>}
         {!searchOpen && suggestion ? <ChitsGuide text={suggestion.copy} bottom={composerHeight + spacing.xs} onShown={() => confirmShown(suggestion.message.id)} onClose={dismissSuggestion} hint={suggestion.message.attachments.some((attachment) => attachment.type === 'file') || suggestion.message.attachments.length > 1 ? 'Spaces show a preview; every attachment stays with your Chat note.' : undefined} actions={[{ label: 'Add to Board', onPress: () => { const id = suggestion?.message.id; if (!id) return; hideSuggestion(); router.push({ pathname: '/unorganized', params: { messageId: id, openBoardPicker: '1', chitsGuided: '1' } }); } }, { label: 'Put in Space', onPress: () => { const id = suggestion?.message.id; if (!id) return; hideSuggestion(); router.push({ pathname: '/spaces/pick', params: { messageId: id, chitsGuided: '1' } }); } }, { label: suggestion.intro ? 'Keep in Chat' : 'Not now', onPress: dismissSuggestion }]} /> : null}
         {organizationSuccess ? <ChitsGuide text={organizationSuccess} bottom={composerHeight + spacing.xs} /> : null}
         {!searchOpen ? <View onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setComposerHeight((current) => (current === next ? current : next)); composerMeasuredRef.current = true; maybePerformInitialScroll(); }} style={[styles.composerDock, { paddingBottom: composerBottomPadding }]}>
-          {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { backgroundColor: theme.surfaceElevated, borderColor: theme.danger }]}><Ionicons accessible={false} name="alert-circle-outline" size={18} color={theme.danger} /><Text style={[styles.errorText, { color: theme.danger }]}>{error}</Text></View> : null}
-          <ChatComposerSurface style={[styles.composer, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, composerExpanded && styles.composerExpanded, composerFocused && { borderColor: theme.accentBorder }]}>
+          {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { backgroundColor: theme.surfaceElevated, borderColor: theme.danger }]}><Icon name="alert-circle-outline" size={18} color={theme.danger} /><AppText style={[styles.errorText, { color: theme.danger }]}>{error}</AppText></View> : null}
+          <ChatComposerSurface style={[styles.composer, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, composerExpanded && styles.composerExpanded, composerFocused && { borderColor: theme.accentBorder }, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.panel, outlineColor: composerFocused ? theme.accentStrong : undefined })]}>
             {!isRecordingAudio && attachmentDraft ? <AttachmentDraftPreview draft={attachmentDraft} compact={composerFocused} onRemove={removeAttachmentDraft} /> : null}
-            {!isRecordingAudio ? <TextInput ref={inputRef} accessibilityLabel={attachmentDraft || editing?.attachments.length ? 'Attachment description' : 'Message note'} value={draft} onChangeText={(text) => { if (text) hideSuggestion(); setDraft(text); }} onFocus={focusComposer} onBlur={blurComposer} onContentSizeChange={({ nativeEvent }) => handleContentSizeChange(nativeEvent.contentSize.height)} placeholder={attachmentDraft || editing?.attachments.length ? 'Add a description...' : editing ? 'Edit thought...' : 'Message note...'} placeholderTextColor={theme.textMuted} selectionColor={theme.accent} cursorColor={theme.accent} multiline maxLength={10000} scrollEnabled={!composerFocused || inputMaxed} style={[styles.input, composerExpanded ? styles.inputExpanded : styles.inputCompact, composerExpanded ? styles.inputAutoGrow : styles.inputFixed, { color: theme.textPrimary }]} textAlignVertical={composerExpanded ? 'top' : 'center'} /> : null}
-            <View pointerEvents={composerExpanded ? 'auto' : 'box-none'} style={[styles.composerActions, isRecordingAudio ? styles.composerActionsRecording : composerExpanded ? styles.composerActionsExpanded : styles.composerActionsCompact]}><AttachmentPicker ref={attachmentPickerRef} disabled={Boolean(attachmentDraft) || Boolean(editing) || isSaving} onSelected={attachmentSelected} onError={setError} onRecordingChange={recordingChanged} onOpenChange={(open) => { if (open) hideSuggestion(); setAttachmentPickerOpen(open); }} />{!isRecordingAudio ? <Pressable accessibilityRole="button" accessibilityLabel={canSend ? 'Send message' : 'Record audio'} accessibilityState={{ disabled: isSaving }} disabled={isSaving} onPress={() => { if (canSend) void send(); else attachmentPickerRef.current?.startAudio(); }} style={({ pressed }) => [styles.sendButton, { backgroundColor: isSaving ? theme.surfaceElevated : theme.accent }, pressed && styles.sendPressed]}><Ionicons accessible={false} name={canSend ? 'arrow-up' : 'mic-outline'} size={20} color={theme.accentText} /></Pressable> : null}</View>
+            {!isRecordingAudio ? <TextInput ref={inputRef} accessibilityLabel={attachmentDraft || editing?.attachments.length ? 'Attachment description' : 'Message note'} value={draft} onChangeText={(text) => { if (text) hideSuggestion(); setDraft(text); }} onFocus={focusComposer} onBlur={blurComposer} onContentSizeChange={({ nativeEvent }) => handleContentSizeChange(nativeEvent.contentSize.height)} placeholder={attachmentDraft || editing?.attachments.length ? 'Add a description...' : editing ? 'Edit thought...' : 'Message note...'} placeholderTextColor={theme.textMuted} selectionColor={theme.accent} cursorColor={theme.accent} multiline maxLength={10000} scrollEnabled={!composerFocused || inputMaxed} style={[styles.input, composerExpanded ? styles.inputExpanded : styles.inputCompact, composerExpanded ? styles.inputAutoGrow : styles.inputFixed, inputFont, { color: theme.textPrimary }]} textAlignVertical={composerExpanded ? 'top' : 'center'} /> : null}
+            <View pointerEvents={composerExpanded ? 'auto' : 'box-none'} style={[styles.composerActions, isRecordingAudio ? styles.composerActionsRecording : composerExpanded ? styles.composerActionsExpanded : styles.composerActionsCompact]}><AttachmentPicker ref={attachmentPickerRef} disabled={Boolean(attachmentDraft) || Boolean(editing) || isSaving} onSelected={attachmentSelected} onError={setError} onRecordingChange={recordingChanged} onOpenChange={(open) => { if (open) hideSuggestion(); setAttachmentPickerOpen(open); }} />{!isRecordingAudio ? <Pressable accessibilityRole="button" accessibilityLabel={canSend ? 'Send message' : 'Record audio'} accessibilityState={{ disabled: isSaving }} disabled={isSaving} onPress={() => { if (canSend) void send(); else attachmentPickerRef.current?.startAudio(); }} style={({ pressed }) => [styles.sendButton, { backgroundColor: isSaving ? theme.surfaceElevated : theme.accent }, sticky({ fill: isSaving ? theme.surfaceElevated : styleColors.accentFill, radius: styleTokens.radius.control }, pressed), pressed && styles.sendPressed]}><Icon name={canSend ? 'arrow-up' : 'mic-outline'} size={20} color={styleTokens.outline.width ? styleColors.onAccent : theme.accentText} /></Pressable> : null}</View>
           </ChatComposerSurface>
         </View> : null}
         <View style={styles.headerWrap} pointerEvents="box-none">

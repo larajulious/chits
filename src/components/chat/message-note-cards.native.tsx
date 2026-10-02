@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react';
 import { useRouter } from 'expo-router';
-import { Linking, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Linking, Pressable, StyleSheet, View, type StyleProp, type TextStyle } from 'react-native';
 
 import { classifyMessage, classifyText, parseInlineContent, parseParagraphs, parseStructuredText } from '@/components/chat/message-presentation';
 import { useTheme } from '@/components/theme-provider';
+import { useStickySurface } from '@/components/ui/surface';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
 import { radii, spacing } from '@/constants/theme';
 import type { Message } from '@/db/types';
 import { useBackgroundReadability } from './background-readability';
@@ -31,31 +33,44 @@ export function MessageMetadata({ message, inside = false, onActions, onHideAgai
   return <View style={[styles.metadata, inside && styles.metadataInside, backgroundActive && !inside && { alignSelf: 'flex-end', backgroundColor: tokens.surface, paddingHorizontal: 8, borderRadius: 12 }]}>
     {organization ? (splitPills ? <>
       <Pressable accessibilityRole="link" accessibilityLabel={`Open board ${organization.boardName} at column ${organization.columnName}`} accessibilityHint="Opens this column on its board" hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.pill, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
-        <Ionicons accessible={false} name="folder-outline" size={11} color={tokens.accentStrong} />
-        <Text numberOfLines={1} style={[styles.pillText, { color: tokens.accentStrong }]}>{organization.boardName}</Text>
+        <Icon name="folder-outline" size={11} color={tokens.accentStrong} />
+        <AppText numberOfLines={1} style={[styles.pillText, { color: tokens.accentStrong }]}>{organization.boardName}</AppText>
       </Pressable>
       <Pressable accessibilityRole="link" accessibilityLabel={`Open ${organization.columnName} in ${organization.boardName}`} accessibilityHint="Opens this column on its board" hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.pill, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
-        <Ionicons accessible={false} name="calendar-outline" size={11} color={tokens.accentStrong} />
-        <Text numberOfLines={1} style={[styles.pillText, { color: tokens.accentStrong }]}>{organization.columnName}</Text>
+        <Icon name="calendar-outline" size={11} color={tokens.accentStrong} />
+        <AppText numberOfLines={1} style={[styles.pillText, { color: tokens.accentStrong }]}>{organization.columnName}</AppText>
       </Pressable>
     </> : <Pressable accessibilityRole="link" accessibilityLabel={`Open ${organization.columnName} in ${organization.boardName}`} accessibilityHint="Opens this column on its board" hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.boardChip, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
-      <Ionicons accessible={false} name="folder-outline" size={10} color={tokens.accentStrong} />
-      <Text numberOfLines={1} style={[styles.boardChipText, { color: tokens.accentStrong }]}>{organization.boardName} · {organization.columnName}</Text>
+      <Icon name="folder-outline" size={10} color={tokens.accentStrong} />
+      <AppText numberOfLines={1} style={[styles.boardChipText, { color: tokens.accentStrong }]}>{organization.boardName} · {organization.columnName}</AppText>
     </Pressable>) : null}
-    <Text style={[styles.time, { color: tokens.textMuted }]}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? ' · edited' : ''}</Text>
-    {message.pinned ? <Ionicons accessibilityLabel="Pinned" name="pin-outline" size={13} color={tokens.textMuted} /> : null}
+    <AppText style={[styles.time, { color: tokens.textMuted }]}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? ' · edited' : ''}</AppText>
+    {message.pinned ? <Icon accessibilityLabel="Pinned" name="pin-outline" size={13} color={tokens.textMuted} /> : null}
     {/* A reminder belongs to this thought or its linked card. */}
-    {(message.reminderAt ?? message.organization?.reminderAt) != null ? <Ionicons accessibilityLabel="Reminder set" name="notifications-outline" size={13} color={tokens.textMuted} /> : null}
-    {onHideAgain ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" hitSlop={8} onPress={onHideAgain} style={({ pressed }) => [styles.privacyAction, pressed && styles.pressed]}><Ionicons accessible={false} name="eye-off-outline" size={16} color={tokens.textMuted} /></Pressable> : null}
+    {(message.reminderAt ?? message.organization?.reminderAt) != null ? <Icon accessibilityLabel="Reminder set" name="notifications-outline" size={13} color={tokens.textMuted} /> : null}
+    {onHideAgain ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" hitSlop={8} onPress={onHideAgain} style={({ pressed }) => [styles.privacyAction, pressed && styles.pressed]}><Icon name="eye-off-outline" size={16} color={tokens.textMuted} /></Pressable> : null}
     <Pressable accessibilityRole="button" accessibilityLabel="Thought actions" hitSlop={8} onPress={onActions} style={styles.more}>
-      <Ionicons accessible={false} name="ellipsis-horizontal" size={17} color={tokens.textMuted} />
+      <Icon name="ellipsis-horizontal" size={17} color={tokens.textMuted} />
     </Pressable>
   </View>;
 }
 
+/** Sticky's outlined chat surfaces; null under Classic. */
+function useStickyMessage() {
+  const { tokens, styleTokens: t, styleColors } = useTheme();
+  const sticky = useStickySurface();
+  const b = t.radius.bubble;
+  return {
+    // A thought: its bubble color, outlined, the bottom-right corner tight like a tail.
+    bubble: (focused: boolean) => sticky({ fill: tokens.bubble, radius: { topLeft: b, topRight: b, bottomRight: t.radius.card.bottomRight, bottomLeft: b }, outlineColor: focused ? tokens.accentStrong : undefined }),
+    card: (focused: boolean) => sticky({ fill: styleColors.controlFill, radius: t.radius.panel, outlineColor: focused ? tokens.accentStrong : undefined }),
+  };
+}
+
 export function QuickThoughtBubble({ message, focused, onActions, onHideAgain, preview = false }: NoteProps & { preview?: boolean }) {
   const { tokens } = useTheme();
-  const bubbleStyle = [styles.quickThought, { backgroundColor: tokens.bubble, borderColor: focused ? tokens.accentStrong : 'transparent' }, focused && styles.focused];
+  const sticky = useStickyMessage();
+  const bubbleStyle = [styles.quickThought, { backgroundColor: tokens.bubble, borderColor: focused ? tokens.accentStrong : 'transparent' }, focused && styles.focused, sticky.bubble(Boolean(focused))];
   const content = <PlainTextContent text={message.text ?? ''} mode="compact" color={tokens.bubbleText} />;
   return <>
     {preview ? <View style={bubbleStyle}>{content}</View> : <Pressable
@@ -73,12 +88,13 @@ export function QuickThoughtBubble({ message, focused, onActions, onHideAgain, p
 
 export function NoteCard({ message, focused, onActions, onHideAgain }: NoteProps) {
   const { tokens } = useTheme();
+  const sticky = useStickyMessage();
   return <Pressable
     accessibilityRole="button"
     accessibilityLabel={messageLabel(message)}
     delayLongPress={350}
     onLongPress={onActions}
-    style={({ pressed }) => [styles.noteCard, { backgroundColor: tokens.surface, borderColor: focused ? tokens.accentStrong : tokens.borderSubtle }, focused && styles.focused, pressed && styles.pressed]}
+    style={({ pressed }) => [styles.noteCard, { backgroundColor: tokens.surface, borderColor: focused ? tokens.accentStrong : tokens.borderSubtle }, focused && styles.focused, sticky.card(Boolean(focused)), pressed && styles.pressed]}
   >
     <PlainTextContent text={message.text ?? ''} mode="compact" color={tokens.textPrimary} />
     <MessageMetadata message={message} inside onActions={onActions} onHideAgain={onHideAgain} />
@@ -87,12 +103,13 @@ export function NoteCard({ message, focused, onActions, onHideAgain }: NoteProps
 
 export function StructuredNoteCard({ message, focused, onActions, onHideAgain }: NoteProps) {
   const { tokens } = useTheme();
+  const sticky = useStickyMessage();
   return <Pressable
     accessibilityRole="button"
     accessibilityLabel={messageLabel(message)}
     delayLongPress={350}
     onLongPress={onActions}
-    style={({ pressed }) => [styles.noteCard, { backgroundColor: tokens.surface, borderColor: focused ? tokens.accentStrong : tokens.borderSubtle }, focused && styles.focused, pressed && styles.pressed]}
+    style={({ pressed }) => [styles.noteCard, { backgroundColor: tokens.surface, borderColor: focused ? tokens.accentStrong : tokens.borderSubtle }, focused && styles.focused, sticky.card(Boolean(focused)), pressed && styles.pressed]}
   >
     <StructuredContent text={message.text ?? ''} mode="compact" />
     <MessageMetadata message={message} inside onActions={onActions} onHideAgain={onHideAgain} />
@@ -108,9 +125,9 @@ function PlainTextContent({ text, mode, color }: { text: string; mode: ContentMo
 
 function TextWithLinks({ text, style }: { text: string; style: StyleProp<TextStyle> }) {
   const { tokens } = useTheme();
-  return <Text style={style}>{parseInlineContent(text).map((segment, index) => segment.kind === 'link'
-    ? <Text key={`${index}-${segment.text}`} accessibilityRole="link" onPress={() => void Linking.openURL(segment.text)} style={{ color: tokens.accentStrong, textDecorationLine: 'underline' }}>{segment.text}</Text>
-    : <Text key={`${index}-${segment.text}`}>{segment.text}</Text>)}</Text>;
+  return <AppText style={style}>{parseInlineContent(text).map((segment, index) => segment.kind === 'link'
+    ? <AppText key={`${index}-${segment.text}`} accessibilityRole="link" onPress={() => void Linking.openURL(segment.text)} style={{ color: tokens.accentStrong, textDecorationLine: 'underline' }}>{segment.text}</AppText>
+    : <AppText key={`${index}-${segment.text}`}>{segment.text}</AppText>)}</AppText>;
 }
 
 function StructuredContent({ text, mode, accentColor }: { text: string; mode: ContentMode; accentColor?: string }) {
@@ -125,7 +142,7 @@ function StructuredContent({ text, mode, accentColor }: { text: string; mode: Co
       return <View key={line.key} style={[styles.itemRow, mode === 'detail' && styles.itemRowDetail]}>
         {line.checked === null
           ? <View style={[styles.bullet, mode === 'detail' && styles.bulletDetail, { backgroundColor: bulletColor }]} />
-          : <View style={[styles.checkbox, mode === 'detail' && styles.checkboxDetail, { borderColor: line.checked ? bulletColor : tokens.borderSubtle, backgroundColor: line.checked ? bulletColor : 'transparent' }]}>{line.checked ? <Ionicons accessible={false} name="checkmark" size={12} color={checkedIconColor} /> : null}</View>}
+          : <View style={[styles.checkbox, mode === 'detail' && styles.checkboxDetail, { borderColor: line.checked ? bulletColor : tokens.borderSubtle, backgroundColor: line.checked ? bulletColor : 'transparent' }]}>{line.checked ? <Icon name="checkmark" size={12} color={checkedIconColor} /> : null}</View>}
         <TextWithLinks text={line.text} style={[mode === 'detail' ? styles.itemTextDetail : styles.itemText, { color: tokens.textPrimary }]} />
       </View>;
     })}

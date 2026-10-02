@@ -20,6 +20,11 @@ export type SurfaceOptions = {
   /** Sticky's solid bottom edge depth (default: the style's); false for none. */
   edge?: number | false;
   edgeColor?: string;
+  /**
+   * The surface clips its content (overflow: hidden): Sticky draws the edge as
+   * a deeper bottom border inside the box, which clipping can't cut off.
+   */
+  clip?: boolean;
 };
 
 export function radiusStyle(radius: Radius | undefined): ViewStyle {
@@ -41,7 +46,7 @@ export function edgeDepth(tokens: StyleTokens, edge: SurfaceOptions['edge']): nu
  * layout space — leave room for it below).
  */
 export function surfaceStyle(tokens: StyleTokens, colors: StyleColors, options: SurfaceOptions, sunk = false): ViewStyle {
-  const { fill, radius, border, outline, outlineColor, shadow, edge, edgeColor } = options;
+  const { fill, radius, border, outline, outlineColor, shadow, edge, edgeColor, clip } = options;
   const style: ViewStyle = { ...radiusStyle(radius), ...(fill ? { backgroundColor: fill } : null) };
   if (tokens.elevation === 'soft') {
     if (border) Object.assign(style, { borderWidth: StyleSheet.hairlineWidth, borderColor: border });
@@ -49,16 +54,30 @@ export function surfaceStyle(tokens: StyleTokens, colors: StyleColors, options: 
     if (soft) Object.assign(style, { shadowColor: '#000', shadowOpacity: soft.opacity, shadowRadius: soft.radius, shadowOffset: { width: 0, height: soft.offsetY }, elevation: soft.elevation });
     return style;
   }
+  // Sticky never blurs: cancel any soft shadow a Classic style underneath set.
+  Object.assign(style, { shadowOpacity: 0, elevation: 0 });
   const width = outline === false ? 0 : outline ?? tokens.outline.width;
   if (width > 0) Object.assign(style, { borderWidth: width, borderColor: outlineColor ?? colors.outline });
   const depth = edgeDepth(tokens, edge);
-  if (depth > 0 && !sunk) style.boxShadow = `0px ${depth}px 0px 0px ${edgeColor ?? colors.outline}`;
+  if (depth > 0 && clip) Object.assign(style, { borderBottomWidth: width + depth, borderBottomColor: edgeColor ?? colors.outline });
+  else if (depth > 0 && !sunk) style.boxShadow = `0px ${depth}px 0px 0px ${edgeColor ?? colors.outline}`;
   return style;
 }
 
-export function Surface({ children, style, fill, radius, border, outline, outlineColor, shadow, edge, edgeColor, ...props }: PropsWithChildren<ViewProps & SurfaceOptions>) {
+/**
+ * For screens that keep their Classic styles as they are: returns a style to
+ * lay over them that turns the surface into Sticky's (outline, edge, corners),
+ * or null under Classic so nothing changes.
+ */
+export function useStickySurface() {
   const { styleTokens, styleColors } = useTheme();
-  return <View {...props} style={[surfaceStyle(styleTokens, styleColors, { fill, radius, border, outline, outlineColor, shadow, edge, edgeColor }), style]}>{children}</View>;
+  return (options: SurfaceOptions, sunk = false): ViewStyle | null =>
+    styleTokens.elevation === 'edge' ? surfaceStyle(styleTokens, styleColors, options, sunk) : null;
+}
+
+export function Surface({ children, style, fill, radius, border, outline, outlineColor, shadow, edge, edgeColor, clip, ...props }: PropsWithChildren<ViewProps & SurfaceOptions>) {
+  const { styleTokens, styleColors } = useTheme();
+  return <View {...props} style={[surfaceStyle(styleTokens, styleColors, { fill, radius, border, outline, outlineColor, shadow, edge, edgeColor, clip }), style]}>{children}</View>;
 }
 
 const CLASSIC_PRESSED: ViewStyle = { opacity: 0.6 };
@@ -68,15 +87,16 @@ const CLASSIC_PRESSED: ViewStyle = { opacity: 0.6 };
  * (`pressedStyle`); Sticky sinks the surface onto its edge — or, with Reduce
  * Motion on, just loses the edge and dims slightly instead of moving.
  */
-export function PressableSurface({ children, style, pressedStyle = CLASSIC_PRESSED, fill, radius, border, outline, outlineColor, shadow, edge, edgeColor, ...props }: Omit<PressableProps, 'style' | 'children'> & SurfaceOptions & { children?: ReactNode; style?: StyleProp<ViewStyle>; pressedStyle?: StyleProp<ViewStyle> }) {
+export function PressableSurface({ children, style, pressedStyle = CLASSIC_PRESSED, fill, radius, border, outline, outlineColor, shadow, edge, edgeColor, clip, ...props }: Omit<PressableProps, 'style' | 'children'> & SurfaceOptions & { children?: ReactNode; style?: StyleProp<ViewStyle>; pressedStyle?: StyleProp<ViewStyle> }) {
   const { styleTokens, styleColors } = useTheme();
   const reduceMotion = useReducedMotion();
-  const options = { fill, radius, border, outline, outlineColor, shadow, edge, edgeColor };
+  const options = { fill, radius, border, outline, outlineColor, shadow, edge, edgeColor, clip };
   const depth = edgeDepth(styleTokens, edge);
   return <Pressable
     {...props}
     style={({ pressed }) => {
-      const sink = pressed && styleTokens.press === 'sink' && depth > 0;
+      // A clipped surface's edge is part of its box, so it stays put rather than sinking.
+      const sink = pressed && styleTokens.press === 'sink' && depth > 0 && !clip;
       return [
         surfaceStyle(styleTokens, styleColors, options, sink),
         style,

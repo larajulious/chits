@@ -15,7 +15,7 @@ export { Button, Chip, ChipRow, IconButton, SegmentedControl } from './controls'
 export { EmptyState } from './empty-state';
 export { Icon } from './icon';
 export { NoteCard, NoteCategory } from './note-card';
-export { PressableSurface, Surface } from './surface';
+export { PressableSurface, Surface, useStickySurface } from './surface';
 
 export function Screen({ children, style, edges }: PropsWithChildren<{ style?: StyleProp<ViewStyle>; edges?: Edge[] }>) { const { tokens: theme } = useTheme(); return <SafeAreaView edges={edges} style={[styles.screen, { backgroundColor: theme.background }, style]}>{children}</SafeAreaView>; }
 export const AppScreen = Screen;

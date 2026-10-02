@@ -1,15 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { useTheme } from '@/components/theme-provider';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
 import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
 import { spacing } from '@/constants/theme';
 import { resolveBoardIcon, type BoardIconName } from '@/constants/board-appearance';
@@ -94,17 +88,17 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
       contentContainerStyle={styles.content}
     >
       <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
-      <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Edit board</Text>
-      <Text style={[styles.supportingCopy, { color: theme.textSecondary }]}>Update this board’s name and appearance.</Text>
+      <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Edit board</AppText>
+      <AppText style={[styles.supportingCopy, { color: theme.textSecondary }]}>Update this board’s name and appearance.</AppText>
 
       <View accessible accessibilityLabel={`Preview: ${trimmedName || 'Untitled board'}`} style={[styles.preview, { backgroundColor: theme.background, borderColor: theme.borderSubtle }]}>
         <View style={[styles.previewMark, { backgroundColor: accent ?? theme.accentSoft }]}>
-          <Ionicons accessible={false} name={resolveBoardIcon(icon)} size={19} color={accent ? '#FFFFFF' : theme.accentStrong} />
+          <Icon name={resolveBoardIcon(icon)} size={19} color={accent ? '#FFFFFF' : theme.accentStrong} />
         </View>
-        <Text numberOfLines={1} style={[styles.previewName, { color: theme.textPrimary }]}>{trimmedName || 'Untitled board'}</Text>
+        <AppText numberOfLines={1} style={[styles.previewName, { color: theme.textPrimary }]}>{trimmedName || 'Untitled board'}</AppText>
       </View>
 
-      <Text nativeID="board-name-label" style={[styles.label, { color: theme.textSecondary }]}>Board name</Text>
+      <AppText nativeID="board-name-label" style={[styles.label, { color: theme.textSecondary }]}>Board name</AppText>
       <TextInput
         ref={inputRef}
         accessibilityLabel="Board name"
@@ -130,15 +124,15 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
           },
         ]}
       />
-      {validation ? <Text accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{validation}</Text> : null}
+      {validation ? <AppText accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{validation}</AppText> : null}
 
       <BoardAppearanceFields icon={icon} accent={accent} onIconChange={setIcon} onAccentChange={setAccent} />
 
-      {error ? <Text accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</Text> : null}
+      {error ? <AppText accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</AppText> : null}
 
       <View style={styles.actions}>
         <Pressable accessibilityRole="button" disabled={saving} onPress={close} style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
-          <Text style={[styles.cancelText, { color: theme.textSecondary }]}>Cancel</Text>
+          <AppText style={[styles.cancelText, { color: theme.textSecondary }]}>Cancel</AppText>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -153,7 +147,7 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
             pressed && canSave && styles.pressed,
           ]}
         >
-          {saving ? <ActivityIndicator accessibilityLabel="Saving changes" size="small" color={theme.accentText} /> : <Text style={[styles.saveText, { color: theme.accentText }]}>Save changes</Text>}
+          {saving ? <ActivityIndicator accessibilityLabel="Saving changes" size="small" color={theme.accentText} /> : <AppText style={[styles.saveText, { color: theme.accentText }]}>Save changes</AppText>}
         </Pressable>
       </View>
     </FormSheet>

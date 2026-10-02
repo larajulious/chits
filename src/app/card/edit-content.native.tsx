@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { requestReminderSync } from '@/services/reminders';
 
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
 import { AppHeader, IconButton, Screen, HeaderIcon, useHeaderInk } from '@/components/ui/primitives';
 import { spacing } from '@/constants/theme';
 import { createMessageRepository } from '@/db/repositories';
@@ -98,10 +99,10 @@ export default function EditContentScreen() {
       <AppHeader
         title="Edit Note"
         leading={<IconButton label="Cancel" onPress={() => router.back()}><HeaderIcon name="close" size={24} /></IconButton>}
-        trailing={<IconButton label="Save" disabled={!canSave} onPress={() => void save()}><Ionicons accessible={false} name={saving ? 'ellipsis-horizontal' : 'checkmark'} size={24} color={canSave ? (headerInk.banded ? headerInk.ink : theme.accent) : headerInk.inkMuted} /></IconButton>}
+        trailing={<IconButton label="Save" disabled={!canSave} onPress={() => void save()}><Icon name={saving ? 'ellipsis-horizontal' : 'checkmark'} size={24} color={canSave ? (headerInk.banded ? headerInk.ink : theme.accent) : headerInk.inkMuted} /></IconButton>}
       />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { borderColor: theme.danger }]}><Text style={[styles.errorText, { color: theme.danger }]}>{error}</Text></View> : null}
+        {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { borderColor: theme.danger }]}><AppText style={[styles.errorText, { color: theme.danger }]}>{error}</AppText></View> : null}
         {/* The screen itself is the editing surface — no boxed field, no
             border, no inner ScrollView. A single flex:1 TextInput handles its
             own scrolling for content of any length, so it never has to

@@ -1,7 +1,8 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { useTheme } from '@/components/theme-provider';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
 import { spacing } from '@/constants/theme';
 import { BOARD_ACCENTS, BOARD_ICONS, type BoardIconName } from '@/constants/board-appearance';
 
@@ -17,7 +18,7 @@ type Props = {
 export function BoardAppearanceFields({ icon, accent, onIconChange, onAccentChange }: Props) {
   const { tokens: theme } = useTheme();
   return <>
-    <Text style={[styles.label, { color: theme.textSecondary }]}>Icon</Text>
+    <AppText style={[styles.label, { color: theme.textSecondary }]}>Icon</AppText>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.iconChoices}>
       <Pressable
         accessibilityRole="radio"
@@ -26,7 +27,7 @@ export function BoardAppearanceFields({ icon, accent, onIconChange, onAccentChan
         onPress={() => onIconChange(null)}
         style={[styles.iconChoice, { backgroundColor: theme.surfaceElevated }, icon === null && { borderColor: theme.accentStrong, backgroundColor: theme.accentSoft }]}
       >
-        <Ionicons accessible={false} name="remove" size={20} color={theme.textSecondary} />
+        <Icon name="remove" size={20} color={theme.textSecondary} />
       </Pressable>
       {BOARD_ICONS.map((choice) => (
         <Pressable
@@ -37,12 +38,12 @@ export function BoardAppearanceFields({ icon, accent, onIconChange, onAccentChan
           onPress={() => onIconChange(choice.name)}
           style={[styles.iconChoice, { backgroundColor: theme.surfaceElevated }, icon === choice.name && { borderColor: theme.accentStrong, backgroundColor: theme.accentSoft }]}
         >
-          <Ionicons accessible={false} name={choice.name} size={20} color={theme.textPrimary} />
+          <Icon name={choice.name} size={20} color={theme.textPrimary} />
         </Pressable>
       ))}
     </ScrollView>
 
-    <Text style={[styles.label, { color: theme.textSecondary }]}>Accent</Text>
+    <AppText style={[styles.label, { color: theme.textSecondary }]}>Accent</AppText>
     <View style={styles.swatches}>
       {BOARD_ACCENTS.map((choice) => (
         <Pressable
@@ -54,7 +55,7 @@ export function BoardAppearanceFields({ icon, accent, onIconChange, onAccentChan
           style={[styles.swatchHit, accent === choice.value && { borderColor: theme.textPrimary }]}
         >
           <View style={[styles.swatch, { backgroundColor: choice.color ?? theme.surfaceElevated, borderColor: theme.borderSubtle }]}>
-            {accent === choice.value ? <Ionicons accessible={false} name="checkmark" size={16} color={choice.value ? '#FFFFFF' : theme.textPrimary} /> : null}
+            {accent === choice.value ? <Icon name="checkmark" size={16} color={choice.value ? '#FFFFFF' : theme.textPrimary} /> : null}
           </View>
         </Pressable>
       ))}

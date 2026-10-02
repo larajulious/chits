@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { createVideoPlayer, type VideoThumbnail } from 'expo-video';
 
 import type { AttachmentDraft } from '@/components/chat/attachment-picker';
 import { useTheme } from '@/components/theme-provider';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
 import { spacing } from '@/constants/theme';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
 
@@ -39,14 +40,14 @@ function VideoPoster({ uri, duration, aspectRatio, compact }: { uri: string; dur
     } catch { /* The stable video placeholder remains visible. */ }
     return () => { active = false; };
   }, [uri]);
-  return <View style={[styles.media, compact ? styles.mediaCompact : styles.mediaExpanded, { aspectRatio, backgroundColor: tokens.surfaceElevated }]}>{thumbnail ? <Image source={thumbnail} contentFit="cover" style={StyleSheet.absoluteFill} /> : <Ionicons accessible={false} name="videocam-outline" size={28} color={tokens.textMuted} />}<View style={styles.playBadge}><Ionicons accessible={false} name="play" size={16} color="#FFFFFF" /></View><View style={styles.durationBadge}><Text style={styles.durationText}>{formatDuration(duration)}</Text></View></View>;
+  return <View style={[styles.media, compact ? styles.mediaCompact : styles.mediaExpanded, { aspectRatio, backgroundColor: tokens.surfaceElevated }]}>{thumbnail ? <Image source={thumbnail} contentFit="cover" style={StyleSheet.absoluteFill} /> : <Icon name="videocam-outline" size={28} color={tokens.textMuted} />}<View style={styles.playBadge}><Icon name="play" size={16} color="#FFFFFF" /></View><View style={styles.durationBadge}><AppText style={styles.durationText}>{formatDuration(duration)}</AppText></View></View>;
 }
 
 function PhotoPreview({ uri, aspectRatio, compact }: { uri: string; aspectRatio: number; compact: boolean }) {
   const { tokens } = useTheme();
   const [failed, setFailed] = useState(false);
   const mediaStyle = [styles.media, compact ? styles.mediaCompact : styles.mediaExpanded, { aspectRatio }];
-  if (failed) return <View accessibilityLabel="Photo unavailable" style={[mediaStyle, { backgroundColor: tokens.surfaceElevated }]}><Ionicons accessible={false} name="image-outline" size={26} color={tokens.textMuted} /><Text style={[styles.unavailable, { color: tokens.textSecondary }]}>Photo unavailable</Text></View>;
+  if (failed) return <View accessibilityLabel="Photo unavailable" style={[mediaStyle, { backgroundColor: tokens.surfaceElevated }]}><Icon name="image-outline" size={26} color={tokens.textMuted} /><AppText style={[styles.unavailable, { color: tokens.textSecondary }]}>Photo unavailable</AppText></View>;
   return <Image source={uri} contentFit="cover" transition={120} allowDownscaling onError={() => setFailed(true)} style={mediaStyle} />;
 }
 
@@ -61,7 +62,7 @@ function AudioDraft({ uri, duration }: { uri: string; duration: number | null })
     if (status.didJustFinish || (total && status.currentTime >= total)) void player.seekTo(0);
     player.play();
   };
-  return <View style={styles.audio}><Pressable accessibilityRole="button" accessibilityLabel={status.playing ? 'Pause recording preview' : 'Play recording preview'} onPress={toggle} style={[styles.audioButton, { backgroundColor: tokens.accent }]}><Ionicons accessible={false} name={status.playing ? 'pause' : 'play'} size={16} color={tokens.accentText} /></Pressable><View style={styles.audioCopy}><View style={[styles.track, { backgroundColor: tokens.borderSubtle }]}><View style={[styles.progress, { width: `${progress * 100}%`, backgroundColor: tokens.accent }]} /></View><Text style={[styles.meta, { color: tokens.textMuted }]}>{formatDuration(duration)}</Text></View></View>;
+  return <View style={styles.audio}><Pressable accessibilityRole="button" accessibilityLabel={status.playing ? 'Pause recording preview' : 'Play recording preview'} onPress={toggle} style={[styles.audioButton, { backgroundColor: tokens.accent }]}><Icon name={status.playing ? 'pause' : 'play'} size={16} color={tokens.accentText} /></Pressable><View style={styles.audioCopy}><View style={[styles.track, { backgroundColor: tokens.borderSubtle }]}><View style={[styles.progress, { width: `${progress * 100}%`, backgroundColor: tokens.accent }]} /></View><AppText style={[styles.meta, { color: tokens.textMuted }]}>{formatDuration(duration)}</AppText></View></View>;
 }
 
 export function AttachmentDraftPreview({ draft, compact, onRemove }: { draft: AttachmentDraft; compact: boolean; onRemove: () => void }) {
@@ -74,8 +75,8 @@ export function AttachmentDraftPreview({ draft, compact, onRemove }: { draft: At
     {attachment.type === 'photo' ? <PhotoPreview uri={uri} aspectRatio={aspectRatio} compact={compact} /> : null}
     {attachment.type === 'video' ? <VideoPoster uri={uri} duration={attachment.duration} aspectRatio={aspectRatio} compact={compact} /> : null}
     {attachment.type === 'audio' ? <AudioDraft uri={uri} duration={attachment.duration} /> : null}
-    {attachment.type === 'file' ? <View style={styles.file}><View style={[styles.fileIcon, { backgroundColor: tokens.surface }]}><Ionicons accessible={false} name="document-outline" size={22} color={tokens.accent} /></View><View style={styles.fileCopy}><Text numberOfLines={2} style={[styles.fileName, { color: tokens.textPrimary }]}>{attachment.originalName ?? 'Document'}</Text><Text style={[styles.meta, { color: tokens.textMuted }]}>{[readableType(attachment.mimeType, attachment.originalName), size].filter(Boolean).join(' · ')}</Text></View></View> : null}
-    <Pressable accessibilityRole="button" accessibilityLabel="Remove attachment" hitSlop={6} onPress={onRemove} style={[styles.remove, { backgroundColor: tokens.surface }]}><Ionicons accessible={false} name="close" size={17} color={tokens.textPrimary} /></Pressable>
+    {attachment.type === 'file' ? <View style={styles.file}><View style={[styles.fileIcon, { backgroundColor: tokens.surface }]}><Icon name="document-outline" size={22} color={tokens.accent} /></View><View style={styles.fileCopy}><AppText numberOfLines={2} style={[styles.fileName, { color: tokens.textPrimary }]}>{attachment.originalName ?? 'Document'}</AppText><AppText style={[styles.meta, { color: tokens.textMuted }]}>{[readableType(attachment.mimeType, attachment.originalName), size].filter(Boolean).join(' · ')}</AppText></View></View> : null}
+    <Pressable accessibilityRole="button" accessibilityLabel="Remove attachment" hitSlop={6} onPress={onRemove} style={[styles.remove, { backgroundColor: tokens.surface }]}><Icon name="close" size={17} color={tokens.textPrimary} /></Pressable>
   </View>;
 }
 

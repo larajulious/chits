@@ -1,7 +1,9 @@
 import { forwardRef } from 'react';
 import { LayoutAnimation, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/components/theme-provider';
+import { useFontStyle } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
+import { useStickySurface } from '@/components/ui/surface';
 import { useChatTransition } from '@/components/navigation/chat-transition';
 
 // Short, restrained cross-fade — no bounce — used whenever the row swaps between
@@ -29,19 +31,23 @@ export const ChatHeader = forwardRef<TextInput, Props>(function ChatHeader({ sea
 });
 
 export const ChatHeaderSurface = forwardRef<TextInput, Omit<Props, 'onCloseSearch'> & { onBack: () => void; preview?: boolean }>(function ChatHeaderSurface({ searchOpen, searchQuery, onBack, onOpenSearch, onSearchChange, onOpenSettings, preview = false }, searchInputRef) {
-  const { tokens } = useTheme();
+  const { tokens, styleTokens, styleColors } = useTheme();
+  const sticky = useStickySurface();
+  const inputFont = useFontStyle('body');
+  // Sticky: the header's buttons are outlined tiles, the search an outlined field.
+  const tile = (pressed: boolean) => sticky({ fill: styleColors.controlFill, radius: styleTokens.header.iconButton.radius, edge: styleTokens.header.iconButton.edge }, pressed);
   return <View style={styles.row}>
     {searchOpen ? (
-      <Pressable accessibilityRole="button" accessibilityLabel="Close search" onPress={onBack} style={({ pressed }) => [styles.iconButton, { backgroundColor: tokens.surface }, pressed && { backgroundColor: tokens.surfaceElevated }]}>
-        <Ionicons accessible={false} name="arrow-back" size={20} color={tokens.textPrimary} />
+      <Pressable accessibilityRole="button" accessibilityLabel="Close search" onPress={onBack} style={({ pressed }) => [styles.iconButton, { backgroundColor: tokens.surface }, pressed && { backgroundColor: tokens.surfaceElevated }, tile(pressed)]}>
+        <Icon name="arrow-back" size={20} color={tokens.textPrimary} />
       </Pressable>
     ) : (
-      <Pressable accessibilityRole="button" accessibilityLabel="Back" accessibilityHint="Closes Chat and returns to where you came from" onPress={onBack} style={({ pressed }) => [styles.iconButton, { backgroundColor: tokens.surface }, pressed && { backgroundColor: tokens.surfaceElevated }]}>
-        <Ionicons accessible={false} name="arrow-back" size={20} color={tokens.textPrimary} />
+      <Pressable accessibilityRole="button" accessibilityLabel="Back" accessibilityHint="Closes Chat and returns to where you came from" onPress={onBack} style={({ pressed }) => [styles.iconButton, { backgroundColor: tokens.surface }, pressed && { backgroundColor: tokens.surfaceElevated }, tile(pressed)]}>
+        <Icon name="arrow-back" size={20} color={tokens.textPrimary} />
       </Pressable>
     )}
-    <View style={[styles.searchField, { backgroundColor: tokens.surfaceElevated }]}>
-      <Ionicons accessible={false} name="search-outline" size={17} color={tokens.textMuted} />
+    <View style={[styles.searchField, { backgroundColor: tokens.surfaceElevated }, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.control, edge: false })]}>
+      <Icon name="search-outline" size={17} color={tokens.textMuted} />
       <TextInput
         ref={searchInputRef}
         editable={!preview}
@@ -54,12 +60,12 @@ export const ChatHeaderSurface = forwardRef<TextInput, Omit<Props, 'onCloseSearc
         selectionColor={tokens.accent}
         cursorColor={tokens.accent}
         returnKeyType="search"
-        style={[styles.searchInput, { color: tokens.textPrimary }]}
+        style={[styles.searchInput, inputFont, { color: tokens.textPrimary }]}
       />
-      {searchQuery ? <Pressable accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={8} onPress={() => onSearchChange('')}><Ionicons accessible={false} name="close-circle" size={16} color={tokens.textMuted} /></Pressable> : null}
+      {searchQuery ? <Pressable accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={8} onPress={() => onSearchChange('')}><Icon name="close-circle" size={16} color={tokens.textMuted} /></Pressable> : null}
     </View>
-    <Pressable accessibilityRole="button" accessibilityLabel="Settings" onPress={onOpenSettings} style={({ pressed }) => [styles.iconButton, { backgroundColor: tokens.surface }, pressed && { backgroundColor: tokens.surfaceElevated }]}>
-      <Ionicons accessible={false} name="ellipsis-horizontal" size={20} color={tokens.textPrimary} />
+    <Pressable accessibilityRole="button" accessibilityLabel="Settings" onPress={onOpenSettings} style={({ pressed }) => [styles.iconButton, { backgroundColor: tokens.surface }, pressed && { backgroundColor: tokens.surfaceElevated }, tile(pressed)]}>
+      <Icon name="ellipsis-horizontal" size={20} color={tokens.textPrimary} />
     </Pressable>
   </View>;
 });

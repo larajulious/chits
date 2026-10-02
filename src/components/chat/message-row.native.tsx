@@ -1,6 +1,5 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { FlatList, Modal, Pressable, StyleSheet, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
 import { BlurTargetView, BlurView } from 'expo-blur';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
@@ -13,6 +12,9 @@ import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-
 
 import { radii, spacing } from '@/constants/theme';
 import { useTheme } from '@/components/theme-provider';
+import { useStickySurface } from '@/components/ui/surface';
+import { AppText } from '@/components/ui/app-text';
+import { Icon, type IconName } from '@/components/ui/icon';
 import { MessageContentRenderer, MessageMetadata } from '@/components/chat/message-note-cards';
 import { createBoardRepository } from '@/db/repositories';
 import type { Attachment, AttachmentLike, Message } from '@/db/types';
@@ -45,7 +47,7 @@ function typeLabel(attachment: AttachmentLike) {
   if (attachment.mimeType?.includes('pdf')) return 'PDF file';
   return 'File';
 }
-function fileIcon(attachment: AttachmentLike): React.ComponentProps<typeof Ionicons>['name'] {
+function fileIcon(attachment: AttachmentLike): IconName {
   if (isPdfAttachment(attachment)) return 'document-text-outline';
   const value = `${attachment.mimeType ?? ''} ${attachment.originalName ?? ''}`.toLowerCase();
   if (value.includes('zip') || value.includes('archive') || value.includes('.rar')) return 'archive-outline';
@@ -74,9 +76,9 @@ function ViewerActions({ attachment, label, onDismiss }: { attachment: Attachmen
   const insets = useSafeAreaInsets();
   const top = { top: insets.top + spacing.sm };
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${exportActionLabel(attachment)}, ${label}`} disabled={download.busy} onPress={() => void download.exportAttachment(attachment)} style={[styles.viewerClose, styles.viewerSecondary, top]}><Ionicons accessible={false} name="download-outline" size={22} color="#FFFFFF" /></Pressable>
-    <Pressable accessibilityRole="button" accessibilityLabel={`Close ${label}`} onPress={onDismiss} style={[styles.viewerClose, top]}><Ionicons accessible={false} name="close" size={24} color="#FFFFFF" /></Pressable>
-    {download.status ? <View pointerEvents="none" style={[styles.viewerToast, { bottom: insets.bottom + spacing.xl }]}><Text accessibilityLiveRegion="polite" style={styles.viewerToastText}>{download.status}</Text></View> : null}
+    <Pressable accessibilityRole="button" accessibilityLabel={`${exportActionLabel(attachment)}, ${label}`} disabled={download.busy} onPress={() => void download.exportAttachment(attachment)} style={[styles.viewerClose, styles.viewerSecondary, top]}><Icon name="download-outline" size={22} color="#FFFFFF" /></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Close ${label}`} onPress={onDismiss} style={[styles.viewerClose, top]}><Icon name="close" size={24} color="#FFFFFF" /></Pressable>
+    {download.status ? <View pointerEvents="none" style={[styles.viewerToast, { bottom: insets.bottom + spacing.xl }]}><AppText accessibilityLiveRegion="polite" style={styles.viewerToastText}>{download.status}</AppText></View> : null}
   </>;
 }
 
@@ -107,7 +109,7 @@ export function useVideoThumbnail(storagePath: string) {
 export function VideoPoster({ attachment, style }: { attachment: AttachmentLike; style?: StyleProp<ViewStyle> }) {
   const { tokens: theme } = useTheme();
   const thumbnail = useVideoThumbnail(attachment.storagePath);
-  return <View style={[styles.media, style, { backgroundColor: theme.surfaceElevated }]}>{thumbnail ? <Image source={thumbnail} contentFit="cover" style={StyleSheet.absoluteFill} /> : <Ionicons accessible={false} name="videocam-outline" size={36} color={theme.textMuted} />}<View style={styles.videoPlay}><Ionicons accessible={false} name="play" size={23} color="#FFFFFF" /></View><View style={styles.durationBadge}><Text style={styles.durationText}>{formatDuration(attachment.duration)}</Text></View></View>;
+  return <View style={[styles.media, style, { backgroundColor: theme.surfaceElevated }]}>{thumbnail ? <Image source={thumbnail} contentFit="cover" style={StyleSheet.absoluteFill} /> : <Icon name="videocam-outline" size={36} color={theme.textMuted} />}<View style={styles.videoPlay}><Icon name="play" size={23} color="#FFFFFF" /></View><View style={styles.durationBadge}><AppText style={styles.durationText}>{formatDuration(attachment.duration)}</AppText></View></View>;
 }
 
 const WAVEFORM_BAR_COUNT = 34;
@@ -164,8 +166,7 @@ function AudioPlayer({ attachment }: { attachment: AttachmentLike }) {
         pressed && styles.audioButtonPressed,
       ]}
     >
-      <Ionicons
-        accessible={false}
+      <Icon
         name={unavailable ? 'alert-circle-outline' : loading ? 'ellipsis-horizontal' : status.playing ? 'pause' : 'play'}
         size={20}
         color={disabled ? theme.textMuted : theme.accentText}
@@ -174,8 +175,8 @@ function AudioPlayer({ attachment }: { attachment: AttachmentLike }) {
     </Pressable>
     <View style={styles.audioBody}>
       <View style={styles.audioHeading}>
-        <Text style={[styles.audioTitle, { color: theme.textPrimary }]}>Audio note</Text>
-        <Text style={[styles.audioState, { color: unavailable ? theme.textMuted : theme.accentStrong }]}>{unavailable ? 'Unavailable' : loading ? 'Loading' : formatSeconds(duration)}</Text>
+        <AppText style={[styles.audioTitle, { color: theme.textPrimary }]}>Audio note</AppText>
+        <AppText style={[styles.audioState, { color: unavailable ? theme.textMuted : theme.accentStrong }]}>{unavailable ? 'Unavailable' : loading ? 'Loading' : formatSeconds(duration)}</AppText>
       </View>
       <View
         accessible
@@ -186,7 +187,7 @@ function AudioPlayer({ attachment }: { attachment: AttachmentLike }) {
       >
         {bars.map((height, index) => <View key={index} style={[styles.waveformBar, { height, backgroundColor: index < playedBars ? theme.accent : theme.borderSubtle }]} />)}
       </View>
-      <Text style={[styles.audioTime, { color: theme.textMuted }]}>{formatSeconds(currentTime)}</Text>
+      <AppText style={[styles.audioTime, { color: theme.textMuted }]}>{formatSeconds(currentTime)}</AppText>
     </View>
   </View>;
 }
@@ -195,13 +196,13 @@ function Unavailable({ attachment, style }: { attachment: AttachmentLike; style?
   const { tokens: theme } = useTheme();
   const icon = attachment.type === 'photo' ? 'image-outline' : attachment.type === 'video' ? 'videocam-outline' : attachment.type === 'audio' ? 'volume-medium-outline' : fileIcon(attachment);
   const label = attachment.type === 'photo' ? 'Photo unavailable' : attachment.type === 'video' ? 'Video unavailable' : 'Attachment unavailable';
-  return <View accessibilityLabel={label} style={[styles.unavailable, style, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name={icon} size={25} color={theme.textMuted} /><Text style={[styles.unavailableText, { color: theme.textSecondary }]}>{label}</Text></View>;
+  return <View accessibilityLabel={label} style={[styles.unavailable, style, { backgroundColor: theme.surfaceElevated }]}><Icon name={icon} size={25} color={theme.textMuted} /><AppText style={[styles.unavailableText, { color: theme.textSecondary }]}>{label}</AppText></View>;
 }
 
 function AttachmentLoading({ attachment, style }: { attachment: AttachmentLike; style?: StyleProp<ViewStyle> }) {
   const { tokens: theme } = useTheme();
   const icon = attachment.type === 'photo' ? 'image-outline' : attachment.type === 'video' ? 'videocam-outline' : attachment.type === 'audio' ? 'volume-medium-outline' : fileIcon(attachment);
-  return <View accessibilityLabel={`${typeLabel(attachment)} loading`} style={[styles.unavailable, style, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name={icon} size={25} color={theme.textMuted} /></View>;
+  return <View accessibilityLabel={`${typeLabel(attachment)} loading`} style={[styles.unavailable, style, { backgroundColor: theme.surfaceElevated }]}><Icon name={icon} size={25} color={theme.textMuted} /></View>;
 }
 
 // `onOpen` (photo/video only): a tap hands off to the caller's multi-attachment
@@ -242,9 +243,9 @@ export function AttachmentContent({ attachment, accessibilityLabel, overlay, var
   // system share/open-with flow.
   const pdf = isPdfAttachment(attachment);
   const meta = [typeLabel(attachment).replace(/ file$/, ''), formatSize(attachment.size)].filter(Boolean).join(' · ');
-  if (pdf) return <><Pressable accessibilityRole="button" accessibilityLabel={`Open PDF, ${attachment.originalName ?? 'document'}${attachment.size ? `, ${formatSize(attachment.size)}` : ''}`} accessibilityHint="Opens the PDF in Chits" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [styles.fileTile, pressed && styles.fileTilePressed]}><View style={[styles.fileIcon, { backgroundColor: theme.surface }]}><Ionicons accessible={false} name="document-text-outline" size={22} color={accentColor ?? theme.accent} /><Text style={[styles.pdfBadge, { color: accentColor ?? theme.accent }]}>PDF</Text></View><View style={styles.fileCopy}><Text numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{attachment.originalName ?? 'Document.pdf'}</Text><Text style={[styles.attachmentMeta, { color: theme.textMuted }]}>{meta}</Text></View><Ionicons accessible={false} name="chevron-forward" size={18} color={theme.textMuted} />{overlay}</Pressable>{viewerOpen ? <PdfViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
+  if (pdf) return <><Pressable accessibilityRole="button" accessibilityLabel={`Open PDF, ${attachment.originalName ?? 'document'}${attachment.size ? `, ${formatSize(attachment.size)}` : ''}`} accessibilityHint="Opens the PDF in Chits" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [styles.fileTile, pressed && styles.fileTilePressed]}><View style={[styles.fileIcon, { backgroundColor: theme.surface }]}><Icon name="document-text-outline" size={22} color={accentColor ?? theme.accent} /><AppText style={[styles.pdfBadge, { color: accentColor ?? theme.accent }]}>PDF</AppText></View><View style={styles.fileCopy}><AppText numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{attachment.originalName ?? 'Document.pdf'}</AppText><AppText style={[styles.attachmentMeta, { color: theme.textMuted }]}>{meta}</AppText></View><Icon name="chevron-forward" size={18} color={theme.textMuted} />{overlay}</Pressable>{viewerOpen ? <PdfViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
   const open = async () => { setOpenError(null); try { if (!uri || !await Sharing.isAvailableAsync()) throw new Error(); await Sharing.shareAsync(uri, { mimeType: attachment.mimeType ?? undefined }); } catch { setOpenError('This file could not be opened.'); } };
-  return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${typeLabel(attachment)}, ${attachment.originalName ?? 'document'}${attachment.size ? `, ${formatSize(attachment.size)}` : ''}`} onPress={() => void open()} onLongPress={onLongPress} delayLongPress={350} style={styles.fileTile}><View style={[styles.fileIcon, { backgroundColor: theme.surface }]}><Ionicons accessible={false} name={fileIcon(attachment)} size={24} color={accentColor ?? theme.accent} /></View><View style={styles.fileCopy}><Text numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{attachment.originalName ?? 'Document'}</Text><Text style={[styles.attachmentMeta, { color: theme.textMuted }]}>{openError ?? meta}</Text></View><Ionicons accessible={false} name="open-outline" size={18} color={theme.textMuted} />{overlay}</Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${typeLabel(attachment)}, ${attachment.originalName ?? 'document'}${attachment.size ? `, ${formatSize(attachment.size)}` : ''}`} onPress={() => void open()} onLongPress={onLongPress} delayLongPress={350} style={styles.fileTile}><View style={[styles.fileIcon, { backgroundColor: theme.surface }]}><Icon name={fileIcon(attachment)} size={24} color={accentColor ?? theme.accent} /></View><View style={styles.fileCopy}><AppText numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{attachment.originalName ?? 'Document'}</AppText><AppText style={[styles.attachmentMeta, { color: theme.textMuted }]}>{openError ?? meta}</AppText></View><Icon name="open-outline" size={18} color={theme.textMuted} />{overlay}</Pressable>;
 }
 
 // `timestampLeft`: the bottom-right corner is taken (a video's duration or the
@@ -262,15 +263,15 @@ function MediaMetadata({ message, timestampLeft = false, onActions, onHideAgain 
         router.push({ pathname: '/board/[id]', params: { id: organization.boardId, highlightColumnId: organization.columnId } });
       }}
       style={({ pressed }) => [styles.mediaBoardChip, pressed && styles.pressed]}
-    ><Text numberOfLines={1} style={styles.mediaBoardChipText}>{organization.boardName} · {organization.columnName}</Text></Pressable> : null}
-    <View style={[styles.mediaTimestamp, timestampLeft && styles.mediaTimestampLeft]}><Text style={styles.mediaTimestampText}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? ' · edited' : ''}</Text>{message.pinned ? <Ionicons accessibilityLabel="Pinned" name="pin-outline" size={12} color="#FFFFFF" /> : null}{(message.reminderAt ?? message.organization?.reminderAt) != null ? <Ionicons accessibilityLabel="Reminder set" name="notifications-outline" size={12} color="#FFFFFF" /> : null}</View>
-    {onHideAgain ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" onPress={onHideAgain} hitSlop={6} style={styles.mediaPrivacy}><Ionicons accessible={false} name="eye-off-outline" size={16} color="#FFFFFF" /></Pressable> : null}
-    <Pressable accessibilityRole="button" accessibilityLabel="Thought actions" onPress={onActions} hitSlop={6} style={styles.mediaActions}><Ionicons accessible={false} name="ellipsis-horizontal" size={17} color="#FFFFFF" /></Pressable>
+    ><AppText numberOfLines={1} style={styles.mediaBoardChipText}>{organization.boardName} · {organization.columnName}</AppText></Pressable> : null}
+    <View style={[styles.mediaTimestamp, timestampLeft && styles.mediaTimestampLeft]}><AppText style={styles.mediaTimestampText}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? ' · edited' : ''}</AppText>{message.pinned ? <Icon accessibilityLabel="Pinned" name="pin-outline" size={12} color="#FFFFFF" /> : null}{(message.reminderAt ?? message.organization?.reminderAt) != null ? <Icon accessibilityLabel="Reminder set" name="notifications-outline" size={12} color="#FFFFFF" /> : null}</View>
+    {onHideAgain ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" onPress={onHideAgain} hitSlop={6} style={styles.mediaPrivacy}><Icon name="eye-off-outline" size={16} color="#FFFFFF" /></Pressable> : null}
+    <Pressable accessibilityRole="button" accessibilityLabel="Thought actions" onPress={onActions} hitSlop={6} style={styles.mediaActions}><Icon name="ellipsis-horizontal" size={17} color="#FFFFFF" /></Pressable>
   </>;
 }
 
 function AttachmentMessage({ message, attachment, focused, onLongPress, onHideAgain }: { message: Message; attachment: Attachment; focused: boolean; onLongPress: (message: Message) => void; onHideAgain?: () => void }) {
-  const { tokens: theme } = useTheme();
+  const { tokens: theme, styleTokens } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const database = useSQLiteContext();
   const [gallery, setGallery] = useState<{ items: AttachmentLike[]; initialIndex: number } | null>(null);
@@ -302,12 +303,13 @@ function AttachmentMessage({ message, attachment, focused, onLongPress, onHideAg
   // one), but capped well short of the full chat width so it still reads as a
   // message, not a full-bleed screen element.
   const chatWidth = screenWidth - spacing.md * 2;
+  const sticky = useStickySurface();
   const messageMaxWidth = Math.min(520, Math.round(chatWidth * 0.8));
-  return <Pressable accessible={false} onLongPress={() => onLongPress(message)} delayLongPress={350} style={({ pressed }) => [styles.attachmentMessage, { maxWidth: messageMaxWidth, backgroundColor: theme.surface, borderColor: focused ? theme.accentStrong : theme.borderSubtle }, focused && styles.focused, pressed && styles.pressed]}>
+  return <Pressable accessible={false} onLongPress={() => onLongPress(message)} delayLongPress={350} style={({ pressed }) => [styles.attachmentMessage, { maxWidth: messageMaxWidth, backgroundColor: theme.surface, borderColor: focused ? theme.accentStrong : theme.borderSubtle }, focused && styles.focused, sticky({ radius: styleTokens.radius.panel, outlineColor: focused ? theme.accentStrong : undefined, clip: true }), pressed && styles.pressed]}>
     {mosaicItems.length > 1
       ? <MediaMosaic items={mosaicItems} total={totalAttachments} firstLabel={accessibilityLabel} onOpen={(startId) => void openGallery(startId)} onLongPress={() => onLongPress(message)} overlay={!message.text ? <MediaMetadata message={message} timestampLeft onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /> : null} />
       : <AttachmentContent attachment={attachment} accessibilityLabel={accessibilityLabel} onOpen={moreCount > 0 ? () => void openGallery() : undefined} overlay={visual && !message.text ? <MediaMetadata message={message} timestampLeft={attachment.type === 'video'} onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /> : null} />}
-    {message.text ? <View style={[styles.descriptionSurface, visual && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.borderSubtle }]}><Text accessible={!visual} style={[styles.attachmentDescription, { color: theme.textPrimary }]}>{message.text}</Text><MessageMetadata message={message} inside splitPills={attachment.type === 'audio'} onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /></View> : null}
+    {message.text ? <View style={[styles.descriptionSurface, visual && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.borderSubtle }]}><AppText accessible={!visual} style={[styles.attachmentDescription, { color: theme.textPrimary }]}>{message.text}</AppText><MessageMetadata message={message} inside splitPills={attachment.type === 'audio'} onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /></View> : null}
     {!visual && !message.text ? <MessageMetadata message={message} inside splitPills={attachment.type === 'audio'} onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /> : null}
     {gallery ? <AttachmentGallery attachments={gallery.items} initialIndex={gallery.initialIndex} onDismiss={() => setGallery(null)} /> : null}
   </Pressable>;
@@ -322,9 +324,9 @@ function MosaicVideoFace({ item }: { item: AttachmentLike }) {
   const { tokens: theme } = useTheme();
   const thumbnail = useVideoThumbnail(item.storagePath);
   return <>
-    {thumbnail ? <Image source={thumbnail} contentFit="cover" style={StyleSheet.absoluteFill} /> : <Ionicons accessible={false} name="videocam-outline" size={28} color={theme.textMuted} />}
-    <View style={styles.mosaicPlay}><Ionicons accessible={false} name="play" size={16} color="#FFFFFF" /></View>
-    <View style={styles.durationBadge}><Text style={styles.durationText}>{formatDuration(item.duration)}</Text></View>
+    {thumbnail ? <Image source={thumbnail} contentFit="cover" style={StyleSheet.absoluteFill} /> : <Icon name="videocam-outline" size={28} color={theme.textMuted} />}
+    <View style={styles.mosaicPlay}><Icon name="play" size={16} color="#FFFFFF" /></View>
+    <View style={styles.durationBadge}><AppText style={styles.durationText}>{formatDuration(item.duration)}</AppText></View>
   </>;
 }
 
@@ -334,8 +336,8 @@ function MosaicFileFace({ item }: { item: AttachmentLike }) {
   const icon = item.type === 'photo' ? 'image-outline' : item.type === 'audio' ? 'volume-medium-outline' : fileIcon(item);
   const name = item.type === 'file' ? item.originalName ?? typeLabel(item) : typeLabel(item);
   return <View style={styles.mosaicFile}>
-    <Ionicons accessible={false} name={icon} size={26} color={theme.accent} />
-    <Text numberOfLines={2} style={[styles.mosaicFileName, { color: theme.textSecondary }]}>{name}</Text>
+    <Icon name={icon} size={26} color={theme.accent} />
+    <AppText numberOfLines={2} style={[styles.mosaicFileName, { color: theme.textSecondary }]}>{name}</AppText>
   </View>;
 }
 
@@ -346,7 +348,7 @@ function MosaicTile({ item, label, hiddenCount, onPress, onLongPress }: { item: 
     {item.type === 'photo' && !photoFailed ? <Image source={resolveAttachmentUri(item.storagePath)} contentFit="cover" transition={120} allowDownscaling recyclingKey={item.id} onError={() => setPhotoFailed(true)} style={StyleSheet.absoluteFill} />
       : item.type === 'video' ? <MosaicVideoFace item={item} />
       : <MosaicFileFace item={item} />}
-    {hiddenCount > 0 ? <View style={styles.mosaicMore}><Text style={styles.mosaicMoreText}>+{hiddenCount}</Text></View> : null}
+    {hiddenCount > 0 ? <View style={styles.mosaicMore}><AppText style={styles.mosaicMoreText}>+{hiddenCount}</AppText></View> : null}
   </Pressable>;
 }
 
@@ -416,7 +418,7 @@ function AttachmentGallery({ attachments, initialIndex, onDismiss }: { attachmen
 
 function GalleryPosition({ label }: { label: string }) {
   const insets = useSafeAreaInsets();
-  return <View style={[styles.galleryPosition, { top: insets.top + spacing.sm }]}><Text accessibilityLiveRegion="polite" style={styles.galleryPositionText}>{label}</Text></View>;
+  return <View style={[styles.galleryPosition, { top: insets.top + spacing.sm }]}><AppText accessibilityLiveRegion="polite" style={styles.galleryPositionText}>{label}</AppText></View>;
 }
 
 function hiddenCopy(message: Message) {
@@ -445,7 +447,8 @@ function hiddenFallbackHeight(message: Message, width: number, screenHeight: num
 }
 
 function HiddenMessageCover({ message, height, focused, onReveal, onLongPress }: { message: Message; height: number; focused: boolean; onReveal: (message: Message) => void; onLongPress: (message: Message) => void }) {
-  const { scheme, tokens: theme } = useTheme();
+  const { scheme, tokens: theme, styleTokens } = useTheme();
+  const sticky = useStickySurface();
   const blurTargetRef = useRef<View | null>(null);
   const copy = hiddenCopy(message);
   return <Pressable
@@ -456,7 +459,7 @@ function HiddenMessageCover({ message, height, focused, onReveal, onLongPress }:
     onPress={() => onReveal(message)}
     onLongPress={() => onLongPress(message)}
     delayLongPress={350}
-    style={({ pressed }) => [styles.hiddenCover, { minHeight: height, backgroundColor: theme.surfaceElevated, borderColor: focused ? theme.accentStrong : theme.borderSubtle }, focused && styles.focused, pressed && styles.hiddenCoverPressed]}
+    style={({ pressed }) => [styles.hiddenCover, { minHeight: height, backgroundColor: theme.surfaceElevated, borderColor: focused ? theme.accentStrong : theme.borderSubtle }, focused && styles.focused, sticky({ radius: styleTokens.radius.panel, outlineColor: focused ? theme.accentStrong : undefined, clip: true }), pressed && styles.hiddenCoverPressed]}
   >
     <BlurTargetView ref={blurTargetRef} accessible={false} style={StyleSheet.absoluteFill}>
       <View style={[styles.hiddenVeilOrb, styles.hiddenVeilOrbTop, { backgroundColor: theme.accentSoft }]} />
@@ -472,10 +475,10 @@ function HiddenMessageCover({ message, height, focused, onReveal, onLongPress }:
     />
     <View accessible={false} style={[StyleSheet.absoluteFill, styles.hiddenPrivacyWash, { backgroundColor: theme.surface }]} />
     <View style={[styles.hiddenBadge, { backgroundColor: `${theme.surfaceElevated}D9`, borderColor: `${theme.borderSubtle}B8` }]}>
-      <View style={[styles.hiddenBadgeIcon, { backgroundColor: `${theme.accentSoft}E6` }]}><Ionicons accessible={false} name="eye-off-outline" size={18} color={theme.accentStrong} /></View>
+      <View style={[styles.hiddenBadgeIcon, { backgroundColor: `${theme.accentSoft}E6` }]}><Icon name="eye-off-outline" size={18} color={theme.accentStrong} /></View>
       <View style={styles.hiddenBadgeCopy}>
-        <Text style={[styles.hiddenTitle, { color: theme.textPrimary }]}>{copy.title}</Text>
-        <Text style={[styles.hiddenHint, { color: theme.textMuted }]}>Tap to reveal</Text>
+        <AppText style={[styles.hiddenTitle, { color: theme.textPrimary }]}>{copy.title}</AppText>
+        <AppText style={[styles.hiddenHint, { color: theme.textMuted }]}>Tap to reveal</AppText>
       </View>
     </View>
   </Pressable>;

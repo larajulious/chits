@@ -1,10 +1,12 @@
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useState, type ComponentProps } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomSheetSurface } from '@/components/ui/primitives';
 import { useTheme } from '@/components/theme-provider';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
 import { spacing } from '@/constants/theme';
 import type { Message } from '@/db/types';
 import { exportActionLabel } from '@/services/attachment-export';
@@ -46,8 +48,8 @@ function ActionRow({ icon, label, onPress, destructive = false }: { icon: Compon
   const { tokens: theme } = useTheme();
   const color = destructive ? theme.danger : theme.textPrimary;
   return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
-    <Ionicons accessible={false} name={icon} size={20} color={color} />
-    <Text style={[styles.rowLabel, { color }]}>{label}</Text>
+    <Icon name={icon} size={20} color={color} />
+    <AppText style={[styles.rowLabel, { color }]}>{label}</AppText>
   </Pressable>;
 }
 
@@ -78,7 +80,7 @@ export function MessageActions({ message: current, temporarilyRevealed, onDismis
       <SafeAreaView edges={['bottom']} style={styles.sheet}>
         <BottomSheetSurface>
           <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
-          <Text numberOfLines={2} ellipsizeMode="tail" style={[styles.preview, { color: theme.textSecondary }]}>{preview}</Text>
+          <AppText numberOfLines={2} ellipsizeMode="tail" style={[styles.preview, { color: theme.textSecondary }]}>{preview}</AppText>
 
           <View style={styles.group}>
             {covered ? <ActionRow icon="eye-outline" label="Reveal" onPress={() => onReveal(message)} /> : null}

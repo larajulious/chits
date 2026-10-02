@@ -1,11 +1,13 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ComponentProps } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
 import { deleteAsync } from 'expo-file-system/legacy';
 
 import { BottomSheetSurface } from '@/components/ui/primitives';
 import { useTheme } from '@/components/theme-provider';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
 import { spacing } from '@/constants/theme';
 import type { MessageType } from '@/db/types';
 import { pickAndStageFile, pickAndStageMedia, stageAttachment, type AttachmentDraft } from '@/services/attachment-import';
@@ -112,7 +114,7 @@ export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(functi
     await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true, interruptionMode: 'doNotMix', shouldPlayInBackground: false, shouldRouteThroughEarpiece: false });
   };
 
-  const choose = (label: string, icon: ComponentProps<typeof Ionicons>['name'], onPress: () => void) => <Pressable accessibilityRole="button" onPress={onPress} style={[styles.choice, { borderColor: theme.borderSubtle }]}><Ionicons accessible={false} name={icon} size={22} color={theme.textSecondary} /><Text style={[styles.choiceText, { color: theme.textPrimary }]}>{label}</Text></Pressable>;
+  const choose = (label: string, icon: ComponentProps<typeof Ionicons>['name'], onPress: () => void) => <Pressable accessibilityRole="button" onPress={onPress} style={[styles.choice, { borderColor: theme.borderSubtle }]}><Icon name={icon} size={22} color={theme.textSecondary} /><AppText style={[styles.choiceText, { color: theme.textPrimary }]}>{label}</AppText></Pressable>;
   useImperativeHandle(ref, () => ({ startAudio: () => void startRecording() }), [startRecording]);
   useEffect(() => { onRecordingChange?.(recorderState.isRecording); }, [onRecordingChange, recorderState.isRecording]);
   useEffect(() => () => onRecordingChange?.(false), [onRecordingChange]);
@@ -120,15 +122,15 @@ export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(functi
   useEffect(() => () => onOpenChange?.(false), [onOpenChange]);
 
   if (recorderState.isRecording) return <View style={styles.recording}>
-    <Pressable accessibilityRole="button" accessibilityLabel="Cancel recording" onPress={() => void cancelRecording()} style={({ pressed }) => [styles.recordingAction, { backgroundColor: theme.surfaceElevated }, pressed && styles.actionPressed]}><Ionicons accessible={false} name="close" size={21} color={theme.textSecondary} /></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel="Cancel recording" onPress={() => void cancelRecording()} style={({ pressed }) => [styles.recordingAction, { backgroundColor: theme.surfaceElevated }, pressed && styles.actionPressed]}><Icon name="close" size={21} color={theme.textSecondary} /></Pressable>
     <View accessibilityLiveRegion="polite" accessibilityLabel={`Recording, ${formatRecordingTime(recorderState.durationMillis)}`} style={styles.recordingStatus}>
-      <View style={styles.recordingLabel}><View style={[styles.recordingDot, { backgroundColor: theme.danger }]} /><Text style={[styles.recordingText, { color: theme.textSecondary }]}>Recording</Text></View>
-      <Text style={[styles.recordingTime, { color: theme.textPrimary }]}>{formatRecordingTime(recorderState.durationMillis)}</Text>
+      <View style={styles.recordingLabel}><View style={[styles.recordingDot, { backgroundColor: theme.danger }]} /><AppText style={[styles.recordingText, { color: theme.textSecondary }]}>Recording</AppText></View>
+      <AppText style={[styles.recordingTime, { color: theme.textPrimary }]}>{formatRecordingTime(recorderState.durationMillis)}</AppText>
     </View>
-    <Pressable accessibilityRole="button" accessibilityLabel="Use recording" accessibilityHint="Stops recording and prepares it to send" onPress={() => void finishRecording()} style={({ pressed }) => [styles.recordingAction, { backgroundColor: theme.accent }, pressed && styles.actionPressed]}><Ionicons accessible={false} name="checkmark" size={22} color={theme.accentText} /></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel="Use recording" accessibilityHint="Stops recording and prepares it to send" onPress={() => void finishRecording()} style={({ pressed }) => [styles.recordingAction, { backgroundColor: theme.accent }, pressed && styles.actionPressed]}><Icon name="checkmark" size={22} color={theme.accentText} /></Pressable>
   </View>;
 
-  return <><Pressable accessibilityRole="button" accessibilityLabel="Add attachment" accessibilityState={{ disabled: disabled || saving }} disabled={disabled || saving} onPress={() => setOpen(true)} style={[styles.trigger, (disabled || saving) && styles.disabled]}><Ionicons accessible={false} name="add" size={24} color={theme.textSecondary} /></Pressable><Modal transparent visible={open} animationType="slide" onRequestClose={() => setOpen(false)}><Pressable style={styles.backdrop} onPress={() => setOpen(false)}><Pressable style={styles.sheetShield} onPress={() => undefined}><BottomSheetSurface><View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />{choose('Photo', 'image-outline', () => void pickMedia('photo'))}{choose('Video', 'videocam-outline', () => void pickMedia('video'))}{choose('Audio', 'mic-outline', () => void startRecording())}{choose('File', 'document-outline', () => void pickFile())}{choose('Cancel', 'close-outline', () => setOpen(false))}</BottomSheetSurface></Pressable></Pressable></Modal></>;
+  return <><Pressable accessibilityRole="button" accessibilityLabel="Add attachment" accessibilityState={{ disabled: disabled || saving }} disabled={disabled || saving} onPress={() => setOpen(true)} style={[styles.trigger, (disabled || saving) && styles.disabled]}><Icon name="add" size={24} color={theme.textSecondary} /></Pressable><Modal transparent visible={open} animationType="slide" onRequestClose={() => setOpen(false)}><Pressable style={styles.backdrop} onPress={() => setOpen(false)}><Pressable style={styles.sheetShield} onPress={() => undefined}><BottomSheetSurface><View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />{choose('Photo', 'image-outline', () => void pickMedia('photo'))}{choose('Video', 'videocam-outline', () => void pickMedia('video'))}{choose('Audio', 'mic-outline', () => void startRecording())}{choose('File', 'document-outline', () => void pickFile())}{choose('Cancel', 'close-outline', () => setOpen(false))}</BottomSheetSurface></Pressable></Pressable></Modal></>;
 });
 
 const styles = StyleSheet.create({
