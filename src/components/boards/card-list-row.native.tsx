@@ -266,8 +266,7 @@ const styles = StyleSheet.create({
   fileMeta: { marginTop: 1, fontSize: 12, lineHeight: 16 },
   audioPill: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 34, marginTop: 10, paddingHorizontal: 9 },
   waveform: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  // Fully rounded bar ends (radius ≥ half the 2pt width).
-  waveformBar: { width: 2, borderRadius: 2, opacity: 0.8 },
+  waveformBar: { width: 2, borderRadius: 2 / 2, opacity: 0.8 },
   audioText: { fontSize: 12, fontVariant: ['tabular-nums'] },
   reminderLine: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 },
   reminderText: { flexShrink: 1, fontSize: 11.5, fontVariant: ['tabular-nums'] },

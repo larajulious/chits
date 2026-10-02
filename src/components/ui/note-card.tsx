@@ -4,7 +4,7 @@ import { StyleSheet, View, type PressableProps, type StyleProp, type ViewStyle }
 import { useTheme } from '@/components/theme-provider';
 import { noteColors, stableTilt, type NoteColors } from '@/constants/style-tokens';
 import { AppText } from './app-text';
-import { PressableSurface } from './surface';
+import { PressableSurface, surfaceStyle } from './surface';
 
 /** A Sticky note's colors: its board's accent when it has one, else the palette's. */
 export function useNoteColors(accent: string | null | undefined): NoteColors {
@@ -29,7 +29,7 @@ export function NoteCard({ id, accent, paper, border, tilt = false, children, st
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
-  const { styleTokens: t, scheme, look, tokens } = useTheme();
+  const { styleTokens: t, styleColors, scheme, look, tokens } = useTheme();
   const colors = useNoteColors(accent);
   const sticky = t.card.tinted;
   const padding = { paddingTop: t.noteCard.padding.top, paddingHorizontal: t.noteCard.padding.horizontal, paddingBottom: t.noteCard.padding.bottom };
@@ -56,7 +56,7 @@ export function NoteCard({ id, accent, paper, border, tilt = false, children, st
       pointerEvents="none"
       style={[styles.tape, {
         top: -tape.overhang, width: tape.width, height: tape.height, marginLeft: -tape.width / 2, borderRadius: tape.radius,
-        backgroundColor: colors.cardEdge, boxShadow: `0px ${tape.edge}px 0px 0px ${colors.tapeEdge}`,
+        ...surfaceStyle(t, styleColors, { fill: colors.cardEdge, outline: false, edge: tape.edge, edgeColor: colors.tapeEdge }),
         transform: [{ rotate: `${stableTilt(id, tape.maxAngle)}deg` }],
       }]}
     /> : null}

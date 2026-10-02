@@ -70,7 +70,8 @@
     "lint": "expo lint",
     "test": "node --test tests/*.test.mjs",
     "test:timeline": "node --test tests/chat-timeline-pagination.test.mjs",
-    "test:retirement": "node --test tests/reminder-retirement.test.mjs"
+    "test:retirement": "node --test tests/reminder-retirement.test.mjs",
+    "check:style": "scripts/check-style-tokens.sh"
   },
   "private": true
 }

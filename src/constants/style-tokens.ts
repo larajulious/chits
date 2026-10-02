@@ -30,7 +30,7 @@ export type StyleTokens = {
   id: AppStyle;
   /** display = screen titles and headings; body = UI text; paragraph = longer prose. */
   font: { display: FontFaces; body: FontFaces; paragraph: FontFaces };
-  radius: { card: Corners; control: number; pill: number; nav: number; panel: number; tile: number; sheet: number; toast: number };
+  radius: { card: Corners; control: number; pill: number; nav: number; panel: number; tile: number; sheet: number; toast: number; bubble: number };
   /** 0 = no outline (Classic's hairlines stay as they were). */
   outline: { width: number };
   elevation: 'soft' | 'edge';
@@ -43,7 +43,7 @@ export type StyleTokens = {
   chatButton: 'circle' | 'bubble';
   mascotEmptyStates: boolean;
   /** Classic's soft shadows, by how high the surface floats. */
-  shadow: { card: SoftShadow; bubble: SoftShadow; guide: SoftShadow; toast: SoftShadow; nav: SoftShadow; chat: SoftShadow };
+  shadow: { card: SoftShadow; bubble: SoftShadow; guide: SoftShadow; toast: SoftShadow; floating: SoftShadow; nav: SoftShadow; chat: SoftShadow };
 
   header: { minHeight: number; align: 'center' | 'left'; titleSize: number; titleLineHeight?: number; countSize: number; countBeside: boolean; iconButton: { size: number; radius: number; filled: boolean; edge: number } };
   segmented: { height: number; radius: number; padding: number; optionRadius: number; labelSize: number; edge: number };
@@ -68,7 +68,7 @@ export const STYLE_PRESETS: Record<AppStyle, StyleTokens> = {
   classic: {
     id: 'classic',
     font: { display: null, body: null, paragraph: null },
-    radius: { card: corners(18), control: 12, pill: 999, nav: 28, panel: 18, tile: 16, sheet: 22, toast: 20 },
+    radius: { card: corners(18), control: 12, pill: 999, nav: 28, panel: 18, tile: 16, sheet: 22, toast: 20, bubble: 14 },
     outline: { width: 0 },
     elevation: 'soft',
     edgeDepth: 0,
@@ -82,6 +82,7 @@ export const STYLE_PRESETS: Record<AppStyle, StyleTokens> = {
       bubble: { opacity: 0.1, radius: 12, offsetY: 4, elevation: 4 },
       guide: { opacity: 0.12, radius: 12, offsetY: 4, elevation: 5 },
       toast: { opacity: 0.16, radius: 10, offsetY: 4, elevation: 6 },
+      floating: { opacity: 0.08, radius: 16, offsetY: 8, elevation: 4 },
       nav: { opacity: 0.1, radius: 16, offsetY: 6, elevation: 8 },
       chat: { opacity: 0.22, radius: 12, offsetY: 6, elevation: 10 },
     },
@@ -104,7 +105,7 @@ export const STYLE_PRESETS: Record<AppStyle, StyleTokens> = {
       body: faces('Nunito_700Bold', 'Nunito_700Bold', 'Nunito_700Bold', 'Nunito_700Bold', 'Nunito_800ExtraBold'),
       paragraph: faces('Nunito_600SemiBold', 'Nunito_600SemiBold', 'Nunito_700Bold', 'Nunito_700Bold', 'Nunito_800ExtraBold'),
     },
-    radius: { card: corners(16, 16, 6, 16), control: 14, pill: 17, nav: 26, panel: 18, tile: 14, sheet: 22, toast: 16 },
+    radius: { card: corners(16, 16, 6, 16), control: 14, pill: 17, nav: 26, panel: 18, tile: 14, sheet: 22, toast: 16, bubble: 16 },
     outline: { width: 2 },
     elevation: 'edge',
     edgeDepth: 3,
@@ -118,6 +119,7 @@ export const STYLE_PRESETS: Record<AppStyle, StyleTokens> = {
       bubble: { opacity: 0, radius: 0, offsetY: 0, elevation: 0 },
       guide: { opacity: 0, radius: 0, offsetY: 0, elevation: 0 },
       toast: { opacity: 0, radius: 0, offsetY: 0, elevation: 0 },
+      floating: { opacity: 0, radius: 0, offsetY: 0, elevation: 0 },
       nav: { opacity: 0, radius: 0, offsetY: 0, elevation: 0 },
       chat: { opacity: 0, radius: 0, offsetY: 0, elevation: 0 },
     },

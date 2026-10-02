@@ -7,7 +7,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
   useWindowDimensions,
@@ -18,7 +17,7 @@ import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
-import { AppHeader, AppText, Chip, ChipRow, EmptyState, Icon, IconButton, PressableSurface, Screen, SegmentedControl, Surface, Toast, HeaderIcon, MenuIcon } from '@/components/ui/primitives';
+import { AppHeader, AppText, Chip, ChipRow, EmptyState, Icon, IconButton, PressableSurface, Screen, SegmentedControl, Surface, Toast, HeaderIcon, MenuIcon, useFontStyle } from '@/components/ui/primitives';
 import { AddNoteSheet, type NoteSubmission } from '@/components/boards/add-note-sheet';
 import { groupRecentNotes } from '@/services/card-grouping';
 import { detachConfirmationMessage } from '@/services/detach-card';
@@ -120,6 +119,7 @@ export default function BoardsScreen() {
   const { columnGap, rowGap } = styleTokens.noteCard;
   // Half a gap outside each balanced column, so columns sit at the screen inset.
   const listInset = spacing.md - columnGap / 2;
+  const inputFont = useFontStyle('body');
   // The floating bottom nav is absolutely positioned over this screen (see
   // PHASE: REDESIGN CHITS BOTTOM NAVIGATION) rather than reserving its own flex
   // space, so this screen's own scroll content has to reserve the matching
@@ -566,10 +566,10 @@ export default function BoardsScreen() {
         contentContainerStyle={styles.sheetContent}
       >
         <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
-        <Text accessibilityRole="header" style={[styles.sheetTitle, { color: theme.textPrimary }]}>New board</Text>
-        <Text style={[styles.sheetIntro, { color: theme.textSecondary }]}>Give this collection a clear, memorable name.</Text>
+        <AppText accessibilityRole="header" variant="display" weight="700" style={[styles.sheetTitle, { color: theme.textPrimary }]}>New board</AppText>
+        <AppText variant="paragraph" style={[styles.sheetIntro, { color: theme.textSecondary }]}>Give this collection a clear, memorable name.</AppText>
 
-        <Text style={[styles.label, { color: theme.textSecondary }]}>Board name</Text>
+        <AppText weight="600" style={[styles.label, { color: theme.textSecondary }]}>Board name</AppText>
         <TextInput
           ref={nameInputRef}
           accessibilityLabel="Board name"
@@ -582,34 +582,33 @@ export default function BoardsScreen() {
           placeholder="e.g. Tasks"
           placeholderTextColor={theme.textMuted}
           maxLength={80}
-          style={[styles.nameInput, { borderColor: theme.borderSubtle, color: theme.textPrimary, backgroundColor: theme.background }]}
+          style={[styles.nameInput, inputFont, { borderRadius: styleTokens.radius.control, borderWidth: styleTokens.outline.width || 1, borderColor: styleTokens.outline.width ? styleColors.outline : theme.borderSubtle, color: theme.textPrimary, backgroundColor: theme.background }]}
           returnKeyType="done"
           onSubmitEditing={() => void createBoard()}
         />
 
-        <Text style={[styles.optionalLabel, { color: theme.textMuted }]}>OPTIONAL PERSONALIZATION</Text>
+        <AppText weight="700" style={[styles.optionalLabel, { color: theme.textMuted }]}>OPTIONAL PERSONALIZATION</AppText>
         <BoardAppearanceFields icon={icon} accent={accent} onIconChange={setIcon} onAccentChange={setAccent} />
 
-        {error ? <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
+        {error ? <AppText accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>{error}</AppText> : null}
 
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" onPress={closeCreate} disabled={saving} style={styles.secondary}>
-            <Text style={[styles.secondaryText, { color: theme.textSecondary }]}>Cancel</Text>
+            <AppText weight="600" style={{ color: theme.textSecondary }}>Cancel</AppText>
           </Pressable>
-          <Pressable
+          <PressableSurface
             accessibilityRole="button"
             accessibilityState={{ disabled: !isNameValid || saving }}
             onPress={() => void createBoard()}
             disabled={!isNameValid || saving}
-            style={({ pressed }) => [
-              styles.primary,
-              { backgroundColor: theme.accent },
-              (!isNameValid || saving) && styles.disabled,
-              pressed && isNameValid && styles.pressed,
-            ]}
+            fill={styleTokens.elevation === 'edge' ? styleColors.accentFill : theme.accent}
+            radius={styleTokens.button.radius}
+            edge={styleTokens.button.edge || false}
+            pressedStyle={styles.pressed}
+            style={[styles.primary, (!isNameValid || saving) && styles.disabled]}
           >
-            <Text style={[styles.primaryText, { color: theme.accentText }]}>{saving ? 'Creating…' : 'Create board'}</Text>
-          </Pressable>
+            <AppText weight={styleTokens.elevation === 'edge' ? '800' : '700'} style={{ color: styleTokens.elevation === 'edge' ? styleColors.onAccent : theme.accentText }}>{saving ? 'Creating…' : 'Create board'}</AppText>
+          </PressableSurface>
         </View>
       </FormSheet>
       <Toast message={cardToast} />
@@ -653,17 +652,15 @@ const styles = StyleSheet.create({
   boardName: { fontSize: 16 },
   pressed: { opacity: 0.58 },
   sheetContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.md, gap: spacing.xs },
-  handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginBottom: spacing.xs },
-  sheetTitle: { fontSize: 22, fontWeight: '700' },
+  handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 4 / 2, marginBottom: spacing.xs },
+  sheetTitle: { fontSize: 22 },
   sheetIntro: { fontSize: 14, lineHeight: 20, marginBottom: spacing.xs },
-  label: { fontSize: 13, fontWeight: '600', marginTop: spacing.xs },
-  nameInput: { minHeight: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: spacing.sm, fontSize: 17 },
-  optionalLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginTop: spacing.sm },
+  label: { fontSize: 13, marginTop: spacing.xs },
+  nameInput: { minHeight: 48, paddingHorizontal: spacing.sm, fontSize: 17 },
+  optionalLabel: { fontSize: 11, letterSpacing: 0.8, marginTop: spacing.sm },
   error: { fontSize: 13, marginTop: spacing.xs },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
   secondary: { minHeight: 44, paddingHorizontal: spacing.md, alignItems: 'center', justifyContent: 'center' },
-  secondaryText: { fontWeight: '600' },
-  primary: { minHeight: 44, borderRadius: 12, paddingHorizontal: spacing.md, alignItems: 'center', justifyContent: 'center' },
-  primaryText: { fontWeight: '700' },
+  primary: { minHeight: 44, paddingHorizontal: spacing.md, alignItems: 'center', justifyContent: 'center' },
   disabled: { opacity: 0.38 },
 });

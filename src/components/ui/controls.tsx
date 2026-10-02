@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 're
 import { useTheme } from '@/components/theme-provider';
 import { layout, spacing } from '@/constants/theme';
 import { AppText } from './app-text';
-import { PressableSurface } from './surface';
+import { PressableSurface, surfaceStyle } from './surface';
 
 /** True inside a screen header, so its icon buttons dress as header chrome. */
 export const HeaderChromeContext = createContext(false);
@@ -103,7 +103,7 @@ export function SegmentedControl<Key extends string>({ options, value, onChange 
   return <View style={[
     styles.segmentTrack,
     { padding: s.padding, borderRadius: s.radius, backgroundColor: sticky ? styleColors.controlFill : tokens.surfaceElevated },
-    sticky ? { borderWidth: outline, borderColor: styleColors.outline, boxShadow: `0px ${s.edge}px 0px 0px ${styleColors.outline}` } : { height: s.height },
+    sticky ? surfaceStyle(t, styleColors, { edge: s.edge }) : { height: s.height },
   ]}>
     {options.map((option) => {
       const selected = option.key === value;

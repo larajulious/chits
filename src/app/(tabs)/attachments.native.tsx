@@ -167,7 +167,7 @@ function AttachmentDetailModal({ item, onClose, onViewCard }: { item: Attachment
             trailing={<IconButton label={exportActionLabel(attachment)} disabled={download.busy} onPress={() => void download.exportAttachment(attachment)}><HeaderIcon name="download-outline" size={22} /></IconButton>}
           />
           <ScrollView contentContainerStyle={styles.detailContent}>
-            <Text style={[styles.detailContext, { color: theme.textMuted }]}>{contextLine}</Text>
+            <AppText weight="600" style={[styles.detailContext, { color: theme.textMuted }]}>{contextLine}</AppText>
             <View style={[styles.detailMediaWrap, { borderRadius: styleTokens.radius.panel }]}>
               <AttachmentContent attachment={attachment} variant="detail" />
             </View>
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
   loadMoreText: { fontSize: 14 },
   detailScreen: { flex: 1 },
   detailContent: { padding: spacing.md, gap: spacing.md },
-  detailContext: { fontSize: 13, fontWeight: '600' },
+  detailContext: { fontSize: 13 },
   detailMediaWrap: { overflow: 'hidden' },
   detailFileName: { fontSize: 13, lineHeight: 18 },
 });

@@ -112,7 +112,7 @@ export default function SettingsScreen() {
         {identity === 'default' ? <View style={styles.paletteBlock}>
           <AppText style={[styles.label, { color: tokens.textPrimary }]}>Accent color</AppText>
           <AppText variant="paragraph" style={[styles.description, { color: tokens.textSecondary }]}>Used for controls and accents in the Default theme.</AppText>
-          <View style={[styles.preview, { backgroundColor: tokens.bubble }]}><AppText style={{ color: tokens.bubbleText }}>My thought</AppText></View>
+          <View style={[styles.preview, { backgroundColor: tokens.bubble, borderRadius: styleTokens.radius.bubble }]}><AppText style={{ color: tokens.bubbleText }}>My thought</AppText></View>
           <View style={styles.palette}>{(Object.keys(themes) as ChatThemeKey[]).map((key) => {
             const selected = themeKey === key;
             const color = key === 'light' ? '#E9E9E9' : themes[key].light.accent;
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
   paletteBlock: { paddingTop: 12, paddingBottom: 2 }, palette: { flexDirection: 'row', flexWrap: 'wrap', gap: 2 },
   swatchTarget: { width: 44, height: 44, borderRadius: 44 / 2, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   swatch: { width: 32, height: 32, borderRadius: 32 / 2, alignItems: 'center', justifyContent: 'center' },
-  preview: { alignSelf: 'flex-end', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, marginVertical: 8 },
+  preview: { alignSelf: 'flex-end', paddingHorizontal: 12, paddingVertical: 8, marginVertical: 8 },
   pressed: { opacity: 0.65 }, backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000055' },
   sheet: { maxHeight: '85%' },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', paddingLeft: 20, paddingRight: 12, paddingTop: 8 },

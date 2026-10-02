@@ -52,6 +52,6 @@ const styles = StyleSheet.create({
   description: { textAlign: 'center' },
   descriptionAboveAction: { marginBottom: spacing.sm },
   mascotTilt: { transform: [{ rotate: '-4deg' }] },
-  poseProp: { position: 'absolute', right: -6, top: '38%', width: 44, height: 44, borderRadius: 22, borderWidth: 2, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '18deg' }] },
-  mascotShadow: { height: 12, marginTop: -6, marginBottom: spacing.sm, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.10)' },
+  poseProp: { position: 'absolute', right: -6, top: '38%', width: 44, height: 44, borderRadius: 44 / 2, borderWidth: 2, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '18deg' }] },
+  mascotShadow: { height: 12, marginTop: -6, marginBottom: spacing.sm, borderRadius: 12 / 2, backgroundColor: 'rgba(0,0,0,0.10)' },
 });
