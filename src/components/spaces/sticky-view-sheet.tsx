@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { BackHandler, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Icon } from '@/components/ui/icon';
 import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
@@ -53,17 +53,15 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
   // its paper, with edged buttons — below the note, which scrolls above it.
   const stickyFooter = styleTokens.elevation === 'edge';
   const scrollRef = useRef<ScrollView>(null);
-  const [actionsHeight, setActionsHeight] = useState(52);
   const sheetWidth = Math.min(window.width - insets.left - insets.right, 600);
   const contentWidth = sheetWidth - 40;
-  // The Space root supplies the actual height available to this absolute sheet.
-  // Keep the action row outside the shrinking scroll region on short screens.
-  const bottomOffset = Platform.OS === 'android' ? insets.top + insets.bottom + 16 : 0;
-  const visibleHeight = viewportHeight - bottomOffset;
-  const maxSheetHeight = Math.max(0, Math.min(visibleHeight * 0.9, visibleHeight - insets.top - 12));
-  // Reserve the measured footer inside the capped sheet, then anchor its
-  // actions there so short notes and small viewports cannot clip them.
-  const footerInset = Platform.OS === 'android' ? 12 : Math.max(insets.bottom, 12) + 8;
+  // The sheet sits on the screen's bottom edge (its paper runs under a
+  // system navigation bar) with the actions as its last row, so its height
+  // always includes them; only the note scrolls on short screens. The room
+  // under the actions is the device's own bottom inset — a 3-button bar, a
+  // gesture handle, or nothing — plus a little air.
+  const maxSheetHeight = Math.max(0, Math.min(viewportHeight * 0.9, viewportHeight - insets.top - 12));
+  const footerInset = Math.max(insets.bottom, 12) + 8;
   // Tagged with the note it belongs to, so a different note never shows a stale read.
   const [loaded, setLoaded] = useState<{ noteId: string; detail: SpaceNoteDetail } | null>(null);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
@@ -120,8 +118,7 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
   </>;
 
   return <>
-    {bottomOffset > 0 ? <View pointerEvents="none" style={[styles.navigationBackdrop, { height: bottomOffset }]} /> : null}
-    <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, shapes.sheet, { width: sheetWidth, left: insets.left + (window.width - insets.left - insets.right - sheetWidth) / 2, maxHeight: maxSheetHeight, bottom: bottomOffset, paddingBottom: stickyFooter ? 0 : footerInset + actionsHeight + 8 }]}>
+    <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, shapes.sheet, { width: sheetWidth, left: insets.left + (window.width - insets.left - insets.right - sheetWidth) / 2, maxHeight: maxSheetHeight }]}>
     <View style={styles.grabber} />
     <View style={styles.header}>
       <Text style={[fonts.label, styles.where]}>ON YOUR {space.name.toUpperCase()}</Text>
@@ -182,22 +179,12 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
         <Icon name={moreExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={ui.textMuted} />
       </Pressable> : null}
     </ScrollView>
-    {stickyFooter
-      // Sticky: the actions are the sheet's last row (in the layout, not
-      // positioned over it), so the sheet's height always includes them and
-      // only the note above shrinks on a short screen.
-      ? <View style={[styles.actionsRow, styles.footerBar, { paddingBottom: footerInset, backgroundColor: ui.ink, borderTopWidth: styleTokens.outline.width, borderTopColor: styleColors.outline }]}>
+    {/* Sticky: a footer bar — an ink rule across the sheet, on its paper. */}
+    <View style={[styles.actionsRow, { paddingBottom: footerInset }, stickyFooter
+      ? [styles.footerBar, { backgroundColor: ui.ink, borderTopWidth: styleTokens.outline.width, borderTopColor: styleColors.outline }]
+      : styles.footerPlain]}>
       {actionButtons}
-      </View>
-      : <View
-      onLayout={({ nativeEvent }) => {
-        const height = Math.ceil(nativeEvent.layout.height);
-        setActionsHeight((current) => current === height ? current : height);
-      }}
-      style={[styles.actions, { bottom: footerInset }]}
-    >
-      {actionButtons}
-    </View>}
+    </View>
   </Animated.View>
   </>;
 }
@@ -295,7 +282,6 @@ const MEDIA_NAMES = { photo: 'Photo', video: 'Video', audio: 'Voice note' } as c
 const PRINT_BORDER = 12;
 
 const createStyles = (ui: SpaceUI) => StyleSheet.create({
-  navigationBackdrop: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: ui.ink },
   sheet: { position: 'absolute', bottom: 0, overflow: 'hidden', paddingHorizontal: 20, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: ui.ink, boxShadow: '0px -8px 30px rgba(0,0,0,0.35)' },
   grabber: { flexShrink: 0, alignSelf: 'center', width: 40, height: 4, borderRadius: 2, marginTop: 10, marginBottom: 14, backgroundColor: ui.inkBorder },
   header: { flexShrink: 0, gap: 2 },
@@ -335,10 +321,10 @@ const createStyles = (ui: SpaceUI) => StyleSheet.create({
   hiddenIcon: { opacity: 0.55 },
   hiddenText: { marginTop: 4, fontSize: 22, lineHeight: 28, color: PAPER_INK, opacity: 0.7 },
   hiddenHint: { fontSize: 16, lineHeight: 21, color: PAPER_INK, opacity: 0.55 },
-  actions: { position: 'absolute', left: 20, right: 20, flexDirection: 'row', gap: 10 },
-  actionsRow: { flexDirection: 'row', gap: 10 },
+  actionsRow: { flexShrink: 0, flexDirection: 'row', gap: 10 },
+  footerPlain: { paddingTop: 8 },
   // Spans the sheet edge to edge (it has 20pt side padding).
-  footerBar: { flexShrink: 0, marginHorizontal: -20, paddingHorizontal: 20, paddingTop: 14 },
+  footerBar: { marginHorizontal: -20, paddingHorizontal: 20, paddingTop: 14 },
   button: { flex: 1, minHeight: 52, paddingHorizontal: 10, paddingVertical: 12, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   secondary: { backgroundColor: ui.inkRaised },
   primary: { backgroundColor: ui.accent },
