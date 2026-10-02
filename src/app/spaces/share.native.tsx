@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '@/components/ui/icon';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { showPermissionSettingsPrompt } from '@/components/permissions/permission-settings-prompt';
 import { useSpaceFonts } from '@/components/spaces/space-fonts';
+import { useSpaceShapes } from '@/components/spaces/ink-surface';
 import { SpaceShareCanvas } from '@/components/spaces/space-share-canvas';
 import { ChitsLoader } from '@/components/ui/chits-loader';
 import { Toast } from '@/components/ui/primitives';
@@ -36,6 +37,7 @@ export default function ShareSpaceScreen() {
   const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
   const fonts = useSpaceFonts();
+  const shapes = useSpaceShapes();
   const [notes, setNotes] = useState<PinnedNote[] | null>(null);
   const [hideText, setHideText] = useState(false);
   const [busy, setBusy] = useState<Busy>(null);
@@ -107,8 +109,8 @@ export default function ShareSpaceScreen() {
 
     <View style={[styles.cover, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={({ pressed }) => [styles.round, pressed && styles.pressed]}>
-          <Ionicons accessible={false} name="close" size={22} color={SPACE_UI.paper} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={({ pressed }) => [styles.round, shapes.round, pressed && styles.pressed]}>
+          <Icon name="close" size={22} color={SPACE_UI.paper} />
         </Pressable>
         <Text accessibilityRole="header" numberOfLines={1} style={[fonts.uiHeavy, styles.title]}>Share your {space.name}</Text>
         <View style={styles.headerSpacer} />
@@ -128,12 +130,12 @@ export default function ShareSpaceScreen() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
         {busy ? <View accessibilityLiveRegion="polite" style={styles.busyRow}><ChitsLoader size="small" /><Text style={[fonts.ui, styles.busyText]}>{BUSY_LABEL[busy]}</Text></View> : null}
         <View style={styles.actions}>
-          <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => void run('save')} style={({ pressed }) => [styles.action, styles.save, disabled && styles.disabled, pressed && styles.pressed]}>
-            <Ionicons accessible={false} name="download-outline" size={19} color={SPACE_UI.paper} />
+          <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => void run('save')} style={({ pressed }) => [styles.action, styles.save, shapes.button, disabled && styles.disabled, pressed && styles.pressed]}>
+            <Icon name="download-outline" size={19} color={SPACE_UI.paper} />
             <Text style={[fonts.uiSemi, styles.actionText, { color: SPACE_UI.paper }]}>Save image</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => void run('share')} style={({ pressed }) => [styles.action, styles.share, disabled && styles.disabled, pressed && styles.pressed]}>
-            <Ionicons accessible={false} name={Platform.OS === 'ios' ? 'share-outline' : 'share-social-outline'} size={19} color={SPACE_UI.accentText} />
+          <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => void run('share')} style={({ pressed }) => [styles.action, styles.share, shapes.button, disabled && styles.disabled, pressed && styles.pressed]}>
+            <Icon name={Platform.OS === 'ios' ? 'share-outline' : 'share-social-outline'} size={19} color={SPACE_UI.accentText} />
             <Text style={[fonts.uiSemi, styles.actionText, { color: SPACE_UI.accentText }]}>Share</Text>
           </Pressable>
         </View>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '@/components/ui/icon';
 import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -17,6 +17,7 @@ import { resolveAttachmentUri } from '@/services/attachment-storage';
 import { PinDecoration } from './pin-decoration';
 import { Cassette, formatTapeTime } from './space-cassette';
 import { useSpaceFonts } from './space-fonts';
+import { useSpaceShapes } from '@/components/spaces/ink-surface';
 import { photoCaption, stickyText } from './sticky-note';
 
 type Props = {
@@ -41,6 +42,7 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
   const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
   const fonts = useSpaceFonts();
+  const shapes = useSpaceShapes();
   const scrollRef = useRef<ScrollView>(null);
   const [actionsHeight, setActionsHeight] = useState(52);
   const sheetWidth = Math.min(window.width - insets.left - insets.right, 600);
@@ -99,7 +101,7 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
 
   return <>
     {bottomOffset > 0 ? <View pointerEvents="none" style={[styles.navigationBackdrop, { height: bottomOffset }]} /> : null}
-    <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, { width: sheetWidth, left: insets.left + (window.width - insets.left - insets.right - sheetWidth) / 2, maxHeight: maxSheetHeight, bottom: bottomOffset, paddingBottom: footerInset + actionsHeight + 8 }]}>
+    <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, shapes.sheet, { width: sheetWidth, left: insets.left + (window.width - insets.left - insets.right - sheetWidth) / 2, maxHeight: maxSheetHeight, bottom: bottomOffset, paddingBottom: footerInset + actionsHeight + 8 }]}>
     <View style={styles.grabber} />
     <View style={styles.header}>
       <Text style={[fonts.label, styles.where]}>ON YOUR {space.name.toUpperCase()}</Text>
@@ -128,7 +130,7 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
         <View style={[styles.paper, { backgroundColor: paper.base, experimental_backgroundImage: `linear-gradient(176deg, ${paper.base} 0%, ${paper.base} 82%, ${paper.curl} 100%)` }]}>
           <View style={styles.paperContent}>
             {note.hidden ? <View accessible accessibilityLabel="Hidden Chit. Open it in Chat to see it." style={styles.hidden}>
-              <Ionicons accessible={false} name="eye-off-outline" size={26} color={PAPER_INK} style={styles.hiddenIcon} />
+              <Icon name="eye-off-outline" size={26} color={PAPER_INK} style={styles.hiddenIcon} />
               <Text style={[fonts.note, styles.hiddenText]}>Hidden Chit</Text>
               <Text style={[fonts.note, styles.hiddenHint]}>Open it in Chat to see it.</Text>
             </View> : <>
@@ -155,9 +157,9 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
         onPress={() => setExpandedNoteId((current) => current === note.id ? null : note.id)}
         style={({ pressed }) => [styles.moreToggle, pressed && styles.pressed]}
       >
-        <Ionicons accessible={false} name="layers-outline" size={18} color={SPACE_UI.paper} />
+        <Icon name="layers-outline" size={18} color={SPACE_UI.paper} />
         <Text style={[fonts.uiSemi, styles.moreToggleText]}>{moreExpanded ? 'Hide' : 'See'} {moreThoughts.length} more {moreThoughts.length === 1 ? 'thought' : 'thoughts'}</Text>
-        <Ionicons accessible={false} name={moreExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={SPACE_UI.textMuted} />
+        <Icon name={moreExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={SPACE_UI.textMuted} />
       </Pressable> : null}
     </ScrollView>
     <View
@@ -167,12 +169,12 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
       }}
       style={[styles.actions, { bottom: footerInset }]}
     >
-      <Pressable accessibilityRole="button" accessibilityLabel={`Options for ${heading}`} onPress={onOptions} style={({ pressed }) => [styles.button, styles.secondary, pressed && styles.pressed]}>
-        <Ionicons accessible={false} name="ellipsis-horizontal" size={20} color={SPACE_UI.paper} />
+      <Pressable accessibilityRole="button" accessibilityLabel={`Options for ${heading}`} onPress={onOptions} style={({ pressed }) => [styles.button, styles.secondary, shapes.control, pressed && styles.pressed]}>
+        <Icon name="ellipsis-horizontal" size={20} color={SPACE_UI.paper} />
         <Text style={[fonts.uiSemi, styles.buttonLabel, { color: SPACE_UI.paper }]}>Options</Text>
       </Pressable>
-      <Pressable accessibilityRole="button" onPress={onOpen} style={({ pressed }) => [styles.button, styles.primary, pressed && styles.pressed]}>
-        <Ionicons accessible={false} name={open.icon} size={19} color={SPACE_UI.accentText} />
+      <Pressable accessibilityRole="button" onPress={onOpen} style={({ pressed }) => [styles.button, styles.primary, shapes.control, pressed && styles.pressed]}>
+        <Icon name={open.icon} size={19} color={SPACE_UI.accentText} />
         <Text style={[fonts.uiSemi, styles.buttonLabel, { color: SPACE_UI.accentText }]}>{open.label}</Text>
       </Pressable>
     </View>
@@ -251,7 +253,7 @@ function SheetTape({ media, caption, color, width, tilt, pin }: { media: SpaceNo
         disabled={disabled}
         onPress={() => void toggle()}
         style={({ pressed }) => [styles.play, disabled && styles.disabled, pressed && styles.pressed]}>
-        <Ionicons accessible={false} name={status.playing ? 'pause' : 'play'} size={24} color={SPACE_UI.accentText} style={status.playing ? undefined : styles.playGlyph} />
+        <Icon name={status.playing ? 'pause' : 'play'} size={24} color={SPACE_UI.accentText} style={status.playing ? undefined : styles.playGlyph} />
       </Pressable>
       <View style={styles.deckTrack}>
         <View accessible accessibilityRole="progressbar" accessibilityLabel="Playback" accessibilityValue={{ min: 0, max: Math.max(1, Math.round(duration)), now: Math.round(currentTime) }} style={styles.track}>

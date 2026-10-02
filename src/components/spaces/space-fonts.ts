@@ -1,5 +1,6 @@
 import { Platform, type TextStyle } from 'react-native';
 import { useFonts } from 'expo-font';
+import { useOptionalTheme } from '@/components/theme-provider';
 import { BricolageGrotesque_400Regular } from '@expo-google-fonts/bricolage-grotesque/400Regular';
 import { BricolageGrotesque_600SemiBold } from '@expo-google-fonts/bricolage-grotesque/600SemiBold';
 import { BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque/800ExtraBold';
@@ -42,8 +43,16 @@ const FALLBACK: SpaceFonts = {
   ready: false,
 };
 
+/** Sticky: Spaces' UI text joins the app's faces; notes, tapes and magnets keep theirs (they're the objects). */
+const STICKY_UI: Pick<SpaceFonts, 'ui' | 'uiSemi' | 'uiHeavy'> = {
+  ui: { fontFamily: 'Nunito_700Bold' }, uiSemi: { fontFamily: 'Nunito_800ExtraBold' }, uiHeavy: { fontFamily: 'Fredoka_600SemiBold' },
+};
+
 /** Spaces' type, as styles to spread into a Text's style. */
 export function useSpaceFonts(): SpaceFonts {
   const [loaded] = useFonts(FACES);
-  return loaded ? LOADED : FALLBACK;
+  const theme = useOptionalTheme();
+  const fonts = loaded ? LOADED : FALLBACK;
+  // font.body is only set once Sticky's own faces have registered.
+  return theme?.styleTokens.font.body ? { ...fonts, ...STICKY_UI } : fonts;
 }

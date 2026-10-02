@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FlatList, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '@/components/ui/icon';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -36,12 +36,12 @@ export function NotePicker({ visible, spaceName, onClose, onPick }: { visible: b
     <SafeAreaView edges={Platform.OS === 'ios' ? ['bottom'] : ['top', 'bottom']} style={styles.screen}>
       <View style={styles.header}>
         <Text accessibilityRole="header" style={[fonts.uiHeavy, styles.title]}>Stick on your {spaceName}</Text>
-        <IconButton label="Close" onPress={close}><Ionicons accessible={false} name="close" size={24} color={SPACE_UI.paper} /></IconButton>
+        <IconButton label="Close" onPress={close}><Icon name="close" size={24} color={SPACE_UI.paper} /></IconButton>
       </View>
       <View style={styles.search}>
-        <Ionicons accessible={false} name="search-outline" size={17} color={SPACE_UI.textMuted} />
+        <Icon name="search-outline" size={17} color={SPACE_UI.textMuted} />
         <TextInput accessibilityLabel="Search notes" value={query} onChangeText={setQuery} placeholder="Search notes…" placeholderTextColor={SPACE_UI.textMuted} selectionColor={SPACE_UI.accent} cursorColor={SPACE_UI.accent} returnKeyType="search" autoCorrect={false} style={[fonts.ui, styles.input]} />
-        {query ? <Pressable accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={12} onPress={() => setQuery('')}><Ionicons accessible={false} name="close-circle" size={16} color={SPACE_UI.textMuted} /></Pressable> : null}
+        {query ? <Pressable accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={12} onPress={() => setQuery('')}><Icon name="close-circle" size={16} color={SPACE_UI.textMuted} /></Pressable> : null}
       </View>
       <FlatList
         data={items ?? []}
@@ -55,12 +55,12 @@ export function NotePicker({ visible, spaceName, onClose, onPick }: { visible: b
           onPress={() => pick(item)}
           style={({ pressed }) => [styles.row, pressed && styles.pressed]}
         >
-          <View style={styles.icon}><Ionicons accessible={false} name={item.hidden ? 'eye-off-outline' : item.kind === 'card' ? 'albums-outline' : 'chatbubble-outline'} size={17} color={SPACE_UI.paper} /></View>
+          <View style={styles.icon}><Icon name={item.hidden ? 'eye-off-outline' : item.kind === 'card' ? 'albums-outline' : 'chatbubble-outline'} size={17} color={SPACE_UI.paper} /></View>
           <View style={styles.copy}>
             <Text numberOfLines={1} style={[fonts.uiSemi, styles.rowTitle]}>{item.title}</Text>
             <Text numberOfLines={1} style={[fonts.ui, styles.rowContext]}>{item.context ?? 'Thought in Chat'}</Text>
           </View>
-          <Ionicons accessible={false} name="add-circle" size={24} color={SPACE_UI.magnetRed} />
+          <Icon name="add-circle" size={24} color={SPACE_UI.magnetRed} />
         </Pressable>}
       />
     </SafeAreaView>

@@ -1,6 +1,6 @@
 import { memo, useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '@/components/ui/icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -10,6 +10,7 @@ import * as Haptics from 'expo-haptics';
 import { LabelTape } from '@/components/spaces/label-tape';
 import { MagnetButton } from '@/components/spaces/magnet-button';
 import { useSpaceFonts } from '@/components/spaces/space-fonts';
+import { useSpaceShapes } from '@/components/spaces/ink-surface';
 import { SpaceSurface } from '@/components/spaces/space-surface';
 import { StickyPaper } from '@/components/spaces/sticky-note';
 import { Toast } from '@/components/ui/primitives';
@@ -32,6 +33,7 @@ const SAMPLES = [
 
 const SpaceCard = memo(function SpaceCard({ space, selected, count, onPress }: { space: SpaceDefinition; selected: boolean; count: number; onPress: () => void }) {
   const fonts = useSpaceFonts();
+  const shapes = useSpaceShapes();
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   // The sample notes scale down with a short card, so they're never cut off.
   const unit = size ? Math.min(0.5, (size.height - 14) / 150) : 0.5;
@@ -43,9 +45,9 @@ const SpaceCard = memo(function SpaceCard({ space, selected, count, onPress }: {
     accessibilityState={{ selected }}
     onPress={onPress}
     onLayout={({ nativeEvent: { layout } }) => setSize((current) => (current && current.width === layout.width && current.height === layout.height ? current : { width: layout.width, height: layout.height }))}
-    style={({ pressed }) => [styles.card, { borderColor: selected ? SPACE_UI.paper : 'transparent' }, pressed && styles.pressed]}
+    style={({ pressed }) => [styles.card, shapes.card, { borderColor: selected ? SPACE_UI.paper : 'transparent' }, pressed && styles.pressed]}
   >
-    {size ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.cardClip]}>
+    {size ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.cardClip, shapes.cardClip]}>
       {/* The surface at phone scale, cropped to the card. */}
       <SpaceSurface spaceId={space.id} width={Math.max(size.width, 390) * 0.62} height={size.height} />
       <View style={[styles.sample, { right: 74 * nudge, top: 20 * nudge }]}><StickyPaper note={SAMPLES[0]} space={space.id} seed={1} unit={unit} /></View>
@@ -72,6 +74,7 @@ export default function PickSpaceScreen() {
   const repository = createSpaceRepository(database);
   const insets = useSafeAreaInsets();
   const fonts = useSpaceFonts();
+  const shapes = useSpaceShapes();
   // Everything fits on one screen, with no scrolling: the cards take the
   // height that's left, and a short phone gets a tighter heading.
   const compact = useWindowDimensions().height < 760;
@@ -119,8 +122,8 @@ export default function PickSpaceScreen() {
     <StatusBar style="light" />
     <View style={styles.content}>
       <View style={[styles.topRow, compact && styles.topRowCompact]}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
-          <Ionicons accessible={false} name="chevron-back" size={24} color={SPACE_UI.paper} style={{ marginLeft: -2 }} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={({ pressed }) => [styles.back, shapes.round, pressed && styles.pressed]}>
+          <Icon name="chevron-back" size={24} color={SPACE_UI.paper} style={{ marginLeft: -2 }} />
         </Pressable>
         <OnboardingMascot size={compact ? 60 : 76} />
       </View>
@@ -132,7 +135,7 @@ export default function PickSpaceScreen() {
       </View>
     </View>
     <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
-      <Pressable accessibilityRole="button" accessibilityState={{ disabled: saving }} disabled={saving} onPress={() => void choose()} style={({ pressed }) => [styles.primary, (pressed || saving) && styles.pressed]}>
+      <Pressable accessibilityRole="button" accessibilityState={{ disabled: saving }} disabled={saving} onPress={() => void choose()} style={({ pressed }) => [styles.primary, shapes.button, (pressed || saving) && styles.pressed]}>
         <Text style={[fonts.uiSemi, styles.primaryText]}>{saved ? `Go to your ${space.name}` : `Stick them on the ${space.name}`}</Text>
       </Pressable>
       <Text style={[fonts.ui, styles.helper]}>You can switch spaces any time from the dock.</Text>

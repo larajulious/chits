@@ -1,6 +1,7 @@
 import { useEffect, useState, type ComponentProps } from 'react';
 import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from '@/components/ui/icon';
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,6 +9,7 @@ import { SPACE_CAPACITY, SPACE_LIST, SPACES, STICKY_COLORS, type SpaceId } from 
 import { paperColor, SPACE_UI } from '@/constants/spaces-theme';
 import type { PinnedNote } from '@/db/types';
 import { useSpaceFonts } from './space-fonts';
+import { useSpaceShapes } from '@/components/spaces/ink-surface';
 import { photoCaption, stickyText } from './sticky-note';
 
 type Props = {
@@ -29,9 +31,10 @@ const SWATCH_TILTS = [-4, 3, -2, 4, -3];
 
 function Tile({ icon, label, onPress, danger = false }: { icon: IconName; label: string; onPress: () => void; danger?: boolean }) {
   const fonts = useSpaceFonts();
+  const shapes = useSpaceShapes();
   const color = danger ? SPACE_UI.dangerText : SPACE_UI.paper;
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => [styles.tile, danger ? styles.tileDanger : styles.tileRaised, pressed && styles.pressed]}>
-    <Ionicons accessible={false} name={icon} size={22} color={color} />
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => [styles.tile, danger ? styles.tileDanger : styles.tileRaised, shapes.control, pressed && styles.pressed]}>
+    <Icon name={icon} size={22} color={color} />
     <Text numberOfLines={2} style={[fonts.uiSemi, styles.tileLabel, { color }]}>{label}</Text>
   </Pressable>;
 }
@@ -45,6 +48,7 @@ function Tile({ icon, label, onPress, danger = false }: { icon: IconName; label:
 export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onOpen, onBringToFront, onMove, onRemove, onReminder }: Props) {
   const insets = useSafeAreaInsets();
   const fonts = useSpaceFonts();
+  const shapes = useSpaceShapes();
   const [moving, setMoving] = useState(false);
   const space = SPACES[note.spaceId];
   useEffect(() => {
@@ -55,18 +59,18 @@ export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onOpen, o
   // A photo print has no paper to color; a tape's label does.
   const isPrint = media?.attachment.type === 'photo' || media?.attachment.type === 'video';
   const title = note.hidden ? 'Hidden Chit' : media ? photoCaption(note) ?? MEDIA_NAMES[media.attachment.type] : stickyText(note).split('\n')[0] || 'Note';
-  return <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
+  return <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, shapes.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
     <View style={styles.grabber} />
     <Text accessibilityRole="header" numberOfLines={1} style={[fonts.uiHeavy, styles.title]}>{title}</Text>
     <Text style={[fonts.ui, styles.subtitle]}>On your {space.name}</Text>
     {moving ? <View style={styles.moveList}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Back to options" onPress={() => setMoving(false)} style={({ pressed }) => [styles.moveRow, pressed && styles.pressed]}>
-        <Ionicons accessible={false} name="chevron-back" size={20} color={SPACE_UI.paper} />
+      <Pressable accessibilityRole="button" accessibilityLabel="Back to options" onPress={() => setMoving(false)} style={({ pressed }) => [styles.moveRow, shapes.control, pressed && styles.pressed]}>
+        <Icon name="chevron-back" size={20} color={SPACE_UI.paper} />
         <Text style={[fonts.uiSemi, styles.moveLabel]}>Move to…</Text>
       </Pressable>
       {SPACE_LIST.filter((item) => item.id !== note.spaceId).map((item) => {
         const full = counts[item.id] >= SPACE_CAPACITY;
-        return <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`${item.name}, ${full ? 'full' : `${counts[item.id]} of ${SPACE_CAPACITY}`}`} accessibilityState={{ disabled: full }} disabled={full} onPress={() => onMove(item.id)} style={({ pressed }) => [styles.moveRow, styles.moveTarget, full && styles.disabled, pressed && styles.pressed]}>
+        return <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`${item.name}, ${full ? 'full' : `${counts[item.id]} of ${SPACE_CAPACITY}`}`} accessibilityState={{ disabled: full }} disabled={full} onPress={() => onMove(item.id)} style={({ pressed }) => [styles.moveRow, styles.moveTarget, shapes.control, full && styles.disabled, pressed && styles.pressed]}>
           <Text style={[fonts.uiSemi, styles.moveLabel]}>{item.name}</Text>
           <Text style={[fonts.label, styles.moveCount]}>{full ? 'FULL' : `${counts[item.id]} / ${SPACE_CAPACITY}`}</Text>
         </Pressable>;
