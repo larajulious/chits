@@ -8,20 +8,7 @@ import {
   type ComponentProps,
   type PropsWithChildren,
 } from 'react';
-import {
-  AccessibilityInfo,
-  Animated,
-  Easing,
-  LayoutAnimation,
-  Modal,
-  PanResponder,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { AccessibilityInfo, Animated, Easing, LayoutAnimation, Modal, PanResponder, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePathname, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -29,6 +16,9 @@ import * as Haptics from 'expo-haptics';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
+import { useStickySurface } from '@/components/ui/surface';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
 import { LabelTape } from '@/components/spaces/label-tape';
 import { Toast } from '@/components/ui/primitives';
 import { spacing } from '@/constants/theme';
@@ -83,15 +73,18 @@ function isDestinationActive(pathname: string, destination: Destination) {
 function DrawerIcon({ name, color }: { name: IconName; color: string }) {
   return (
     <View accessible={false} style={styles.iconSlot}>
-      <Ionicons accessible={false} name={name} size={21} color={color} />
+      <Icon name={name} size={21} color={color} />
     </View>
   );
 }
 
 function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'note' }: { destination: Destination; pathname: string; close: () => void; badge?: number; badgeNoun?: 'note' | 'reminder' }) {
   const router = useRouter();
-  const { tokens } = useTheme();
+  const { tokens, styleTokens, styleColors } = useTheme();
+  const sticky = useStickySurface();
   const active = isDestinationActive(pathname, destination);
+  // Sticky: the current screen is an outlined accent tile, like the nav's active pill.
+  const tile = active && styleTokens.outline.width > 0;
   return (
     <Pressable
       accessibilityRole="button"
@@ -104,10 +97,12 @@ function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'n
       style={({ pressed }) => [
         styles.item,
         active && { backgroundColor: tokens.accentSoft },
+        { borderRadius: styleTokens.radius.control - 2 },
+        active && sticky({ fill: styleColors.accentFill, radius: styleTokens.radius.control, edge: false }),
         pressed && styles.pressed,
       ]}>
-      <DrawerIcon name={destination.icon} color={active ? tokens.accentStrong : tokens.textPrimary} />
-      <Text style={[styles.itemText, { color: tokens.textPrimary }, active && styles.itemTextSelected]}>{destination.label}</Text>
+      <DrawerIcon name={destination.icon} color={tile ? styleColors.onAccent : active ? tokens.accentStrong : tokens.textPrimary} />
+      <AppText style={[styles.itemText, { color: tile ? styleColors.onAccent : tokens.textPrimary }, active && styles.itemTextSelected]}>{destination.label}</AppText>
       {/* A tiny red label-maker tape, like the ones in Spaces; the count is in the row's label. */}
       {badge > 0 ? <LabelTape text={String(badge)} variant="red" size="sm" rotation={-3} decorative style={styles.badge} /> : null}
     </Pressable>
@@ -118,7 +113,8 @@ function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'n
 // kind of thing; only Pinned rows get the trailing unpin button.
 function ShortcutRow({ item, close, onUnpin }: { item: ContextItem; close: () => void; onUnpin?: () => void }) {
   const router = useRouter();
-  const { tokens } = useTheme();
+  const { tokens, styleTokens, styleColors } = useTheme();
+  const sticky = useStickySurface();
   const isBoard = item.kind === 'board';
   const accessibilityLabel = isBoard
     ? `${item.title}. Board.`
@@ -132,13 +128,13 @@ function ShortcutRow({ item, close, onUnpin }: { item: ContextItem; close: () =>
         if (isBoard) router.push({ pathname: '/board/[id]', params: { id: item.id } });
         else router.push({ pathname: '/card/[id]', params: { id: item.id } });
       }}
-      style={({ pressed }) => [styles.contextRow, onUnpin && styles.pinnedRow, pressed && styles.pressed]}>
-      <View accessible={false} style={[styles.contextIcon, { backgroundColor: isBoard ? tokens.accentSoft : tokens.surfaceElevated, borderColor: isBoard ? tokens.accentBorder : tokens.borderSubtle }]}>
-        <Ionicons accessible={false} name={isBoard ? 'grid-outline' : 'document-text-outline'} size={17} color={isBoard ? tokens.accentStrong : tokens.textSecondary} />
+      style={({ pressed }) => [styles.contextRow, { borderRadius: styleTokens.radius.control - 2 }, onUnpin && styles.pinnedRow, pressed && styles.pressed]}>
+      <View accessible={false} style={[styles.contextIcon, { borderRadius: styleTokens.radius.control - 3, backgroundColor: isBoard ? tokens.accentSoft : tokens.surfaceElevated, borderColor: isBoard ? tokens.accentBorder : tokens.borderSubtle }, sticky({ fill: isBoard ? styleColors.cardTint : styleColors.controlFill, radius: styleTokens.radius.control - 4, edge: false })]}>
+        <Icon name={isBoard ? 'grid-outline' : 'document-text-outline'} size={17} color={styleTokens.outline.width ? (isBoard ? styleColors.cardInk : tokens.textSecondary) : isBoard ? tokens.accentStrong : tokens.textSecondary} />
       </View>
       <View style={styles.contextCopy}>
-        <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.contextTitle, { color: tokens.textPrimary }]}>{item.title}</Text>
-        <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.contextMeta, { color: tokens.textSecondary }]}>{item.context}</Text>
+        <AppText numberOfLines={1} ellipsizeMode="tail" style={[styles.contextTitle, { color: tokens.textPrimary }]}>{item.title}</AppText>
+        <AppText numberOfLines={1} ellipsizeMode="tail" style={[styles.contextMeta, { color: tokens.textSecondary }]}>{item.context}</AppText>
       </View>
       {/* Nested Pressable, not the row's own onPress — stopPropagation keeps this
           from also opening the row underneath it. Neutral color throughout: this
@@ -150,7 +146,7 @@ function ShortcutRow({ item, close, onUnpin }: { item: ContextItem; close: () =>
           hitSlop={10}
           onPress={(event) => { event.stopPropagation(); onUnpin(); }}
           style={({ pressed }) => [styles.unpinButton, pressed && styles.unpinPressed]}>
-          <Ionicons accessible={false} name="close" size={16} color={tokens.textMuted} />
+          <Icon name="close" size={16} color={tokens.textMuted} />
         </Pressable>
       ) : null}
     </Pressable>
@@ -162,7 +158,7 @@ function SectionHeader({ label }: { label: string }) {
   const { tokens } = useTheme();
   return (
     <View style={styles.sectionHeader}>
-      <Text accessibilityRole="header" style={[styles.sectionLabel, { color: tokens.textMuted }]}>{label}</Text>
+      <AppText accessibilityRole="header" style={[styles.sectionLabel, { color: tokens.textMuted }]}>{label}</AppText>
     </View>
   );
 }
@@ -196,7 +192,8 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   const database = useSQLiteContext();
   const repository = useMemo(() => createBoardRepository(database), [database]);
   const pathname = usePathname();
-  const { tokens } = useTheme();
+  const { tokens, styleTokens, styleColors } = useTheme();
+  const sticky = useStickySurface();
   const [pinned, setPinned] = useState<ContextItem[]>([]);
   const [recent, setRecent] = useState<ContextItem[]>([]);
   // Same single source of truth as Chat's own header (app_settings.chat_title) and
@@ -259,22 +256,22 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   const recentUnpinned = recent.filter((item) => !pinnedKeys.has(`${item.kind}-${item.id}`));
   const hasShortcuts = pinned.length > 0 || recentUnpinned.length > 0;
   return (
-    <SafeAreaView accessibilityViewIsModal style={[styles.drawer, { backgroundColor: tokens.surface, borderColor: tokens.borderSubtle }]}>
+    <SafeAreaView accessibilityViewIsModal style={[styles.drawer, { backgroundColor: tokens.surface, borderColor: tokens.borderSubtle }, styleTokens.outline.width ? [{ borderRightWidth: styleTokens.outline.width, borderColor: styleColors.outline }, sticky({ edge: styleTokens.nav.edge, edgeSide: 'right', outline: false })] : null]}>
       <View style={styles.top}>
-        <Text accessibilityRole="header" style={[styles.title, { color: tokens.textPrimary }]}>{appTitle}</Text>
+        <AppText accessibilityRole="header" variant="display" style={[styles.title, { color: tokens.textPrimary }]}>{appTitle}</AppText>
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
         <NavigationRow destination={boardsDestination} pathname={pathname} close={close} />
         <NavigationRow destination={spacesDestination} pathname={pathname} close={close} badge={stuckCount} />
         <NavigationRow destination={calendarDestination} pathname={pathname} close={close} badge={incomingReminderCount} badgeNoun="reminder" />
         <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
-        {hasShortcuts ? <View style={[styles.divider, { backgroundColor: tokens.borderSubtle }]} /> : null}
+        {hasShortcuts ? <View style={[styles.divider, { backgroundColor: tokens.borderSubtle }, styleTokens.outline.width ? { height: styleTokens.outline.width, backgroundColor: styleColors.outline } : null]} /> : null}
         <PinnedSection items={pinned} close={close} onUnpin={unpinItem} />
         <RecentSection items={recentUnpinned.slice(0, 5)} close={close} />
       </ScrollView>
       {/* Settings is app chrome, not a place your notes live — it stays pinned
           to the bottom instead of sitting in the list of destinations. */}
-      <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }]}>
+      <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }, styleTokens.outline.width ? { borderTopWidth: styleTokens.outline.width, borderTopColor: styleColors.outline } : null]}>
         <NavigationRow destination={gettingStartedDestination} pathname={pathname} close={close} />
         <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
       </View>
@@ -367,7 +364,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginHorizontal: spacing.sm,
     paddingHorizontal: spacing.sm,
-    borderRadius: 10,
   },
   itemText: { fontSize: 16 },
   itemTextSelected: { fontWeight: '700' },
@@ -386,16 +382,15 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginHorizontal: spacing.sm,
     paddingHorizontal: spacing.sm,
-    borderRadius: 10,
   },
-  contextIcon: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderRadius: 9 },
+  contextIcon: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
   contextCopy: { flex: 1, minWidth: 0 },
   contextTitle: { fontSize: 15, fontWeight: '500' },
   contextMeta: { fontSize: 12, marginTop: 2 },
   pinnedRow: { paddingRight: spacing.xxs },
   // Icon stays visually compact (16dp); hitSlop below brings the actual touch
   // target up to the 44dp minimum without the row looking crowded.
-  unpinButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
+  unpinButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 32 / 2 },
   unpinPressed: { opacity: 0.55 },
   pressed: { opacity: 0.62 },
 });

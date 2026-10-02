@@ -25,6 +25,8 @@ export type SurfaceOptions = {
    * a deeper bottom border inside the box, which clipping can't cut off.
    */
   clip?: boolean;
+  /** Which side the edge shows on: under the surface (default), or to its right for a side panel. */
+  edgeSide?: 'bottom' | 'right';
 };
 
 export function radiusStyle(radius: Radius | undefined): ViewStyle {
@@ -46,7 +48,7 @@ export function edgeDepth(tokens: StyleTokens, edge: SurfaceOptions['edge']): nu
  * layout space — leave room for it below).
  */
 export function surfaceStyle(tokens: StyleTokens, colors: StyleColors, options: SurfaceOptions, sunk = false): ViewStyle {
-  const { fill, radius, border, outline, outlineColor, shadow, edge, edgeColor, clip } = options;
+  const { fill, radius, border, outline, outlineColor, shadow, edge, edgeColor, clip, edgeSide = 'bottom' } = options;
   const style: ViewStyle = { ...radiusStyle(radius), ...(fill ? { backgroundColor: fill } : null) };
   if (tokens.elevation === 'soft') {
     if (border) Object.assign(style, { borderWidth: StyleSheet.hairlineWidth, borderColor: border });
@@ -60,7 +62,7 @@ export function surfaceStyle(tokens: StyleTokens, colors: StyleColors, options: 
   if (width > 0) Object.assign(style, { borderWidth: width, borderColor: outlineColor ?? colors.outline });
   const depth = edgeDepth(tokens, edge);
   if (depth > 0 && clip) Object.assign(style, { borderBottomWidth: width + depth, borderBottomColor: edgeColor ?? colors.outline });
-  else if (depth > 0 && !sunk) style.boxShadow = `0px ${depth}px 0px 0px ${edgeColor ?? colors.outline}`;
+  else if (depth > 0 && !sunk) style.boxShadow = edgeSide === 'right' ? `${depth}px 0px 0px 0px ${edgeColor ?? colors.outline}` : `0px ${depth}px 0px 0px ${edgeColor ?? colors.outline}`;
   return style;
 }
 
