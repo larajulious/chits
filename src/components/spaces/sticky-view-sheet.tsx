@@ -17,6 +17,8 @@ import { resolveAttachmentUri } from '@/services/attachment-storage';
 import { PinDecoration } from './pin-decoration';
 import { Cassette, formatTapeTime } from './space-cassette';
 import { useSpaceFonts } from './space-fonts';
+import { useTheme } from '@/components/theme-provider';
+import { useStickySurface } from '@/components/ui/surface';
 import { useSpaceShapes, useSpaceStyles, useSpaceUI, type SpaceUI } from '@/components/spaces/ink-surface';
 import { photoCaption, stickyText } from './sticky-note';
 
@@ -45,6 +47,11 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
   const window = useWindowDimensions();
   const fonts = useSpaceFonts();
   const shapes = useSpaceShapes();
+  const { styleTokens, styleColors } = useTheme();
+  const stickySurface = useStickySurface();
+  // Sticky: the actions are a pinned footer bar — an ink rule across the
+  // sheet, on its paper, with edged buttons — so the note scrolls under it.
+  const stickyFooter = styleTokens.elevation === 'edge';
   const scrollRef = useRef<ScrollView>(null);
   const [actionsHeight, setActionsHeight] = useState(52);
   const sheetWidth = Math.min(window.width - insets.left - insets.right, 600);
@@ -103,7 +110,7 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
 
   return <>
     {bottomOffset > 0 ? <View pointerEvents="none" style={[styles.navigationBackdrop, { height: bottomOffset }]} /> : null}
-    <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, shapes.sheet, { width: sheetWidth, left: insets.left + (window.width - insets.left - insets.right - sheetWidth) / 2, maxHeight: maxSheetHeight, bottom: bottomOffset, paddingBottom: footerInset + actionsHeight + 8 }]}>
+    <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, shapes.sheet, { width: sheetWidth, left: insets.left + (window.width - insets.left - insets.right - sheetWidth) / 2, maxHeight: maxSheetHeight, bottom: bottomOffset, paddingBottom: stickyFooter ? actionsHeight : footerInset + actionsHeight + 8 }]}>
     <View style={styles.grabber} />
     <View style={styles.header}>
       <Text style={[fonts.label, styles.where]}>ON YOUR {space.name.toUpperCase()}</Text>
@@ -169,13 +176,15 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
         const height = Math.ceil(nativeEvent.layout.height);
         setActionsHeight((current) => current === height ? current : height);
       }}
-      style={[styles.actions, { bottom: footerInset }]}
+      style={[styles.actions, stickyFooter
+        ? { left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 14, paddingBottom: footerInset, backgroundColor: ui.ink, borderTopWidth: styleTokens.outline.width, borderTopColor: styleColors.outline }
+        : { bottom: footerInset }]}
     >
-      <Pressable accessibilityRole="button" accessibilityLabel={`Options for ${heading}`} onPress={onOptions} style={({ pressed }) => [styles.button, styles.secondary, shapes.control, pressed && styles.pressed]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Options for ${heading}`} onPress={onOptions} style={({ pressed }) => [styles.button, styles.secondary, stickySurface({ fill: styleColors.controlFill, radius: styleTokens.button.radius, edge: styleTokens.button.edge }, pressed), !stickyFooter && pressed && styles.pressed]}>
         <Icon name="ellipsis-horizontal" size={20} color={ui.paper} />
         <Text style={[fonts.uiSemi, styles.buttonLabel, { color: ui.paper }]}>Options</Text>
       </Pressable>
-      <Pressable accessibilityRole="button" onPress={onOpen} style={({ pressed }) => [styles.button, styles.primary, shapes.control, pressed && styles.pressed]}>
+      <Pressable accessibilityRole="button" onPress={onOpen} style={({ pressed }) => [styles.button, styles.primary, stickySurface({ fill: styleColors.accentFill, radius: styleTokens.button.radius, edge: styleTokens.button.edge }, pressed), !stickyFooter && pressed && styles.pressed]}>
         <Icon name={open.icon} size={19} color={ui.accentText} />
         <Text style={[fonts.uiSemi, styles.buttonLabel, { color: ui.accentText }]}>{open.label}</Text>
       </Pressable>
