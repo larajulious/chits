@@ -3,6 +3,7 @@ import { Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable,
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
+import { useStickySheet } from './surface';
 import { GlassSurface } from '@/components/ui/glass-surface';
 
 // How much breathing room to leave between the focused field and the keyboard
@@ -74,7 +75,9 @@ export const FormSheet = forwardRef<FormSheetHandle, Props>(function FormSheet(
   { visible, onRequestClose, closeAccessibilityLabel, header, contentContainerStyle, maxHeightPercent = 100, scrollEnabled, accessibilityViewIsModal, onModalShow, children },
   forwardedRef,
 ) {
-  const { tokens: theme } = useTheme();
+  const { tokens: theme, styleColors } = useTheme();
+  const stickySheet = useStickySheet();
+  const sticky = stickySheet();
   const scrollNodeRef = useRef<ScrollView | null>(null);
   const scrollOffsetRef = useRef(0);
   const keyboardScreenYRef = useRef(Dimensions.get('window').height);
@@ -140,9 +143,9 @@ export const FormSheet = forwardRef<FormSheetHandle, Props>(function FormSheet(
         <SafeAreaView
           edges={['bottom']}
           accessibilityViewIsModal={accessibilityViewIsModal}
-          style={[styles.safeArea, { maxHeight: `${maxHeightPercent}%` as `${number}%`, backgroundColor: theme.surface }]}
+          style={[styles.safeArea, { maxHeight: `${maxHeightPercent}%` as `${number}%`, backgroundColor: theme.surface }, stickySheet(styleColors.controlFill)]}
         >
-          <GlassSurface style={[styles.sheet, { borderColor: theme.borderSubtle }]}>
+          <GlassSurface style={[styles.sheet, { borderColor: theme.borderSubtle }, sticky && { borderWidth: 0, borderTopLeftRadius: sticky.borderTopLeftRadius, borderTopRightRadius: sticky.borderTopRightRadius, backgroundColor: styleColors.controlFill }]}>
             {header}
             <ScrollView
               ref={scrollNodeRef}

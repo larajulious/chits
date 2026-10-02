@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
-import { ActivityIndicator, BackHandler, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/components/theme-provider';
+import { useStickySurface } from '@/components/ui/surface';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
 import { layout, spacing } from '@/constants/theme';
 import { resolveDialogPalette, type DialogType } from './dialog-colors';
 
@@ -59,7 +62,10 @@ export type AppDialogProps = ConfirmProps | AlertProps | ActionSheetProps;
 // via Reanimated so it stays smooth even while the caller's async work (e.g. a
 // delete) runs on the JS thread.
 export function AppDialog(props: AppDialogProps) {
-  const { tokens: theme, scheme } = useTheme();
+  const { tokens: theme, scheme, styleTokens, styleColors } = useTheme();
+  const sticky = useStickySurface();
+  // Sticky: an outlined card on a solid edge; rows divided by ink lines.
+  const rowDivider = styleTokens.outline.width ? styleColors.outline : theme.borderSubtle;
   const { visible, type, title, message, icon, accentColor, onRequestClose } = props;
   const dismissOnBackdrop = props.dismissOnBackdrop ?? true;
   const palette = resolveDialogPalette(type, theme, scheme, accentColor);
@@ -119,16 +125,16 @@ export function AppDialog(props: AppDialogProps) {
           accessibilityViewIsModal
           accessibilityRole="alert"
           accessibilityLabel={title}
-          style={[styles.card, { backgroundColor: theme.surface }, cardStyle]}
+          style={[styles.card, { backgroundColor: theme.surface }, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.panel, edge: styleTokens.emptyState.button.edge }), cardStyle]}
         >
           {isActionSheet ? null : (
             <View style={[styles.iconWrap, { backgroundColor: palette.iconBg }]}>
-              <Ionicons accessible={false} name={resolvedIcon} size={26} color={palette.iconColor} />
+              <Icon name={resolvedIcon} size={26} color={palette.iconColor} />
             </View>
           )}
 
-          {title ? <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{title}</Text> : null}
-          {message ? <Text style={[styles.message, { color: theme.textSecondary }]}>{message}</Text> : null}
+          {title ? <AppText accessibilityRole="header" variant="display" style={[styles.title, { color: theme.textPrimary }]}>{title}</AppText> : null}
+          {message ? <AppText style={[styles.message, { color: theme.textSecondary }]}>{message}</AppText> : null}
 
           {isConfirm ? (
             <View style={styles.actions}>
@@ -138,9 +144,9 @@ export function AppDialog(props: AppDialogProps) {
                 accessibilityState={{ disabled: busy, busy }}
                 disabled={busy}
                 onPress={props.onConfirm}
-                style={({ pressed }) => [styles.primaryButton, { backgroundColor: palette.ctaBg }, pressed && !busy && styles.pressed, busy && styles.busy]}
+                style={({ pressed }) => [styles.primaryButton, { backgroundColor: palette.ctaBg }, sticky({ radius: styleTokens.button.radius, edge: styleTokens.button.edge }, pressed), pressed && !busy && styles.pressed, busy && styles.busy]}
               >
-                {busy ? <ActivityIndicator color={palette.ctaText} /> : <Text style={[styles.primaryButtonText, { color: palette.ctaText }]}>{props.confirmText}</Text>}
+                {busy ? <ActivityIndicator color={palette.ctaText} /> : <AppText style={[styles.primaryButtonText, { color: palette.ctaText }]}>{props.confirmText}</AppText>}
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -149,7 +155,7 @@ export function AppDialog(props: AppDialogProps) {
                 onPress={props.onCancel}
                 style={({ pressed }) => [styles.cancelButton, pressed && !busy && styles.pressed, busy && styles.disabled]}
               >
-                <Text style={[styles.cancelText, { color: theme.textSecondary }]}>{props.cancelText}</Text>
+                <AppText style={[styles.cancelText, { color: theme.textSecondary }]}>{props.cancelText}</AppText>
               </Pressable>
             </View>
           ) : null}
@@ -160,9 +166,9 @@ export function AppDialog(props: AppDialogProps) {
                 accessibilityRole="button"
                 accessibilityLabel={props.actionText}
                 onPress={props.onAction}
-                style={({ pressed }) => [styles.primaryButton, { backgroundColor: palette.ctaBg }, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.primaryButton, { backgroundColor: palette.ctaBg }, sticky({ radius: styleTokens.button.radius, edge: styleTokens.button.edge }, pressed), pressed && styles.pressed]}
               >
-                <Text style={[styles.primaryButtonText, { color: palette.ctaText }]}>{props.actionText}</Text>
+                <AppText style={[styles.primaryButtonText, { color: palette.ctaText }]}>{props.actionText}</AppText>
               </Pressable>
             </View>
           ) : null}
@@ -176,10 +182,10 @@ export function AppDialog(props: AppDialogProps) {
                   accessibilityLabel={option.label}
                   disabled={option.disabled}
                   onPress={option.onPress}
-                  style={({ pressed }) => [styles.sheetRow, index > 0 && { borderTopColor: theme.borderSubtle, borderTopWidth: StyleSheet.hairlineWidth }, pressed && !option.disabled && styles.pressed, option.disabled && styles.disabled]}
+                  style={({ pressed }) => [styles.sheetRow, index > 0 && { borderTopColor: rowDivider, borderTopWidth: StyleSheet.hairlineWidth }, pressed && !option.disabled && styles.pressed, option.disabled && styles.disabled]}
                 >
-                  {option.icon ? <Ionicons accessible={false} name={option.icon} size={18} color={option.destructive ? theme.danger : theme.textPrimary} /> : null}
-                  <Text style={[styles.sheetRowText, { color: option.destructive ? theme.danger : theme.textPrimary }]}>{option.label}</Text>
+                  {option.icon ? <Icon name={option.icon} size={18} color={option.destructive ? theme.danger : theme.textPrimary} /> : null}
+                  <AppText style={[styles.sheetRowText, { color: option.destructive ? theme.danger : theme.textPrimary }]}>{option.label}</AppText>
                 </Pressable>
               ))}
               <Pressable
@@ -188,7 +194,7 @@ export function AppDialog(props: AppDialogProps) {
                 onPress={props.onCancel}
                 style={({ pressed }) => [styles.cancelButton, styles.sheetCancel, pressed && styles.pressed]}
               >
-                <Text style={[styles.cancelText, { color: theme.textSecondary }]}>{props.cancelText}</Text>
+                <AppText style={[styles.cancelText, { color: theme.textSecondary }]}>{props.cancelText}</AppText>
               </Pressable>
             </View>
           ) : null}

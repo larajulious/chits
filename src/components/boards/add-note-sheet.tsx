@@ -3,6 +3,7 @@ import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, St
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
+import { useStickyControls } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { GlassSurface } from '@/components/ui/glass-surface';
@@ -38,6 +39,7 @@ const MAX_NOTE_LENGTH = 10000;
 // staged file is deleted again if the sheet is dismissed without adding.
 export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit }: Props) {
   const { tokens: theme } = useTheme();
+  const controls = useStickyControls();
   const inputRef = useRef<TextInput>(null);
   const wasVisible = useRef(false);
   const [text, setText] = useState('');
@@ -115,7 +117,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
       editable={!saving}
       style={fullscreen
         ? [styles.fullInput, { color: theme.textPrimary }]
-        : [styles.input, draft && styles.inputWithAttachment, { backgroundColor: theme.background, borderColor: theme.borderSubtle, color: theme.textPrimary }]}
+        : [styles.input, controls.input, draft && styles.inputWithAttachment, { backgroundColor: theme.background, borderColor: theme.borderSubtle, color: theme.textPrimary }]}
     />
   );
 
@@ -133,7 +135,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
           accessibilityState={{ disabled: busy }}
           disabled={busy}
           onPress={() => void attach(option.key)}
-          style={({ pressed }) => [styles.attachChip, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, busy && styles.disabled, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.attachChip, controls.panel, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, busy && styles.disabled, pressed && styles.pressed]}
         >
           <Icon name={option.icon} size={17} color={theme.textSecondary} />
           <AppText style={[styles.attachLabel, { color: theme.textPrimary }]}>{option.label}</AppText>
@@ -219,7 +221,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
                       accessibilityState={{ disabled: !canAdd }}
                       disabled={!canAdd}
                       onPress={() => void submit()}
-                      style={({ pressed }) => [styles.addButton, { backgroundColor: theme.accent }, !canAdd && styles.disabled, pressed && canAdd && styles.pressed]}
+                      style={({ pressed }) => [styles.addButton, controls.button, { backgroundColor: theme.accent }, !canAdd && styles.disabled, pressed && canAdd && styles.pressed]}
                     >
                       {saving ? <ActivityIndicator accessibilityLabel="Adding note" size="small" color={theme.accentText} /> : <AppText style={[styles.addText, { color: theme.accentText }]}>Add</AppText>}
                     </Pressable>

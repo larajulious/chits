@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { useTheme } from '@/components/theme-provider';
+import { useStickyControls } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
@@ -44,6 +45,7 @@ export function ColumnManagementSheet({
   onDelete,
 }: Props) {
   const { tokens: theme } = useTheme();
+  const controls = useStickyControls();
   const [page, setPage] = useState<Page>('manage');
   const [name, setName] = useState('');
   const [touched, setTouched] = useState(false);
@@ -248,11 +250,11 @@ export function ColumnManagementSheet({
                     maxLength={MAX_COLUMN_NAME_LENGTH}
                     returnKeyType="done"
                     selectTextOnFocus
-                    style={[styles.input, { color: theme.textPrimary, backgroundColor: theme.background, borderColor: nameError ? theme.danger : theme.borderSubtle }]}
+                    style={[styles.input, controls.input, { color: theme.textPrimary, backgroundColor: theme.background, borderColor: nameError ? theme.danger : theme.borderSubtle }]}
                   />
                   {nameError ? <AppText accessibilityRole="alert" style={[styles.validation, { color: theme.danger }]}>{nameError}</AppText> : null}
                   {nameChanged ? (
-                    <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => void saveName()} style={({ pressed }) => [styles.saveButton, { backgroundColor: theme.accent }, pressed && styles.pressed]}>
+                    <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => void saveName()} style={({ pressed }) => [styles.saveButton, controls.button, { backgroundColor: theme.accent }, pressed && styles.pressed]}>
                       <AppText style={[styles.saveText, { color: theme.accentText }]}>{busy ? 'Saving…' : 'Save changes'}</AppText>
                     </Pressable>
                   ) : null}
@@ -268,7 +270,7 @@ export function ColumnManagementSheet({
                       accessibilityState={{ disabled: leftDisabled }}
                       disabled={leftDisabled}
                       onPress={() => void moveColumn(-1)}
-                      style={({ pressed }) => [styles.positionButton, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, leftDisabled && styles.disabled, pressed && !leftDisabled && styles.pressed]}
+                      style={({ pressed }) => [styles.positionButton, controls.panel, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, leftDisabled && styles.disabled, pressed && !leftDisabled && styles.pressed]}
                     >
                       <Icon name="arrow-back-outline" size={18} color={theme.textPrimary} />
                       <AppText style={[styles.positionText, { color: theme.textPrimary }]}>Move left</AppText>
@@ -279,7 +281,7 @@ export function ColumnManagementSheet({
                       accessibilityState={{ disabled: rightDisabled }}
                       disabled={rightDisabled}
                       onPress={() => void moveColumn(1)}
-                      style={({ pressed }) => [styles.positionButton, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, rightDisabled && styles.disabled, pressed && !rightDisabled && styles.pressed]}
+                      style={({ pressed }) => [styles.positionButton, controls.panel, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, rightDisabled && styles.disabled, pressed && !rightDisabled && styles.pressed]}
                     >
                       <AppText style={[styles.positionText, { color: theme.textPrimary }]}>Move right</AppText>
                       <Icon name="arrow-forward-outline" size={18} color={theme.textPrimary} />
@@ -325,7 +327,7 @@ export function ColumnManagementSheet({
                     returnKeyType="done"
                     placeholder="e.g. To do"
                     placeholderTextColor={theme.textMuted}
-                    style={[styles.input, { color: theme.textPrimary, backgroundColor: theme.background, borderColor: nameError ? theme.danger : theme.borderSubtle }]}
+                    style={[styles.input, controls.input, { color: theme.textPrimary, backgroundColor: theme.background, borderColor: nameError ? theme.danger : theme.borderSubtle }]}
                   />
                   {nameError ? <AppText accessibilityRole="alert" style={[styles.validation, { color: theme.danger }]}>{nameError}</AppText> : null}
                   <Pressable
@@ -333,7 +335,7 @@ export function ColumnManagementSheet({
                     accessibilityState={{ disabled: !trimmedName || busy }}
                     disabled={!trimmedName || busy}
                     onPress={() => void addColumn()}
-                    style={({ pressed }) => [styles.fullButton, { backgroundColor: theme.accent }, (!trimmedName || busy) && styles.disabled, pressed && trimmedName && styles.pressed]}
+                    style={({ pressed }) => [styles.fullButton, controls.button, { backgroundColor: theme.accent }, (!trimmedName || busy) && styles.disabled, pressed && trimmedName && styles.pressed]}
                   >
                     <AppText style={[styles.saveText, { color: theme.accentText }]}>{busy ? 'Adding…' : 'Add column'}</AppText>
                   </Pressable>
@@ -350,7 +352,7 @@ export function ColumnManagementSheet({
                     <>
                       <AppText style={[styles.deleteCopy, { color: theme.textSecondary }]}>This column contains {deleteCardCount} {deleteCardCount === 1 ? 'card' : 'cards'}. Choose where to move {deleteCardCount === 1 ? 'it' : 'them'} first.</AppText>
                       <AppText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Move cards to</AppText>
-                      <View style={[styles.destinationList, { borderColor: theme.borderSubtle }]}>
+                      <View style={[styles.destinationList, controls.panel, { borderColor: theme.borderSubtle }]}>
                         {destinations.map((column, index) => {
                           const selected = destinationId === column.id;
                           return (

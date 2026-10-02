@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { useTheme } from '@/components/theme-provider';
+import { useStickyControls } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
@@ -25,6 +26,7 @@ const MAX_BOARD_NAME_LENGTH = 80;
 // never a second, drifted design.
 export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
   const { tokens: theme } = useTheme();
+  const controls = useStickyControls();
   const inputRef = useRef<TextInput>(null);
   const scrollRef = useRef<FormSheetHandle>(null);
   const wasVisible = useRef(false);
@@ -91,7 +93,7 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
       <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Edit board</AppText>
       <AppText style={[styles.supportingCopy, { color: theme.textSecondary }]}>Update this board’s name and appearance.</AppText>
 
-      <View accessible accessibilityLabel={`Preview: ${trimmedName || 'Untitled board'}`} style={[styles.preview, { backgroundColor: theme.background, borderColor: theme.borderSubtle }]}>
+      <View accessible accessibilityLabel={`Preview: ${trimmedName || 'Untitled board'}`} style={[styles.preview, controls.panel, { backgroundColor: theme.background, borderColor: theme.borderSubtle }]}>
         <View style={[styles.previewMark, { backgroundColor: accent ?? theme.accentSoft }]}>
           <Icon name={resolveBoardIcon(icon)} size={19} color={accent ? '#FFFFFF' : theme.accentStrong} />
         </View>
@@ -116,7 +118,7 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
         returnKeyType="done"
         selectionColor={theme.accent}
         style={[
-          styles.input,
+          styles.input, controls.input,
           {
             backgroundColor: theme.background,
             borderColor: validation ? theme.danger : theme.borderSubtle,
@@ -141,7 +143,7 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
           disabled={!canSave}
           onPress={() => void save()}
           style={({ pressed }) => [
-            styles.saveButton,
+            styles.saveButton, controls.button,
             { backgroundColor: theme.accent },
             !canSave && styles.disabled,
             pressed && canSave && styles.pressed,

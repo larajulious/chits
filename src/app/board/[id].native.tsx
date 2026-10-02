@@ -19,7 +19,7 @@ import { createBoardRepository } from '@/db/repositories';
 import { formatReminder } from '@/services/reminder-time';
 import { requestReminderSync, subscribeToReminderChanges } from '@/services/reminders';
 import { useTheme } from '@/components/theme-provider';
-import { useStickySurface } from '@/components/ui/surface';
+import { useStickySheet, useStickySurface } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import type { Attachment, Board } from '@/db/types';
@@ -339,7 +339,7 @@ function reorder(items: Card[], from: number, to: number) { const next = [...ite
 
 export default function BoardScreen() {
   'use no memo';
-  const database = useSQLiteContext(); const { id, highlightColumnId, highlightCardId } = useLocalSearchParams<{ id: string; highlightColumnId?: string; highlightCardId?: string }>(); const repository = useMemo(() => createBoardRepository(database), [database]); const { tokens: theme, look, styleTokens, styleColors } = useTheme(); const sticky = useStickySurface(); const headerInk = useHeaderInk();
+  const database = useSQLiteContext(); const { id, highlightColumnId, highlightCardId } = useLocalSearchParams<{ id: string; highlightColumnId?: string; highlightCardId?: string }>(); const repository = useMemo(() => createBoardRepository(database), [database]); const { tokens: theme, look, styleTokens, styleColors } = useTheme(); const sticky = useStickySurface(); const stickySheet = useStickySheet(); const headerInk = useHeaderInk();
   // Sticky: header buttons are outlined tiles on an edge.
   const headerTile = (pressed: boolean) => sticky({ fill: styleColors.controlFill, radius: styleTokens.header.iconButton.radius, edge: styleTokens.header.iconButton.edge }, pressed);
   // The ONE source of truth for the column navigator dock's bottom clearance
@@ -820,7 +820,7 @@ export default function BoardScreen() {
       {board.showColumnNavigator ? <View onLayout={(event) => setNavigatorDockHeight(Math.ceil(event.nativeEvent.layout.height))} style={[styles.navigatorDock, { paddingBottom: Math.min(insets.bottom, spacing.sm) || spacing.sm }]}><ColumnNavigator columns={columns} cards={cards} columnStatus={columnStatus} columnCounts={columnCounts} columnIndex={columnIndex} reduceMotion={reduceMotion} accent={accent} onSelect={goToColumn} onAddColumn={openAddColumnSheet} /></View> : null}
       <Pressable accessibilityRole="button" accessibilityLabel="Add from Unorganized" accessibilityHint="Opens unorganized thoughts to add to this board" onPress={() => router.push(`/unorganized?boardId=${id}`)} style={({ pressed }) => [styles.add, { bottom: addButtonBottom, backgroundColor: accent }, sticky({ fill: accent, radius: styleTokens.radius.panel, edge: styleTokens.emptyState.button.edge }, pressed), pressed && styles.addPressed]}><Icon name="add-outline" size={28} color={accentOn} /></Pressable>
     </View> : <View style={styles.carousel}><AddColumnPlaceholder variant="empty" onPress={openAddColumnSheet} /></View>}</View>{error ? <AppText accessibilityRole="alert" style={[styles.error, { backgroundColor: theme.danger }]}>{error}</AppText> : null}
-    <Modal visible={!!moveCard} transparent animationType="fade" onRequestClose={() => setMoveCard(null)}><View style={styles.backdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setMoveCard(null)} /><View style={[styles.modal, { backgroundColor: theme.surface }]}><AppText variant="display" style={[styles.modalTitle, { color: theme.textPrimary }]}>Move to…</AppText><AppText style={[styles.modalCopy, { color: theme.textSecondary }]}>Choose a destination column.</AppText>{columns.map((column) => <Pressable key={column.id} onPress={() => void move(column)} style={[styles.option, { borderTopColor: theme.borderSubtle }]}><AppText style={[styles.optionText, { color: theme.textPrimary }]}>{column.name}</AppText><AppText style={[styles.optionArrow, { color: theme.textMuted }]}>›</AppText></Pressable>)}</View></View></Modal>
+    <Modal visible={!!moveCard} transparent animationType="fade" onRequestClose={() => setMoveCard(null)}><View style={styles.backdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setMoveCard(null)} /><View style={[styles.modal, { backgroundColor: theme.surface }, stickySheet()]}><AppText variant="display" style={[styles.modalTitle, { color: theme.textPrimary }]}>Move to…</AppText><AppText style={[styles.modalCopy, { color: theme.textSecondary }]}>Choose a destination column.</AppText>{columns.map((column) => <Pressable key={column.id} onPress={() => void move(column)} style={[styles.option, { borderTopColor: theme.borderSubtle }]}><AppText style={[styles.optionText, { color: theme.textPrimary }]}>{column.name}</AppText><AppText style={[styles.optionArrow, { color: theme.textMuted }]}>›</AppText></Pressable>)}</View></View></Modal>
     <ColumnManagementSheet
       visible={settingsOpen}
       columns={columns}

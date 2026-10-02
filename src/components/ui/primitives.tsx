@@ -6,7 +6,7 @@ import { layout, spacing, tokens } from '@/constants/theme';
 import { AppText } from './app-text';
 import { ChitsLoader } from './chits-loader';
 import { HeaderChromeContext, IconButton } from './controls';
-import { PressableSurface, Surface } from './surface';
+import { PressableSurface, Surface, useStickySheet } from './surface';
 import { TopBarBackground, useHeaderInk } from './top-bar';
 
 export { HeaderIcon, MenuIcon, TopBarBackground, useHeaderInk } from './top-bar';
@@ -15,7 +15,7 @@ export { Button, Chip, ChipRow, IconButton, SegmentedControl } from './controls'
 export { EmptyState } from './empty-state';
 export { Icon } from './icon';
 export { NoteCard, NoteCategory } from './note-card';
-export { PressableSurface, Surface, useStickySurface } from './surface';
+export { PressableSurface, Surface, useStickySheet, useStickySurface } from './surface';
 
 export function Screen({ children, style, edges }: PropsWithChildren<{ style?: StyleProp<ViewStyle>; edges?: Edge[] }>) { const { tokens: theme } = useTheme(); return <SafeAreaView edges={edges} style={[styles.screen, { backgroundColor: theme.background }, style]}>{children}</SafeAreaView>; }
 export const AppScreen = Screen;
@@ -44,7 +44,7 @@ export function BackHeader({ title, onBack, trailing }: { title: string; onBack:
 export function Divider() { const { tokens: theme } = useTheme(); return <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />; }
 export function LoadingState({ label = 'Preparing Chits…' }: { label?: string }) { return <SafeAreaView style={[styles.screen, styles.loadingScreen, { backgroundColor: tokens.background }]}><ChitsLoader size="large" label={label} /></SafeAreaView>; }
 export function FloatingSurface({ children, style }: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) { const { tokens: theme, styleTokens, styleColors } = useTheme(); return <Surface fill={styleTokens.outline.width ? styleColors.controlFill : theme.surface} border={theme.borderSubtle} radius={styleTokens.radius.panel} shadow="floating" style={style}>{children}</Surface>; }
-export function BottomSheetSurface({ children, style }: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) { const { tokens: theme, styleTokens } = useTheme(); const r = styleTokens.radius.sheet; return <Surface fill={theme.surface} border={theme.borderSubtle} radius={{ topLeft: r, topRight: r, bottomRight: 0, bottomLeft: 0 }} edge={false} style={style}>{children}</Surface>; }
+export function BottomSheetSurface({ children, style }: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) { const { tokens: theme, styleTokens } = useTheme(); const stickySheet = useStickySheet(); const r = styleTokens.radius.sheet; return <Surface fill={theme.surface} border={theme.borderSubtle} radius={{ topLeft: r, topRight: r, bottomRight: 0, bottomLeft: 0 }} edge={false} style={[stickySheet(), style]}>{children}</Surface>; }
 /** A full-width-capable accent button (no pressed dimming under Classic, as before). */
 export function PrimaryButton({ label, onPress, disabled = false }: { label: string; onPress: () => void; disabled?: boolean }) { const { tokens: theme, styleTokens, styleColors } = useTheme(); const sticky = styleTokens.elevation === 'edge'; return <PressableSurface accessibilityRole="button" disabled={disabled} onPress={onPress} fill={sticky ? styleColors.accentFill : theme.accent} radius={styleTokens.button.radius} edge={styleTokens.button.edge || false} pressedStyle={null} style={[styles.button, disabled && styles.disabled]}><AppText weight={sticky ? '800' : '700'} style={{ color: sticky ? styleColors.onAccent : theme.accentText }}>{label}</AppText></PressableSurface>; }
 export function SecondaryButton({ label, onPress, disabled = false }: { label: string; onPress: () => void; disabled?: boolean }) { const { tokens: theme, styleTokens, styleColors } = useTheme(); const sticky = styleTokens.elevation === 'edge'; return <PressableSurface accessibilityRole="button" disabled={disabled} onPress={onPress} fill={sticky ? styleColors.controlFill : theme.surfaceElevated} radius={styleTokens.button.radius} edge={styleTokens.button.edge || false} pressedStyle={null} style={[styles.button, disabled && styles.disabled]}><AppText weight={sticky ? '700' : '600'} style={{ color: theme.textPrimary }}>{label}</AppText></PressableSurface>; }

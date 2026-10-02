@@ -1,6 +1,6 @@
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { useTheme, type AppAppearance } from '@/components/theme-provider';
-import { AppText, HeaderIcon, Icon, IconButton, SegmentedControl, Surface, TopBarBackground, useHeaderInk, MenuIcon } from '@/components/ui/primitives';
+import { AppText, HeaderIcon, Icon, IconButton, SegmentedControl, Surface, TopBarBackground, useHeaderInk, useStickySheet, MenuIcon } from '@/components/ui/primitives';
 import { HeaderChromeContext } from '@/components/ui/controls';
 import { EditNoteSpaceNameSheet } from '@/components/settings/edit-notespace-name-sheet';
 import { ChatAppearanceSettings } from '@/components/settings/chat-appearance-settings';
@@ -35,6 +35,7 @@ export default function SettingsScreen() {
   const { openDrawer } = useAppDrawer();
   const { appearance, setAppearance, identity, themeKey, setThemeKey, themes, tokens, style, setStyle, styleTokens } = useTheme();
   const leftTitle = styleTokens.header.align === 'left';
+  const stickySheet = useStickySheet();
   const headerInk = useHeaderInk();
   const database = useSQLiteContext();
   const [sheet, setSheet] = useState<Sheet>(null);
@@ -136,7 +137,7 @@ export default function SettingsScreen() {
     <Modal visible={sheet !== null} transparent animationType="slide" onRequestClose={closeSheet}>
       <View style={styles.backdrop}>
         <Pressable accessible={false} style={StyleSheet.absoluteFill} onPress={closeSheet} />
-        <SafeAreaView edges={['bottom', 'left', 'right']} accessibilityViewIsModal style={[styles.sheet, { backgroundColor: tokens.surface, borderTopLeftRadius: styleTokens.radius.sheet, borderTopRightRadius: styleTokens.radius.sheet }]}>
+        <SafeAreaView edges={['bottom', 'left', 'right']} accessibilityViewIsModal style={[styles.sheet, { backgroundColor: tokens.surface, borderTopLeftRadius: styleTokens.radius.sheet, borderTopRightRadius: styleTokens.radius.sheet }, stickySheet()]}>
           <View style={styles.sheetHeader}><AppText accessibilityRole="header" variant="display" weight="600" style={[styles.sheetTitle, { color: tokens.textPrimary }]}>App appearance</AppText><IconButton label="Close settings sheet" disabled={busy} onPress={closeSheet}><Icon name="close-outline" size={22} color={tokens.textSecondary} /></IconButton></View>
           <ScrollView contentContainerStyle={styles.sheetContent}>
             {sheet === 'appearance' ? (['system', 'light', 'dark'] as AppAppearance[]).map((mode) => <Pressable key={mode} accessibilityRole="radio" accessibilityState={{ selected: appearance === mode, disabled: busy }} disabled={busy} onPress={() => void change(() => setAppearance(mode), true)} style={styles.choice}><AppText style={[styles.label, { color: tokens.textPrimary }]}>{appearanceNames[mode]}</AppText>{appearance === mode ? <Icon name="checkmark" size={22} color={tokens.accent} /> : null}</Pressable>) : null}

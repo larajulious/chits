@@ -1,8 +1,9 @@
 import type { PropsWithChildren, ReactNode } from 'react';
-import { Pressable, StyleSheet, View, type PressableProps, type StyleProp, type ViewProps, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, View, type PressableProps, type StyleProp, type TextStyle, type ViewProps, type ViewStyle } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 
 import { useTheme } from '@/components/theme-provider';
+import { fontStyle } from './app-text';
 import type { Corners, SoftShadow, StyleColors, StyleTokens } from '@/constants/style-tokens';
 
 export type Radius = number | Corners;
@@ -75,6 +76,35 @@ export function useStickySurface() {
   const { styleTokens, styleColors } = useTheme();
   return (options: SurfaceOptions, sunk = false): ViewStyle | null =>
     styleTokens.elevation === 'edge' ? surfaceStyle(styleTokens, styleColors, options, sunk) : null;
+}
+
+/**
+ * A bottom sheet under Sticky: rounded top corners and an ink outline along
+ * its top and sides (the bottom runs off-screen). Null under Classic.
+ */
+export function useStickySheet() {
+  const { styleTokens: t, styleColors } = useTheme();
+  return (fill: string = styleColors.controlFill): ViewStyle | null => t.elevation === 'edge' ? {
+    backgroundColor: fill,
+    borderTopLeftRadius: t.radius.sheet, borderTopRightRadius: t.radius.sheet,
+    borderWidth: t.outline.width, borderBottomWidth: 0, borderColor: styleColors.outline,
+    shadowOpacity: 0, elevation: 0,
+  } : null;
+}
+
+/**
+ * Sticky overlays for the pieces every sheet repeats: a text field, a filled
+ * button, and a grouped panel. Each is null under Classic.
+ */
+export function useStickyControls() {
+  const { styleTokens: t, styleColors, look } = useTheme();
+  const on = t.elevation === 'edge';
+  const sticky = (options: SurfaceOptions) => (on ? surfaceStyle(t, styleColors, options) : null);
+  return {
+    input: on ? { ...sticky({ fill: styleColors.controlFill, radius: t.radius.control, edge: false }), ...fontStyle(t, look, 'paragraph') } as TextStyle : null,
+    button: sticky({ radius: t.button.radius, edge: t.button.edge }),
+    panel: sticky({ radius: t.radius.panel, edge: false }),
+  };
 }
 
 export function Surface({ children, style, fill, radius, border, outline, outlineColor, shadow, edge, edgeColor, clip, ...props }: PropsWithChildren<ViewProps & SurfaceOptions>) {

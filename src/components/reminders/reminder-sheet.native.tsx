@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTimePicker } from '@expo/ui/community/datetime-picker';
 
 import { showPermissionSettingsPrompt } from '@/components/permissions/permission-settings-prompt';
 import { useTheme } from '@/components/theme-provider';
+import { useStickyControls } from '@/components/ui/surface';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
 import { radii, spacing } from '@/constants/theme';
 import type { SetReminderResult } from '@/services/reminders';
 import {
@@ -40,6 +43,7 @@ const QUICK_ICONS: Record<ReminderQuickKey, React.ComponentProps<typeof Ionicons
  */
 export function ReminderSheet({ visible, existing, accent, accentOn, onClose, onSave, onRemove }: Props) {
   const { scheme, tokens: theme } = useTheme();
+  const controls = useStickyControls();
   // Initial state comes from props at mount; the parent remounts the sheet
   // (new `key`) each time it opens, so it always starts from the note's current
   // reminder — or Tomorrow when there isn't one.
@@ -115,14 +119,14 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
           <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
           <ScrollView bounces={false} contentContainerStyle={styles.content}>
             <View style={styles.header}>
-              <View style={[styles.headerIcon, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name={existing ? 'notifications' : 'notifications-outline'} size={18} color={accent} /></View>
+              <View style={[styles.headerIcon, { backgroundColor: theme.surfaceElevated }]}><Icon name={existing ? 'notifications' : 'notifications-outline'} size={18} color={accent} /></View>
               <View style={styles.flex}>
-                <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{title}</Text>
-                <Text style={[styles.subtitle, { color: theme.textSecondary }]}>{existing ? `Set for ${formatReminder(new Date(existing), now)}` : 'Get notified about this card'}</Text>
+                <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{title}</AppText>
+                <AppText style={[styles.subtitle, { color: theme.textSecondary }]}>{existing ? `Set for ${formatReminder(new Date(existing), now)}` : 'Get notified about this card'}</AppText>
               </View>
             </View>
 
-            <View accessibilityRole="radiogroup" style={[styles.group, { borderColor: theme.borderSubtle }]}>
+            <View accessibilityRole="radiogroup" style={[styles.group, controls.panel, { borderColor: theme.borderSubtle }]}>
               {options.map((option, index) => (
                 <OptionRow
                   key={option.key}
@@ -138,8 +142,8 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
               <OptionRow icon="calendar-outline" label="Pick date & time" detail={choice === 'custom' ? formatReminder(value, now) : null} selected={choice === 'custom'} first={false} accent={accent} onPress={chooseCustom} />
             </View>
 
-            <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>DATE & TIME</Text>
-            <View style={[styles.group, { borderColor: theme.borderSubtle }]}>
+            <AppText style={[styles.sectionLabel, { color: theme.textMuted }]}>DATE & TIME</AppText>
+            <View style={[styles.group, controls.panel, { borderColor: theme.borderSubtle }]}>
               <FieldRow label="Date" first>
                 {Platform.OS === 'ios'
                   ? <DateTimePicker style={styles.iosDate} value={value} mode="date" display="compact" minimumDate={startOfDay(now)} accentColor={accent} themeVariant={scheme === 'dark' ? 'dark' : 'light'} onValueChange={(_, date) => pick(withDate(value, date.getFullYear(), date.getMonth(), date.getDate()), 'custom')} />
@@ -153,35 +157,35 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
             </View>
 
             {problem === 'past' || (!valid && !busy) ? (
-              <View accessibilityRole="alert" style={styles.inline}><Ionicons accessible={false} name="alert-circle-outline" size={16} color={theme.danger} /><Text style={[styles.inlineText, { color: theme.danger }]}>Choose a future time.</Text></View>
+              <View accessibilityRole="alert" style={styles.inline}><Icon name="alert-circle-outline" size={16} color={theme.danger} /><AppText style={[styles.inlineText, { color: theme.danger }]}>Choose a future time.</AppText></View>
             ) : null}
             {problem === 'declined' ? (
               // Just declined at the system prompt: a plain status line only — no
               // prompt and no Settings shortcut (App Review Guideline 5.1.1(iv)).
-              <View accessibilityRole="alert" style={styles.inline}><Ionicons accessible={false} name="notifications-off-outline" size={16} color={theme.textSecondary} /><Text style={[styles.inlineText, { color: theme.textSecondary }]}>Reminder not set. Notifications aren’t allowed for Chits.</Text></View>
+              <View accessibilityRole="alert" style={styles.inline}><Icon name="notifications-off-outline" size={16} color={theme.textSecondary} /><AppText style={[styles.inlineText, { color: theme.textSecondary }]}>Reminder not set. Notifications aren’t allowed for Chits.</AppText></View>
             ) : null}
             {problem === 'failed' ? (
-              <View accessibilityRole="alert" style={styles.inline}><Ionicons accessible={false} name="alert-circle-outline" size={16} color={theme.danger} /><Text style={[styles.inlineText, { color: theme.danger }]}>The reminder couldn’t be set. Please try again.</Text></View>
+              <View accessibilityRole="alert" style={styles.inline}><Icon name="alert-circle-outline" size={16} color={theme.danger} /><AppText style={[styles.inlineText, { color: theme.danger }]}>The reminder couldn’t be set. Please try again.</AppText></View>
             ) : null}
 
             <View style={styles.actions}>
               {existing ? (
                 <Pressable accessibilityRole="button" disabled={busy !== null} onPress={() => void remove()} style={({ pressed }) => [styles.textButton, pressed && styles.pressed]}>
-                  {busy === 'remove' ? <ActivityIndicator size="small" color={theme.danger} /> : <Text style={[styles.textButtonLabel, { color: theme.danger }]}>Remove Reminder</Text>}
+                  {busy === 'remove' ? <ActivityIndicator size="small" color={theme.danger} /> : <AppText style={[styles.textButtonLabel, { color: theme.danger }]}>Remove Reminder</AppText>}
                 </Pressable>
               ) : null}
               <View style={styles.flex} />
               <Pressable accessibilityRole="button" disabled={busy !== null} onPress={close} style={({ pressed }) => [styles.textButton, pressed && styles.pressed]}>
-                <Text style={[styles.textButtonLabel, { color: theme.textSecondary }]}>Cancel</Text>
+                <AppText style={[styles.textButtonLabel, { color: theme.textSecondary }]}>Cancel</AppText>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
                 accessibilityState={{ disabled: primaryDisabled }}
                 disabled={primaryDisabled}
                 onPress={() => void save()}
-                style={({ pressed }) => [styles.primary, { backgroundColor: accent }, primaryDisabled && styles.disabled, pressed && !primaryDisabled && styles.pressed]}
+                style={({ pressed }) => [styles.primary, controls.button, { backgroundColor: accent }, primaryDisabled && styles.disabled, pressed && !primaryDisabled && styles.pressed]}
               >
-                {busy === 'save' ? <ActivityIndicator size="small" color={accentOn} /> : <Text style={[styles.primaryLabel, { color: accentOn }]}>{primaryLabel}</Text>}
+                {busy === 'save' ? <ActivityIndicator size="small" color={accentOn} /> : <AppText style={[styles.primaryLabel, { color: accentOn }]}>{primaryLabel}</AppText>}
               </Pressable>
             </View>
           </ScrollView>
@@ -235,10 +239,10 @@ function OptionRow({ icon, label, detail, selected, first, accent, onPress }: { 
       onPress={onPress}
       style={({ pressed }) => [styles.row, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.borderSubtle }, pressed && { backgroundColor: theme.surfaceElevated }]}
     >
-      <Ionicons accessible={false} name={icon} size={19} color={selected ? accent : theme.textSecondary} />
-      <Text style={[styles.rowLabel, { color: theme.textPrimary }, selected && styles.rowLabelSelected]}>{label}</Text>
-      {detail ? <Text numberOfLines={1} style={[styles.rowDetail, { color: selected ? accent : theme.textMuted }]}>{detail}</Text> : null}
-      <Ionicons accessible={false} name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={selected ? accent : theme.borderSubtle} />
+      <Icon name={icon} size={19} color={selected ? accent : theme.textSecondary} />
+      <AppText style={[styles.rowLabel, { color: theme.textPrimary }, selected && styles.rowLabelSelected]}>{label}</AppText>
+      {detail ? <AppText numberOfLines={1} style={[styles.rowDetail, { color: selected ? accent : theme.textMuted }]}>{detail}</AppText> : null}
+      <Icon name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={selected ? accent : theme.borderSubtle} />
     </Pressable>
   );
 }
@@ -247,7 +251,7 @@ function FieldRow({ label, first, children }: { label: string; first: boolean; c
   const { tokens: theme } = useTheme();
   return (
     <View style={[styles.row, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.borderSubtle }]}>
-      <Text style={[styles.rowLabel, { color: theme.textPrimary }]}>{label}</Text>
+      <AppText style={[styles.rowLabel, { color: theme.textPrimary }]}>{label}</AppText>
       <View style={styles.fieldValue}>{children}</View>
     </View>
   );
@@ -257,7 +261,7 @@ function FieldButton({ text, label, onPress }: { text: string; label: string; on
   const { tokens: theme } = useTheme();
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} hitSlop={6} style={({ pressed }) => [styles.fieldButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>
-      <Text style={[styles.fieldButtonText, { color: theme.textPrimary }]}>{text}</Text>
+      <AppText style={[styles.fieldButtonText, { color: theme.textPrimary }]}>{text}</AppText>
     </Pressable>
   );
 }

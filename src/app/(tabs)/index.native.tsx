@@ -15,6 +15,7 @@ import {
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
+import { useStickyControls } from '@/components/ui/surface';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
 import { AppHeader, AppText, Chip, ChipRow, EmptyState, Icon, IconButton, PressableSurface, Screen, SegmentedControl, Surface, Toast, HeaderIcon, MenuIcon, useFontStyle } from '@/components/ui/primitives';
@@ -113,6 +114,7 @@ export default function BoardsScreen() {
   const { openDrawer } = useAppDrawer();
   const { actionSheet, confirm } = useAppDialog();
   const { tokens: theme, styleTokens, styleColors } = useTheme();
+  const controls = useStickyControls();
   // Sticky balances the masonry columns by height and spaces them evenly;
   // Classic keeps its alternating columns exactly as they were.
   const balanced = styleTokens.card.tinted;
@@ -582,7 +584,7 @@ export default function BoardsScreen() {
           placeholder="e.g. Tasks"
           placeholderTextColor={theme.textMuted}
           maxLength={80}
-          style={[styles.nameInput, inputFont, { borderRadius: styleTokens.radius.control, borderWidth: styleTokens.outline.width || 1, borderColor: styleTokens.outline.width ? styleColors.outline : theme.borderSubtle, color: theme.textPrimary, backgroundColor: theme.background }]}
+          style={[styles.nameInput, controls.input, inputFont, { borderRadius: styleTokens.radius.control, borderWidth: styleTokens.outline.width || 1, borderColor: styleTokens.outline.width ? styleColors.outline : theme.borderSubtle, color: theme.textPrimary, backgroundColor: theme.background }]}
           returnKeyType="done"
           onSubmitEditing={() => void createBoard()}
         />

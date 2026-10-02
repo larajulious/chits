@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -11,6 +11,9 @@ import { AppHeader, EmptyState, IconButton, Screen, useHeaderInk } from '@/compo
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { useTheme } from '@/components/theme-provider';
+import { useStickySheet } from '@/components/ui/surface';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
 import { useVideoThumbnail } from '@/components/chat/message-row';
 import { spacing, type ThemeTokens } from '@/constants/theme';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
@@ -45,18 +48,18 @@ function formatDateTime(timestamp: number) {
 function VideoThumb({ attachment }: { attachment: Attachment }) {
   const { tokens: theme } = useTheme();
   const thumbnail = useVideoThumbnail(attachment.storagePath);
-  return <View style={[thumbStyles.thumb, { backgroundColor: theme.surfaceElevated }]}>{thumbnail ? <Image source={thumbnail} contentFit="cover" style={StyleSheet.absoluteFill} /> : <Ionicons accessible={false} name="videocam-outline" size={20} color={theme.textMuted} />}<View style={thumbStyles.thumbPlay}><Ionicons accessible={false} name="play" size={11} color="#FFFFFF" /></View></View>;
+  return <View style={[thumbStyles.thumb, { backgroundColor: theme.surfaceElevated }]}>{thumbnail ? <Image source={thumbnail} contentFit="cover" style={StyleSheet.absoluteFill} /> : <Icon name="videocam-outline" size={20} color={theme.textMuted} />}<View style={thumbStyles.thumbPlay}><Icon name="play" size={11} color="#FFFFFF" /></View></View>;
 }
 
 function Thumbnail({ message }: { message: Message }) {
   const { tokens: theme } = useTheme();
-  if (message.isHiddenContent) return <View accessibilityLabel="Hidden content" style={[thumbStyles.thumb, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name="eye-off-outline" size={20} color={theme.textMuted} /></View>;
+  if (message.isHiddenContent) return <View accessibilityLabel="Hidden content" style={[thumbStyles.thumb, { backgroundColor: theme.surfaceElevated }]}><Icon name="eye-off-outline" size={20} color={theme.textMuted} /></View>;
   const attachment = message.attachments[0];
   if (!attachment) return null;
   if (attachment.type === 'photo') return <Image source={resolveAttachmentUri(attachment.storagePath) ?? ''} contentFit="cover" style={thumbStyles.thumb} />;
   if (attachment.type === 'video') return <VideoThumb attachment={attachment} />;
   const iconName: IoniconName = attachment.type === 'audio' ? 'mic-outline' : 'document-outline';
-  return <View style={[thumbStyles.thumb, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name={iconName} size={20} color={theme.textMuted} /></View>;
+  return <View style={[thumbStyles.thumb, { backgroundColor: theme.surfaceElevated }]}><Icon name={iconName} size={20} color={theme.textMuted} /></View>;
 }
 
 const thumbStyles = StyleSheet.create({
@@ -92,6 +95,8 @@ function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCa
   onCreateColumn: (name: string) => Promise<void>;
 }) {
   const { tokens: theme } = useTheme();
+  const stickySheet = useStickySheet();
+  const stickyInner = stickySheet() && { borderWidth: 0, backgroundColor: 'transparent' };
   const [mode, setMode] = useState<'board' | 'board-create' | 'column' | 'column-create'>(lockedBoard ? 'column' : 'board');
   const [search, setSearch] = useState('');
   const [createName, setCreateName] = useState('');
@@ -136,55 +141,55 @@ function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCa
   return <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
     <KeyboardAvoidingView style={sheetStyles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <Pressable accessibilityRole="button" accessibilityLabel="Close" style={StyleSheet.absoluteFill} onPress={close} />
-      <SafeAreaView edges={['bottom']} accessibilityViewIsModal style={[sheetStyles.sheetSafeArea, { backgroundColor: theme.surface }]}>
-        <GlassSurface style={[sheetStyles.sheet, { borderColor: theme.borderSubtle }]}>
+      <SafeAreaView edges={['bottom']} accessibilityViewIsModal style={[sheetStyles.sheetSafeArea, { backgroundColor: theme.surface }, stickySheet()]}>
+        <GlassSurface style={[sheetStyles.sheet, { borderColor: theme.borderSubtle }, stickyInner]}>
           <View style={[sheetStyles.handle, { backgroundColor: theme.borderSubtle }]} />
-          {guided ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 16, paddingBottom: 3 }}><OnboardingMascot size={36} accessible={false} /><Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '600' }}>{mode === 'column' || mode === 'column-create' ? 'Chits · Which column?' : 'Chits · Which board should this go to?'}</Text></View> : null}
+          {guided ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 16, paddingBottom: 3 }}><OnboardingMascot size={36} accessible={false} /><AppText style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '600' }}>{mode === 'column' || mode === 'column-create' ? 'Chits · Which column?' : 'Chits · Which board should this go to?'}</AppText></View> : null}
           {mode === 'board-create' ? <>
             <View style={sheetStyles.headerRow}>
-              <IconButton label="Back" onPress={() => setMode('board')}><Text style={[sheetStyles.backIcon, { color: theme.textPrimary }]}>‹</Text></IconButton>
-              <Text accessibilityRole="header" style={[sheetStyles.title, { color: theme.textPrimary }]}>New board</Text>
+              <IconButton label="Back" onPress={() => setMode('board')}><AppText style={[sheetStyles.backIcon, { color: theme.textPrimary }]}>‹</AppText></IconButton>
+              <AppText accessibilityRole="header" style={[sheetStyles.title, { color: theme.textPrimary }]}>New board</AppText>
               <View style={sheetStyles.headerSpacer} />
             </View>
             <View style={sheetStyles.createBody}>
-              <Text style={[sheetStyles.label, { color: theme.textSecondary }]}>Board name</Text>
+              <AppText style={[sheetStyles.label, { color: theme.textSecondary }]}>Board name</AppText>
               <TextInput autoFocus value={createName} onChangeText={(value) => { setCreateName(value); setCreateError(null); }} placeholder="e.g. Travel" placeholderTextColor={theme.textMuted} maxLength={80} returnKeyType="done" onSubmitEditing={() => void submitCreate()} style={[sheetStyles.nameInput, { borderColor: theme.borderSubtle, color: theme.textPrimary, backgroundColor: theme.background }]} />
-              {createError ? <Text accessibilityRole="alert" style={[sheetStyles.error, { color: theme.danger }]}>{createError}</Text> : null}
+              {createError ? <AppText accessibilityRole="alert" style={[sheetStyles.error, { color: theme.danger }]}>{createError}</AppText> : null}
               <Pressable accessibilityRole="button" disabled={!createName.trim() || creating} onPress={() => void submitCreate()} style={[sheetStyles.primaryButton, { backgroundColor: theme.accent }, (!createName.trim() || creating) && sheetStyles.disabled]}>
-                <Text style={[sheetStyles.primaryButtonText, { color: theme.accentText }]}>{creating ? 'Creating…' : `Create and add ${pluralize(selectedCount, 'note')}`}</Text>
+                <AppText style={[sheetStyles.primaryButtonText, { color: theme.accentText }]}>{creating ? 'Creating…' : `Create and add ${pluralize(selectedCount, 'note')}`}</AppText>
               </Pressable>
             </View>
           </> : mode === 'column' || mode === 'column-create' ? <>
             <View style={sheetStyles.headerRow}>
-              {lockedBoard ? null : <IconButton label="Back" onPress={mode === 'column-create' ? () => setMode('column') : backToBoards}><Text style={[sheetStyles.backIcon, { color: theme.textPrimary }]}>‹</Text></IconButton>}
+              {lockedBoard ? null : <IconButton label="Back" onPress={mode === 'column-create' ? () => setMode('column') : backToBoards}><AppText style={[sheetStyles.backIcon, { color: theme.textPrimary }]}>‹</AppText></IconButton>}
               <View style={sheetStyles.headerCopy}>
-                <Text accessibilityRole="header" style={[sheetStyles.title, { color: theme.textPrimary }]}>{mode === 'column-create' ? 'New column' : 'Choose a column'}</Text>
-                <Text style={[sheetStyles.subtitle, { color: theme.textSecondary }]}>{mode === 'column-create' ? `Add a column to ${selectedBoard?.name ?? 'this board'}.` : `${selectedBoard?.name ?? 'This board'} · choose where to place the selected note${selectedCount === 1 ? '' : 's'}.`}</Text>
+                <AppText accessibilityRole="header" style={[sheetStyles.title, { color: theme.textPrimary }]}>{mode === 'column-create' ? 'New column' : 'Choose a column'}</AppText>
+                <AppText style={[sheetStyles.subtitle, { color: theme.textSecondary }]}>{mode === 'column-create' ? `Add a column to ${selectedBoard?.name ?? 'this board'}.` : `${selectedBoard?.name ?? 'This board'} · choose where to place the selected note${selectedCount === 1 ? '' : 's'}.`}</AppText>
               </View>
-              <IconButton label="Close" onPress={close}><Ionicons accessible={false} name="close" size={22} color={theme.textPrimary} /></IconButton>
+              <IconButton label="Close" onPress={close}><Icon name="close" size={22} color={theme.textPrimary} /></IconButton>
             </View>
 
             {mode === 'column-create' ? (
               <View style={sheetStyles.createBody}>
-                <Text style={[sheetStyles.label, { color: theme.textSecondary }]}>Column name</Text>
+                <AppText style={[sheetStyles.label, { color: theme.textSecondary }]}>Column name</AppText>
                 <TextInput autoFocus value={columnName} onChangeText={(value) => { setColumnName(value); setColumnError(null); }} placeholder="e.g. To do" placeholderTextColor={theme.textMuted} maxLength={60} returnKeyType="done" onSubmitEditing={() => void submitCreateColumn()} style={[sheetStyles.nameInput, { borderColor: theme.borderSubtle, color: theme.textPrimary, backgroundColor: theme.background }]} />
-                {columnError ? <Text accessibilityRole="alert" style={[sheetStyles.error, { color: theme.danger }]}>{columnError}</Text> : null}
+                {columnError ? <AppText accessibilityRole="alert" style={[sheetStyles.error, { color: theme.danger }]}>{columnError}</AppText> : null}
                 <Pressable accessibilityRole="button" disabled={!columnName.trim() || creatingColumn} onPress={() => void submitCreateColumn()} style={[sheetStyles.primaryButton, { backgroundColor: theme.accent }, (!columnName.trim() || creatingColumn) && sheetStyles.disabled]}>
-                  <Text style={[sheetStyles.primaryButtonText, { color: theme.accentText }]}>{creatingColumn ? 'Creating…' : 'Create column'}</Text>
+                  <AppText style={[sheetStyles.primaryButtonText, { color: theme.accentText }]}>{creatingColumn ? 'Creating…' : 'Create column'}</AppText>
                 </Pressable>
               </View>
             ) : columnsLoading ? (
               <View style={sheetStyles.emptyWrap}><ActivityIndicator color={theme.accent} /></View>
             ) : !columns || columns.length === 0 ? (
               <View style={sheetStyles.emptyWrap}>
-                <View style={[sheetStyles.emptyMark, { backgroundColor: theme.accentSoft }]}><Ionicons accessible={false} name="albums-outline" size={28} color={theme.accentStrong} /></View>
-                <Text style={[sheetStyles.emptyTitle, { color: theme.textPrimary }]}>No columns yet</Text>
-                <Text style={[sheetStyles.emptyDescription, { color: theme.textSecondary }]}>{selectedBoard?.name ?? 'This board'} doesn’t have a column yet.</Text>
+                <View style={[sheetStyles.emptyMark, { backgroundColor: theme.accentSoft }]}><Icon name="albums-outline" size={28} color={theme.accentStrong} /></View>
+                <AppText style={[sheetStyles.emptyTitle, { color: theme.textPrimary }]}>No columns yet</AppText>
+                <AppText style={[sheetStyles.emptyDescription, { color: theme.textSecondary }]}>{selectedBoard?.name ?? 'This board'} doesn’t have a column yet.</AppText>
                 <Pressable accessibilityRole="button" onPress={beginCreateColumn} style={[sheetStyles.primaryButton, sheetStyles.emptyPrimary, { backgroundColor: theme.accent }]}>
-                  <Text style={[sheetStyles.primaryButtonText, { color: theme.accentText }]}>Create column</Text>
+                  <AppText style={[sheetStyles.primaryButtonText, { color: theme.accentText }]}>Create column</AppText>
                 </Pressable>
                 <Pressable accessibilityRole="button" onPress={close} style={sheetStyles.emptyCancel}>
-                  <Text style={[sheetStyles.secondaryText, { color: theme.textSecondary }]}>Cancel</Text>
+                  <AppText style={[sheetStyles.secondaryText, { color: theme.textSecondary }]}>Cancel</AppText>
                 </Pressable>
               </View>
             ) : (
@@ -195,50 +200,50 @@ function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCa
           </> : <>
             <View style={sheetStyles.headerRow}>
               <View style={sheetStyles.headerCopy}>
-                <Text accessibilityRole="header" style={[sheetStyles.title, { color: theme.textPrimary }]}>{forCard ? 'Add to card' : 'Add to board'}</Text>
-                <Text style={[sheetStyles.subtitle, { color: theme.textSecondary }]}>Choose where to organize the selected note{selectedCount === 1 ? '' : 's'}.</Text>
+                <AppText accessibilityRole="header" style={[sheetStyles.title, { color: theme.textPrimary }]}>{forCard ? 'Add to card' : 'Add to board'}</AppText>
+                <AppText style={[sheetStyles.subtitle, { color: theme.textSecondary }]}>Choose where to organize the selected note{selectedCount === 1 ? '' : 's'}.</AppText>
               </View>
-              <IconButton label="Close" onPress={close}><Ionicons accessible={false} name="close" size={22} color={theme.textPrimary} /></IconButton>
+              <IconButton label="Close" onPress={close}><Icon name="close" size={22} color={theme.textPrimary} /></IconButton>
             </View>
 
             {boards.length === 0 ? (
               <View style={sheetStyles.emptyWrap}>
-                <View style={[sheetStyles.emptyMark, { backgroundColor: theme.accentSoft }]}><Ionicons accessible={false} name="folder-outline" size={28} color={theme.accentStrong} /></View>
-                <Text style={[sheetStyles.emptyTitle, { color: theme.textPrimary }]}>No boards yet</Text>
-                <Text style={[sheetStyles.emptyDescription, { color: theme.textSecondary }]}>Create your first board to start organizing your notes.</Text>
+                <View style={[sheetStyles.emptyMark, { backgroundColor: theme.accentSoft }]}><Icon name="folder-outline" size={28} color={theme.accentStrong} /></View>
+                <AppText style={[sheetStyles.emptyTitle, { color: theme.textPrimary }]}>No boards yet</AppText>
+                <AppText style={[sheetStyles.emptyDescription, { color: theme.textSecondary }]}>Create your first board to start organizing your notes.</AppText>
                 <Pressable accessibilityRole="button" onPress={() => beginCreate('')} style={[sheetStyles.primaryButton, sheetStyles.emptyPrimary, { backgroundColor: theme.accent }]}>
-                  <Text style={[sheetStyles.primaryButtonText, { color: theme.accentText }]}>Create a board</Text>
+                  <AppText style={[sheetStyles.primaryButtonText, { color: theme.accentText }]}>Create a board</AppText>
                 </Pressable>
                 <Pressable accessibilityRole="button" onPress={close} style={sheetStyles.emptyCancel}>
-                  <Text style={[sheetStyles.secondaryText, { color: theme.textSecondary }]}>Cancel</Text>
+                  <AppText style={[sheetStyles.secondaryText, { color: theme.textSecondary }]}>Cancel</AppText>
                 </Pressable>
               </View>
             ) : <>
               <View style={sheetStyles.searchRow}>
-                <Ionicons accessible={false} name="search" size={17} color={theme.textMuted} style={sheetStyles.searchIcon} />
+                <Icon name="search" size={17} color={theme.textMuted} style={sheetStyles.searchIcon} />
                 <TextInput value={search} onChangeText={setSearch} placeholder="Search boards…" placeholderTextColor={theme.textMuted} style={[sheetStyles.searchInput, { color: theme.textPrimary }]} returnKeyType="search" />
-                {search ? <IconButton label="Clear search" onPress={() => setSearch('')}><Ionicons accessible={false} name="close-circle" size={17} color={theme.textMuted} /></IconButton> : null}
+                {search ? <IconButton label="Clear search" onPress={() => setSearch('')}><Icon name="close-circle" size={17} color={theme.textMuted} /></IconButton> : null}
               </View>
 
               <Pressable accessibilityRole="button" onPress={() => beginCreate(query)} style={[sheetStyles.createRow, { borderColor: theme.borderSubtle }]}>
-                <View style={[sheetStyles.createMark, { backgroundColor: theme.accentSoft }]}><Ionicons accessible={false} name="add" size={18} color={theme.accentStrong} /></View>
-                <Text style={[sheetStyles.createLabel, { color: theme.textPrimary }]}>Create new board</Text>
+                <View style={[sheetStyles.createMark, { backgroundColor: theme.accentSoft }]}><Icon name="add" size={18} color={theme.accentStrong} /></View>
+                <AppText style={[sheetStyles.createLabel, { color: theme.textPrimary }]}>Create new board</AppText>
               </Pressable>
 
               <View style={sheetStyles.listWrap}>
                 {query && filtered.length === 0 ? (
                   <View style={sheetStyles.noResults}>
-                    <Text style={[sheetStyles.noResultsText, { color: theme.textSecondary }]}>No boards found for “{query}”</Text>
+                    <AppText style={[sheetStyles.noResultsText, { color: theme.textSecondary }]}>No boards found for “{query}”</AppText>
                     <Pressable accessibilityRole="button" onPress={() => beginCreate(query)} style={[sheetStyles.primaryButton, { backgroundColor: theme.accent }]}>
-                      <Text style={[sheetStyles.primaryButtonText, { color: theme.accentText }]}>+ Create “{query}”</Text>
+                      <AppText style={[sheetStyles.primaryButtonText, { color: theme.accentText }]}>+ Create “{query}”</AppText>
                     </Pressable>
                   </View>
                 ) : (
                   <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={sheetStyles.listContent}>
                     {recentBoards.length > 0 ? <>
-                      <Text style={[sheetStyles.sectionLabel, { color: theme.textMuted }]}>RECENT</Text>
+                      <AppText style={[sheetStyles.sectionLabel, { color: theme.textMuted }]}>RECENT</AppText>
                       {recentBoards.map((board) => <BoardRow key={`recent-${board.id}`} board={board} disabled={busy} onPress={() => pickBoard(board)} />)}
-                      <Text style={[sheetStyles.sectionLabel, { color: theme.textMuted }]}>ALL BOARDS</Text>
+                      <AppText style={[sheetStyles.sectionLabel, { color: theme.textMuted }]}>ALL BOARDS</AppText>
                     </> : null}
                     {filtered.map((board) => <BoardRow key={board.id} board={board} disabled={busy} onPress={() => pickBoard(board)} />)}
                   </ScrollView>
@@ -269,6 +274,8 @@ function MergeSheet({ visible, boards, recentBoardIds, count, busy, error, onClo
   onMerge: (board: BoardSummary, columnId: string, title: string) => void;
 }) {
   const { tokens: theme } = useTheme();
+  const stickySheet = useStickySheet();
+  const stickyInner = stickySheet() && { borderWidth: 0, backgroundColor: 'transparent' };
   const [board, setBoard] = useState<BoardSummary | null>(null);
   const [columns, setColumns] = useState<ColumnOption[] | null>(null);
   const [columnId, setColumnId] = useState<string | null>(null);
@@ -294,42 +301,42 @@ function MergeSheet({ visible, boards, recentBoardIds, count, busy, error, onClo
   return <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
     <KeyboardAvoidingView style={sheetStyles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <Pressable accessibilityRole="button" accessibilityLabel="Close" style={StyleSheet.absoluteFill} onPress={close} />
-      <SafeAreaView edges={['bottom']} accessibilityViewIsModal style={[sheetStyles.sheetSafeArea, { backgroundColor: theme.surface }]}>
-        <GlassSurface style={[sheetStyles.sheet, { borderColor: theme.borderSubtle }]}>
+      <SafeAreaView edges={['bottom']} accessibilityViewIsModal style={[sheetStyles.sheetSafeArea, { backgroundColor: theme.surface }, stickySheet()]}>
+        <GlassSurface style={[sheetStyles.sheet, { borderColor: theme.borderSubtle }, stickyInner]}>
           <View style={[sheetStyles.handle, { backgroundColor: theme.borderSubtle }]} />
           <View style={sheetStyles.headerRow}>
-            {board ? <IconButton label="Back to boards" onPress={() => setBoard(null)}><Text style={[sheetStyles.backIcon, { color: theme.textPrimary }]}>‹</Text></IconButton> : null}
+            {board ? <IconButton label="Back to boards" onPress={() => setBoard(null)}><AppText style={[sheetStyles.backIcon, { color: theme.textPrimary }]}>‹</AppText></IconButton> : null}
             <View style={sheetStyles.headerCopy}>
-              <Text accessibilityRole="header" style={[sheetStyles.title, { color: theme.textPrimary }]}>{heading}</Text>
-              <Text style={[sheetStyles.subtitle, { color: theme.textSecondary }]}>{board ? `Into ${board.name} · choose a column and a title.` : 'They’ll become one card, in the order you picked them. Choose a board.'}</Text>
+              <AppText accessibilityRole="header" style={[sheetStyles.title, { color: theme.textPrimary }]}>{heading}</AppText>
+              <AppText style={[sheetStyles.subtitle, { color: theme.textSecondary }]}>{board ? `Into ${board.name} · choose a column and a title.` : 'They’ll become one card, in the order you picked them. Choose a board.'}</AppText>
             </View>
-            <IconButton label="Close" onPress={close}><Ionicons accessible={false} name="close" size={22} color={theme.textPrimary} /></IconButton>
+            <IconButton label="Close" onPress={close}><Icon name="close" size={22} color={theme.textPrimary} /></IconButton>
           </View>
 
           {!board ? (boards.length === 0 ? (
             <View style={sheetStyles.emptyWrap}>
-              <View style={[sheetStyles.emptyMark, { backgroundColor: theme.accentSoft }]}><Ionicons accessible={false} name="folder-outline" size={28} color={theme.accentStrong} /></View>
-              <Text style={[sheetStyles.emptyTitle, { color: theme.textPrimary }]}>No boards yet</Text>
-              <Text style={[sheetStyles.emptyDescription, { color: theme.textSecondary }]}>Create a board with Add to board first, then merge into it.</Text>
+              <View style={[sheetStyles.emptyMark, { backgroundColor: theme.accentSoft }]}><Icon name="folder-outline" size={28} color={theme.accentStrong} /></View>
+              <AppText style={[sheetStyles.emptyTitle, { color: theme.textPrimary }]}>No boards yet</AppText>
+              <AppText style={[sheetStyles.emptyDescription, { color: theme.textSecondary }]}>Create a board with Add to board first, then merge into it.</AppText>
               <Pressable accessibilityRole="button" onPress={close} style={sheetStyles.emptyCancel}>
-                <Text style={[sheetStyles.secondaryText, { color: theme.textSecondary }]}>Cancel</Text>
+                <AppText style={[sheetStyles.secondaryText, { color: theme.textSecondary }]}>Cancel</AppText>
               </Pressable>
             </View>
           ) : <>
             <View style={sheetStyles.searchRow}>
-              <Ionicons accessible={false} name="search" size={17} color={theme.textMuted} style={sheetStyles.searchIcon} />
+              <Icon name="search" size={17} color={theme.textMuted} style={sheetStyles.searchIcon} />
               <TextInput value={search} onChangeText={setSearch} placeholder="Search boards…" placeholderTextColor={theme.textMuted} style={[sheetStyles.searchInput, { color: theme.textPrimary }]} returnKeyType="search" />
-              {search ? <IconButton label="Clear search" onPress={() => setSearch('')}><Ionicons accessible={false} name="close-circle" size={17} color={theme.textMuted} /></IconButton> : null}
+              {search ? <IconButton label="Clear search" onPress={() => setSearch('')}><Icon name="close-circle" size={17} color={theme.textMuted} /></IconButton> : null}
             </View>
             <View style={sheetStyles.listWrap}>
               {query && filtered.length === 0 ? (
-                <View style={sheetStyles.noResults}><Text style={[sheetStyles.noResultsText, { color: theme.textSecondary }]}>No boards found for “{query}”</Text></View>
+                <View style={sheetStyles.noResults}><AppText style={[sheetStyles.noResultsText, { color: theme.textSecondary }]}>No boards found for “{query}”</AppText></View>
               ) : (
                 <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={sheetStyles.listContent}>
                   {recentBoards.length > 0 ? <>
-                    <Text style={[sheetStyles.sectionLabel, { color: theme.textMuted }]}>RECENT</Text>
+                    <AppText style={[sheetStyles.sectionLabel, { color: theme.textMuted }]}>RECENT</AppText>
                     {recentBoards.map((item) => <BoardRow key={`recent-${item.id}`} board={item} disabled={busy} onPress={() => pickBoard(item)} />)}
-                    <Text style={[sheetStyles.sectionLabel, { color: theme.textMuted }]}>ALL BOARDS</Text>
+                    <AppText style={[sheetStyles.sectionLabel, { color: theme.textMuted }]}>ALL BOARDS</AppText>
                   </> : null}
                   {filtered.map((item) => <BoardRow key={item.id} board={item} disabled={busy} onPress={() => pickBoard(item)} />)}
                 </ScrollView>
@@ -337,9 +344,9 @@ function MergeSheet({ visible, boards, recentBoardIds, count, busy, error, onClo
             </View>
           </>) : (
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={mergeStyles.body}>
-              <Text style={[sheetStyles.label, { color: theme.textSecondary }]}>Column</Text>
+              <AppText style={[sheetStyles.label, { color: theme.textSecondary }]}>Column</AppText>
               {columns === null ? <View style={mergeStyles.loading}><ActivityIndicator color={theme.accent} /></View>
-                : columns.length === 0 ? <Text style={[mergeStyles.note, { color: theme.textSecondary }]}>{board.name} doesn’t have a column yet. Add one from the board, then merge.</Text>
+                : columns.length === 0 ? <AppText style={[mergeStyles.note, { color: theme.textSecondary }]}>{board.name} doesn’t have a column yet. Add one from the board, then merge.</AppText>
                 : <View accessibilityRole="radiogroup" accessibilityLabel="Column" style={mergeStyles.chips}>
                   {columns.map((column) => {
                     const selected = column.id === columnId;
@@ -351,17 +358,17 @@ function MergeSheet({ visible, boards, recentBoardIds, count, busy, error, onClo
                       onPress={() => setColumnId(column.id)}
                       // Same border width either way, so choosing a column never shifts the row.
                       style={({ pressed }) => [mergeStyles.chip, { borderColor: selected ? theme.accent : theme.borderSubtle, backgroundColor: selected ? theme.accentSoft : 'transparent' }, pressed && sheetStyles.pressed]}>
-                      {selected ? <Ionicons accessible={false} name="checkmark" size={15} color={theme.accentStrong} /> : null}
-                      <Text numberOfLines={1} style={[mergeStyles.chipText, { color: selected ? theme.accentStrong : theme.textPrimary }]}>{column.name}</Text>
+                      {selected ? <Icon name="checkmark" size={15} color={theme.accentStrong} /> : null}
+                      <AppText numberOfLines={1} style={[mergeStyles.chipText, { color: selected ? theme.accentStrong : theme.textPrimary }]}>{column.name}</AppText>
                     </Pressable>;
                   })}
                 </View>}
 
-              <Text style={[sheetStyles.label, mergeStyles.titleLabel, { color: theme.textSecondary }]}>Card title</Text>
+              <AppText style={[sheetStyles.label, mergeStyles.titleLabel, { color: theme.textSecondary }]}>Card title</AppText>
               <TextInput value={title} onChangeText={setTitle} placeholder="Optional — e.g. Trip ideas" placeholderTextColor={theme.textMuted} selectionColor={theme.accent} maxLength={120} returnKeyType="done" onSubmitEditing={() => { if (canMerge && board && columnId) onMerge(board, columnId, title); }} style={[sheetStyles.nameInput, { borderColor: theme.borderSubtle, color: theme.textPrimary, backgroundColor: theme.background }]} />
-              {error ? <Text accessibilityRole="alert" style={[sheetStyles.error, mergeStyles.error, { color: theme.danger }]}>{error}</Text> : null}
+              {error ? <AppText accessibilityRole="alert" style={[sheetStyles.error, mergeStyles.error, { color: theme.danger }]}>{error}</AppText> : null}
               <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canMerge }} disabled={!canMerge} onPress={() => { if (board && columnId) onMerge(board, columnId, title); }} style={[sheetStyles.primaryButton, mergeStyles.submit, { backgroundColor: theme.accent }, !canMerge && sheetStyles.disabled]}>
-                <Text style={[sheetStyles.primaryButtonText, { color: theme.accentText }]}>{busy ? 'Merging…' : 'Create merged card'}</Text>
+                <AppText style={[sheetStyles.primaryButtonText, { color: theme.accentText }]}>{busy ? 'Merging…' : 'Create merged card'}</AppText>
               </Pressable>
             </ScrollView>
           )}
@@ -374,23 +381,23 @@ function MergeSheet({ visible, boards, recentBoardIds, count, busy, error, onClo
 function BoardRow({ board, disabled, onPress }: { board: BoardSummary; disabled: boolean; onPress: () => void }) {
   const { tokens: theme } = useTheme();
   return <Pressable accessibilityRole="button" accessibilityLabel={`${board.name}. ${pluralize(board.cardCount, 'note')}.`} disabled={disabled} onPress={onPress} style={({ pressed }) => [sheetStyles.boardRow, { borderBottomColor: theme.borderSubtle }, pressed && sheetStyles.pressed]}>
-    <View style={[sheetStyles.boardMark, { backgroundColor: board.accent ?? theme.accentSoft }]}><Ionicons accessible={false} name={boardIconName(board.icon)} size={17} color={board.accent ? '#FFFFFF' : theme.accentStrong} /></View>
+    <View style={[sheetStyles.boardMark, { backgroundColor: board.accent ?? theme.accentSoft }]}><Icon name={boardIconName(board.icon)} size={17} color={board.accent ? '#FFFFFF' : theme.accentStrong} /></View>
     <View style={sheetStyles.boardCopy}>
-      <Text numberOfLines={1} style={[sheetStyles.boardName, { color: theme.textPrimary }]}>{board.name}</Text>
-      <Text style={[sheetStyles.boardDetail, { color: theme.textSecondary }]}>{pluralize(board.cardCount, 'note')}</Text>
+      <AppText numberOfLines={1} style={[sheetStyles.boardName, { color: theme.textPrimary }]}>{board.name}</AppText>
+      <AppText style={[sheetStyles.boardDetail, { color: theme.textSecondary }]}>{pluralize(board.cardCount, 'note')}</AppText>
     </View>
-    <Ionicons accessible={false} name="chevron-forward" size={18} color={theme.textMuted} />
+    <Icon name="chevron-forward" size={18} color={theme.textMuted} />
   </Pressable>;
 }
 
 function ColumnRow({ name, disabled, onPress }: { name: string; disabled: boolean; onPress: () => void }) {
   const { tokens: theme } = useTheme();
   return <Pressable accessibilityRole="button" accessibilityLabel={name} disabled={disabled} onPress={onPress} style={({ pressed }) => [sheetStyles.boardRow, { borderBottomColor: theme.borderSubtle }, pressed && sheetStyles.pressed]}>
-    <View style={[sheetStyles.boardMark, { backgroundColor: theme.accentSoft }]}><Ionicons accessible={false} name="albums-outline" size={17} color={theme.accentStrong} /></View>
+    <View style={[sheetStyles.boardMark, { backgroundColor: theme.accentSoft }]}><Icon name="albums-outline" size={17} color={theme.accentStrong} /></View>
     <View style={sheetStyles.boardCopy}>
-      <Text numberOfLines={1} style={[sheetStyles.boardName, { color: theme.textPrimary }]}>{name}</Text>
+      <AppText numberOfLines={1} style={[sheetStyles.boardName, { color: theme.textPrimary }]}>{name}</AppText>
     </View>
-    <Ionicons accessible={false} name="chevron-forward" size={18} color={theme.textMuted} />
+    <Icon name="chevron-forward" size={18} color={theme.textMuted} />
   </Pressable>;
 }
 
@@ -535,49 +542,49 @@ export default function UnorganizedScreen() {
   };
 
   return <Screen>
-    <AppHeader title="Unorganized" leading={<IconButton label="Go back" onPress={() => router.back()}><Text style={[styles.back, { color: headerInk.ink }]}>‹</Text></IconButton>} />
+    <AppHeader title="Unorganized" leading={<IconButton label="Go back" onPress={() => router.back()}><AppText style={[styles.back, { color: headerInk.ink }]}>‹</AppText></IconButton>} />
     {selectionMode ? (
       <View style={[styles.header, { borderBottomColor: theme.borderSubtle }]}>
-        <IconButton label="Exit selection" onPress={() => setSelected([])}><Ionicons accessible={false} name="close" size={22} color={theme.textPrimary} /></IconButton>
-        <Text style={styles.selectionTitle}>{selected.length} selected</Text>
-        <Pressable accessibilityRole="button" hitSlop={8} onPress={toggleSelectAll} style={styles.selectAllHit}><Text style={styles.selectAllText}>{selected.length === messages.length ? 'Deselect all' : 'Select all'}</Text></Pressable>
+        <IconButton label="Exit selection" onPress={() => setSelected([])}><Icon name="close" size={22} color={theme.textPrimary} /></IconButton>
+        <AppText style={styles.selectionTitle}>{selected.length} selected</AppText>
+        <Pressable accessibilityRole="button" hitSlop={8} onPress={toggleSelectAll} style={styles.selectAllHit}><AppText style={styles.selectAllText}>{selected.length === messages.length ? 'Deselect all' : 'Select all'}</AppText></Pressable>
       </View>
     ) : null}
     {!ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : messages.length ? <>
       <ScrollView contentContainerStyle={styles.list}>
-        {!selectionMode ? <Text style={styles.intro}>{addToCard ? 'Select thoughts to attach to this card. Your original chat remains exactly as it is.' : 'Notes that haven’t been added to a board yet.'}</Text> : null}
+        {!selectionMode ? <AppText style={styles.intro}>{addToCard ? 'Select thoughts to attach to this card. Your original chat remains exactly as it is.' : 'Notes that haven’t been added to a board yet.'}</AppText> : null}
         {messages.map((message) => {
           const isSelected = selected.includes(message.id);
           const messagePreview = preview(message);
           const dateLabel = formatDateTime(message.createdAt);
           return <Pressable key={message.id} accessibilityRole="checkbox" accessibilityLabel={`${messagePreview}. ${dateLabel}`} accessibilityState={{ checked: isSelected }} onPress={() => toggle(message.id)} style={({ pressed }) => [styles.message, isSelected && styles.messageSelected, pressed && styles.messagePressed]}>
-            {isSelected ? <Ionicons accessible={false} name="checkmark-circle" size={22} color={theme.accent} /> : <Ionicons accessible={false} name="ellipse-outline" size={22} color={theme.textMuted} />}
+            {isSelected ? <Icon name="checkmark-circle" size={22} color={theme.accent} /> : <Icon name="ellipse-outline" size={22} color={theme.textMuted} />}
             <Thumbnail message={message} />
             <View style={styles.messageCopy}>
-              <Text numberOfLines={2} ellipsizeMode="tail" style={styles.messageText}>{messagePreview}</Text>
-              <Text numberOfLines={1} style={styles.messageMeta}>{message.pinned ? 'Pinned · ' : ''}{dateLabel}</Text>
+              <AppText numberOfLines={2} ellipsizeMode="tail" style={styles.messageText}>{messagePreview}</AppText>
+              <AppText numberOfLines={1} style={styles.messageMeta}>{message.pinned ? 'Pinned · ' : ''}{dateLabel}</AppText>
             </View>
           </Pressable>;
         })}
       </ScrollView>
       {selectionMode ? (
         <Animated.View entering={SlideInDown.springify().damping(20).mass(0.6)} exiting={SlideOutDown.duration(160)} style={[styles.actionBar, { borderTopColor: theme.borderSubtle, backgroundColor: theme.surface }]}>
-          <Text style={styles.selectedCount}>{selected.length} selected</Text>
+          <AppText style={styles.selectedCount}>{selected.length} selected</AppText>
           <View style={styles.actionButtons}>
-            {!addToCard ? <Pressable disabled={selected.length < 2 || working} accessibilityRole="button" onPress={() => { setError(null); setMergeOpen(true); }} style={styles.textAction}><Text style={[styles.mergeText, (selected.length < 2 || working) && styles.disabledText]}>Merge</Text></Pressable> : null}
-            <Pressable disabled={working} onPress={() => void archive()} style={styles.textAction}><Text style={[styles.archiveText, working && styles.disabledText]}>Archive</Text></Pressable>
+            {!addToCard ? <Pressable disabled={selected.length < 2 || working} accessibilityRole="button" onPress={() => { setError(null); setMergeOpen(true); }} style={styles.textAction}><AppText style={[styles.mergeText, (selected.length < 2 || working) && styles.disabledText]}>Merge</AppText></Pressable> : null}
+            <Pressable disabled={working} onPress={() => void archive()} style={styles.textAction}><AppText style={[styles.archiveText, working && styles.disabledText]}>Archive</AppText></Pressable>
             <Pressable disabled={working} onPress={() => { if (addToCard) void addToExistingCard(); else openAddToBoardSheet(); }} style={[styles.primaryPill, working && styles.disabled]}>
-              <Text style={styles.primaryPillText}>{addToCard ? 'Add to card' : 'Add to board'}</Text>
+              <AppText style={styles.primaryPillText}>{addToCard ? 'Add to card' : 'Add to board'}</AppText>
             </Pressable>
           </View>
         </Animated.View>
       ) : null}
     </> : <EmptyState title="You’re all organized" description="Notes that haven’t been added to a board will appear here." />}
-    {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+    {error ? <AppText accessibilityRole="alert" style={styles.error}>{error}</AppText> : null}
     {toast ? <View pointerEvents="box-none" accessibilityLiveRegion="polite" style={styles.toastWrap}>
       <View style={[styles.toast, { backgroundColor: theme.textPrimary }]}>
-        <Text style={[styles.toastText, { color: theme.background }]}>{toast.message}</Text>
-        {toast.onUndo ? <Pressable accessibilityRole="button" hitSlop={8} onPress={toast.onUndo}><Text style={[styles.toastUndo, { color: theme.background }]}>Undo</Text></Pressable> : null}
+        <AppText style={[styles.toastText, { color: theme.background }]}>{toast.message}</AppText>
+        {toast.onUndo ? <Pressable accessibilityRole="button" hitSlop={8} onPress={toast.onUndo}><AppText style={[styles.toastUndo, { color: theme.background }]}>Undo</AppText></Pressable> : null}
       </View>
     </View> : null}
 

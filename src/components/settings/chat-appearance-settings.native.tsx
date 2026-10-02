@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { getInfoAsync } from 'expo-file-system/legacy';
@@ -8,6 +8,8 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { AppDialogProvider, useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
+import { AppText } from '@/components/ui/app-text';
+import { Icon } from '@/components/ui/icon';
 import { AppHeader, IconButton, PrimaryButton, SecondaryButton, HeaderIcon } from '@/components/ui/primitives';
 import { QuickThoughtBubble } from '@/components/chat/message-note-cards';
 import { BackgroundStyleControls } from '@/components/chat/background-style-controls';
@@ -26,9 +28,9 @@ function ChatAppearancePreview({ background, onError }: { background: ChatBackgr
   return <View testID="chat-appearance-preview" style={[styles.preview, { backgroundColor: tokens.chatBackground, borderColor: tokens.borderSubtle }]}>
     <ChatBackgroundLayer background={background} onError={onError} />
     {!background ? <View style={styles.default}>
-      <Ionicons accessible={false} name="image-outline" size={28} color={tokens.textMuted} />
-      <Text style={[styles.defaultTitle, { color: tokens.textPrimary }]}>Default</Text>
-      <Text style={[styles.copy, { color: tokens.textSecondary }]}>Choose a photo to personalize your chat.</Text>
+      <Icon name="image-outline" size={28} color={tokens.textMuted} />
+      <AppText style={[styles.defaultTitle, { color: tokens.textPrimary }]}>Default</AppText>
+      <AppText style={[styles.copy, { color: tokens.textSecondary }]}>Choose a photo to personalize your chat.</AppText>
     </View> : null}
     <View pointerEvents="none" accessible accessibilityRole="text" accessibilityLabel="Your chat will look like this" style={styles.sample}>
       <View collapsable={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><QuickThoughtBubble message={sampleMessage} focused={false} onActions={noAction} preview /></View>
@@ -38,7 +40,7 @@ function ChatAppearancePreview({ background, onError }: { background: ChatBackgr
 
 function AppearanceOption({ label, icon, onPress, destructive = false, disabled }: { label: string; icon: React.ComponentProps<typeof Ionicons>['name']; onPress: () => void; destructive?: boolean; disabled: boolean }) {
   const { tokens } = useTheme();
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.option, { borderColor: tokens.borderSubtle }, pressed && { opacity: 0.7 }]}><Ionicons accessible={false} name={icon} size={21} color={destructive ? tokens.danger : tokens.textSecondary} /><Text style={[styles.optionText, { color: destructive ? tokens.danger : tokens.textPrimary }]}>{label}</Text><Ionicons accessible={false} name="chevron-forward" size={16} color={tokens.textMuted} /></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.option, { borderColor: tokens.borderSubtle }, pressed && { opacity: 0.7 }]}><Icon name={icon} size={21} color={destructive ? tokens.danger : tokens.textSecondary} /><AppText style={[styles.optionText, { color: destructive ? tokens.danger : tokens.textPrimary }]}>{label}</AppText><Icon name="chevron-forward" size={16} color={tokens.textMuted} /></Pressable>;
 }
 
 function AppearanceContent({ close, initialSelection }: { close: (after?: () => void) => void; initialSelection: ChatBackgroundImage | null }) {
@@ -136,7 +138,7 @@ function AppearanceContent({ close, initialSelection }: { close: (after?: () => 
         <AppearanceOption label="Remove Background" icon="trash-outline" disabled={busy} destructive onPress={remove} />
         <AppearanceOption label="Reset to Default" icon="refresh-outline" disabled={busy} onPress={remove} />
       </> : null}
-      {error || imageFailed ? <Text accessibilityRole="alert" style={{ color: tokens.danger }}>{error ?? 'This photo could not be loaded. Choose another photo.'}</Text> : null}
+      {error || imageFailed ? <AppText accessibilityRole="alert" style={{ color: tokens.danger }}>{error ?? 'This photo could not be loaded. Choose another photo.'}</AppText> : null}
     </ScrollView>
   </SafeAreaView>;
 }
@@ -162,11 +164,11 @@ export function ChatAppearanceSettings() {
     setOpen(true);
   }, [chatAppearanceSelection]));
   return <View>
-    <Text accessibilityRole="header" style={[styles.sectionTitle, { color: tokens.textSecondary }]}>CHAT APPEARANCE</Text>
+    <AppText accessibilityRole="header" style={[styles.sectionTitle, { color: tokens.textSecondary }]}>CHAT APPEARANCE</AppText>
     <Pressable accessibilityRole="button" accessibilityLabel={`Background, ${background ? 'Custom photo' : 'Default'}`} onPress={() => { void dismissKeyboardAsync().then(() => { setInitialSelection(null); setMounted(true); setOpen(true); }); }} style={[styles.backgroundRow, { borderColor: tokens.borderSubtle }]}>
-      {background ? <Image source={resolveAttachmentUri(background.storagePath)} blurRadius={background.blur ? 5 : 0} contentFit="cover" style={styles.thumbnail} /> : <View style={[styles.thumbnail, styles.thumbnailDefault, { backgroundColor: tokens.surfaceElevated }]}><Ionicons name="image-outline" size={22} color={tokens.textMuted} /></View>}
-      <View style={styles.rowCopy}><Text style={[styles.defaultTitle, { color: tokens.textPrimary }]}>Background</Text><Text style={[styles.copy, { color: tokens.textSecondary }]}>{background ? 'Custom photo' : 'Default'}</Text>{!background ? <Text style={[styles.copy, { color: tokens.textSecondary }]}>Choose a photo to personalize your chat.</Text> : null}</View>
-      <Ionicons name="chevron-forward" size={17} color={tokens.textMuted} />
+      {background ? <Image source={resolveAttachmentUri(background.storagePath)} blurRadius={background.blur ? 5 : 0} contentFit="cover" style={styles.thumbnail} /> : <View style={[styles.thumbnail, styles.thumbnailDefault, { backgroundColor: tokens.surfaceElevated }]}><Icon name="image-outline" size={22} color={tokens.textMuted} /></View>}
+      <View style={styles.rowCopy}><AppText style={[styles.defaultTitle, { color: tokens.textPrimary }]}>Background</AppText><AppText style={[styles.copy, { color: tokens.textSecondary }]}>{background ? 'Custom photo' : 'Default'}</AppText>{!background ? <AppText style={[styles.copy, { color: tokens.textSecondary }]}>Choose a photo to personalize your chat.</AppText> : null}</View>
+      <Icon name="chevron-forward" size={17} color={tokens.textMuted} />
     </Pressable>
     <Modal visible={open} animationType="none" presentationStyle="fullScreen" onRequestClose={() => close()} onDismiss={finishClose}>
       <SafeAreaProvider><AppDialogProvider>{mounted ? <AppearanceContent key={initialSelection?.storagePath ?? 'current'} close={close} initialSelection={initialSelection} /> : null}</AppDialogProvider></SafeAreaProvider>
