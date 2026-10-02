@@ -8,6 +8,7 @@ import { createVideoPlayer, useVideoPlayer, VideoView, type VideoThumbnail } fro
 import * as Sharing from 'expo-sharing';
 import { getInfoAsync } from 'expo-file-system/legacy';
 import { useSQLiteContext } from 'expo-sqlite';
+import { useRouter } from 'expo-router';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { radii, spacing } from '@/constants/theme';
@@ -249,7 +250,23 @@ export function AttachmentContent({ attachment, accessibilityLabel, overlay, var
 // `timestampLeft`: the bottom-right corner is taken (a video's duration or the
 // "+N" badge), so the timestamp moves to the bottom-left instead.
 function MediaMetadata({ message, timestampLeft = false, onActions, onHideAgain }: { message: Message; timestampLeft?: boolean; onActions: () => void; onHideAgain?: () => void }) {
-  return <>{message.organization ? <View accessibilityLabel={`Organized in ${message.organization.boardName}, ${message.organization.columnName}`} style={styles.mediaBoardChip}><Text numberOfLines={1} style={styles.mediaBoardChipText}>{message.organization.boardName} · {message.organization.columnName}</Text></View> : null}<View style={[styles.mediaTimestamp, timestampLeft && styles.mediaTimestampLeft]}><Text style={styles.mediaTimestampText}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? ' · edited' : ''}</Text>{message.pinned ? <Ionicons accessibilityLabel="Pinned" name="pin-outline" size={12} color="#FFFFFF" /> : null}{(message.reminderAt ?? message.organization?.reminderAt) != null ? <Ionicons accessibilityLabel="Reminder set" name="notifications-outline" size={12} color="#FFFFFF" /> : null}</View>{onHideAgain ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" onPress={onHideAgain} hitSlop={6} style={styles.mediaPrivacy}><Ionicons accessible={false} name="eye-off-outline" size={16} color="#FFFFFF" /></Pressable> : null}<Pressable accessibilityRole="button" accessibilityLabel="Thought actions" onPress={onActions} hitSlop={6} style={styles.mediaActions}><Ionicons accessible={false} name="ellipsis-horizontal" size={17} color="#FFFFFF" /></Pressable></>;
+  const router = useRouter();
+  const organization = message.organization;
+  return <>
+    {organization ? <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`Open ${organization.columnName} in ${organization.boardName}`}
+      accessibilityHint="Opens this column on its board"
+      onPress={(event) => {
+        event.stopPropagation();
+        router.push({ pathname: '/board/[id]', params: { id: organization.boardId, highlightColumnId: organization.columnId } });
+      }}
+      style={({ pressed }) => [styles.mediaBoardChip, pressed && styles.pressed]}
+    ><Text numberOfLines={1} style={styles.mediaBoardChipText}>{organization.boardName} · {organization.columnName}</Text></Pressable> : null}
+    <View style={[styles.mediaTimestamp, timestampLeft && styles.mediaTimestampLeft]}><Text style={styles.mediaTimestampText}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? ' · edited' : ''}</Text>{message.pinned ? <Ionicons accessibilityLabel="Pinned" name="pin-outline" size={12} color="#FFFFFF" /> : null}{(message.reminderAt ?? message.organization?.reminderAt) != null ? <Ionicons accessibilityLabel="Reminder set" name="notifications-outline" size={12} color="#FFFFFF" /> : null}</View>
+    {onHideAgain ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" onPress={onHideAgain} hitSlop={6} style={styles.mediaPrivacy}><Ionicons accessible={false} name="eye-off-outline" size={16} color="#FFFFFF" /></Pressable> : null}
+    <Pressable accessibilityRole="button" accessibilityLabel="Thought actions" onPress={onActions} hitSlop={6} style={styles.mediaActions}><Ionicons accessible={false} name="ellipsis-horizontal" size={17} color="#FFFFFF" /></Pressable>
+  </>;
 }
 
 function AttachmentMessage({ message, attachment, focused, onLongPress, onHideAgain }: { message: Message; attachment: Attachment; focused: boolean; onLongPress: (message: Message) => void; onHideAgain?: () => void }) {

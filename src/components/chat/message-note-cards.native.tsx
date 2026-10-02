@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useRouter } from 'expo-router';
 import { Linking, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
@@ -20,22 +21,27 @@ function messageLabel(message: Message) {
 }
 
 export function MessageMetadata({ message, inside = false, onActions, onHideAgain, splitPills = false }: { message: Message; inside?: boolean; onActions: () => void; onHideAgain?: () => void; splitPills?: boolean }) {
+  const router = useRouter();
   const { tokens } = useTheme();
   const backgroundActive = useBackgroundReadability();
+  const organization = message.organization;
+  const openOrganization = () => {
+    if (organization) router.push({ pathname: '/board/[id]', params: { id: organization.boardId, highlightColumnId: organization.columnId } });
+  };
   return <View style={[styles.metadata, inside && styles.metadataInside, backgroundActive && !inside && { alignSelf: 'flex-end', backgroundColor: tokens.surface, paddingHorizontal: 8, borderRadius: 12 }]}>
-    {message.organization ? (splitPills ? <>
-      <View accessibilityLabel={`Board: ${message.organization.boardName}`} style={[styles.pill, { backgroundColor: tokens.accentSoft }]}>
+    {organization ? (splitPills ? <>
+      <Pressable accessibilityRole="link" accessibilityLabel={`Open board ${organization.boardName} at column ${organization.columnName}`} accessibilityHint="Opens this column on its board" hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.pill, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
         <Ionicons accessible={false} name="folder-outline" size={11} color={tokens.accentStrong} />
-        <Text numberOfLines={1} style={[styles.pillText, { color: tokens.accentStrong }]}>{message.organization.boardName}</Text>
-      </View>
-      <View accessibilityLabel={`Column: ${message.organization.columnName}`} style={[styles.pill, { backgroundColor: tokens.accentSoft }]}>
+        <Text numberOfLines={1} style={[styles.pillText, { color: tokens.accentStrong }]}>{organization.boardName}</Text>
+      </Pressable>
+      <Pressable accessibilityRole="link" accessibilityLabel={`Open ${organization.columnName} in ${organization.boardName}`} accessibilityHint="Opens this column on its board" hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.pill, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
         <Ionicons accessible={false} name="calendar-outline" size={11} color={tokens.accentStrong} />
-        <Text numberOfLines={1} style={[styles.pillText, { color: tokens.accentStrong }]}>{message.organization.columnName}</Text>
-      </View>
-    </> : <View accessibilityLabel={`Organized in ${message.organization.boardName}, ${message.organization.columnName}`} style={[styles.boardChip, { backgroundColor: tokens.accentSoft }]}>
+        <Text numberOfLines={1} style={[styles.pillText, { color: tokens.accentStrong }]}>{organization.columnName}</Text>
+      </Pressable>
+    </> : <Pressable accessibilityRole="link" accessibilityLabel={`Open ${organization.columnName} in ${organization.boardName}`} accessibilityHint="Opens this column on its board" hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.boardChip, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
       <Ionicons accessible={false} name="folder-outline" size={10} color={tokens.accentStrong} />
-      <Text numberOfLines={1} style={[styles.boardChipText, { color: tokens.accentStrong }]}>{message.organization.boardName} · {message.organization.columnName}</Text>
-    </View>) : null}
+      <Text numberOfLines={1} style={[styles.boardChipText, { color: tokens.accentStrong }]}>{organization.boardName} · {organization.columnName}</Text>
+    </Pressable>) : null}
     <Text style={[styles.time, { color: tokens.textMuted }]}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? ' · edited' : ''}</Text>
     {message.pinned ? <Ionicons accessibilityLabel="Pinned" name="pin-outline" size={13} color={tokens.textMuted} /> : null}
     {/* A reminder belongs to this thought or its linked card. */}

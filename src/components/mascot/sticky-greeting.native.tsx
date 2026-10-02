@@ -57,15 +57,15 @@ export function StickyGreeting({ bottom }: { bottom: number }) {
 
   return <View pointerEvents="box-none" style={[styles.anchor, { bottom, maxWidth: width - spacing.md * 2 }]}>
     <Animated.View style={[styles.bubble, { backgroundColor: theme.surface, borderColor: theme.borderSubtle, maxWidth: Math.min(width - spacing.md * 2, 272), opacity: bubbleOpacity, transform: [{ translateY: bubbleLift }] }]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Sticky says: ${greeting.text}. Open Chat.`} onPress={openChat} style={styles.bubbleMessage}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Chits says: ${greeting.text}. Open Chat.`} onPress={openChat} style={styles.bubbleMessage}>
         <Text style={[styles.message, { color: theme.textPrimary }]}>{greeting.text}</Text>
       </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Dismiss Sticky greeting" onPress={dismissGreeting} hitSlop={4} style={styles.close}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Dismiss Chits greeting" onPress={dismissGreeting} hitSlop={4} style={styles.close}>
         <Ionicons accessible={false} name="close" size={17} color={theme.textSecondary} />
       </Pressable>
     </Animated.View>
     <Animated.View style={{ opacity: mascotOpacity, transform: [{ translateY: mascotLift }, { scale: mascotScale }] }}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Sticky, Chits mascot. Open Chat to write a thought." onPress={openChat} style={styles.mascotButton}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Chits mascot. Open Chat to write a thought." onPress={openChat} style={styles.mascotButton}>
         <OnboardingMascot size={68} accessible={false} />
       </Pressable>
     </Animated.View>

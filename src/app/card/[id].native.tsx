@@ -25,6 +25,7 @@ import { useTheme } from '@/components/theme-provider';
 import { AppHeader, EmptyState, IconButton, Screen, Toast, HeaderIcon } from '@/components/ui/primitives';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { radii, spacing, type ThemeTokens } from '@/constants/theme';
+import { tintWithAccent } from '@/constants/board-appearance';
 import { createBoardRepository } from '@/db/repositories';
 import { persistCardAttachment, removeCardAttachmentFile } from '@/services/card-attachment-storage';
 import { exportActionLabel, shareAttachment } from '@/services/attachment-export';
@@ -65,7 +66,7 @@ export default function CardDetailScreen() {
   const database = useSQLiteContext();
   const { id } = useLocalSearchParams<{ id: string }>();
   const repository = useMemo(() => createBoardRepository(database), [database]);
-  const { tokens: theme } = useTheme();
+  const { tokens: theme, scheme, look } = useTheme();
   const { confirm, actionSheet } = useAppDialog();
   const { openBackgroundPreview, isCurrentBackground } = useChatBackground();
   const attachmentDeletion = useAttachmentDeletion();
@@ -102,6 +103,7 @@ export default function CardDetailScreen() {
   // Session-only peek at hidden content, mirroring Chat's temporary reveal — the
   // stored hidden flag only changes through the Hide/Show content action.
   const [temporarilyRevealed, setTemporarilyRevealed] = useState(false);
+  const [paperHeight, setPaperHeight] = useState(0);
   // Refresh on focus/reminder changes; Date.now() inside render is impure.
   const [renderedAt, setRenderedAt] = useState(() => Date.now());
   const scrollRef = useRef<ScrollView>(null);
@@ -465,14 +467,9 @@ export default function CardDetailScreen() {
   const covered = contentHidden && !temporarilyRevealed;
   const singleThoughtEditable = !covered && messages.length === 1 && Boolean(messages[0]?.text);
 
-  // The content's thin left accent line takes its color from the card's own
-  // board — same source of truth as the board detail screen — rather than the
-  // generic theme accent, so it stays visually tied to where the card lives.
-  // Falls back to the same neutral border used when a board has no accent set
-  // (not a colored one), matching the Cards list's own "no color = neutral"
-  // convention rather than inventing a second fallback rule.
-  const contentAccentLine = detail.boardAccent ?? theme.borderSubtle;
   const contentAccentStrong = detail.boardAccent ?? theme.accentStrong;
+  const paperColor = detail.boardAccent ? tintWithAccent(theme.cardBase, detail.boardAccent, scheme === 'dark' ? 0.16 : 0.1) : theme.cardPaper;
+  const paperEdge = detail.boardAccent ? tintWithAccent(theme.borderSubtle, detail.boardAccent, scheme === 'dark' ? 0.3 : 0.35) : theme.borderSubtle;
   // For solid fills (Save buttons) and the focused-input underline — the full
   // accent rather than the softer "strong" variant, matching what these already
   // used before they followed the board's color (tokens.accent, not accentStrong).
@@ -516,7 +513,18 @@ export default function CardDetailScreen() {
           </View>
         </View>
 
-        <View style={[styles.contentBody, { borderLeftColor: contentAccentLine }]}>
+        <View
+          onLayout={({ nativeEvent }) => {
+            const height = Math.ceil(nativeEvent.layout.height);
+            setPaperHeight((current) => current === height ? current : height);
+          }}
+          style={[styles.contentBody, { backgroundColor: paperColor, borderColor: paperEdge }, scheme !== 'dark' && [styles.paperShadow, { shadowOpacity: look.cardShadowOpacity }]]}
+        >
+          <View pointerEvents="none" accessible={false} style={StyleSheet.absoluteFill}>
+            {Array.from({ length: Math.min(320, Math.max(0, Math.floor((Math.max(200, paperHeight) - 58) / 22) + 1)) }, (_, index) =>
+              <View key={index} style={[styles.paperRule, { top: 46 + index * 22, backgroundColor: scheme === 'dark' ? 'rgba(157,193,226,0.27)' : '#BCD2EA' }]} />)}
+            <View style={[styles.paperMargin, { backgroundColor: scheme === 'dark' ? 'rgba(233,163,163,0.46)' : '#E9A3A3' }]} />
+          </View>
           {covered ? <Pressable accessibilityRole="button" accessibilityLabel="Hidden content. Double tap to reveal." onPress={() => setTemporarilyRevealed(true)} style={({ pressed }) => [styles.hiddenCover, pressed && styles.pressed]}>
             <Ionicons accessible={false} name="eye-off-outline" size={24} color={theme.textMuted} />
             <Text style={styles.hiddenCoverTitle}>Content hidden</Text>
@@ -728,12 +736,12 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   // tighter marginTop than the shared sectionHeader keeps it feeling like the
   // continuation of what the user is already reading rather than a jump.
   contentSectionHeader: { marginTop: spacing.md },
-  // The note itself sits directly on the screen background — no tinted fill,
-  // no border box — so it reads as the document being read, not a form field.
-  // The thin left rule (see contentAccentLine) is the only accent, carried
-  // over from the old tinted card's board-color idea but pared down to just
-  // that one subtle line.
-  contentBody: { marginTop: spacing.sm, paddingLeft: spacing.sm, borderLeftWidth: 2 },
+  // The ruled page follows the existing index-card treatment in Spaces. The
+  // generous left inset places the writing after the margin rule.
+  contentBody: { marginTop: spacing.sm, minHeight: 200, paddingTop: 24, paddingBottom: 28, paddingLeft: 46, paddingRight: spacing.md, borderRadius: radii.contentCard, borderWidth: StyleSheet.hairlineWidth },
+  paperShadow: { shadowColor: '#000000', shadowRadius: 7, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
+  paperRule: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth },
+  paperMargin: { position: 'absolute', top: 0, bottom: 0, left: 30, width: StyleSheet.hairlineWidth },
   contentHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   hiddenTitle: { color: tokens.textMuted },
   hiddenCover: { minHeight: 132, alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: radii.contentCard, backgroundColor: tokens.surfaceElevated },

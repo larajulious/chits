@@ -16,6 +16,8 @@ import { spacing, type ThemeTokens } from '@/constants/theme';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
 import type { Attachment, Board, Message } from '@/db/types';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
+import { markOrganizationAccepted } from '@/services/chits-organization';
+import { OnboardingMascot } from '@/features/onboarding/components/onboarding-mascot';
 
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -70,12 +72,13 @@ type ColumnOption = { id: string; name: string };
 // Unorganized/search/other global actions, where no board is already in scope)
 // preserves the original board-first flow, just with a column step appended before
 // the item actually lands, so both paths end the same way through `onPickColumn`.
-function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCard, busy, lockedBoard, selectedBoard, columns, columnsLoading, onClose, onSelectBoard, onBackToBoards, onPickColumn, onCreateAndAdd, onCreateColumn }: {
+function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCard, guided, busy, lockedBoard, selectedBoard, columns, columnsLoading, onClose, onSelectBoard, onBackToBoards, onPickColumn, onCreateAndAdd, onCreateColumn }: {
   visible: boolean;
   boards: BoardSummary[];
   recentBoardIds: string[];
   selectedCount: number;
   forCard: boolean;
+  guided: boolean;
   busy: boolean;
   lockedBoard: BoardSummary | null;
   selectedBoard: BoardSummary | null;
@@ -136,6 +139,7 @@ function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCa
       <SafeAreaView edges={['bottom']} accessibilityViewIsModal style={[sheetStyles.sheetSafeArea, { backgroundColor: theme.surface }]}>
         <GlassSurface style={[sheetStyles.sheet, { borderColor: theme.borderSubtle }]}>
           <View style={[sheetStyles.handle, { backgroundColor: theme.borderSubtle }]} />
+          {guided ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 16, paddingBottom: 3 }}><OnboardingMascot size={36} accessible={false} /><Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '600' }}>{mode === 'column' || mode === 'column-create' ? 'Chits · Which column?' : 'Chits · Which board should this go to?'}</Text></View> : null}
           {mode === 'board-create' ? <>
             <View style={sheetStyles.headerRow}>
               <IconButton label="Back" onPress={() => setMode('board')}><Text style={[sheetStyles.backIcon, { color: theme.textPrimary }]}>‹</Text></IconButton>
@@ -395,7 +399,7 @@ export default function UnorganizedScreen() {
   const { tokens: theme } = useTheme();
   const headerInk = useHeaderInk();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const { addToCard, messageId, boardId, openBoardPicker } = useLocalSearchParams<{ addToCard?: string; messageId?: string; boardId?: string; openBoardPicker?: string }>();
+  const { addToCard, messageId, boardId, openBoardPicker, chitsGuided } = useLocalSearchParams<{ addToCard?: string; messageId?: string; boardId?: string; openBoardPicker?: string; chitsGuided?: string }>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [boards, setBoards] = useState<BoardSummary[]>([]);
   const [recentBoardIds, setRecentBoardIds] = useState<string[]>([]);
@@ -495,7 +499,10 @@ export default function UnorganizedScreen() {
       const { cardIds } = await createBoardRepository(database).organizeMessages(sheetBoard.id, selected, columnId);
       await createBoardRepository(database).markOpened('board', sheetBoard.id);
       setSheetOpen(false); setSelected([]);
-      goToDestination(sheetBoard.id, columnId, cardIds);
+      if (chitsGuided === '1' && cardIds.length) {
+        const first = await markOrganizationAccepted(database, 'board').catch(() => false);
+        router.dismissTo({ pathname: '/chat', params: { chitsOrganized: 'board', chitsRelationship: first ? '1' : undefined } });
+      } else goToDestination(sheetBoard.id, columnId, cardIds);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Couldn’t add to board. Try again.'); }
     finally { setWorking(false); }
   };
@@ -508,7 +515,10 @@ export default function UnorganizedScreen() {
     const board = await createBoardRepository(database).create({ name });
     const { cardIds, columnId } = await createBoardRepository(database).organizeMessages(board.id, selected);
     setSheetOpen(false); setSelected([]);
-    goToDestination(board.id, columnId, cardIds);
+    if (chitsGuided === '1' && cardIds.length) {
+      const first = await markOrganizationAccepted(database, 'board').catch(() => false);
+      router.dismissTo({ pathname: '/chat', params: { chitsOrganized: 'board', chitsRelationship: first ? '1' : undefined } });
+    } else goToDestination(board.id, columnId, cardIds);
   };
   const addToExistingCard = async () => {
     if (!addToCard) return;
@@ -577,6 +587,7 @@ export default function UnorganizedScreen() {
       recentBoardIds={recentBoardIds}
       selectedCount={selected.length}
       forCard={Boolean(addToCard)}
+      guided={chitsGuided === '1'}
       busy={working}
       lockedBoard={contextBoard}
       selectedBoard={sheetBoard}

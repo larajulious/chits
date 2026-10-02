@@ -14,6 +14,7 @@ export type SpacePinStyle = 'magnet' | 'tape' | 'pushpin' | 'washi';
 export type SpaceDefinition = {
   id: SpaceId;
   name: string;
+  description: string;
   pinStyle: SpacePinStyle;
   /**
    * The board's color, in light and dark. Until real art exists (space_fridge,
@@ -24,10 +25,10 @@ export type SpaceDefinition = {
 };
 
 export const SPACES: Record<SpaceId, SpaceDefinition> = {
-  fridge: { id: 'fridge', name: 'Fridge', pinStyle: 'magnet', background: { light: '#E8ECEF', dark: '#2B3034' } },
-  desk: { id: 'desk', name: 'Desk', pinStyle: 'tape', background: { light: '#D9BF9A', dark: '#4A3A2A' } },
-  cork: { id: 'cork', name: 'Cork board', pinStyle: 'pushpin', background: { light: '#B98552', dark: '#5B4029' } },
-  wall: { id: 'wall', name: 'Wall', pinStyle: 'washi', background: { light: '#EDE6DC', dark: '#2F2B27' } },
+  fridge: { id: 'fridge', name: 'Fridge', description: 'Daily reminders & lists', pinStyle: 'magnet', background: { light: '#E8ECEF', dark: '#2B3034' } },
+  desk: { id: 'desk', name: 'Desk', description: 'Work and study notes', pinStyle: 'tape', background: { light: '#D9BF9A', dark: '#4A3A2A' } },
+  cork: { id: 'cork', name: 'Cork board', description: 'Ideas and plans', pinStyle: 'pushpin', background: { light: '#B98552', dark: '#5B4029' } },
+  wall: { id: 'wall', name: 'Wall', description: 'Inspiration to revisit', pinStyle: 'washi', background: { light: '#EDE6DC', dark: '#2F2B27' } },
 };
 export const SPACE_LIST: SpaceDefinition[] = SPACE_IDS.map((id) => SPACES[id]);
 

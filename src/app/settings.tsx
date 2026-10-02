@@ -9,8 +9,9 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ORGANIZATION_ENABLED_KEY } from '@/services/chits-organization';
 
 type Sheet = 'appearance' | null;
 const appearanceNames = { system: 'System', light: 'Light', dark: 'Dark' };
@@ -37,6 +38,7 @@ export default function SettingsScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastBackup, setLastBackup] = useState<string | null>(null);
+  const [organizationSuggestionsEnabled, setOrganizationSuggestionsEnabled] = useState(true);
   // Same single source of truth as Chat's header, Boards' header, and the drawer —
   // all independently read this same app_settings key, refetched here on focus so
   // a rename made elsewhere is reflected without restarting the app.
@@ -45,12 +47,14 @@ export default function SettingsScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const refresh = useCallback(async () => {
     try {
-      const [backup, titleRow] = await Promise.all([
+      const [backup, titleRow, suggestionRow] = await Promise.all([
         database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', 'last_backup_at'),
         database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', 'chat_title'),
+        database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', ORGANIZATION_ENABLED_KEY),
       ]);
       setLastBackup(backup?.value ?? null);
       setNoteSpaceName(titleRow?.value.trim() || 'Chits');
+      setOrganizationSuggestionsEnabled(suggestionRow?.value !== 'false');
     } catch { setError('Some settings could not be loaded. Reopen Settings to try again.'); }
   }, [database]);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
@@ -68,6 +72,14 @@ export default function SettingsScreen() {
     finally { setBusy(false); }
   };
   const closeSheet = () => { if (!busy) setSheet(null); };
+  const toggleOrganizationSuggestions = async (enabled: boolean) => {
+    if (busy) return;
+    setOrganizationSuggestionsEnabled(enabled);
+    setBusy(true); setError(null);
+    try { await database.runAsync('INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at', ORGANIZATION_ENABLED_KEY, enabled ? 'true' : 'false', Date.now()); }
+    catch { setOrganizationSuggestionsEnabled(!enabled); setError('That setting could not be saved. Please try again.'); }
+    finally { setBusy(false); }
+  };
 
   return <SafeAreaView style={[styles.screen, { backgroundColor: tokens.background }]}>
     <View style={styles.header}><TopBarBackground /><IconButton label="Open navigation" onPress={openDrawer}><MenuIcon /></IconButton><Text accessibilityRole="header" style={[styles.headerTitle, { color: headerInk.ink, fontWeight: look.headingWeight, fontFamily: headingFontFamily(look.headingFont) }]}>Settings</Text><IconButton label="Close settings" onPress={() => router.canGoBack() ? router.back() : router.navigate('/')}><HeaderIcon name="close" size={24} /></IconButton></View>
@@ -99,6 +111,12 @@ export default function SettingsScreen() {
         </View> : null}
       </Section>
       <ChatAppearanceSettings />
+      <Section title="CHITS">
+        <View style={[styles.row, { borderBottomColor: tokens.borderSubtle }]}>
+          <View style={styles.rowCopy}><Text style={[styles.label, { color: tokens.textPrimary }]}>Chits Suggestions</Text><Text style={[styles.description, { color: tokens.textSecondary }]}>Let Chits occasionally suggest Boards or Spaces for your notes.</Text></View>
+          <Switch accessibilityLabel="Chits Suggestions" accessibilityRole="switch" value={organizationSuggestionsEnabled} disabled={busy} onValueChange={(value) => void toggleOrganizationSuggestions(value)} trackColor={{ true: tokens.accent, false: tokens.borderSubtle }} thumbColor={tokens.surface} />
+        </View>
+      </Section>
       <Section title="DATA"><SettingsRow label="Backup & Restore" description={lastBackup && !Number.isNaN(new Date(Number(lastBackup)).getTime()) ? 'Last backup: ' + new Date(Number(lastBackup)).toLocaleDateString() : 'Last backup: Never'} onPress={() => router.push('/backup')} /></Section>
 
     </ScrollView>

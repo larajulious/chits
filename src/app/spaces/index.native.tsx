@@ -30,6 +30,7 @@ import { DARK_SURFACE, DOCK_ICONS, DOCK_LABELS, noteSeed, SPACE_UI } from '@/con
 import { createSpaceRepository } from '@/db/repositories';
 import type { PinnedNote, SpaceCandidate } from '@/db/types';
 import { subscribeToSpaceChanges } from '@/services/space-changes';
+import { ChitsGuide } from '@/components/mascot/chits-guide.native';
 
 const EMPTY_COUNTS = Object.fromEntries(SPACE_IDS.map((id) => [id, 0])) as Record<SpaceId, number>;
 
@@ -42,13 +43,13 @@ const openNote = (note: Pick<PinnedNote, 'kind' | 'noteId' | 'boardId'>) => rout
  */
 export default function SpacesScreen() {
   const database = useSQLiteContext();
-  const { spaceId, noteId } = useLocalSearchParams<{ spaceId?: string; noteId?: string }>();
+  const { spaceId, noteId, chitsGuided, chitsRelationship } = useLocalSearchParams<{ spaceId?: string; noteId?: string; chitsGuided?: string; chitsRelationship?: string }>();
   const [initial] = useState(() => resolveSpaceId(spaceId) ?? createSpaceRepository(database).getSelectedSpaceSync());
   if (!initial) return <Redirect href="/spaces/pick" />;
-  return <SpaceBoard initialSpaceId={initial} focusNoteId={noteId} />;
+  return <SpaceBoard initialSpaceId={initial} focusNoteId={noteId} guided={chitsGuided === '1'} relationship={chitsRelationship === '1'} />;
 }
 
-function SpaceBoard({ initialSpaceId, focusNoteId }: { initialSpaceId: SpaceId; focusNoteId?: string }) {
+function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { initialSpaceId: SpaceId; focusNoteId?: string; guided: boolean; relationship: boolean }) {
   const database = useSQLiteContext();
   const { tokens: theme } = useTheme();
   const repository = useMemo(() => createSpaceRepository(database), [database]);
@@ -68,6 +69,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId }: { initialSpaceId: SpaceId; 
   const [reminderKey, setReminderKey] = useState(0);
   const focusedOnce = useRef(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [guideState, setGuideState] = useState<'placement' | 'success' | null>(guided ? 'placement' : null);
   const [toast, setToast] = useState<string | null>(null);
   const space = SPACES[spaceId];
   const count = counts[spaceId];
@@ -100,14 +102,19 @@ function SpaceBoard({ initialSpaceId, focusNoteId }: { initialSpaceId: SpaceId; 
       setCounts(nextCounts);
       if (!focusedOnce.current && focusNoteId) {
         const note = list.find((entry) => entry.noteId === focusNoteId);
-        if (note) { focusedOnce.current = true; setViewingId(note.id); }
+        if (note) { focusedOnce.current = true; if (!guided) setViewingId(note.id); }
       }
     };
     void read();
     const unsubscribe = subscribeToSpaceChanges(() => { void read(); });
     return () => { active = false; unsubscribe(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `reload` only re-runs the read.
-  }, [repository, spaceId, reload, focusNoteId]));
+  }, [repository, spaceId, reload, focusNoteId, guided]));
+  useEffect(() => {
+    if (!guideState) return;
+    const timer = setTimeout(() => setGuideState(null), guideState === 'success' ? 1800 : 10000);
+    return () => clearTimeout(timer);
+  }, [guideState]);
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 2200); return () => clearTimeout(timer); }, [toast]);
 
   const switchSpace = useCallback((next: SpaceId) => {
@@ -154,8 +161,10 @@ function SpaceBoard({ initialSpaceId, focusNoteId }: { initialSpaceId: SpaceId; 
       const note = current?.find((item) => item.id === id);
       return current && note ? [...current.filter((item) => item.id !== id), { ...note, ...unit }] : current;
     });
-    void repository.savePosition(id, unit).catch(() => { setToast('That move couldn’t be saved.'); load(); });
-  }, [board, load, repository]);
+    void repository.savePosition(id, unit).then(() => {
+      if (guided && notes?.find((note) => note.id === id)?.noteId === focusNoteId) setGuideState('success');
+    }).catch(() => { setToast('That move couldn’t be saved.'); load(); });
+  }, [board, load, repository, guided, notes, focusNoteId]);
   // A tap reads the note right here, over the space; leaving for the card or
   // Chat is the sheet's own button.
   const onOpen = useCallback((id: string) => { void Haptics.selectionAsync(); setViewingId(id); }, []);
@@ -267,6 +276,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId }: { initialSpaceId: SpaceId; 
       })}
     </View>
     <MagnetButton size={DOCK_HEIGHT} icon="add" accessibilityLabel="Stick a note" onPress={openPicker} style={[styles.magnet, { bottom: dockBottom }]} />
+    {guideState ? <ChitsGuide text={guideState === 'success' ? 'Perfect spot ✨' : relationship ? 'Drop it anywhere you like. It’s still in Chat.' : 'Drop it anywhere you like.'} bottom={dockBottom + DOCK_HEIGHT + 12} onClose={() => setGuideState(null)} /> : null}
 
     {viewing && !selected ? <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <SheetDim label="Close note" onPress={closeView} />

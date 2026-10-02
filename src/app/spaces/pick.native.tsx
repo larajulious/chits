@@ -2,7 +2,7 @@ import { memo, useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import * as Haptics from 'expo-haptics';
@@ -16,8 +16,9 @@ import { Toast } from '@/components/ui/primitives';
 import { DEFAULT_SPACE_ID, SPACE_LIST, STICKY_COLORS, type SpaceDefinition, type SpaceId } from '@/constants/spaces';
 import { SPACE_UI } from '@/constants/spaces-theme';
 import { layout } from '@/constants/theme';
-import { createSpaceRepository } from '@/db/repositories';
+import { createMessageRepository, createSpaceRepository } from '@/db/repositories';
 import { OnboardingMascot } from '@/features/onboarding/components/onboarding-mascot';
+import { markOrganizationAccepted } from '@/services/chits-organization';
 
 // Cards share whatever height the screen has left, up to this tall, and never
 // below the minimum (where the tapes and a sample note still fit).
@@ -30,13 +31,15 @@ const SAMPLES = [
 ];
 
 const SpaceCard = memo(function SpaceCard({ space, selected, count, onPress }: { space: SpaceDefinition; selected: boolean; count: number; onPress: () => void }) {
+  const fonts = useSpaceFonts();
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   // The sample notes scale down with a short card, so they're never cut off.
   const unit = size ? Math.min(0.5, (size.height - 14) / 150) : 0.5;
   const nudge = unit / 0.5;
+  const shortCard = size !== null && size.height < 72;
   return <Pressable
     accessibilityRole="radio"
-    accessibilityLabel={count ? `${space.name}, ${count} ${count === 1 ? 'note' : 'notes'}` : space.name}
+    accessibilityLabel={`${space.name}. ${space.description}.${count ? ` ${count} ${count === 1 ? 'note' : 'notes'}.` : ''}`}
     accessibilityState={{ selected }}
     onPress={onPress}
     onLayout={({ nativeEvent: { layout } }) => setSize((current) => (current && current.width === layout.width && current.height === layout.height ? current : { width: layout.width, height: layout.height }))}
@@ -48,7 +51,10 @@ const SpaceCard = memo(function SpaceCard({ space, selected, count, onPress }: {
       <View style={[styles.sample, { right: 74 * nudge, top: 20 * nudge }]}><StickyPaper note={SAMPLES[0]} space={space.id} seed={1} unit={unit} /></View>
       <View style={[styles.sample, { right: 22 * nudge, top: 34 * nudge }]}><StickyPaper note={SAMPLES[1]} space={space.id} seed={2} unit={unit} /></View>
     </View> : null}
-    <LabelTape text={space.name} variant="dark" size="md" rotation={-2} decorative style={styles.cardLabel} />
+    <LabelTape text={space.name} variant="dark" size={shortCard ? 'sm' : 'md'} rotation={-2} decorative style={[styles.cardLabel, shortCard && styles.cardLabelShort]} />
+    <View pointerEvents="none" style={styles.cardDescription}>
+      <Text numberOfLines={1} style={[fonts.uiSemi, styles.cardDescriptionText]}>{space.description}</Text>
+    </View>
     {count ? <LabelTape text={`${count} ${count === 1 ? 'note' : 'notes'}`} variant="red" size="sm" rotation={2} decorative style={styles.cardCount} /> : null}
     {selected ? <MagnetButton size={30} icon="checkmark" style={styles.check} /> : null}
   </Pressable>;
@@ -61,6 +67,8 @@ const SpaceCard = memo(function SpaceCard({ space, selected, count, onPress }: {
  */
 export default function PickSpaceScreen() {
   const database = useSQLiteContext();
+  const { messageId, chitsGuided } = useLocalSearchParams<{ messageId?: string; chitsGuided?: string }>();
+  const [guidedPending, setGuidedPending] = useState(chitsGuided === '1');
   const repository = createSpaceRepository(database);
   const insets = useSafeAreaInsets();
   const fonts = useSpaceFonts();
@@ -87,6 +95,17 @@ export default function PickSpaceScreen() {
     setSaving(true);
     try {
       await repository.setSelectedSpace(selected);
+      if (guidedPending && messageId) {
+        const message = await createMessageRepository(database).getActiveById(messageId);
+        if (!message) throw new Error('That note is no longer available.');
+        const result = await repository.stick('thought', messageId, selected);
+        if (result.status === 'full') { setToast('This space is full. Choose another space.'); setSaving(false); return; }
+        const first = await markOrganizationAccepted(database, 'space').catch(() => false);
+        setGuidedPending(false);
+        router.push({ pathname: '/spaces', params: { spaceId: selected, noteId: messageId, chitsGuided: '1', chitsRelationship: first ? '1' : undefined } });
+        setSaving(false);
+        return;
+      }
       // On top of this screen, so going back from the space returns here.
       router.push('/spaces');
       setSaving(false);
@@ -137,8 +156,10 @@ const styles = StyleSheet.create({
   cardClip: { borderRadius: 15, overflow: 'hidden' },
   sample: { position: 'absolute' },
   cardLabel: { position: 'absolute', left: 12, top: 12 },
-  // On the bottom edge, so it stays on the card however short the card gets.
-  cardCount: { position: 'absolute', left: 16, bottom: 8 },
+  cardLabelShort: { top: 6 },
+  cardDescription: { position: 'absolute', left: 12, bottom: 8, maxWidth: '62%', borderRadius: 7, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: 'rgba(18,19,21,0.78)' },
+  cardDescriptionText: { color: SPACE_UI.paper, fontSize: 11, lineHeight: 14 },
+  cardCount: { position: 'absolute', right: 12, bottom: 8 },
   check: { position: 'absolute', right: -8, top: -8 },
   footer: { paddingHorizontal: 20, paddingTop: 12, alignSelf: 'center', width: '100%', maxWidth: layout.maxContentWidth, gap: 10 },
   primary: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: SPACE_UI.accent },

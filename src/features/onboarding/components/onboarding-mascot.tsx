@@ -26,7 +26,7 @@ export function OnboardingMascot({ size, style, accessible = true }: { size: num
     return () => { mounted = false; };
   }, []);
 
-  return <View accessible={accessible} accessibilityRole="image" accessibilityLabel="Sticky, Chits mascot" pointerEvents="none" style={[{ width: size, height: size }, style]}>
+  return <View accessible={accessible} accessibilityRole="image" accessibilityLabel="Chits mascot" pointerEvents="none" style={[{ width: size, height: size }, style]}>
     {!ready ? <Image source={MASCOT} contentFit="contain" style={StyleSheet.absoluteFill} /> : null}
     {html ? <WebView
       source={{ html }}

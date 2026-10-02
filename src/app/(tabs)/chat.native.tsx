@@ -36,6 +36,8 @@ import { radii, spacing } from '@/constants/theme';
 import { createMessageRepository } from '@/db/repositories';
 import type { Message, TimelineCursor, TimelineEvent, TimelineItem } from '@/db/types';
 import { deleteAttachment } from '@/services/attachment-storage';
+import { ChitsGuide } from '@/components/mascot/chits-guide.native';
+import { useChitsOrganization } from '@/hooks/use-chits-organization';
 
 const PAGE_SIZE = 50;
 const MIN_COMPOSER_INPUT_HEIGHT = 40;
@@ -251,7 +253,7 @@ function QuickFilterRow({ pinned, onSelect }: { pinned: Message[]; onSelect: (me
 export default function ChatScreen() {
   const database = useSQLiteContext();
   const repository = useMemo(() => createMessageRepository(database), [database]);
-  const { messageId, prefill, focusInput } = useLocalSearchParams<{ messageId?: string; prefill?: string; focusInput?: string }>();
+  const { messageId, prefill, focusInput, chitsOrganized, chitsRelationship } = useLocalSearchParams<{ messageId?: string; prefill?: string; focusInput?: string; chitsOrganized?: string; chitsRelationship?: string }>();
   const router = useRouter();
   const { tokens: theme, topBar } = useTheme();
   const { confirm } = useAppDialog();
@@ -356,6 +358,30 @@ export default function ChatScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<TimelineItem[]>([]);
   const [searching, setSearching] = useState(false);
+  const chatFocused = useRef(false);
+  const [organizationSuccess, setOrganizationSuccess] = useState<string | null>(null);
+  const { suggestion, onSent: onOrganizationSent, dismiss: dismissSuggestion, hide: hideSuggestion, confirmShown } = useChitsOrganization(() => chatFocused.current && AppState.currentState !== 'background' && AppState.currentState !== 'inactive' && !draft.trim() && !attachmentDraft && !attachmentPickerOpen && !isRecordingAudio && !editing && !selected && !reminderMessageId && !searchOpen && !organizationSuccess && !isSaving);
+  useFocusEffect(useCallback(() => {
+    chatFocused.current = true;
+    return () => { chatFocused.current = false; hideSuggestion(); };
+  }, [hideSuggestion]));
+  useEffect(() => {
+    if (!chitsOrganized) return;
+    hideSuggestion();
+    const frame = requestAnimationFrame(() => {
+      setOrganizationSuccess(chitsRelationship === '1' ? 'Done ✨ You can still find it here in Chat.' : 'Done! It’s on your board ✨');
+      router.setParams({ chitsOrganized: undefined, chitsRelationship: undefined });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [chitsOrganized, chitsRelationship, hideSuggestion, router]);
+  useEffect(() => {
+    if (!organizationSuccess) return;
+    const timer = setTimeout(() => setOrganizationSuccess(null), 1800);
+    return () => clearTimeout(timer);
+  }, [organizationSuccess]);
+  useEffect(() => {
+    if (draft.trim() || attachmentPickerOpen || attachmentDraft || selected || searchOpen || editing || isRecordingAudio || reminderMessageId) hideSuggestion();
+  }, [draft, attachmentPickerOpen, attachmentDraft, selected, searchOpen, editing, isRecordingAudio, reminderMessageId, hideSuggestion]);
   // Debounced (see handleSearchChange) so this never flashes for an instant query.
   const showSearchLoader = useChitsLoading(searching, { delay: 150, minDuration: 200 });
 
@@ -758,6 +784,7 @@ export default function ChatScreen() {
     const text = draft.trim();
     const canEditEmptyDescription = Boolean(editing?.attachments.length);
     if ((!text && !attachmentDraft && !canEditEmptyDescription) || isSaving) return;
+    hideSuggestion();
     setIsSaving(true); setError(null);
     try {
       if (editing) {
@@ -770,11 +797,13 @@ export default function ChatScreen() {
         const staged = attachmentDraft;
         const message = await repository.createAttachmentMessage(staged.attachment, text || null);
         setFeed((current) => mergeTimeline(current, [{ kind: 'message', message, createdAt: message.createdAt }]));
+        void onOrganizationSent(message);
         if (attachmentDraftRef.current === staged) { attachmentDraftRef.current = null; animateComposerTransition(); setAttachmentDraft(null); }
         if (nearBottom.current) pendingScrollToLatest.current = true;
       } else {
         const message = await repository.createText(text);
         setFeed((current) => mergeTimeline(current, [{ kind: 'message', message, createdAt: message.createdAt }]));
+        void onOrganizationSent(message);
         if (nearBottom.current) pendingScrollToLatest.current = true;
       }
       // Deliberately NOT touching composerFocused here — sending must not
@@ -786,7 +815,7 @@ export default function ChatScreen() {
       setDraft('');
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch { setError(editing ? 'Your edit was not saved. Please try again.' : 'Your thought was not saved. Please try again.'); } finally { setIsSaving(false); }
-  }, [animateComposerTransition, attachmentDraft, draft, editing, isSaving, repository]);
+  }, [animateComposerTransition, attachmentDraft, draft, editing, isSaving, repository, onOrganizationSent, hideSuggestion]);
 
   const attachmentSelected = useCallback((next: AttachmentDraft) => {
     attachmentDraftRef.current = next;
@@ -920,9 +949,9 @@ export default function ChatScreen() {
     temporarilyRevealed={item.kind === 'message' && temporarilyRevealedIds.has(item.message.id)}
     onReveal={revealContent}
     onHideAgain={hideAgain}
-    onActions={setSelected}
+    onActions={(message) => { hideSuggestion(); setSelected(message); }}
     onEvent={openEvent}
-  />, [feed, focusedId, hideAgain, openEvent, revealContent, temporarilyRevealedIds]);
+  />, [feed, focusedId, hideAgain, hideSuggestion, openEvent, revealContent, temporarilyRevealedIds]);
   const hasDraft = Boolean(draft.trim());
   const canSend = hasDraft || Boolean(attachmentDraft) || Boolean(editing?.attachments.length);
   // ONE source of truth for compact vs. expanded (see PHASE: FIX INCONSISTENT
@@ -952,10 +981,11 @@ export default function ChatScreen() {
     });
   }, []);
   const focusComposer = useCallback(() => {
+    hideSuggestion();
     animateComposerTransition();
     setComposerFocused(true);
     if (nearBottom.current) requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: false }));
-  }, [animateComposerTransition]);
+  }, [animateComposerTransition, hideSuggestion]);
   // The TextInput's own blur — the primary way composerFocused turns back off
   // (see composerExpanded above). Draft text/attachment/editing/recording each
   // independently keep the composer expanded regardless of this, so blurring
@@ -1001,7 +1031,7 @@ export default function ChatScreen() {
           // includes the composer's own safe-area bottom padding (it's baked into
           // that view's own measured box), so it isn't added again here — just a
           // small breathing-room gap on top of it.
-          ListFooterComponent={<View style={{ height: composerHeight + spacing.md }} />}
+          ListFooterComponent={<View style={{ height: composerHeight + spacing.md + (suggestion ? 170 : 0) }} />}
           onScrollToIndexFailed={handleScrollToIndexFailed}
           onScroll={({ nativeEvent }) => {
             const distance = nativeEvent.contentSize.height - nativeEvent.layoutMeasurement.height - nativeEvent.contentOffset.y;
@@ -1030,14 +1060,16 @@ export default function ChatScreen() {
             </ScrollView>}
         </View> : null}
         {!searchOpen ? <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.chatBackground}00`, `${theme.chatBackground}10`, `${theme.chatBackground}80`, `${theme.chatBackground}EF`, theme.chatBackground]} locations={[0, 0.2, 0.5, 0.8, 1]} style={[styles.bottomFade, { height: Math.min(composerHeight, MIN_COMPOSER_INPUT_HEIGHT + spacing.sm + composerBottomPadding) }]} /> : null}
-        {!searchOpen && showJumpToLatest ? <Pressable accessibilityRole="button" accessibilityLabel="Jump to latest message" onPress={jumpToLatest} style={({ pressed }) => [styles.jumpToLatest, { bottom: composerHeight + (editing ? 52 : spacing.md), backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, pressed && styles.sendPressed]}><Ionicons accessible={false} name="arrow-down" size={20} color={theme.textPrimary} /></Pressable> : null}
+        {!searchOpen && showJumpToLatest && !suggestion ? <Pressable accessibilityRole="button" accessibilityLabel="Jump to latest message" onPress={jumpToLatest} style={({ pressed }) => [styles.jumpToLatest, { bottom: composerHeight + (editing ? 52 : spacing.md), backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, pressed && styles.sendPressed]}><Ionicons accessible={false} name="arrow-down" size={20} color={theme.textPrimary} /></Pressable> : null}
         {!searchOpen && editing && <View style={[styles.editing, { bottom: composerHeight + spacing.xs, backgroundColor: theme.surfaceElevated }]}><Text style={[styles.editingText, { color: theme.textSecondary }]}>{editing.attachments.length ? 'Editing description' : 'Editing thought'}</Text><Pressable accessibilityRole="button" onPress={cancelEditing}><Text style={[styles.cancel, { color: theme.accent }]}>Cancel</Text></Pressable></View>}
+        {!searchOpen && suggestion ? <ChitsGuide text={suggestion.copy} bottom={composerHeight + spacing.xs} onShown={() => confirmShown(suggestion.message.id)} onClose={dismissSuggestion} hint={suggestion.message.attachments.some((attachment) => attachment.type === 'file') || suggestion.message.attachments.length > 1 ? 'Spaces show a preview; every attachment stays with your Chat note.' : undefined} actions={[{ label: 'Add to Board', onPress: () => { const id = suggestion?.message.id; if (!id) return; hideSuggestion(); router.push({ pathname: '/unorganized', params: { messageId: id, openBoardPicker: '1', chitsGuided: '1' } }); } }, { label: 'Put in Space', onPress: () => { const id = suggestion?.message.id; if (!id) return; hideSuggestion(); router.push({ pathname: '/spaces/pick', params: { messageId: id, chitsGuided: '1' } }); } }, { label: suggestion.intro ? 'Keep in Chat' : 'Not now', onPress: dismissSuggestion }]} /> : null}
+        {organizationSuccess ? <ChitsGuide text={organizationSuccess} bottom={composerHeight + spacing.xs} /> : null}
         {!searchOpen ? <View onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setComposerHeight((current) => (current === next ? current : next)); composerMeasuredRef.current = true; maybePerformInitialScroll(); }} style={[styles.composerDock, { paddingBottom: composerBottomPadding }]}>
           {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { backgroundColor: theme.surfaceElevated, borderColor: theme.danger }]}><Ionicons accessible={false} name="alert-circle-outline" size={18} color={theme.danger} /><Text style={[styles.errorText, { color: theme.danger }]}>{error}</Text></View> : null}
           <ChatComposerSurface style={[styles.composer, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, composerExpanded && styles.composerExpanded, composerFocused && { borderColor: theme.accentBorder }]}>
             {!isRecordingAudio && attachmentDraft ? <AttachmentDraftPreview draft={attachmentDraft} compact={composerFocused} onRemove={removeAttachmentDraft} /> : null}
-            {!isRecordingAudio ? <TextInput ref={inputRef} accessibilityLabel={attachmentDraft || editing?.attachments.length ? 'Attachment description' : 'Message note'} value={draft} onChangeText={setDraft} onFocus={focusComposer} onBlur={blurComposer} onContentSizeChange={({ nativeEvent }) => handleContentSizeChange(nativeEvent.contentSize.height)} placeholder={attachmentDraft || editing?.attachments.length ? 'Add a description...' : editing ? 'Edit thought...' : 'Message note...'} placeholderTextColor={theme.textMuted} selectionColor={theme.accent} cursorColor={theme.accent} multiline maxLength={10000} scrollEnabled={!composerFocused || inputMaxed} style={[styles.input, composerExpanded ? styles.inputExpanded : styles.inputCompact, composerExpanded ? styles.inputAutoGrow : styles.inputFixed, { color: theme.textPrimary }]} textAlignVertical={composerExpanded ? 'top' : 'center'} /> : null}
-            <View pointerEvents={composerExpanded ? 'auto' : 'box-none'} style={[styles.composerActions, isRecordingAudio ? styles.composerActionsRecording : composerExpanded ? styles.composerActionsExpanded : styles.composerActionsCompact]}><AttachmentPicker ref={attachmentPickerRef} disabled={Boolean(attachmentDraft) || Boolean(editing) || isSaving} onSelected={attachmentSelected} onError={setError} onRecordingChange={recordingChanged} onOpenChange={setAttachmentPickerOpen} />{!isRecordingAudio ? <Pressable accessibilityRole="button" accessibilityLabel={canSend ? 'Send message' : 'Record audio'} accessibilityState={{ disabled: isSaving }} disabled={isSaving} onPress={() => { if (canSend) void send(); else attachmentPickerRef.current?.startAudio(); }} style={({ pressed }) => [styles.sendButton, { backgroundColor: isSaving ? theme.surfaceElevated : theme.accent }, pressed && styles.sendPressed]}><Ionicons accessible={false} name={canSend ? 'arrow-up' : 'mic-outline'} size={20} color={theme.accentText} /></Pressable> : null}</View>
+            {!isRecordingAudio ? <TextInput ref={inputRef} accessibilityLabel={attachmentDraft || editing?.attachments.length ? 'Attachment description' : 'Message note'} value={draft} onChangeText={(text) => { if (text) hideSuggestion(); setDraft(text); }} onFocus={focusComposer} onBlur={blurComposer} onContentSizeChange={({ nativeEvent }) => handleContentSizeChange(nativeEvent.contentSize.height)} placeholder={attachmentDraft || editing?.attachments.length ? 'Add a description...' : editing ? 'Edit thought...' : 'Message note...'} placeholderTextColor={theme.textMuted} selectionColor={theme.accent} cursorColor={theme.accent} multiline maxLength={10000} scrollEnabled={!composerFocused || inputMaxed} style={[styles.input, composerExpanded ? styles.inputExpanded : styles.inputCompact, composerExpanded ? styles.inputAutoGrow : styles.inputFixed, { color: theme.textPrimary }]} textAlignVertical={composerExpanded ? 'top' : 'center'} /> : null}
+            <View pointerEvents={composerExpanded ? 'auto' : 'box-none'} style={[styles.composerActions, isRecordingAudio ? styles.composerActionsRecording : composerExpanded ? styles.composerActionsExpanded : styles.composerActionsCompact]}><AttachmentPicker ref={attachmentPickerRef} disabled={Boolean(attachmentDraft) || Boolean(editing) || isSaving} onSelected={attachmentSelected} onError={setError} onRecordingChange={recordingChanged} onOpenChange={(open) => { if (open) hideSuggestion(); setAttachmentPickerOpen(open); }} />{!isRecordingAudio ? <Pressable accessibilityRole="button" accessibilityLabel={canSend ? 'Send message' : 'Record audio'} accessibilityState={{ disabled: isSaving }} disabled={isSaving} onPress={() => { if (canSend) void send(); else attachmentPickerRef.current?.startAudio(); }} style={({ pressed }) => [styles.sendButton, { backgroundColor: isSaving ? theme.surfaceElevated : theme.accent }, pressed && styles.sendPressed]}><Ionicons accessible={false} name={canSend ? 'arrow-up' : 'mic-outline'} size={20} color={theme.accentText} /></Pressable> : null}</View>
           </ChatComposerSurface>
         </View> : null}
         <View style={styles.headerWrap} pointerEvents="box-none">

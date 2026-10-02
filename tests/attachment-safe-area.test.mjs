@@ -26,6 +26,6 @@ test('chat composer clears the system navigation bar without doubling the inset 
   assert.match(chat, /const composerBottomPadding = keyboardVisible \? spacing\.xs : insets\.bottom > 0 \? insets\.bottom \+ spacing\.xxs : spacing\.sm;/);
   assert.match(chat, /styles\.composerDock, \{ paddingBottom: composerBottomPadding \}/);
   // The list's end spacing is derived from the measured dock (padding included), never a fixed number.
-  assert.match(chat, /ListFooterComponent=\{<View style=\{\{ height: composerHeight \+ spacing\.md \}\} \/>\}/);
+  assert.match(chat, /ListFooterComponent=\{<View style=\{\{ height: composerHeight \+ spacing\.md/);
   assert.doesNotMatch(chat, /paddingBottom: keyboardVisible \? spacing\.xs : spacing\.sm/);
 });
