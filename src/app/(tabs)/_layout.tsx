@@ -4,12 +4,10 @@ import { BottomNav } from '@/components/navigation/bottom-nav';
 import { ChatTransitionProvider } from '@/components/navigation/chat-transition';
 import { useTheme } from '@/components/theme-provider';
 
-// Boards, Chat, and Attachments are the app's 3 persistent destinations (see
-// PHASE: REDESIGN CHITS BOTTOM NAVIGATION, PHASE: GLOBAL ATTACHMENTS SCREEN) —
+// Notes, Calendar, Chat, Attachments, and Spaces are the app's persistent destinations —
 // a real Tabs navigator, not a Stack, so each keeps its own mounted state when
-// switching between them instead of remounting. Archive and Search both stay
-// normal screens in this group (still reachable via router.navigate, Archive
-// now from the side drawer) but aren't among the 3 buttons BottomNav renders.
+// switching between them instead of remounting. Archive and Search stay
+// normal screens in this group but aren't among the BottomNav buttons.
 // ChatTransitionProvider wraps the navigator (not just BottomNav) so it can own
 // navigation into/out of Chat itself and paint its balloon-expansion overlay
 // above every screen — see PHASE: REFINE CHAT NAVIGATION TRANSITION and
@@ -20,8 +18,10 @@ export default function TabLayout() {
     <ChatTransitionProvider>
       <Tabs backBehavior="history" tabBar={(props) => <BottomNav {...props} />} screenOptions={{ headerShown: false, animation: 'none', sceneStyle: { backgroundColor: tokens.background } }}>
         <Tabs.Screen name="index" />
+        <Tabs.Screen name="calendar" />
         <Tabs.Screen name="chat" />
         <Tabs.Screen name="attachments" />
+        <Tabs.Screen name="spaces" />
         <Tabs.Screen name="archive" />
         <Tabs.Screen name="search" />
       </Tabs>

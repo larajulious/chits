@@ -1,13 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useMemo, useState } from 'react';
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
+import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { ReminderSheet } from '@/components/reminders/reminder-sheet';
 import { useTheme } from '@/components/theme-provider';
-import { AppHeader, EmptyState, HeaderIcon, IconButton, Screen, Toast } from '@/components/ui/primitives';
+import { AppHeader, EmptyState, IconButton, MenuIcon, Screen, Toast } from '@/components/ui/primitives';
 import { layout, radii, spacing } from '@/constants/theme';
 import { addLocalDays, getCalendarItems, getRemindersForDate, localDayKey, startOfLocalDay, type CalendarItem } from '@/features/calendar/calendar-data';
 import { completeReminder, removeCardReminder, removeMessageReminder, setCardReminder, setMessageReminder, subscribeToReminderChanges } from '@/services/reminders';
@@ -23,8 +25,10 @@ const timeLabel = (timestamp: number) => new Intl.DateTimeFormat(undefined, { ho
 export default function CalendarScreen() {
   const database = useSQLiteContext();
   const router = useRouter();
+  const { openDrawer } = useAppDrawer();
   const { actionSheet, confirm } = useAppDialog();
   const { tokens: theme } = useTheme();
+  const tabBarHeight = useBottomTabBarHeight();
   const { height, fontScale } = useWindowDimensions();
   const pinDateGrid = height >= 700 && fontScale <= 1.3;
   const [today, setToday] = useState(() => startOfLocalDay(new Date()));
@@ -146,8 +150,8 @@ export default function CalendarScreen() {
   );
 
   return <Screen>
-    <AppHeader title="Calendar" leading={<IconButton label="Go back" onPress={() => router.canGoBack() ? router.back() : router.replace('/')}><HeaderIcon name="chevron-back" size={24} /></IconButton>} trailing={<Pressable accessibilityRole="button" onPress={() => setSelected(startOfLocalDay(new Date()))} style={styles.todayButton}><Text style={[styles.todayText, { color: theme.accentStrong }]}>Today</Text></Pressable>} />
-    <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" stickyHeaderIndices={[0]} contentContainerStyle={styles.content}>
+    <AppHeader title="Calendar" leading={<IconButton label="Open navigation" onPress={openDrawer}><MenuIcon /></IconButton>} trailing={<Pressable accessibilityRole="button" onPress={() => setSelected(startOfLocalDay(new Date()))} style={styles.todayButton}><Text style={[styles.todayText, { color: theme.accentStrong }]}>Today</Text></Pressable>} />
+    <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" stickyHeaderIndices={[0]} contentContainerStyle={{ paddingBottom: tabBarHeight + spacing.xl }}>
       <View collapsable={false} style={[styles.calendarHeader, { backgroundColor: theme.background, borderBottomColor: theme.borderSubtle }]}>
         <View style={styles.headerContent}>
           <View style={styles.toolbar}>
@@ -188,7 +192,6 @@ export default function CalendarScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingBottom: spacing.xl },
   calendarHeader: { borderBottomWidth: StyleSheet.hairlineWidth },
   headerContent: { maxWidth: layout.maxContentWidth, width: '100%', alignSelf: 'center', paddingHorizontal: spacing.md, paddingTop: spacing.xxs, paddingBottom: spacing.sm, gap: spacing.xxs },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: spacing.xxs },

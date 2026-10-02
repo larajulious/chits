@@ -1,4 +1,4 @@
-export type ChatReturnPath = '/' | '/attachments';
+export type ChatReturnPath = '/' | '/spaces' | '/attachments' | '/calendar';
 
 // Guards callbacks crossing the UI/JS bridge against a newer navigation intent.
 export function createChatTransitionLifecycle() {

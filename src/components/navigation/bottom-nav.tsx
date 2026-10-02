@@ -1,5 +1,5 @@
 import { useContext, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BottomTabBarHeightCallbackContext, type BottomTabBarProps } from 'expo-router/tabs';
@@ -17,23 +17,20 @@ import { spacing } from '@/constants/theme';
 // with a round 58pt Chat button poking 22pt above it, or Sticky's outlined
 // 72pt bar with a speech-bubble Chat button raised 34pt above it.
 
-// The custom bottom-tab-bar for the app's 3 global destinations (Boards, Chat,
-// Attachments) — see PHASE: REDESIGN CHITS BOTTOM NAVIGATION and PHASE: REDESIGN
+// The custom bottom-tab-bar for Notes, Calendar, Chat, Attachments and Spaces —
+// see PHASE: REDESIGN CHITS BOTTOM NAVIGATION and PHASE: REDESIGN
 // CHAT TRANSITION — CONNECTED FLOATING BUTTON. Archive moved to the side drawer
 // (see PHASE: GLOBAL ATTACHMENTS SCREEN) but stays mounted in this same tabs
 // group, just without its own NavItem here. Absolutely positioned over the
 // active screen (not a normal docked flex tab-bar slot) so the transparent
 // margins around the floating pill genuinely show the screen's own content/
 // background instead of an opaque reserved strip — screens opt into the
-// matching bottom clearance themselves via `useBottomTabBarHeight()` (see
-// index.native.tsx, attachments.native.tsx, search.native.tsx). While Chat
-// itself is active, this
-// renders nothing at all
-// (not just hidden — see the early return below) so Chat's own composer can use
-// that space instead of a floating bar sitting over it.
+// matching bottom clearance themselves via `useBottomTabBarHeight()`. Chat and
+// Spaces render without this bar so their own controls can use the bottom edge.
 export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
   const { tokens: theme, styleTokens, styleColors } = useTheme();
   const nav = styleTokens.nav;
+  const compactLabels = useWindowDimensions().width < 375;
   const chat = styleTokens.chat;
   const bubble = styleTokens.chatButton === 'bubble';
   const reportHeight = useContext(BottomTabBarHeightCallbackContext);
@@ -50,7 +47,9 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
   const [travelling, setTravelling] = useState(false);
 
   const boardsRoute = state.routes.find((route) => route.name === 'index');
+  const spacesRoute = state.routes.find((route) => route.name === 'spaces');
   const attachmentsRoute = state.routes.find((route) => route.name === 'attachments');
+  const calendarRoute = state.routes.find((route) => route.name === 'calendar');
   const activeName = state.routes[state.index]?.name;
 
   // "Adjusting state when a prop changes" via setState-during-render (React's own
@@ -79,11 +78,12 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
     void Haptics.selectionAsync();
     setTravelling(true);
     chatButtonRef.current?.measureInWindow((x, y, width, height) => {
-      openChat({ x: x + width / 2, y: y + height / 2, size: Math.max(width, height) }, activeName === 'attachments' ? '/attachments' : '/');
+      const fromPath = activeName === 'spaces' ? '/spaces' : activeName === 'attachments' ? '/attachments' : activeName === 'calendar' ? '/calendar' : '/';
+      openChat({ x: x + width / 2, y: y + height / 2, size: Math.max(width, height) }, fromPath);
     });
   };
 
-  // Boards/Archive (and the idle "Chat" label) fade away first, per the phase's
+  // The tab labels and icons (including the idle "Chat" label) fade away first,
   // choreography — the Chat button itself is handled separately (press bounce +
   // the overlay's traveling clone once tapped), never by this fade.
   const navFadeStyle = useAnimatedStyle(() => {
@@ -92,10 +92,8 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
   });
   const pressedStyle = useAnimatedStyle(() => ({ transform: [{ scale: travelling ? 0 : pressScale.get() }] }));
 
-  // Chat is treated as a launch point, not a resting destination for this bar —
-  // once it's the active tab, this component intentionally renders nothing (see
-  // the file comment above) rather than a "Chat" pill with nothing beside it.
-  if (activeName === 'chat') return null;
+  // Chat and Spaces have their own controls at the bottom of the screen.
+  if (activeName === 'chat' || activeName === 'spaces') return null;
 
   return (
     <Animated.View
@@ -138,9 +136,18 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
             focused={activeName === 'index'}
             accessibilityLabel={`Notes${activeName === 'index' ? '. Current screen.' : ''}`}
             onPress={() => go(boardsRoute?.name)}
+            compact={compactLabels}
+          />
+          <NavItem
+            label="Calendar"
+            icon="calendar-outline"
+            focused={activeName === 'calendar'}
+            accessibilityLabel={`Calendar${activeName === 'calendar' ? '. Current screen.' : ''}`}
+            onPress={() => go(calendarRoute?.name)}
+            compact={compactLabels}
           />
           <View style={styles.centerSlot} pointerEvents="none">
-            <AppText numberOfLines={1} weight={bubble ? '800' : '600'} style={{ fontSize: nav.labelSize, color: bubble ? styleColors.textSecondary : theme.textMuted }}>Chat</AppText>
+            <AppText numberOfLines={1} weight={bubble ? '800' : '600'} style={{ fontSize: compactLabels ? Math.min(nav.labelSize, 10) : nav.labelSize, color: bubble ? styleColors.textSecondary : theme.textMuted }}>Chat</AppText>
           </View>
           <NavItem
             label="Attachments"
@@ -148,6 +155,15 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
             focused={activeName === 'attachments'}
             accessibilityLabel={`Attachments${activeName === 'attachments' ? '. Current screen.' : ''}`}
             onPress={() => go(attachmentsRoute?.name)}
+            compact={compactLabels}
+          />
+          <NavItem
+            label="Spaces"
+            icon="magnet-outline"
+            focused={activeName === 'spaces'}
+            accessibilityLabel={`Spaces${activeName === 'spaces' ? '. Current screen.' : ''}`}
+            onPress={() => go(spacesRoute?.name)}
+            compact={compactLabels}
           />
         </Animated.View>
 
@@ -194,7 +210,7 @@ function enterButtonSettle() {
   };
 }
 
-function NavItem({ label, icon, focused, accessibilityLabel, onPress }: { label: string; icon: IconName; focused: boolean; accessibilityLabel: string; onPress: () => void }) {
+function NavItem({ label, icon, focused, accessibilityLabel, onPress, compact }: { label: string; icon: IconName; focused: boolean; accessibilityLabel: string; onPress: () => void; compact: boolean }) {
   const { tokens: theme, styleTokens, styleColors } = useTheme();
   const nav = styleTokens.nav;
   const pill = nav.activePill;
@@ -212,7 +228,7 @@ function NavItem({ label, icon, focused, accessibilityLabel, onPress }: { label:
           <Icon name={icon} size={22} color={focused ? styleColors.onAccent : styleColors.textSecondary} />
         </View>
       ) : <Icon name={icon} size={23} color={focused ? theme.accent : theme.textMuted} />}
-      <AppText weight={pill ? (focused ? '800' : '700') : focused ? '700' : '500'} style={{ fontSize: nav.labelSize, color: focused ? theme.textPrimary : pill ? styleColors.textSecondary : theme.textMuted }}>{label}</AppText>
+      <AppText numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} weight={pill ? (focused ? '800' : '700') : focused ? '700' : '500'} style={{ width: '100%', textAlign: 'center', fontSize: compact ? Math.min(nav.labelSize, 10) : nav.labelSize, color: focused ? theme.textPrimary : pill ? styleColors.textSecondary : theme.textMuted }}>{label}</AppText>
     </Pressable>
   );
 }

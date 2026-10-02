@@ -11,7 +11,7 @@ import { AppHeader, EmptyState, HeaderGlyph, IconButton, Screen } from '@/compon
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { useTheme } from '@/components/theme-provider';
-import { useStickySheet } from '@/components/ui/surface';
+import { PressableSurface, useStickySheet } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { useVideoThumbnail } from '@/components/chat/message-row';
@@ -403,7 +403,8 @@ function ColumnRow({ name, disabled, onPress }: { name: string; disabled: boolea
 
 export default function UnorganizedScreen() {
   const database = useSQLiteContext();
-  const { tokens: theme } = useTheme();
+  const { tokens: theme, styleTokens, styleColors } = useTheme();
+  const sticky = styleTokens.elevation === 'edge';
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { addToCard, messageId, boardId, openBoardPicker, chitsGuided } = useLocalSearchParams<{ addToCard?: string; messageId?: string; boardId?: string; openBoardPicker?: string; chitsGuided?: string }>();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -572,9 +573,9 @@ export default function UnorganizedScreen() {
           <View style={styles.actionButtons}>
             {!addToCard ? <Pressable disabled={selected.length < 2 || working} accessibilityRole="button" onPress={() => { setError(null); setMergeOpen(true); }} style={styles.textAction}><AppText style={[styles.mergeText, (selected.length < 2 || working) && styles.disabledText]}>Merge</AppText></Pressable> : null}
             <Pressable disabled={working} onPress={() => void archive()} style={styles.textAction}><AppText style={[styles.archiveText, working && styles.disabledText]}>Archive</AppText></Pressable>
-            <Pressable disabled={working} onPress={() => { if (addToCard) void addToExistingCard(); else openAddToBoardSheet(); }} style={[styles.primaryPill, working && styles.disabled]}>
-              <AppText style={styles.primaryPillText}>{addToCard ? 'Add to card' : 'Add to board'}</AppText>
-            </Pressable>
+            <PressableSurface accessibilityRole="button" disabled={working} onPress={() => { if (addToCard) void addToExistingCard(); else openAddToBoardSheet(); }} fill={sticky ? styleColors.accentFill : theme.accent} radius={sticky ? styleTokens.button.radius : 20} edge={sticky ? styleTokens.button.edge : false} pressedStyle={null} style={[styles.primaryPill, working && styles.disabled]}>
+              <AppText weight={sticky ? '800' : '700'} style={[styles.primaryPillText, { color: sticky ? styleColors.onAccent : theme.accentText }]}>{addToCard ? 'Add to card' : 'Add to board'}</AppText>
+            </PressableSurface>
           </View>
         </Animated.View>
       ) : null}
@@ -642,8 +643,8 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   textAction: { minHeight: 40, justifyContent: 'center', paddingHorizontal: spacing.xxs },
   mergeText: { color: tokens.textSecondary, fontWeight: '600', fontSize: 13 },
   archiveText: { color: tokens.danger, fontWeight: '600', fontSize: 13 },
-  primaryPill: { minHeight: 40, justifyContent: 'center', paddingHorizontal: spacing.md, backgroundColor: tokens.accent, borderRadius: 20 },
-  primaryPillText: { color: tokens.accentText, fontWeight: '700', fontSize: 13 },
+  primaryPill: { minHeight: 40, justifyContent: 'center', paddingHorizontal: spacing.md },
+  primaryPillText: { fontSize: 13 },
   disabled: { opacity: 0.42 },
   disabledText: { opacity: 0.42 },
   error: { color: '#fff', backgroundColor: tokens.danger, padding: spacing.sm, textAlign: 'center' },

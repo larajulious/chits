@@ -12,11 +12,9 @@ type IconName = ComponentProps<typeof Ionicons>['name'];
 type Destination = { label: string; path: '/' | '/calendar' | '/archive' | '/settings' | '/onboarding'; icon: IconName };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
-// Boards, Chat, and Attachments are the 3 items in the bottom navigation; Archive
+// Notes, Spaces, Chat, Attachments, and Calendar are in the bottom navigation; Archive
 // moved here into the side drawer alongside Settings (see PHASE: GLOBAL
-// ATTACHMENTS SCREEN) — Boards is listed again here too since the drawer is
-// reachable from every screen, not just Boards itself.
-const boardsDestination: Destination = { label: 'Notes', path: '/', icon: 'reader-outline' };
+// ATTACHMENTS SCREEN). Notes stays in the bottom navigation only.
 const calendarDestination: Destination = { label: 'Calendar', path: '/calendar', icon: 'calendar-outline' };
 const archiveDestination: Destination = { label: 'Archive', path: '/archive', icon: 'archive-outline' };
 const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
@@ -63,7 +61,6 @@ function DrawerContent({ close }: { close: () => void }) {
         <Text accessibilityRole="header" style={[styles.title, { color: tokens.textPrimary }]}>Chits</Text>
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
-        <NavigationRow destination={boardsDestination} pathname={pathname} close={close} />
         <NavigationRow destination={calendarDestination} pathname={pathname} close={close} />
         <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
       </ScrollView>

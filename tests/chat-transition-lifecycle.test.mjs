@@ -19,6 +19,17 @@ test('a balloon visit returns to its origin and navigates exactly once', () => {
   assert.equal(state.close(), null);
 });
 
+test('Chat returns to the Spaces or Calendar tab that opened it', () => {
+  for (const origin of ['/spaces', '/calendar']) {
+    const state = createChatTransitionLifecycle();
+    const token = state.beginOpen(origin);
+    state.navigateOpen(token);
+    state.focus();
+    state.finishOpen(token);
+    assert.deepEqual(state.close(), { balloonVisit: true, returnPath: origin });
+  }
+});
+
 test('rapid back invalidates unfinished navigation and animation callbacks', () => {
   const state = createChatTransitionLifecycle();
   const interrupted = state.beginOpen('/');

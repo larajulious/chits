@@ -15,6 +15,7 @@ import { SpaceSurface } from '@/components/spaces/space-surface';
 import { StickyPaper } from '@/components/spaces/sticky-note';
 import { Toast } from '@/components/ui/primitives';
 import { DEFAULT_SPACE_ID, SPACE_LIST, STICKY_COLORS, type SpaceDefinition, type SpaceId } from '@/constants/spaces';
+import { SPACE_UI } from '@/constants/spaces-theme';
 import { layout } from '@/constants/theme';
 import { createMessageRepository, createSpaceRepository } from '@/db/repositories';
 import { OnboardingMascot } from '@/features/onboarding/components/onboarding-mascot';
@@ -164,7 +165,7 @@ const createStyles = (ui: SpaceUI) => StyleSheet.create({
   cardLabel: { position: 'absolute', left: 12, top: 12 },
   cardLabelShort: { top: 6 },
   cardDescription: { position: 'absolute', left: 12, bottom: 8, maxWidth: '62%', borderRadius: 7, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: 'rgba(18,19,21,0.78)' },
-  cardDescriptionText: { color: ui.paper, fontSize: 11, lineHeight: 14 },
+  cardDescriptionText: { color: SPACE_UI.paper, fontSize: 11, lineHeight: 14 },
   cardCount: { position: 'absolute', right: 12, bottom: 8 },
   check: { position: 'absolute', right: -8, top: -8 },
   footer: { paddingHorizontal: 20, paddingTop: 12, alignSelf: 'center', width: '100%', maxWidth: layout.maxContentWidth, gap: 10 },

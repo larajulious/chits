@@ -163,7 +163,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     id: 'default', category: 'personalities', name: 'Default', description: 'Off-white paper and Chits yellow', palette: null, look: BASE_LOOK,
     shareNote: {
       id: 'default', name: 'Chits', mood: 'Classic sticky note', backgroundType: 'solid',
-      colors: { background: '#F7F8F6', backgroundEnd: '#F7F8F6', surface: '#FFFDF6', textPrimary: '#24231F', textSecondary: '#5F5C52', accent: '#8A6500', decoration: '#FDC102' },
+      colors: { background: '#F7F8F6', backgroundEnd: '#F7F8F6', surface: '#FFFDF6', textPrimary: '#24231F', textSecondary: '#5F5C52', accent: '#7A5C00', decoration: '#FBE47E' },
       fontStyle: 'casual', decorationStyle: 'none', mark: 'tape', align: 'left',
     },
   },

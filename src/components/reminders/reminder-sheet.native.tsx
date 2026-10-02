@@ -117,7 +117,7 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
         <Pressable accessibilityRole="button" accessibilityLabel="Close reminder" style={StyleSheet.absoluteFill} onPress={close} />
         <SafeAreaView edges={['bottom', 'left', 'right']} style={[styles.sheet, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
           <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
-          <ScrollView bounces={false} contentContainerStyle={styles.content}>
+          <ScrollView bounces={false} style={styles.scroll} contentContainerStyle={styles.content}>
             <View style={styles.header}>
               <View style={[styles.headerIcon, { backgroundColor: theme.surfaceElevated }]}><Icon name={existing ? 'notifications' : 'notifications-outline'} size={18} color={accent} /></View>
               <View style={styles.flex}>
@@ -168,13 +168,14 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
               <View accessibilityRole="alert" style={styles.inline}><Icon name="alert-circle-outline" size={16} color={theme.danger} /><AppText style={[styles.inlineText, { color: theme.danger }]}>The reminder couldn’t be set. Please try again.</AppText></View>
             ) : null}
 
+          </ScrollView>
+          <View style={[styles.footer, { borderTopColor: theme.borderSubtle }]}>
+            {existing ? (
+              <Pressable accessibilityRole="button" disabled={busy !== null} onPress={() => void remove()} style={({ pressed }) => [styles.removeButton, pressed && styles.pressed]}>
+                {busy === 'remove' ? <ActivityIndicator size="small" color={theme.danger} /> : <AppText style={[styles.textButtonLabel, { color: theme.danger }]}>Remove Reminder</AppText>}
+              </Pressable>
+            ) : null}
             <View style={styles.actions}>
-              {existing ? (
-                <Pressable accessibilityRole="button" disabled={busy !== null} onPress={() => void remove()} style={({ pressed }) => [styles.textButton, pressed && styles.pressed]}>
-                  {busy === 'remove' ? <ActivityIndicator size="small" color={theme.danger} /> : <AppText style={[styles.textButtonLabel, { color: theme.danger }]}>Remove Reminder</AppText>}
-                </Pressable>
-              ) : null}
-              <View style={styles.flex} />
               <Pressable accessibilityRole="button" disabled={busy !== null} onPress={close} style={({ pressed }) => [styles.textButton, pressed && styles.pressed]}>
                 <AppText style={[styles.textButtonLabel, { color: theme.textSecondary }]}>Cancel</AppText>
               </Pressable>
@@ -188,7 +189,7 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
                 {busy === 'save' ? <ActivityIndicator size="small" color={accentOn} /> : <AppText style={[styles.primaryLabel, { color: accentOn }]}>{primaryLabel}</AppText>}
               </Pressable>
             </View>
-          </ScrollView>
+          </View>
         </SafeAreaView>
       </View>
 
@@ -268,8 +269,9 @@ function FieldButton({ text, label, onPress }: { text: string; label: string; on
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,23,0.34)' },
-  sheet: { maxHeight: '92%', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth, borderBottomWidth: 0 },
+  sheet: { maxHeight: '92%', flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth, borderBottomWidth: 0 },
   handle: { alignSelf: 'center', width: 36, height: 4, marginTop: spacing.xs, borderRadius: 2 },
+  scroll: { flexShrink: 1 },
   content: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.md },
   flex: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
@@ -290,7 +292,9 @@ const styles = StyleSheet.create({
   fieldButtonText: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.sm },
   inlineText: { fontSize: 13, fontWeight: '600' },
-  actions: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.lg },
+  footer: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.md },
+  removeButton: { minHeight: 40, alignSelf: 'flex-start', alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.sm },
+  actions: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.xs },
   textButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.sm },
   textButtonLabel: { fontSize: 15, fontWeight: '600' },
   primary: { minHeight: 46, minWidth: 132, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: radii.control },

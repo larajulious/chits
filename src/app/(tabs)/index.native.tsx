@@ -101,8 +101,8 @@ function CardFilterChips({ chips, filter, onChange }: { chips: CardFilterChip[];
 }
 
 const VIEW_OPTIONS: { key: ViewMode; label: string; accessibilityLabel: string }[] = [
-  { key: 'cards', label: 'Cards', accessibilityLabel: 'Cards view' },
   { key: 'boards', label: 'Boards', accessibilityLabel: 'Boards view' },
+  { key: 'cards', label: 'Cards', accessibilityLabel: 'Cards view' },
 ];
 
 export default function BoardsScreen() {
@@ -145,8 +145,8 @@ export default function BoardsScreen() {
   const showLoader = useChitsLoading(!ready);
   const isNameValid = Boolean(name.trim());
 
-  // Boards | Cards. The screen always opens on Cards; switching is session-local.
-  const [viewMode, setViewMode] = useState<ViewMode>('cards');
+  // Boards | Cards. The screen opens on Boards; switching is session-local.
+  const [viewMode, setViewMode] = useState<ViewMode>('boards');
   const [addNoteOpen, setAddNoteOpen] = useState(false);
   const [cards, setCards] = useState<CardListItem[]>([]);
   // Chat thoughts not yet organized into any board/card — the Cards view
@@ -155,8 +155,8 @@ export default function BoardsScreen() {
   // been filed into a board yet.
   const [unorganizedThoughts, setUnorganizedThoughts] = useState<CardListItem[]>([]);
   // Which chip is active in the Cards view's horizontal filter row — 'all',
-  // 'unorganized', or a specific board id. Not persisted like viewMode; it's a
-  // lightweight, session-local refinement rather than a standing preference.
+  // 'unorganized', or a specific board id. Like viewMode, it's a lightweight,
+  // session-local refinement rather than a standing preference.
   const [cardFilter, setCardFilter] = useState<CardFilter>('all');
   const [cardToast, setCardToast] = useState<string | null>(null);
 

@@ -126,7 +126,7 @@ function PlainTextContent({ text, mode, color }: { text: string; mode: ContentMo
 function TextWithLinks({ text, style }: { text: string; style: StyleProp<TextStyle> }) {
   const { tokens } = useTheme();
   return <AppText style={style}>{parseInlineContent(text).map((segment, index) => segment.kind === 'link'
-    ? <AppText key={`${index}-${segment.text}`} accessibilityRole="link" onPress={() => void Linking.openURL(segment.text)} style={{ color: tokens.accentStrong, textDecorationLine: 'underline' }}>{segment.text}</AppText>
+    ? <AppText key={`${index}-${segment.text}`} accessibilityRole="link" onPress={(event) => { event.stopPropagation(); void Linking.openURL(segment.text); }} style={{ color: tokens.accentStrong, textDecorationLine: 'underline' }}>{segment.text}</AppText>
     : <AppText key={`${index}-${segment.text}`}>{segment.text}</AppText>)}</AppText>;
 }
 
@@ -149,7 +149,7 @@ function StructuredContent({ text, mode, accentColor }: { text: string; mode: Co
   </View>;
 }
 
-export function MessageContentRenderer({ message, mode, focused = false, accentColor, onActions, onHideAgain, renderAttachments }: { message: Message; mode: ContentMode; focused?: boolean; accentColor?: string; onActions?: () => void; onHideAgain?: () => void; renderAttachments?: () => ReactNode }) {
+export function MessageContentRenderer({ message, mode, focused = false, accentColor, onActions, onHideAgain, onPressText, textAccessibilityLabel, renderAttachments }: { message: Message; mode: ContentMode; focused?: boolean; accentColor?: string; onActions?: () => void; onHideAgain?: () => void; onPressText?: () => void; textAccessibilityLabel?: string; renderAttachments?: () => ReactNode }) {
   const { tokens } = useTheme();
   const presentation = classifyMessage(message);
   const actions = onActions ?? (() => undefined);
@@ -160,11 +160,12 @@ export function MessageContentRenderer({ message, mode, focused = false, accentC
     return <QuickThoughtBubble message={message} focused={focused} onActions={actions} onHideAgain={onHideAgain} />;
   }
   const textPresentation = classifyText(message.text);
+  const content = message.text ? textPresentation === 'structured-note'
+    ? <StructuredContent text={message.text} mode="detail" accentColor={accentColor} />
+    : <PlainTextContent text={message.text} mode="detail" color={tokens.textPrimary} /> : null;
   return <View style={styles.detailContent}>
     {message.attachments.length ? renderAttachments?.() : null}
-    {message.text ? textPresentation === 'structured-note'
-      ? <StructuredContent text={message.text} mode="detail" accentColor={accentColor} />
-      : <PlainTextContent text={message.text} mode="detail" color={tokens.textPrimary} /> : null}
+    {content && onPressText ? <Pressable accessibilityRole="button" accessibilityLabel={textAccessibilityLabel ?? 'Edit content'} hitSlop={8} onPress={onPressText} style={({ pressed }) => pressed && styles.pressed}>{content}</Pressable> : content}
   </View>;
 }
 

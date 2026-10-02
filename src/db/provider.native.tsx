@@ -6,6 +6,7 @@ import { ChitsLoader } from '@/components/ui/chits-loader';
 import { discardAbandonedBackupExports, recoverInterruptedRestore } from '@/services/backup-recovery.native';
 import { BackupError } from '@/services/backup-format';
 import { migrateDatabase } from './migrations';
+import { serializeDatabaseStatements } from './serialize-statements';
 
 const OPEN_OPTIONS = { useNewConnection: true };
 class DatabaseBoundary extends Component<PropsWithChildren<{ onRetry: () => void }>, { error: Error | null }> {
@@ -35,6 +36,7 @@ function ReadyDatabase({ children }: PropsWithChildren) {
   }, []);
   const initialize = useCallback(async (database: SQLiteDatabase) => {
     await migrateDatabase(database);
+    serializeDatabaseStatements(database);
     setInitialized(true);
   }, []);
   if (error) throw error;

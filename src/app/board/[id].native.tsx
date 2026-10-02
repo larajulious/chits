@@ -731,7 +731,7 @@ export default function BoardScreen() {
     if (isDestination && placeholderIndex === displayCards.length) rows.push(placeholder);
     return rows;
   };
-  return <Screen edges={['top', 'left', 'right']}><View style={styles.header}>
+  return <Screen edges={['top', 'left', 'right']}><View style={[styles.header, { minHeight: styleTokens.header.minHeight }]}>
       <TopBarBackground />
       <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={({ pressed }) => [styles.headerButton, { backgroundColor: theme.surfaceElevated }, headerTile(pressed), pressed && styles.headerButtonPressed]}><Icon name="chevron-back" size={24} color={theme.textPrimary} /></Pressable>
       <View accessible={false} style={[styles.boardMark, { backgroundColor: board.accent ?? theme.accentSoft }]}><Icon name={resolveBoardIcon(board.icon)} size={19} color={board.accent ? '#FFFFFF' : theme.accentStrong} /></View>
@@ -842,7 +842,7 @@ export default function BoardScreen() {
 
 const styles = StyleSheet.create({
   loading: { flex: 1, textAlign: 'center', textAlignVertical: 'center' }, boardLoader: { flex: 1, alignItems: 'center', justifyContent: 'center' }, back: { fontSize: 30, lineHeight: 30 },
-  header: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
+  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md },
   boardMark: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   headerCopy: { flex: 1, minWidth: 0, paddingHorizontal: spacing.xxs }, boardTitle: { fontSize: 23, lineHeight: 28, fontWeight: '800' }, boardSubtitle: { marginTop: 2, fontSize: 13, lineHeight: 18, fontWeight: '500' },
   headerButton: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 23 }, headerButtonPressed: { opacity: 0.58, transform: [{ scale: 0.96 }] },

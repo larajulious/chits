@@ -80,11 +80,9 @@ function ThemedApp() {
             <Stack.Screen name="card/[id]" />
             <Stack.Screen name="card/edit-content" />
             <Stack.Screen name="share-note" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="spaces/index" />
             <Stack.Screen name="spaces/pick" />
             <Stack.Screen name="spaces/share" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
             <Stack.Screen name="pinned" />
-            <Stack.Screen name="calendar" />
           </Stack>
           <OnboardingLayer />
         </AppDrawerProvider>

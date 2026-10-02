@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View, type LayoutRectangle } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View, type LayoutRectangle, type StyleProp, type ViewStyle } from 'react-native';
 import { Icon } from '@/components/ui/icon';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -63,6 +63,10 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
   const [screenSize, setScreenSize] = useState({ width: window.width, height: window.height });
   const [spaceId, setSpaceId] = useState(initialSpaceId);
   const [notes, setNotes] = useState<PinnedNote[] | null>(null);
+  const currentSpaceRef = useRef(initialSpaceId);
+  const notesCacheRef = useRef<Partial<Record<SpaceId, PinnedNote[]>>>({});
+  const switchRequestRef = useRef(0);
+  const pendingSelectionRef = useRef<SpaceId | null>(null);
   const [counts, setCounts] = useState(EMPTY_COUNTS);
   const [board, setBoard] = useState<LayoutRectangle | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -82,14 +86,17 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
   // Pick a Space (from the side panel) can choose another space while this
   // one waits underneath; coming back shows the one just picked.
   useFocusEffect(useCallback(() => {
-    if (focusNoteId) return;
+    notesCacheRef.current = {};
+    if (focusNoteId || pendingSelectionRef.current) return;
     const saved = repository.getSelectedSpaceSync();
-    if (!saved || saved === spaceId) return;
+    if (!saved || saved === currentSpaceRef.current) return;
+    ++switchRequestRef.current;
+    currentSpaceRef.current = saved;
     setSelectedId(null);
     setViewingId(null);
     setNotes(null);
     setSpaceId(saved);
-  }, [repository, spaceId, focusNoteId]));
+  }, [repository, focusNoteId]));
 
   // Reloads on focus (a note may have changed elsewhere), on every space
   // switch, on any change to a space, and after a failed save (bump `reload`).
@@ -98,18 +105,35 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
   const load = useCallback(() => setReload((value) => value + 1), []);
   useFocusEffect(useCallback(() => {
     let active = true;
+    let request = 0;
     const read = async () => {
-      const [list, nextCounts] = await Promise.all([repository.list(spaceId), repository.counts()]);
-      if (!active) return;
-      setNotes(list);
-      setCounts(nextCounts);
-      if (!focusedOnce.current && focusNoteId) {
-        const note = list.find((entry) => entry.noteId === focusNoteId);
-        if (note) { focusedOnce.current = true; if (!guided) setViewingId(note.id); }
+      const reading = ++request;
+      try {
+        const list = await repository.list(spaceId);
+        if (!active || reading !== request || spaceId !== currentSpaceRef.current) return;
+        notesCacheRef.current[spaceId] = list;
+        setNotes(list);
+        if (!focusedOnce.current && focusNoteId) {
+          const note = list.find((entry) => entry.noteId === focusNoteId);
+          if (note) { focusedOnce.current = true; if (!guided) setViewingId(note.id); }
+        }
+        const nextCounts = await repository.counts();
+        if (!active || reading !== request || spaceId !== currentSpaceRef.current) return;
+        setCounts(nextCounts);
+        // Each space holds at most twelve notes. Warm the other boards after
+        // the visible one so switching can cross-fade without an empty frame.
+        for (const next of SPACE_IDS) {
+          if (!active || reading !== request || spaceId !== currentSpaceRef.current) return;
+          if (next === spaceId || notesCacheRef.current[next]) continue;
+          const nextNotes = await repository.list(next);
+          if (active && reading === request && spaceId === currentSpaceRef.current) notesCacheRef.current[next] = nextNotes;
+        }
+      } catch {
+        if (active && reading === request) setToast('Could not load this space. Try again.');
       }
     };
     void read();
-    const unsubscribe = subscribeToSpaceChanges(() => { void read(); });
+    const unsubscribe = subscribeToSpaceChanges(() => { notesCacheRef.current = {}; void read(); });
     return () => { active = false; unsubscribe(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `reload` only re-runs the read.
   }, [repository, spaceId, reload, focusNoteId, guided]));
@@ -121,14 +145,31 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 2200); return () => clearTimeout(timer); }, [toast]);
 
   const switchSpace = useCallback((next: SpaceId) => {
-    if (next === spaceId) return;
+    if (next === currentSpaceRef.current) return;
+    const request = ++switchRequestRef.current;
     void Haptics.selectionAsync();
-    setSelectedId(null);
-    setViewingId(null);
-    setNotes(null);
-    setSpaceId(next);
-    void repository.setSelectedSpace(next).catch(() => undefined);
-  }, [repository, spaceId]);
+    const show = (list: PinnedNote[]) => {
+      if (request !== switchRequestRef.current) return;
+      currentSpaceRef.current = next;
+      setSelectedId(null);
+      setViewingId(null);
+      setNotes(list);
+      setSpaceId(next);
+      pendingSelectionRef.current = next;
+      void repository.setSelectedSpace(next).then(() => {
+        if (pendingSelectionRef.current === next) pendingSelectionRef.current = null;
+      }, () => {
+        if (pendingSelectionRef.current === next) pendingSelectionRef.current = null;
+        setToast('Could not save the selected space.');
+      });
+    };
+    const cached = notesCacheRef.current[next];
+    if (cached) show(cached);
+    else void repository.list(next).then((list) => {
+      notesCacheRef.current[next] = list;
+      show(list);
+    }, () => { if (request === switchRequestRef.current) setToast('Could not open this space. Try again.'); });
+  }, [repository]);
 
   // Swiping across the space steps through the dock's order: left for the
   // next space, right for the one before. A swipe that starts on a sticky
@@ -148,6 +189,8 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
       .enabled(!overlayOpen)
       .activeOffsetX([-24, 24])
       .failOffsetY([-18, 18])
+      // Gesture invokes this after render; swipeBy reads refs only on release.
+      // eslint-disable-next-line react-hooks/refs
       .onEnd((event) => {
         const far = Math.abs(event.translationX) > 70 || Math.abs(event.velocityX) > 600;
         if (far && event.translationX < 0 && !last) runOnJS(swipeBy)(1);
@@ -255,7 +298,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
     <View pointerEvents="box-none" style={[styles.topBar, { top }]}>
       {/* Each side is two buttons wide (the right has Chat and Share) so the name stays centered. */}
       <View style={styles.sideGroup}>
-        <RoundButton icon="chevron-back" label="Go back" onPress={() => (router.canGoBack() ? router.back() : router.navigate('/'))} />
+        <MagnetButton size={44} icon="add" accessibilityLabel="Stick a note" onPress={openPicker} />
       </View>
       <View style={styles.middle}>
         <View accessible accessibilityRole="header" accessibilityLabel={`${space.name}, ${count} of ${SPACE_CAPACITY} notes`} style={styles.titles}>
@@ -278,7 +321,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
         </Pressable>;
       })}
     </View>
-    <MagnetButton size={DOCK_HEIGHT} icon="add" accessibilityLabel="Stick a note" onPress={openPicker} style={[styles.magnet, { bottom: dockBottom }]} />
+    <RoundButton icon="chevron-back" label="Go back" onPress={() => (router.canGoBack() ? router.back() : router.navigate('/'))} size={DOCK_HEIGHT} style={[styles.bottomBack, { bottom: dockBottom }]} />
     {guideState ? <ChitsGuide text={guideState === 'success' ? 'Perfect spot ✨' : relationship ? 'Drop it anywhere you like. It’s still in Chat.' : 'Drop it anywhere you like.'} bottom={dockBottom + DOCK_HEIGHT + 12} onClose={() => setGuideState(null)} /> : null}
 
     {viewing && !selected ? <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -325,10 +368,10 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
 }
 
 /** A round paper button floating over the surface. */
-function RoundButton({ icon, label, onPress, disabled = false }: { icon: 'chevron-back' | 'share-outline' | 'chatbox-outline'; label: string; onPress: () => void; disabled?: boolean }) {
+function RoundButton({ icon, label, onPress, disabled = false, size = 44, style }: { icon: 'chevron-back' | 'share-outline' | 'chatbox-outline'; label: string; onPress: () => void; disabled?: boolean; size?: number; style?: StyleProp<ViewStyle> }) {
   const { tokens, styleTokens, styleColors } = useTheme();
   const inkSurface = useInkSurface();
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.round, inkSurface({ fill: styleColors.controlFill, radius: styleTokens.header.iconButton.radius, edge: styleTokens.header.iconButton.edge }, pressed), disabled && styles.disabled, pressed && styles.pressed]}>
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.round, size !== 44 && { width: size, height: size, borderRadius: size / 2 }, inkSurface({ fill: styleColors.controlFill, radius: size === 44 ? styleTokens.header.iconButton.radius : size / 2, edge: styleTokens.header.iconButton.edge }, pressed), style, disabled && styles.disabled, pressed && styles.pressed]}>
     <Icon name={icon} size={icon === 'chevron-back' ? 24 : 21} color={styleTokens.outline.width ? tokens.textPrimary : SPACE_UI.ink} style={icon === 'chevron-back' ? { marginLeft: -2 } : undefined} />
   </Pressable>;
 }
@@ -353,7 +396,7 @@ const styles = StyleSheet.create({
   dockPill: { height: 48, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 24, backgroundColor: SPACE_UI.paper },
   dockIcon: { width: 46, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   dockLabel: { fontSize: 14, color: SPACE_UI.ink },
-  magnet: { position: 'absolute', right: 16 },
+  bottomBack: { position: 'absolute', right: 16 },
   disabled: { opacity: 0.45 },
   pressed: { opacity: 0.8 },
 });

@@ -469,7 +469,6 @@ export default function CardDetailScreen() {
   // the board uses — and stays covered here until revealed for this visit.
   const contentHidden = messages.some((message) => message.isHiddenContent);
   const covered = contentHidden && !temporarilyRevealed;
-  const singleThoughtEditable = !covered && messages.length === 1 && Boolean(messages[0]?.text);
 
   const contentAccentStrong = detail.boardAccent ?? theme.accentStrong;
   const paperColor = detail.boardAccent ? tintWithAccent(theme.cardBase, detail.boardAccent, scheme === 'dark' ? 0.16 : 0.1) : theme.cardPaper;
@@ -512,8 +511,7 @@ export default function CardDetailScreen() {
           <View style={styles.contentHeaderActions}>
             {!covered ? <Pressable accessibilityRole="button" accessibilityLabel="Share Note" hitSlop={8} onPress={openShareNote} style={styles.inlineEdit}><Icon name="images-outline" size={16} color={contentAccentStrong} /></Pressable> : null}
             {contentHidden && !covered ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" hitSlop={8} onPress={() => setTemporarilyRevealed(false)} style={styles.inlineEdit}><Icon name="eye-off-outline" size={16} color={theme.textMuted} /><AppText style={[styles.inlineEditText, { color: theme.textMuted }]}>Hide again</AppText></Pressable> : null}
-            {singleThoughtEditable ? <Pressable accessibilityRole="button" accessibilityLabel="Edit content" hitSlop={8} onPress={() => openContentEditor(messages[0])}><AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>Edit</AppText></Pressable>
-              : messages.length > 1 ? <View style={styles.countBadge}><AppText style={styles.countText}>{messages.length}</AppText></View> : null}
+            {messages.length > 1 ? <View style={styles.countBadge}><AppText style={styles.countText}>{messages.length}</AppText></View> : null}
           </View>
         </View>
 
@@ -536,9 +534,8 @@ export default function CardDetailScreen() {
           </Pressable> : messages.map((message, index) => <View key={message.id} style={index > 0 && styles.thought}>
             {messages.length > 1 ? <View style={styles.thoughtHeader}>
               <AppText style={styles.thoughtLabel}>THOUGHT {index + 1}</AppText>
-              {message.text ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit thought ${index + 1}`} hitSlop={8} onPress={() => openContentEditor(message)} style={styles.inlineEdit}><Icon name="create-outline" size={16} color={contentAccentStrong} /><AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>Edit</AppText></Pressable> : null}
             </View> : null}
-            <MessageContentRenderer message={message} mode="detail" accentColor={detail.boardAccent ?? undefined} renderAttachments={() => <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} onLongPress={attachment.type === 'photo' ? () => openPhotoActions(attachment) : undefined} overlay={attachment.type === 'photo' ? <AttachmentActionsButton onPress={() => openPhotoActions(attachment)} style={styles.attachmentActionsOverlay} iconColor="#FFFFFF" /> : undefined} /></View>)}</View>} />
+            <MessageContentRenderer message={message} mode="detail" accentColor={detail.boardAccent ?? undefined} onPressText={message.text ? () => openContentEditor(message) : undefined} textAccessibilityLabel={messages.length > 1 ? `Edit thought ${index + 1}` : 'Edit content'} renderAttachments={() => <View style={styles.attachmentList}>{message.attachments.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} onLongPress={attachment.type === 'photo' ? () => openPhotoActions(attachment) : undefined} overlay={attachment.type === 'photo' ? <AttachmentActionsButton onPress={() => openPhotoActions(attachment)} style={styles.attachmentActionsOverlay} iconColor="#FFFFFF" /> : undefined} /></View>)}</View>} />
             {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={`Add a description to ${messageFallback(message)}`} onPress={() => openContentEditor(message)} style={styles.addDescription}><Icon name="add" size={16} color={contentAccentStrong} /><AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>Add description</AppText></Pressable> : null}
             {index < messages.length - 1 ? <View style={styles.contentThoughtDivider} /> : null}
           </View>)}

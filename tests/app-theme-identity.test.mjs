@@ -49,7 +49,7 @@ test('Default uses the logo palette while honoring the user’s accent color', (
   }
   assert.equal(getThemeTokens('default', 'logo', 'light').background, '#F7F8F6');
   assert.equal(getThemeTokens('default', 'logo', 'dark').background, '#171612');
-  assert.equal(CHITS_THEMES.default.shareNote.colors.decoration, '#FDC102');
+  assert.equal(CHITS_THEMES.default.shareNote.colors.decoration, '#FBE47E');
 });
 
 test('personality themes bring their own palette; the Default accent setting does not leak into them', () => {

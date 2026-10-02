@@ -5,17 +5,18 @@ import { CHITS_THEMES, type AppPalette, type ChitsThemeIdentity, type HeadingFon
 const lightTokens = {
   background: '#F7F8F6', surface: '#FFFFFF', surfaceElevated: '#F0F1EE',
   textPrimary: '#24231F', textSecondary: '#5F5C52', textMuted: '#6E6A60',
-  borderSubtle: '#E5E4DE', accent: '#8A6500', danger: '#B53A35', success: '#36785B',
+  borderSubtle: '#E5E4DE', accent: '#FBE47E', danger: '#B53A35', success: '#36785B',
 } as const;
 const darkTokens = {
   background: '#171612', surface: '#211F19', surfaceElevated: '#2D2A22',
   textPrimary: '#F7F5EB', textSecondary: '#CBC5B4', textMuted: '#A39C8A',
-  borderSubtle: '#3C382E', accent: '#FDC102', danger: '#EE8B82', success: '#68A982',
+  borderSubtle: '#3C382E', accent: '#FBE47E', danger: '#EE8B82', success: '#68A982',
 } as const;
 export const tokens = lightTokens;
 
 export const chatThemes = {
-  logo: { name: 'Chits Yellow', light: { accent: '#8A6500', accentSoft: '#FFF2C7', accentStrong: '#765400', accentText: '#FFFFFF', accentBorder: '#E9CD70' }, dark: { accent: '#FDC102', accentSoft: '#3D3216', accentStrong: '#FFD65C', accentText: '#24200F', accentBorder: '#806723' } },
+  // #FBE47E is pale, so text on it is dark and accentStrong carries readable gold text in light mode.
+  logo: { name: 'Chits Yellow', light: { accent: '#FBE47E', accentSoft: '#FEF6D6', accentStrong: '#7A5C00', accentText: '#2B2410', accentBorder: '#E8CB55' }, dark: { accent: '#FBE47E', accentSoft: '#3A3219', accentStrong: '#FBE47E', accentText: '#2B2410', accentBorder: '#7E6A2C' } },
   light: { name: 'Light', light: { accent: '#0D0D0D', accentSoft: '#F0F0F0', accentStrong: '#0D0D0D', accentText: '#FFFFFF', accentBorder: '#D9D9D9' }, dark: { accent: '#ECECEC', accentSoft: '#303030', accentStrong: '#ECECEC', accentText: '#171717', accentBorder: '#606060' } },
   green: { name: 'Chits Green', light: { accent: '#3D6E5C', accentSoft: '#E5F0EA', accentStrong: '#2D5949', accentText: '#FFFFFF', accentBorder: '#93B7A5' }, dark: { accent: '#4E8468', accentSoft: '#1E3027', accentStrong: '#75A98A', accentText: '#FFFFFF', accentBorder: '#507460' } },
   blue: { name: 'Ocean Blue', light: { accent: '#3D6D9B', accentSoft: '#E6EFF7', accentStrong: '#2D557A', accentText: '#FFFFFF', accentBorder: '#94B5CF' }, dark: { accent: '#5F8EB8', accentSoft: '#1E2D3A', accentStrong: '#83AFD7', accentText: '#FFFFFF', accentBorder: '#597A98' } },

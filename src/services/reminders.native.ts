@@ -21,6 +21,19 @@ export function subscribeToReminderChanges(listener: Listener): () => void {
 function emitReminderChange() { for (const listener of listeners) listener(); }
 
 // ---------------------------------------------------------------------------
+// One reminder change at a time. A sync that reads the records before a new
+// reminder is saved, but the device list after it is scheduled, would cancel
+// that new notification as an orphan. Setting a reminder for the first time
+// makes this likely: the permission prompt sends the app inactive and back,
+// which starts a sync mid-set.
+let queue: Promise<unknown> = Promise.resolve();
+function exclusive<T>(task: () => Promise<T>): Promise<T> {
+  const next = queue.then(task, task);
+  queue = next.catch(() => undefined);
+  return next;
+}
+
+// ---------------------------------------------------------------------------
 // Platform setup.
 
 // Show reminders even while Chits is open (otherwise iOS/Android suppress them).
@@ -106,40 +119,44 @@ export type SetReminderResult = { ok: true } | { ok: false; reason: 'declined' |
  * notification is scheduled before the old one is cancelled and the record is
  * saved, so a failure never leaves the card without its previous reminder.
  */
-export async function setCardReminder(database: SQLiteDatabase, cardId: string, scheduledAt: number): Promise<SetReminderResult> {
-  try {
-    const access = await ensureNotificationPermission();
-    if (access === 'denied') return { ok: false, reason: 'declined' };
-    if (access === 'blocked') return { ok: false, reason: 'blocked' };
-    const repository = createReminderRepository(database);
-    const previous = await repository.get(cardId);
-    const source = (await repository.listForSync()).find((row) => row.cardId === cardId);
-    const body = reminderBody({ hidden: Boolean(source?.hidden), text: source?.text ?? null, title: source?.title ?? null, attachmentType: source?.attachmentType ?? null });
-    const identifier = await scheduleNotification(cardId, scheduledAt, body);
+export function setCardReminder(database: SQLiteDatabase, cardId: string, scheduledAt: number): Promise<SetReminderResult> {
+  return exclusive(async () => {
     try {
-      await repository.save(cardId, scheduledAt, identifier);
+      const access = await ensureNotificationPermission();
+      if (access === 'denied') return { ok: false, reason: 'declined' };
+      if (access === 'blocked') return { ok: false, reason: 'blocked' };
+      const repository = createReminderRepository(database);
+      const previous = await repository.get(cardId);
+      const source = (await repository.listForSync()).find((row) => row.cardId === cardId);
+      const body = reminderBody({ hidden: Boolean(source?.hidden), text: source?.text ?? null, title: source?.title ?? null, attachmentType: source?.attachmentType ?? null });
+      const identifier = await scheduleNotification(cardId, scheduledAt, body);
+      try {
+        await repository.save(cardId, scheduledAt, identifier);
+      } catch (error) {
+        await cancelNotification(identifier);
+        throw error;
+      }
+      if (previous?.notificationId && previous.notificationId !== identifier) await cancelNotification(previous.notificationId);
+      // Also catches any duplicate left over for this card.
+      for (const item of await scheduledReminders()) if (item.cardId === cardId && item.identifier !== identifier) await cancelNotification(item.identifier);
+      emitReminderChange();
+      return { ok: true };
     } catch (error) {
-      await cancelNotification(identifier);
-      throw error;
+      console.warn('[reminders] could not set reminder', { cardId, error });
+      return { ok: false, reason: 'failed' };
     }
-    if (previous?.notificationId && previous.notificationId !== identifier) await cancelNotification(previous.notificationId);
-    // Also catches any duplicate left over for this card.
-    for (const item of await scheduledReminders()) if (item.cardId === cardId && item.identifier !== identifier) await cancelNotification(item.identifier);
-    emitReminderChange();
-    return { ok: true };
-  } catch (error) {
-    console.warn('[reminders] could not set reminder', { cardId, error });
-    return { ok: false, reason: 'failed' };
-  }
+  });
 }
 
-export async function removeCardReminder(database: SQLiteDatabase, cardId: string): Promise<void> {
-  const repository = createReminderRepository(database);
-  const existing = await repository.get(cardId);
-  await cancelNotification(existing?.notificationId);
-  for (const item of await scheduledReminders().catch(() => [])) if (item.cardId === cardId) await cancelNotification(item.identifier);
-  await repository.remove(cardId);
-  emitReminderChange();
+export function removeCardReminder(database: SQLiteDatabase, cardId: string): Promise<void> {
+  return exclusive(async () => {
+    const repository = createReminderRepository(database);
+    const existing = await repository.get(cardId);
+    await cancelNotification(existing?.notificationId);
+    for (const item of await scheduledReminders().catch(() => [])) if (item.cardId === cardId) await cancelNotification(item.identifier);
+    await repository.remove(cardId);
+    emitReminderChange();
+  });
 }
 
 type MessageReminderRow = { messageId: string; scheduledAt: number; notificationId: string | null; text: string | null; hidden: number; attachmentType: 'photo' | 'video' | 'audio' | 'file' | 'text' | null; active: number };
@@ -158,54 +175,60 @@ async function scheduleMessageNotification(messageId: string, scheduledAt: numbe
   });
 }
 
-export async function setMessageReminder(database: SQLiteDatabase, messageId: string, scheduledAt: number): Promise<SetReminderResult> {
-  try {
-    const access = await ensureNotificationPermission();
-    if (access === 'denied') return { ok: false, reason: 'declined' };
-    if (access === 'blocked') return { ok: false, reason: 'blocked' };
-    const row = await database.getFirstAsync<{ text: string | null; hidden: number; attachmentType: MessageReminderRow['attachmentType'] }>(
-      'SELECT m.text, m.is_hidden_content AS hidden, (SELECT a.type FROM attachments a WHERE a.message_id = m.id ORDER BY a.created_at LIMIT 1) AS attachmentType FROM messages m WHERE m.id = ? AND m.deleted_at IS NULL AND m.archived_at IS NULL', messageId);
-    if (!row) return { ok: false, reason: 'failed' };
-    const previous = await getMessageReminder(database, messageId);
-    const body = reminderBody({ text: row.text, hidden: row.hidden === 1, attachmentType: row.attachmentType, title: null });
-    const notificationId = await scheduleMessageNotification(messageId, scheduledAt, body);
-    const now = Date.now();
+export function setMessageReminder(database: SQLiteDatabase, messageId: string, scheduledAt: number): Promise<SetReminderResult> {
+  return exclusive(async () => {
     try {
-      await database.runAsync('INSERT INTO message_reminders (message_id, scheduled_at, notification_id, completed_at, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?) ON CONFLICT(message_id) DO UPDATE SET scheduled_at = excluded.scheduled_at, notification_id = excluded.notification_id, completed_at = NULL, updated_at = excluded.updated_at', messageId, scheduledAt, notificationId, now, now);
-    } catch (error) { await cancelNotification(notificationId); throw error; }
-    await cancelNotification(previous?.notificationId);
-    for (const item of await messageNotifications()) if (item.content.data?.messageId === messageId && item.identifier !== notificationId) await cancelNotification(item.identifier);
+      const access = await ensureNotificationPermission();
+      if (access === 'denied') return { ok: false, reason: 'declined' };
+      if (access === 'blocked') return { ok: false, reason: 'blocked' };
+      const row = await database.getFirstAsync<{ text: string | null; hidden: number; attachmentType: MessageReminderRow['attachmentType'] }>(
+        'SELECT m.text, m.is_hidden_content AS hidden, (SELECT a.type FROM attachments a WHERE a.message_id = m.id ORDER BY a.created_at LIMIT 1) AS attachmentType FROM messages m WHERE m.id = ? AND m.deleted_at IS NULL AND m.archived_at IS NULL', messageId);
+      if (!row) return { ok: false, reason: 'failed' };
+      const previous = await getMessageReminder(database, messageId);
+      const body = reminderBody({ text: row.text, hidden: row.hidden === 1, attachmentType: row.attachmentType, title: null });
+      const notificationId = await scheduleMessageNotification(messageId, scheduledAt, body);
+      const now = Date.now();
+      try {
+        await database.runAsync('INSERT INTO message_reminders (message_id, scheduled_at, notification_id, completed_at, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?) ON CONFLICT(message_id) DO UPDATE SET scheduled_at = excluded.scheduled_at, notification_id = excluded.notification_id, completed_at = NULL, updated_at = excluded.updated_at', messageId, scheduledAt, notificationId, now, now);
+      } catch (error) { await cancelNotification(notificationId); throw error; }
+      await cancelNotification(previous?.notificationId);
+      for (const item of await messageNotifications()) if (item.content.data?.messageId === messageId && item.identifier !== notificationId) await cancelNotification(item.identifier);
+      emitReminderChange();
+      return { ok: true };
+    } catch (error) {
+      console.warn('[reminders] could not set message reminder', { messageId, error });
+      return { ok: false, reason: 'failed' };
+    }
+  });
+}
+
+export function removeMessageReminder(database: SQLiteDatabase, messageId: string): Promise<void> {
+  return exclusive(async () => {
+    const existing = await getMessageReminder(database, messageId);
+    await cancelNotification(existing?.notificationId);
+    for (const item of await messageNotifications()) if (item.content.data?.messageId === messageId) await cancelNotification(item.identifier);
+    await database.runAsync('DELETE FROM message_reminders WHERE message_id = ?', messageId);
     emitReminderChange();
-    return { ok: true };
-  } catch (error) {
-    console.warn('[reminders] could not set message reminder', { messageId, error });
-    return { ok: false, reason: 'failed' };
-  }
+  });
 }
 
-export async function removeMessageReminder(database: SQLiteDatabase, messageId: string) {
-  const existing = await getMessageReminder(database, messageId);
-  await cancelNotification(existing?.notificationId);
-  for (const item of await messageNotifications()) if (item.content.data?.messageId === messageId) await cancelNotification(item.identifier);
-  await database.runAsync('DELETE FROM message_reminders WHERE message_id = ?', messageId);
-  emitReminderChange();
-}
-
-export async function completeReminder(database: SQLiteDatabase, kind: 'card' | 'message', id: string) {
-  if (kind === 'card') {
-    const repository = createReminderRepository(database);
-    const previous = await repository.get(id);
-    await repository.complete(id);
-    await cancelNotification(previous?.notificationId);
-    for (const item of await scheduledReminders()) if (item.cardId === id) await cancelNotification(item.identifier);
-  } else {
-    const previous = await getMessageReminder(database, id);
-    const now = Date.now();
-    await database.runAsync('UPDATE message_reminders SET completed_at = ?, notification_id = NULL, updated_at = ? WHERE message_id = ? AND completed_at IS NULL', now, now, id);
-    await cancelNotification(previous?.notificationId);
-    for (const item of await messageNotifications()) if (item.content.data?.messageId === id) await cancelNotification(item.identifier);
-  }
-  emitReminderChange();
+export function completeReminder(database: SQLiteDatabase, kind: 'card' | 'message', id: string): Promise<void> {
+  return exclusive(async () => {
+    if (kind === 'card') {
+      const repository = createReminderRepository(database);
+      const previous = await repository.get(id);
+      await repository.complete(id);
+      await cancelNotification(previous?.notificationId);
+      for (const item of await scheduledReminders()) if (item.cardId === id) await cancelNotification(item.identifier);
+    } else {
+      const previous = await getMessageReminder(database, id);
+      const now = Date.now();
+      await database.runAsync('UPDATE message_reminders SET completed_at = ?, notification_id = NULL, updated_at = ? WHERE message_id = ? AND completed_at IS NULL', now, now, id);
+      await cancelNotification(previous?.notificationId);
+      for (const item of await messageNotifications()) if (item.content.data?.messageId === id) await cancelNotification(item.identifier);
+    }
+    emitReminderChange();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -298,7 +321,7 @@ export function requestReminderSync(): Promise<void> {
   if (running) { rerun = true; return running; }
   running = (async () => {
     try {
-      do { rerun = false; await runSync(database); } while (rerun && !syncPaused && syncDatabase === database);
+      do { rerun = false; await exclusive(() => runSync(database)); } while (rerun && !syncPaused && syncDatabase === database);
     } catch (error) {
       console.warn('[reminders] sync failed', error);
     } finally {

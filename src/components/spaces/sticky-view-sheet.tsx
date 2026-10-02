@@ -55,11 +55,7 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
   const scrollRef = useRef<ScrollView>(null);
   const sheetWidth = Math.min(window.width - insets.left - insets.right, 600);
   const contentWidth = sheetWidth - 40;
-  // The sheet sits on the screen's bottom edge (its paper runs under a
-  // system navigation bar) with the actions as its last row, so its height
-  // always includes them; only the note scrolls on short screens. The room
-  // under the actions is the device's own bottom inset — a 3-button bar, a
-  // gesture handle, or nothing — plus a little air.
+  // The action row stays inside the sheet while the note alone scrolls on short screens.
   const maxSheetHeight = Math.max(0, Math.min(viewportHeight * 0.9, viewportHeight - insets.top - 12));
   const footerInset = Math.max(insets.bottom, 12) + 8;
   // Tagged with the note it belongs to, so a different note never shows a stale read.

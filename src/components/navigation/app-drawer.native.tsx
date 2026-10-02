@@ -20,7 +20,9 @@ import { useStickySurface } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { LabelTape } from '@/components/spaces/label-tape';
-import { Toast } from '@/components/ui/primitives';
+import { SegmentedControl, Toast } from '@/components/ui/primitives';
+import { OnboardingMascot } from '@/features/onboarding/components/onboarding-mascot';
+import { APP_STYLE_NAMES, APP_STYLES, type AppStyle } from '@/constants/style-tokens';
 import { spacing } from '@/constants/theme';
 import { createBoardRepository, createSpaceRepository } from '@/db/repositories';
 import { getCalendarItems } from '@/features/calendar/calendar-data';
@@ -42,13 +44,12 @@ type ContextItem = {
 type IconName = ComponentProps<typeof Ionicons>['name'];
 type Destination = { label: string; path: '/' | '/spaces/pick' | '/calendar' | '/archive' | '/settings' | '/onboarding'; icon: IconName };
 
+const STYLE_OPTIONS = APP_STYLES.map((key: AppStyle) => ({ key, label: APP_STYLE_NAMES[key], accessibilityLabel: `${APP_STYLE_NAMES[key]} style` }));
+
 const DrawerContext = createContext<DrawerContextValue | null>(null);
-// Boards, Chat, and Attachments are the 3 items in the bottom navigation (see
-// PHASE: REDESIGN CHITS BOTTOM NAVIGATION); Archive moved here into the side
-// drawer alongside Settings (see PHASE: GLOBAL ATTACHMENTS SCREEN) — Boards is
-// listed again here too since the drawer is reachable from every screen, not
-// just Boards itself.
-const boardsDestination: Destination = { label: 'Notes', path: '/', icon: 'reader-outline' };
+// Notes, Spaces, Chat, Attachments, and Calendar are in the bottom navigation;
+// Archive moved here into the side drawer alongside Settings (see PHASE: GLOBAL
+// ATTACHMENTS SCREEN). Notes stays in the bottom navigation only.
 // Spaces: notes stuck on a fridge, desk, cork board or wall. Its own word (and a
 // magnet, not a pin) so it's never confused with the PINNED shortcuts below.
 // It opens on Pick a Space every time, so choosing where to go comes first.
@@ -192,7 +193,7 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   const database = useSQLiteContext();
   const repository = useMemo(() => createBoardRepository(database), [database]);
   const pathname = usePathname();
-  const { tokens, styleTokens, styleColors } = useTheme();
+  const { tokens, styleTokens, styleColors, style, setStyle } = useTheme();
   const sticky = useStickySurface();
   const [pinned, setPinned] = useState<ContextItem[]>([]);
   const [recent, setRecent] = useState<ContextItem[]>([]);
@@ -240,6 +241,13 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
 
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 1800); return () => clearTimeout(timer); }, [toast]);
 
+  // Same setting as Settings → Appearance → Style; the drawer restyles in place.
+  const changeStyle = useCallback((next: AppStyle) => {
+    if (next === style) return;
+    void Haptics.selectionAsync();
+    setStyle(next).catch(() => setToast('Style could not be saved'));
+  }, [setStyle, style]);
+
   // Immediately reversible (pin it again elsewhere), so no confirmation — just an
   // optimistic removal with a subtle toast, rolled back only if the write fails.
   const unpinItem = useCallback((item: ContextItem) => {
@@ -258,10 +266,10 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   return (
     <SafeAreaView accessibilityViewIsModal style={[styles.drawer, { backgroundColor: tokens.surface, borderColor: tokens.borderSubtle }, styleTokens.outline.width ? [{ borderRightWidth: styleTokens.outline.width, borderColor: styleColors.outline }, sticky({ edge: styleTokens.nav.edge, edgeSide: 'right', outline: false })] : null]}>
       <View style={styles.top}>
+        <OnboardingMascot size={36} accessible={false} />
         <AppText accessibilityRole="header" variant="display" style={[styles.title, { color: tokens.textPrimary }]}>{appTitle}</AppText>
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
-        <NavigationRow destination={boardsDestination} pathname={pathname} close={close} />
         <NavigationRow destination={spacesDestination} pathname={pathname} close={close} badge={stuckCount} />
         <NavigationRow destination={calendarDestination} pathname={pathname} close={close} badge={incomingReminderCount} badgeNoun="reminder" />
         <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
@@ -272,6 +280,9 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
       {/* Settings is app chrome, not a place your notes live — it stays pinned
           to the bottom instead of sitting in the list of destinations. */}
       <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }, styleTokens.outline.width ? { borderTopWidth: styleTokens.outline.width, borderTopColor: styleColors.outline } : null]}>
+        <View accessibilityRole="radiogroup" accessibilityLabel="Style" style={styles.styleToggle}>
+          <SegmentedControl options={STYLE_OPTIONS} value={style} onChange={changeStyle} />
+        </View>
         <NavigationRow destination={gettingStartedDestination} pathname={pathname} close={close} />
         <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
       </View>
@@ -352,7 +363,7 @@ const styles = StyleSheet.create({
     minHeight: 56,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.xs,
     paddingHorizontal: spacing.lg,
   },
   title: { fontSize: 21, fontWeight: '600' },
@@ -372,6 +383,7 @@ const styles = StyleSheet.create({
   iconSlot: { width: 30, alignItems: 'center', justifyContent: 'center' },
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.lg, marginTop: spacing.sm },
   footer: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: spacing.xs },
+  styleToggle: { marginHorizontal: spacing.md, marginTop: spacing.xs, marginBottom: spacing.xxs },
   section: { paddingTop: spacing.sm },
   sectionHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg },
   sectionLabel: { flex: 1, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
