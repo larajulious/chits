@@ -1,0 +1,88 @@
+import type { PropsWithChildren, ReactNode } from 'react';
+import { Pressable, StyleSheet, View, type PressableProps, type StyleProp, type ViewProps, type ViewStyle } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
+
+import { useTheme } from '@/components/theme-provider';
+import type { Corners, SoftShadow, StyleColors, StyleTokens } from '@/constants/style-tokens';
+
+export type Radius = number | Corners;
+
+export type SurfaceOptions = {
+  fill?: string;
+  radius?: Radius;
+  /** Classic's hairline border color; Sticky draws its outline in its place. */
+  border?: string;
+  /** Sticky's outline width (default: the style's); false for none. */
+  outline?: number | false;
+  outlineColor?: string;
+  /** Classic's soft shadow, by name or exact values; false for none. */
+  shadow?: keyof StyleTokens['shadow'] | SoftShadow | false;
+  /** Sticky's solid bottom edge depth (default: the style's); false for none. */
+  edge?: number | false;
+  edgeColor?: string;
+};
+
+export function radiusStyle(radius: Radius | undefined): ViewStyle {
+  if (radius === undefined) return {};
+  if (typeof radius === 'number') return { borderRadius: radius };
+  return { borderTopLeftRadius: radius.topLeft, borderTopRightRadius: radius.topRight, borderBottomRightRadius: radius.bottomRight, borderBottomLeftRadius: radius.bottomLeft };
+}
+
+/** How deep a surface's edge is under the active style (0 under Classic). */
+export function edgeDepth(tokens: StyleTokens, edge: SurfaceOptions['edge']): number {
+  if (tokens.elevation !== 'edge' || edge === false) return 0;
+  return edge ?? tokens.edgeDepth;
+}
+
+/**
+ * A surface's border, corners and depth under the active style. Classic:
+ * an optional hairline and a soft shadow. Sticky: an outline and a solid,
+ * unblurred edge under the bottom (drawn outside the box, so it takes no
+ * layout space — leave room for it below).
+ */
+export function surfaceStyle(tokens: StyleTokens, colors: StyleColors, options: SurfaceOptions, sunk = false): ViewStyle {
+  const { fill, radius, border, outline, outlineColor, shadow, edge, edgeColor } = options;
+  const style: ViewStyle = { ...radiusStyle(radius), ...(fill ? { backgroundColor: fill } : null) };
+  if (tokens.elevation === 'soft') {
+    if (border) Object.assign(style, { borderWidth: StyleSheet.hairlineWidth, borderColor: border });
+    const soft = typeof shadow === 'string' ? tokens.shadow[shadow] : shadow || null;
+    if (soft) Object.assign(style, { shadowColor: '#000', shadowOpacity: soft.opacity, shadowRadius: soft.radius, shadowOffset: { width: 0, height: soft.offsetY }, elevation: soft.elevation });
+    return style;
+  }
+  const width = outline === false ? 0 : outline ?? tokens.outline.width;
+  if (width > 0) Object.assign(style, { borderWidth: width, borderColor: outlineColor ?? colors.outline });
+  const depth = edgeDepth(tokens, edge);
+  if (depth > 0 && !sunk) style.boxShadow = `0px ${depth}px 0px 0px ${edgeColor ?? colors.outline}`;
+  return style;
+}
+
+export function Surface({ children, style, fill, radius, border, outline, outlineColor, shadow, edge, edgeColor, ...props }: PropsWithChildren<ViewProps & SurfaceOptions>) {
+  const { styleTokens, styleColors } = useTheme();
+  return <View {...props} style={[surfaceStyle(styleTokens, styleColors, { fill, radius, border, outline, outlineColor, shadow, edge, edgeColor }), style]}>{children}</View>;
+}
+
+const CLASSIC_PRESSED: ViewStyle = { opacity: 0.6 };
+
+/**
+ * A tappable Surface. Classic keeps each control's own pressed look
+ * (`pressedStyle`); Sticky sinks the surface onto its edge — or, with Reduce
+ * Motion on, just loses the edge and dims slightly instead of moving.
+ */
+export function PressableSurface({ children, style, pressedStyle = CLASSIC_PRESSED, fill, radius, border, outline, outlineColor, shadow, edge, edgeColor, ...props }: Omit<PressableProps, 'style' | 'children'> & SurfaceOptions & { children?: ReactNode; style?: StyleProp<ViewStyle>; pressedStyle?: StyleProp<ViewStyle> }) {
+  const { styleTokens, styleColors } = useTheme();
+  const reduceMotion = useReducedMotion();
+  const options = { fill, radius, border, outline, outlineColor, shadow, edge, edgeColor };
+  const depth = edgeDepth(styleTokens, edge);
+  return <Pressable
+    {...props}
+    style={({ pressed }) => {
+      const sink = pressed && styleTokens.press === 'sink' && depth > 0;
+      return [
+        surfaceStyle(styleTokens, styleColors, options, sink),
+        style,
+        pressed && styleTokens.press === 'ripple' && pressedStyle,
+        sink && (reduceMotion ? { opacity: 0.85 } : { transform: [{ translateY: depth }] }),
+      ];
+    }}
+  >{children}</Pressable>;
+}

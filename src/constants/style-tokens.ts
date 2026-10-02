@@ -197,16 +197,21 @@ export function styleColors(palette: AppPalette): StyleColors {
   // 2px strokes clearly visible without the glare of pure text color.
   const outline = lightPage ? STICKY_INK : mix(palette.textPrimary, palette.background, 0.25);
   const controlFill = lightPage ? '#FFFFFF' : palette.surface;
-  const cardTint = mix(palette.accent, '#FFFFFF', 0.6);
-  const cardInk = STICKY_INK;
   return {
     outline,
     controlFill,
     textSecondary: lightPage ? readable(STICKY_SECONDARY, palette.textSecondary, controlFill) : palette.textSecondary,
     ...accentPair(palette),
-    cardTint, cardEdge: palette.accent, tapeEdge: mix(palette.accent, '#000000', 0.2),
-    cardInk, cardInkMuted: readable(STICKY_SECONDARY, cardInk, cardTint),
+    ...noteColors(palette.accent),
   };
+}
+
+export type NoteColors = Pick<StyleColors, 'cardTint' | 'cardEdge' | 'tapeEdge' | 'cardInk' | 'cardInkMuted'>;
+
+/** A Sticky note's paper in a given accent: its board's, or the palette's. */
+export function noteColors(accent: string): NoteColors {
+  const cardTint = mix(accent, '#FFFFFF', 0.6);
+  return { cardTint, cardEdge: accent, tapeEdge: mix(accent, '#000000', 0.2), cardInk: STICKY_INK, cardInkMuted: readable(STICKY_SECONDARY, STICKY_INK, cardTint) };
 }
 
 /** A small stable angle for a note, from its id, in [-max, max] degrees. */

@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import ts from 'typescript';
 
+import { BOARD_ACCENTS } from '../src/constants/board-appearance.ts';
 import { CHITS_THEME_IDS } from '../src/constants/chits-themes.ts';
-import { APP_STYLES, STYLE_PRESETS, contrast, mix, resolveAppStyle, stableTilt, styleColors } from '../src/constants/style-tokens.ts';
+import { APP_STYLES, STYLE_PRESETS, contrast, mix, noteColors, resolveAppStyle, stableTilt, styleColors } from '../src/constants/style-tokens.ts';
 
 // theme.ts imports react-native, so load it transpiled with a tiny Platform stub.
 const stub = (code) => `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
@@ -76,6 +77,16 @@ test('Sticky stays legible on every palette, light and dark', () => {
     check(label, 'accent label', colors.onAccent, colors.accentFill, 4.5);
   }
   assert.deepEqual(failures, []);
+});
+
+test('notes on a colored board read in that board\'s color too', () => {
+  for (const { value } of BOARD_ACCENTS) {
+    if (!value) continue;
+    const colors = noteColors(value);
+    assert.equal(colors.cardTint, mix(value, '#FFFFFF', 0.6));
+    assert.ok(contrast(colors.cardInk, colors.cardTint) >= 4.5, value);
+    assert.ok(contrast(colors.cardInkMuted, colors.cardTint) >= 4.5, value);
+  }
 });
 
 test('a note keeps the same small tape angle on every render', () => {

@@ -1,12 +1,13 @@
-import { memo, useState, type ComponentProps } from 'react';
+import { memo, useContext, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Decorations } from '@/components/share-note/share-note-template';
 import { useTheme } from '@/components/theme-provider';
+import { TileInkContext } from './controls';
+import { Icon, type IconName } from './icon';
 import { TOP_BAR_IMAGE_SCRIM } from '@/constants/chits-themes';
 import { THEME_IMAGES } from '@/constants/theme-images';
 import { SHARE_NOTE_DESIGN_WIDTH } from '@/services/share-note';
@@ -22,10 +23,11 @@ export function useHeaderInk() {
     : { ink: tokens.textPrimary, inkMuted: tokens.textMuted, border: tokens.borderSubtle, banded: false };
 }
 
-/** A header icon that stays readable on the theme's top bar. */
-export function HeaderIcon({ muted = false, ...props }: Omit<ComponentProps<typeof Ionicons>, 'color'> & { muted?: boolean }) {
+/** A header icon that stays readable on the theme's top bar (or on its button's tile). */
+export function HeaderIcon({ name, size, muted = false }: { name: IconName; size: number; muted?: boolean }) {
   const { ink, inkMuted } = useHeaderInk();
-  return <Ionicons accessible={false} {...props} color={muted ? inkMuted : ink} />;
+  const tileInk = useContext(TileInkContext);
+  return <Icon name={name} size={size} color={tileInk ?? (muted ? inkMuted : ink)} />;
 }
 
 /**
@@ -34,9 +36,11 @@ export function HeaderIcon({ muted = false, ...props }: Omit<ComponentProps<type
  * Chits; colored like every other header icon.
  */
 export function MenuIcon({ size = 24 }: { size?: number }) {
-  const { ink } = useHeaderInk();
+  const { ink: headerInk } = useHeaderInk();
+  const { styleTokens } = useTheme();
+  const ink = useContext(TileInkContext) ?? headerInk;
   const unit = size / 24;
-  const thickness = Math.max(2, 2 * unit);
+  const thickness = Math.max(styleTokens.iconStroke || 2, 2 * unit);
   return <View accessible={false} style={{ width: size, height: size, justifyContent: 'center', gap: 4 * unit, paddingLeft: 3 * unit }}>
     {[18, 13, 8].map((width) => <View key={width} style={{ width: width * unit, height: thickness, borderRadius: thickness / 2, backgroundColor: ink }} />)}
   </View>;
