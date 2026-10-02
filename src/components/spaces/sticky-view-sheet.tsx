@@ -64,15 +64,21 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
   const footerInset = Math.max(insets.bottom, 12) + 8;
   // Tagged with the note it belongs to, so a different note never shows a stale read.
   const [loaded, setLoaded] = useState<{ noteId: string; detail: SpaceNoteDetail } | null>(null);
+  const [failedNoteId, setFailedNoteId] = useState<string | null>(null);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
   const detail = loaded?.noteId === note.noteId ? loaded.detail : null;
+  // Slide in once the note's details are read (a local query, a few ms), so
+  // the sheet's height is final before it animates: on Android a sheet that
+  // grows mid-animation can keep its first height and push the actions out
+  // of view. A failed read still opens with what the note already has.
+  const ready = detail !== null || failedNoteId === note.noteId;
   const space = SPACES[note.spaceId];
   const paper = paperColor(note.color);
   const isCard = note.kind === 'card';
 
   useEffect(() => {
     let active = true;
-    void repository.readNote(note.kind, note.noteId).then((next) => { if (active) setLoaded({ noteId: note.noteId, detail: next }); }, () => undefined);
+    void repository.readNote(note.kind, note.noteId).then((next) => { if (active) setLoaded({ noteId: note.noteId, detail: next }); }, () => { if (active) setFailedNoteId(note.noteId); });
     return () => { active = false; };
   }, [repository, note.kind, note.noteId]);
   useEffect(() => {
@@ -117,6 +123,7 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
     </Pressable>
   </>;
 
+  if (!ready) return null;
   return <>
     <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, shapes.sheet, { width: sheetWidth, left: insets.left + (window.width - insets.left - insets.right - sheetWidth) / 2, maxHeight: maxSheetHeight }]}>
     <View style={styles.grabber} />
