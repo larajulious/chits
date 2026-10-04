@@ -27,12 +27,14 @@ import { Icon, type IconName } from '@/components/ui/icon';
 import { CONTENT_RANGE, useChatTransition } from '@/components/navigation/chat-transition';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { ChatComposerSurface } from '@/components/chat/chat-composer-surface';
+import { FullscreenComposer } from '@/components/chat/fullscreen-composer';
+import { readChatDraft, saveChatComposer, writeChatDraft } from '@/services/chat-composer';
 import { BackgroundReadabilityProvider } from '@/components/chat/background-readability';
 import { ChatWallpaper } from '@/components/chat/chat-wallpaper';
 import { ChatThemeBackdrop } from '@/components/chat/chat-theme-backdrop';
 import { useChatBackground } from '@/components/chat/chat-background-context';
 import { subscribeToAttachmentChanges } from '@/services/attachment-changes';
-import { EmptyState, Screen, Toast, TopBarBackground } from '@/components/ui/primitives';
+import { EmptyState, IconButton, Screen, Toast, TopBarBackground } from '@/components/ui/primitives';
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
 import { radii, spacing } from '@/constants/theme';
 import { createMessageRepository } from '@/db/repositories';
@@ -306,6 +308,17 @@ export default function ChatScreen() {
   const [olderError, setOlderError] = useState(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [draft, setDraft] = useState('');
+  const [fullscreenEditing, setFullscreenEditing] = useState(false);
+  const [savedDraftMessageId, setSavedDraftMessageId] = useState<string | null>(null);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const draftTouched = useRef(false);
+  const savingComposer = useRef(false);
+  const draftWrite = useRef<Promise<void>>(Promise.resolve());
+  const persistDraft = useCallback((text: string, messageId: string | null) => {
+    const pending = draftWrite.current.catch(() => undefined).then(() => writeChatDraft(database, text, messageId));
+    draftWrite.current = pending;
+    return pending;
+  }, [database]);
   const [attachmentDraft, setAttachmentDraft] = useState<AttachmentDraft | null>(null);
   const [editing, setEditing] = useState<Message | null>(null);
   const [selected, setSelected] = useState<Message | null>(null);
@@ -364,7 +377,7 @@ export default function ChatScreen() {
   const [searching, setSearching] = useState(false);
   const chatFocused = useRef(false);
   const [organizationSuccess, setOrganizationSuccess] = useState<string | null>(null);
-  const { suggestion, onSent: onOrganizationSent, dismiss: dismissSuggestion, hide: hideSuggestion, confirmShown } = useChitsOrganization(() => chatFocused.current && AppState.currentState !== 'background' && AppState.currentState !== 'inactive' && !draft.trim() && !attachmentDraft && !attachmentPickerOpen && !isRecordingAudio && !editing && !selected && !reminderMessageId && !searchOpen && !organizationSuccess && !isSaving);
+  const { suggestion, onSent: onOrganizationSent, dismiss: dismissSuggestion, hide: hideSuggestion, confirmShown } = useChitsOrganization(() => chatFocused.current && AppState.currentState !== 'background' && AppState.currentState !== 'inactive' && !fullscreenEditing && !draft.trim() && !attachmentDraft && !attachmentPickerOpen && !isRecordingAudio && !editing && !selected && !reminderMessageId && !searchOpen && !organizationSuccess && !isSaving);
   useFocusEffect(useCallback(() => {
     chatFocused.current = true;
     return () => { chatFocused.current = false; hideSuggestion(); };
@@ -548,31 +561,31 @@ export default function ChatScreen() {
     return () => { showSubscription.remove(); hideSubscription.remove(); };
   }, [animateComposerTransition]);
 
-  // Chat is now reached via a push from Boards rather than staying permanently
-  // mounted, so an in-progress draft would otherwise be lost every time the user
-  // pops back — persist it like chat_title (ChatHeader) so the bottom Chat button
-  // restores exactly where the user left off. A debounced write, not one per
-  // keystroke; the effect's own cleanup cancels a stale pending write whenever the
-  // draft changes again (including the moment a restored draft loads), so a
-  // slower-resolving restore can never be clobbered by an earlier empty-draft write.
+  // Restore the saved editing target with its text, so resuming a fullscreen
+  // draft updates the same message rather than posting it a second time.
   useEffect(() => {
     let active = true;
-    void database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', 'chat_draft_text')
-      .then((row) => { if (active && row?.value) setDraft((current) => current.trim() ? current : row.value); })
-      .catch(() => undefined);
+    void readChatDraft(database, repository)
+      .then((restored) => {
+        if (!active || draftTouched.current) return;
+        setDraft(restored.text);
+        if (restored.editing) { setEditing(restored.editing); setSavedDraftMessageId(restored.editing.id); }
+      })
+      .catch(() => undefined)
+      .finally(() => { if (active) setDraftHydrated(true); });
     return () => { active = false; };
-  }, [database]);
+  }, [database, repository]);
   useEffect(() => {
-    const timer = setTimeout(() => {
-      void database.runAsync('INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at', 'chat_draft_text', draft, Date.now()).catch(() => undefined);
-    }, 400);
+    if (!draftHydrated) return;
+    const timer = setTimeout(() => { void persistDraft(draft, savedDraftMessageId).catch(() => undefined); }, 400);
     return () => clearTimeout(timer);
-  }, [database, draft]);
+  }, [draft, draftHydrated, savedDraftMessageId, persistDraft]);
   // Onboarding's starter chips arrive as ?prefill=…: fill an empty composer (never
   // replace typed text), then clear the param so the same chip works again.
   useEffect(() => {
     if (!prefill) return;
     const frame = requestAnimationFrame(() => {
+      draftTouched.current = true;
       setDraft((current) => (current.trim() ? current : prefill));
       router.setParams({ prefill: undefined });
     });
@@ -784,42 +797,71 @@ export default function ChatScreen() {
     }, 320);
   }, [closeSearch]);
 
-  const send = useCallback(async () => {
-    const text = draft.trim();
-    const canEditEmptyDescription = Boolean(editing?.attachments.length);
-    if ((!text && !attachmentDraft && !canEditEmptyDescription) || isSaving) return;
+  const send = useCallback(async (keepEditing = false) => {
+    if (savingComposer.current) return;
+    savingComposer.current = true;
+    draftTouched.current = true;
     hideSuggestion();
     setIsSaving(true); setError(null);
     try {
+      const message = await saveChatComposer(repository, { text: draft, editing, attachment: attachmentDraft?.attachment ?? null });
+      if (!message) return;
       if (editing) {
-        const updatedAt = await repository.updateText(editing.id, text);
         void requestReminderSync();
-        setFeed((current) => current.map((item) => item.kind === 'message' && item.message.id === editing.id ? { ...item, message: { ...item.message, text, updatedAt } } : item));
-        animateComposerTransition();
-        setEditing(null);
-      } else if (attachmentDraft) {
-        const staged = attachmentDraft;
-        const message = await repository.createAttachmentMessage(staged.attachment, text || null);
-        setFeed((current) => mergeTimeline(current, [{ kind: 'message', message, createdAt: message.createdAt }]));
-        void onOrganizationSent(message);
-        if (attachmentDraftRef.current === staged) { attachmentDraftRef.current = null; animateComposerTransition(); setAttachmentDraft(null); }
-        if (nearBottom.current) pendingScrollToLatest.current = true;
+        setFeed((current) => current.map((item) => item.kind === 'message' && item.message.id === message.id ? { ...item, message: { ...item.message, text: message.text, updatedAt: message.updatedAt } } : item));
+        setPinnedMessages((current) => current.map((item) => item.id === message.id ? { ...item, text: message.text, updatedAt: message.updatedAt } : item));
       } else {
-        const message = await repository.createText(text);
         setFeed((current) => mergeTimeline(current, [{ kind: 'message', message, createdAt: message.createdAt }]));
         void onOrganizationSent(message);
-        if (nearBottom.current) pendingScrollToLatest.current = true;
       }
-      // Deliberately NOT touching composerFocused here — sending must not
-      // collapse the composer while the user is still focused/typing (see
-      // PHASE: FIX INCONSISTENT CHAT COMPOSER EXPANSION, "SEND"). Clearing the
-      // draft only collapses the composer if nothing else (focus, another
-      // draft, editing) is keeping it expanded, via the single composerExpanded
-      // derivation below — not via any explicit collapse call here.
-      setDraft('');
+      if (nearBottom.current) pendingScrollToLatest.current = true;
+      if (attachmentDraft && attachmentDraftRef.current === attachmentDraft) {
+        attachmentDraftRef.current = null;
+        setAttachmentDraft(null);
+      }
+      animateComposerTransition();
+      setEditing(keepEditing ? message : null);
+      setSavedDraftMessageId(keepEditing ? message.id : null);
+      setDraft(keepEditing ? draft : '');
+      // Persist before reporting success or closing. The message is already the
+      // editing target if this write fails, making a retry duplicate-free.
+      try { await persistDraft(keepEditing ? draft : '', keepEditing ? message.id : null); }
+      catch {
+        setEditing(message); setSavedDraftMessageId(message.id); setDraft(draft);
+        setError('The message was saved, but the draft could not be stored. Please try again.');
+        return;
+      }
+      if (!keepEditing && fullscreenEditing) {
+        Keyboard.dismiss();
+        setComposerFocused(false);
+        setFullscreenEditing(false);
+        nearBottom.current = true;
+        requestAnimationFrame(() => scrollToLatest(false));
+      }
+      if (nearBottom.current) pendingScrollToLatest.current = true;
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch { setError(editing ? 'Your edit was not saved. Please try again.' : 'Your thought was not saved. Please try again.'); } finally { setIsSaving(false); }
-  }, [animateComposerTransition, attachmentDraft, draft, editing, isSaving, repository, onOrganizationSent, hideSuggestion]);
+    } catch { setError(editing ? 'Your edit was not saved. Please try again.' : 'Your thought was not saved. Please try again.'); }
+    finally { savingComposer.current = false; setIsSaving(false); }
+  }, [animateComposerTransition, attachmentDraft, draft, editing, repository, onOrganizationSent, hideSuggestion, persistDraft, fullscreenEditing, scrollToLatest]);
+
+  const changeDraft = useCallback((text: string) => {
+    draftTouched.current = true;
+    if (text) hideSuggestion();
+    setDraft(text);
+  }, [hideSuggestion]);
+  const openFullscreenComposer = useCallback(() => {
+    if (savingComposer.current || !draftHydrated) return;
+    hideSuggestion();
+    inputRef.current?.blur();
+    setFullscreenEditing(true);
+  }, [draftHydrated, hideSuggestion]);
+  const closeFullscreenComposer = useCallback(() => {
+    if (savingComposer.current) return;
+    Keyboard.dismiss();
+    setComposerFocused(false);
+    setFullscreenEditing(false);
+    void persistDraft(draft, savedDraftMessageId).catch(() => setError('Your draft could not be stored. Please try again.'));
+  }, [draft, savedDraftMessageId, persistDraft]);
 
   const attachmentSelected = useCallback((next: AttachmentDraft) => {
     attachmentDraftRef.current = next;
@@ -889,8 +931,8 @@ export default function ChatScreen() {
     }, message);
   }, [animatePrivacyTransition, repository, runAction, updateMessagePrivacy]);
 
-  const beginEdit = () => { if (!selected || (selected.isHiddenContent && !temporarilyRevealedIds.has(selected.id))) return; if (attachmentDraft) { setSelected(null); setError('Send or remove the attachment draft before editing another thought.'); return; } animateComposerTransition(); setDraft(selected.text ?? ''); setEditing(selected); setSelected(null); setComposerFocused(true); requestAnimationFrame(() => inputRef.current?.focus()); };
-  const cancelEditing = useCallback(() => { animateComposerTransition(); setEditing(null); setDraft(''); }, [animateComposerTransition]);
+  const beginEdit = () => { if (!selected || (selected.isHiddenContent && !temporarilyRevealedIds.has(selected.id))) return; if (attachmentDraft) { setSelected(null); setError('Send or remove the attachment draft before editing another thought.'); return; } draftTouched.current = true; animateComposerTransition(); setSavedDraftMessageId(null); setDraft(selected.text ?? ''); setEditing(selected); setSelected(null); setComposerFocused(true); requestAnimationFrame(() => inputRef.current?.focus()); };
+  const cancelEditing = useCallback(() => { draftTouched.current = true; animateComposerTransition(); setEditing(null); setSavedDraftMessageId(null); setDraft(''); void persistDraft('', null).catch(() => undefined); }, [animateComposerTransition, persistDraft]);
   const copyChat = (message: Message) => {
     if (message.isHiddenContent && !temporarilyRevealedIds.has(message.id)) return;
     const text = getCopyableMessageText(message);
@@ -1072,8 +1114,8 @@ export default function ChatScreen() {
           {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { backgroundColor: theme.surfaceElevated, borderColor: theme.danger }]}><Icon name="alert-circle-outline" size={18} color={theme.danger} /><AppText style={[styles.errorText, { color: theme.danger }]}>{error}</AppText></View> : null}
           <ChatComposerSurface style={[styles.composer, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, composerExpanded && styles.composerExpanded, composerFocused && { borderColor: theme.accentBorder }, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.panel, outlineColor: composerFocused ? theme.accentStrong : undefined })]}>
             {!isRecordingAudio && attachmentDraft ? <AttachmentDraftPreview draft={attachmentDraft} compact={composerFocused} onRemove={removeAttachmentDraft} /> : null}
-            {!isRecordingAudio ? <TextInput ref={inputRef} accessibilityLabel={attachmentDraft || editing?.attachments.length ? 'Attachment description' : 'Message note'} value={draft} onChangeText={(text) => { if (text) hideSuggestion(); setDraft(text); }} onFocus={focusComposer} onBlur={blurComposer} onContentSizeChange={({ nativeEvent }) => handleContentSizeChange(nativeEvent.contentSize.height)} placeholder={attachmentDraft || editing?.attachments.length ? 'Add a description...' : editing ? 'Edit thought...' : 'Message note...'} placeholderTextColor={theme.textMuted} selectionColor={theme.accent} cursorColor={theme.accent} multiline maxLength={10000} scrollEnabled={!composerFocused || inputMaxed} style={[styles.input, composerExpanded ? styles.inputExpanded : styles.inputCompact, composerExpanded ? styles.inputAutoGrow : styles.inputFixed, inputFont, { color: theme.textPrimary }]} textAlignVertical={composerExpanded ? 'top' : 'center'} /> : null}
-            <View pointerEvents={composerExpanded ? 'auto' : 'box-none'} style={[styles.composerActions, isRecordingAudio ? styles.composerActionsRecording : composerExpanded ? styles.composerActionsExpanded : styles.composerActionsCompact]}><AttachmentPicker ref={attachmentPickerRef} disabled={Boolean(attachmentDraft) || Boolean(editing) || isSaving} onSelected={attachmentSelected} onError={setError} onRecordingChange={recordingChanged} onOpenChange={(open) => { if (open) hideSuggestion(); setAttachmentPickerOpen(open); }} />{!isRecordingAudio ? <Pressable accessibilityRole="button" accessibilityLabel={canSend ? 'Send message' : 'Record audio'} accessibilityState={{ disabled: isSaving }} disabled={isSaving} onPress={() => { if (canSend) void send(); else attachmentPickerRef.current?.startAudio(); }} style={({ pressed }) => [styles.sendButton, { backgroundColor: isSaving ? theme.surfaceElevated : theme.accent }, sticky({ fill: isSaving ? theme.surfaceElevated : styleColors.accentFill, radius: styleTokens.radius.control }, pressed), pressed && styles.sendPressed]}><Icon name={canSend ? 'arrow-up' : 'mic-outline'} size={20} color={styleTokens.outline.width ? styleColors.onAccent : theme.accentText} /></Pressable> : null}</View>
+            {!isRecordingAudio ? <TextInput ref={inputRef} accessibilityLabel={attachmentDraft || editing?.attachments.length ? 'Attachment description' : 'Message note'} value={draft} onChangeText={changeDraft} editable={!isSaving} onFocus={focusComposer} onBlur={blurComposer} onContentSizeChange={({ nativeEvent }) => handleContentSizeChange(nativeEvent.contentSize.height)} placeholder={attachmentDraft || editing?.attachments.length ? 'Add a description...' : editing ? 'Edit thought...' : 'Message note...'} placeholderTextColor={theme.textMuted} selectionColor={theme.accent} cursorColor={theme.accent} multiline maxLength={10000} scrollEnabled={!composerFocused || inputMaxed} style={[styles.input, composerExpanded ? styles.inputExpanded : styles.inputCompact, composerExpanded ? styles.inputAutoGrow : styles.inputFixed, inputFont, { color: theme.textPrimary }]} textAlignVertical={composerExpanded ? 'top' : 'center'} /> : null}
+            <View pointerEvents={composerExpanded ? 'auto' : 'box-none'} style={[styles.composerActions, isRecordingAudio ? styles.composerActionsRecording : composerExpanded ? styles.composerActionsExpanded : styles.composerActionsCompact]}><AttachmentPicker ref={attachmentPickerRef} disabled={Boolean(attachmentDraft) || Boolean(editing) || isSaving} onSelected={attachmentSelected} onError={setError} onRecordingChange={recordingChanged} onOpenChange={(open) => { if (open) hideSuggestion(); setAttachmentPickerOpen(open); }} />{composerExpanded && !isRecordingAudio ? <IconButton label="Edit in fullscreen" disabled={isSaving || !draftHydrated} onPress={openFullscreenComposer}><Icon name="expand-outline" size={20} color={theme.textSecondary} /></IconButton> : null}{!isRecordingAudio ? <Pressable accessibilityRole="button" accessibilityLabel={canSend ? 'Send message' : 'Record audio'} accessibilityState={{ disabled: isSaving }} disabled={isSaving} onPress={() => { if (canSend) void send(); else attachmentPickerRef.current?.startAudio(); }} style={({ pressed }) => [styles.sendButton, { backgroundColor: isSaving ? theme.surfaceElevated : theme.accent }, sticky({ fill: isSaving ? theme.surfaceElevated : styleColors.accentFill, radius: styleTokens.radius.control }, pressed), pressed && styles.sendPressed]}><Icon name={canSend ? 'arrow-up' : 'mic-outline'} size={20} color={styleTokens.outline.width ? styleColors.onAccent : theme.accentText} /></Pressable> : null}</View>
           </ChatComposerSurface>
         </View> : null}
         <View style={styles.headerWrap} pointerEvents="box-none">
@@ -1094,6 +1136,7 @@ export default function ChatScreen() {
           </View>
         </View>
         </View>
+      {fullscreenEditing ? <FullscreenComposer value={draft} onChangeText={changeDraft} onClose={closeFullscreenComposer} onSaveDraft={() => send(true)} onSend={() => { void send(); }} canSave={canSend} saving={isSaving} error={error} savedText={editing ? editing.text ?? '' : null} attachmentLabel={attachmentDraft ? `${attachmentDraft.attachment.type} attachment ready to send` : editing?.attachments.length ? `${editing.attachments.length} attachment${editing.attachments.length === 1 ? '' : 's'} saved in chat` : null} /> : null}
       <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => { afterActionsClosed.current = null; setSelected(null); }} onClosed={runAfterActionsClosed} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} spaceAction={spaceAction} onSpaceAction={runSpaceAction} onAddToBoard={addToBoard} onReminder={openMessageReminder} onDownload={(message) => { setSelected(null); if (message.attachments[0]) void download.exportAttachment(message.attachments[0]); }} onShareNote={(message) => { afterActionsClosed.current = () => router.push(shareNoteHref({ messageId: message.id })); setSelected(null); }} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
       <ReminderSheet key={reminderSheetKey} visible={reminderMessageId !== null} existing={reminderExisting} accent={theme.accent} accentOn={theme.accentText} onClose={() => setReminderMessageId(null)} onSave={async (date) => {
         if (!reminderMessageId) return { ok: false, reason: 'failed' };
@@ -1157,7 +1200,7 @@ const styles = StyleSheet.create({ flex: { flex: 1 }, timelineLayer: { flex: 1 }
   composerDock: { position: 'absolute', right: 0, bottom: 0, left: 0, paddingHorizontal: spacing.md, paddingTop: spacing.xs },
   composer: { alignItems: 'stretch', minHeight: 56, paddingHorizontal: spacing.xs, paddingVertical: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
   composerExpanded: { borderRadius: 20, paddingHorizontal: spacing.sm },
-  composerActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  composerActions: { flexDirection: 'row', alignItems: 'center' },
   composerActionsCompact: { position: 'absolute', top: spacing.xs, right: spacing.xs, left: spacing.xs },
   composerActionsExpanded: { marginTop: spacing.xs },
   composerActionsRecording: { minHeight: 56 },
@@ -1166,6 +1209,6 @@ const styles = StyleSheet.create({ flex: { flex: 1 }, timelineLayer: { flex: 1 }
   inputExpanded: { paddingHorizontal: spacing.xs },
   inputFixed: { height: MIN_COMPOSER_INPUT_HEIGHT },
   inputAutoGrow: { minHeight: MIN_COMPOSER_INPUT_HEIGHT, maxHeight: MAX_COMPOSER_INPUT_HEIGHT },
-  sendButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
+  sendButton: { marginLeft: 'auto', width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
   sendPressed: { opacity: 0.7 },
 });
