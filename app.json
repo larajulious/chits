@@ -10,8 +10,8 @@
     "ios": {
       "icon": "./assets/images/app_icon.png",
       "bundleIdentifier": "com.larajulious.chitsapp",
-      "version": "1.0.2",
-      "buildNumber": "11",
+      "version": "1.0.3",
+      "buildNumber": "12",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryAddUsageDescription": "Chits saves a copy of a photo, video or Share Note image to your photo library only when you choose to save it.",
