@@ -1,12 +1,12 @@
 import Constants from 'expo-constants';
-import { Image } from 'expo-image';
 import * as FS from 'expo-file-system/legacy';
+import { Image } from 'expo-image';
 import { backupDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 import { listContents, NO_COMPRESSION, unzip, zip } from 'react-native-zip-archive';
 
-import { ChitsFiles } from '../../modules/chits-attachments';
 import { LATEST_SCHEMA_VERSION, migrateDatabase } from '@/db/migrations';
-import { BACKUP_VERSION, BackupError, INVALID_BACKUP, archivePathForMedia, backupErrorMessage, parseBackupMetadata, portableMediaPath, validateArchiveEntries, type BackupFile, type BackupManifest, type MissingAttachment } from './backup-format';
+import { ChitsFiles } from '../../modules/chits-attachments';
+import { archivePathForMedia, BACKUP_VERSION, BackupError, backupErrorMessage, INVALID_BACKUP, parseBackupMetadata, portableMediaPath, validateArchiveEntries, type BackupFile, type BackupManifest, type MissingAttachment } from './backup-format';
 import { beginBackupOperation, type BackupProgress } from './backup-operation';
 import { recoverInterruptedRestore, removeDatabaseFiles, restorePaths, writeRestoreJournal, type RestoreJournal } from './backup-recovery.native';
 import { pauseReminderSync, resumeReminderSync } from './reminders';
@@ -48,7 +48,7 @@ async function copyFile(from: string, to: string) {
 async function tableExists(db: SQLiteDatabase, table: string) {
   return !!await db.getFirstAsync('SELECT name FROM sqlite_master WHERE type = ? AND name = ?', 'table', table);
 }
-async function validateDatabase(db: SQLiteDatabase, expectedSchema?: number, current = false) {
+async function validateDatabase(db: SQLiteDatabase, expectedSchema?: number, current = false, checkRelationships = true) {
   const integrity = await db.getAllAsync<Record<string, string>>('PRAGMA integrity_check');
   if (integrity.length !== 1 || Object.values(integrity[0])[0] !== 'ok') throw new BackupError('The backup database is damaged and cannot be restored.');
   const schema = (await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version'))?.user_version ?? 0;
@@ -75,13 +75,14 @@ async function validateDatabase(db: SQLiteDatabase, expectedSchema?: number, cur
     const actual = new Set((await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`)).map((row) => row.name));
     if (columns[table].some((column) => !actual.has(column))) throw new BackupError('The backup database is incomplete or has an incompatible layout.');
   }
-  if ((await db.getAllAsync('PRAGMA foreign_key_check')).length) throw new BackupError('The backup contains broken data relationships and cannot be restored.');
-  const wrongColumns = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM cards c JOIN board_columns bc ON bc.id = c.column_id WHERE c.board_id != bc.board_id');
-  if (wrongColumns?.count) throw new BackupError('The backup contains cards assigned to the wrong board.');
-  const relations = [['attachments', 'message_id', 'messages'], ['board_columns', 'board_id', 'boards'], ['cards', 'board_id', 'boards'], ['cards', 'column_id', 'board_columns'], ['card_messages', 'card_id', 'cards'], ['card_messages', 'message_id', 'messages'], ...(schema >= 16 ? [['card_comments', 'card_id', 'cards']] : []), ...(schema >= 17 ? [['card_attachments', 'card_id', 'cards']] : []), ...(schema >= 20 ? [['card_reminders', 'card_id', 'cards']] : []), ...(schema >= 21 ? [['space_placements', 'message_id', 'messages'], ['space_placements', 'card_id', 'cards']] : []), ...(schema >= 22 ? [['message_reminders', 'message_id', 'messages']] : []), ...(schema >= 23 ? [['card_subtasks', 'card_id', 'cards']] : [])];
-  for (const [child, key, parent] of relations) {
-    // A NULL key is no link at all (a placement holds a thought OR a card), not a broken one.
-    if (await db.getFirstAsync(`SELECT 1 FROM ${child} c LEFT JOIN ${parent} p ON p.id = c.${key} WHERE c.${key} IS NOT NULL AND p.id IS NULL LIMIT 1`)) throw new BackupError('The backup contains broken data relationships and cannot be restored.');
+  if (checkRelationships) {
+    if ((await db.getAllAsync('PRAGMA foreign_key_check')).length) throw new BackupError('The backup contains broken data relationships and cannot be restored.');
+    const wrongColumns = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM cards c JOIN board_columns bc ON bc.id = c.column_id WHERE c.board_id != bc.board_id');
+    if (wrongColumns?.count) throw new BackupError('The backup contains cards assigned to the wrong board.');
+    const relations = [['attachments', 'message_id', 'messages'], ['board_columns', 'board_id', 'boards'], ['cards', 'board_id', 'boards'], ['cards', 'column_id', 'board_columns'], ['card_messages', 'card_id', 'cards'], ['card_messages', 'message_id', 'messages'], ...(schema >= 16 ? [['card_comments', 'card_id', 'cards']] : []), ...(schema >= 17 ? [['card_attachments', 'card_id', 'cards']] : []), ...(schema >= 20 ? [['card_reminders', 'card_id', 'cards']] : []), ...(schema >= 21 ? [['space_placements', 'message_id', 'messages'], ['space_placements', 'card_id', 'cards']] : []), ...(schema >= 22 ? [['message_reminders', 'message_id', 'messages']] : []), ...(schema >= 23 ? [['card_subtasks', 'card_id', 'cards']] : [])];
+    for (const [child, key, parent] of relations) {
+      if (await db.getFirstAsync(`SELECT 1 FROM ${child} c LEFT JOIN ${parent} p ON p.id = c.${key} WHERE c.${key} IS NOT NULL AND p.id IS NULL LIMIT 1`)) throw new BackupError('The backup contains broken data relationships and cannot be restored.');
+    }
   }
   // Compile required reads: a database with same-named, empty placeholder tables is invalid.
   await db.getAllAsync('SELECT m.id, m.text, m.type, m.created_at, m.updated_at, m.archived_at, m.pinned, m.deleted_at, a.id, a.message_id, a.type, a.original_name, a.mime_type, a.size, a.created_at FROM messages m LEFT JOIN attachments a ON a.message_id = m.id LIMIT 0');
@@ -131,6 +132,29 @@ async function normalizeSnapshot(db: SQLiteDatabase) {
   await db.execAsync('UPDATE card_reminders SET notification_id = NULL;');
   await db.execAsync('UPDATE message_reminders SET notification_id = NULL;');
   return sources;
+}
+async function repairSnapshotRelationships(db: SQLiteDatabase) {
+  await db.execAsync(`
+    DELETE FROM attachments WHERE NOT EXISTS (SELECT 1 FROM messages WHERE messages.id = attachments.message_id);
+    DELETE FROM card_messages WHERE NOT EXISTS (SELECT 1 FROM cards WHERE cards.id = card_messages.card_id) OR NOT EXISTS (SELECT 1 FROM messages WHERE messages.id = card_messages.message_id);
+    DELETE FROM card_comments WHERE NOT EXISTS (SELECT 1 FROM cards WHERE cards.id = card_comments.card_id);
+    DELETE FROM card_attachments WHERE NOT EXISTS (SELECT 1 FROM cards WHERE cards.id = card_attachments.card_id);
+    DELETE FROM card_reminders WHERE NOT EXISTS (SELECT 1 FROM cards WHERE cards.id = card_reminders.card_id);
+    DELETE FROM card_subtasks WHERE NOT EXISTS (SELECT 1 FROM cards WHERE cards.id = card_subtasks.card_id);
+    DELETE FROM message_reminders WHERE NOT EXISTS (SELECT 1 FROM messages WHERE messages.id = message_reminders.message_id);
+    DELETE FROM space_placements WHERE (message_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM messages WHERE messages.id = space_placements.message_id)) OR (card_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM cards WHERE cards.id = space_placements.card_id));
+    UPDATE cards SET board_id = (SELECT board_columns.board_id FROM board_columns WHERE board_columns.id = cards.column_id)
+      WHERE EXISTS (SELECT 1 FROM board_columns JOIN boards ON boards.id = board_columns.board_id WHERE board_columns.id = cards.column_id)
+        AND board_id != (SELECT board_columns.board_id FROM board_columns WHERE board_columns.id = cards.column_id);
+    DELETE FROM card_messages WHERE card_id IN (SELECT cards.id FROM cards LEFT JOIN boards ON boards.id = cards.board_id LEFT JOIN board_columns ON board_columns.id = cards.column_id WHERE boards.id IS NULL OR board_columns.id IS NULL);
+    DELETE FROM card_comments WHERE card_id IN (SELECT cards.id FROM cards LEFT JOIN boards ON boards.id = cards.board_id LEFT JOIN board_columns ON board_columns.id = cards.column_id WHERE boards.id IS NULL OR board_columns.id IS NULL);
+    DELETE FROM card_attachments WHERE card_id IN (SELECT cards.id FROM cards LEFT JOIN boards ON boards.id = cards.board_id LEFT JOIN board_columns ON board_columns.id = cards.column_id WHERE boards.id IS NULL OR board_columns.id IS NULL);
+    DELETE FROM card_reminders WHERE card_id IN (SELECT cards.id FROM cards LEFT JOIN boards ON boards.id = cards.board_id LEFT JOIN board_columns ON board_columns.id = cards.column_id WHERE boards.id IS NULL OR board_columns.id IS NULL);
+    DELETE FROM card_subtasks WHERE card_id IN (SELECT cards.id FROM cards LEFT JOIN boards ON boards.id = cards.board_id LEFT JOIN board_columns ON board_columns.id = cards.column_id WHERE boards.id IS NULL OR board_columns.id IS NULL);
+    DELETE FROM space_placements WHERE card_id IN (SELECT cards.id FROM cards LEFT JOIN boards ON boards.id = cards.board_id LEFT JOIN board_columns ON board_columns.id = cards.column_id WHERE boards.id IS NULL OR board_columns.id IS NULL);
+    DELETE FROM cards WHERE NOT EXISTS (SELECT 1 FROM boards WHERE boards.id = cards.board_id) OR NOT EXISTS (SELECT 1 FROM board_columns WHERE board_columns.id = cards.column_id);
+    DELETE FROM board_columns WHERE NOT EXISTS (SELECT 1 FROM boards WHERE boards.id = board_columns.board_id);
+  `);
 }
 async function references(db: SQLiteDatabase): Promise<Reference[]> {
   const rows: Reference[] = [];
@@ -200,13 +224,14 @@ export async function createBackup(database: SQLiteDatabase, progress?: Progress
     // Barrier behind pending SQLite writes, then a WAL-aware online snapshot.
     await database.getFirstAsync('SELECT 1');
     await database.withExclusiveTransactionAsync(async (tx) => { await tx.execAsync('UPDATE app_settings SET value = value WHERE 0;'); });
-    await validateDatabase(database, LATEST_SCHEMA_VERSION, true);
+    await validateDatabase(database, LATEST_SCHEMA_VERSION, true, false);
     await FS.makeDirectoryAsync(staging, { intermediates: true });
     report(progress, 'Collecting data…');
     await snapshot(database, staging);
     const db = await openDatabaseAsync('database.sqlite', { useNewConnection: true }, staging);
     let manifest: BackupManifest;
     try {
+      await repairSnapshotRelationships(db);
       const sources = await normalizeSnapshot(db);
       const refs = await references(db);
       const files: BackupFile[] = [];

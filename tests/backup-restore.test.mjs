@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { copyFileSync, readFileSync, writeFileSync, mkdirSync, existsSync, truncateSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, truncateSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
-import { service, recovery, migration, format, runtime } from './helpers/backup-runtime.mjs';
+import { format, migration, recovery, runtime, service } from './helpers/backup-runtime.mjs';
 
 async function fixture(t, populated = true) {
   const env = runtime(); t.after(() => env.cleanup());
@@ -241,13 +241,17 @@ test('a committed journal cleans up safety files without rolling back restored d
   assert.ok(!existsSync(env.filePath(paths.root)));
 });
 
-test('broken board/card relationships and missing required columns are rejected before taking a live snapshot', async (t) => {
+test('backup repairs broken relationships in its snapshot without changing live data', async (t) => {
   const { db, env } = await fixture(t);
   await db.execAsync('PRAGMA foreign_keys=OFF;');
-  await db.runAsync("UPDATE cards SET column_id='missing-column'");
-  await assert.rejects(service.createBackup(db), /broken data relationships/);
-  assert.equal(db.raw.prepare('SELECT column_id FROM cards').get().column_id,'missing-column');
-  await db.runAsync("UPDATE cards SET column_id='column'");
+  await db.runAsync("INSERT INTO cards VALUES ('orphan-card','board','missing-column','Orphan card',3, NULL,123,456,0,NULL)");
+  await db.runAsync("INSERT INTO card_comments VALUES ('orphan-comment','orphan-card','Keep live comment',123,456,NULL)");
+  await db.runAsync("UPDATE cards SET column_id='missing-column' WHERE id='orphan-card'");
+  const created = await service.createBackup(db);
+  assert.equal(created.manifest.cardCount, 1);
+  assert.equal(db.raw.prepare("SELECT column_id FROM cards WHERE id='orphan-card'").get().column_id,'missing-column');
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS count FROM card_comments WHERE id='orphan-comment'").get().count,1);
+  await db.runAsync("UPDATE cards SET column_id='column' WHERE id='orphan-card'");
   await db.execAsync('ALTER TABLE card_comments DROP COLUMN text;');
   await assert.rejects(service.createBackup(db), /incomplete|incompatible/);
   assert.equal(db.raw.prepare('SELECT text FROM messages').get().text,'Keep my words');
