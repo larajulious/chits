@@ -15,7 +15,8 @@ import { useTheme } from '@/components/theme-provider';
 import { useStickySurface } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon, type IconName } from '@/components/ui/icon';
-import { MessageContentRenderer, MessageMetadata } from '@/components/chat/message-note-cards';
+import { MessageContentRenderer, MessageMetadata, NoteText } from '@/components/chat/message-note-cards';
+import { NoteContentView } from '@/components/notes/note-content-view';
 import { createBoardRepository } from '@/db/repositories';
 import type { Attachment, AttachmentLike, Message } from '@/db/types';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
@@ -25,6 +26,7 @@ import { PdfViewer } from '@/components/pdf/pdf-viewer';
 import { PhotoAttachmentViewer } from '@/components/attachments/photo-attachment-viewer';
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
 import { exportActionLabel } from '@/services/attachment-export';
+import { noteRenderContent } from '@/services/note-content';
 
 let activeAudio: { token: symbol; pause: () => void } | null = null;
 const availabilityCache = new Map<string, boolean>();
@@ -315,6 +317,22 @@ function AttachmentMessage({ message, attachment, focused, onLongPress, onHideAg
   </Pressable>;
 }
 
+// A note with images pasted between its words: one bubble that reads top to
+// bottom in the order it was written. Any attachment that isn't inline (a
+// picked photo, video, recording or file) leads, as it always has; images
+// keep their own proportions, within a screen-relative height.
+function InlineNoteMessage({ message, content, focused, onLongPress, onHideAgain }: { message: Message; content: NonNullable<ReturnType<typeof noteRenderContent<Attachment>>>; focused: boolean; onLongPress: (message: Message) => void; onHideAgain?: () => void }) {
+  const { tokens: theme, styleTokens } = useTheme();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const sticky = useStickySurface();
+  const messageMaxWidth = Math.min(520, Math.round((screenWidth - spacing.md * 2) * 0.8));
+  return <Pressable accessible={false} onLongPress={() => onLongPress(message)} delayLongPress={350} style={({ pressed }) => [styles.attachmentMessage, { maxWidth: messageMaxWidth, backgroundColor: theme.surface, borderColor: focused ? theme.accentStrong : theme.borderSubtle }, focused && styles.focused, sticky({ radius: styleTokens.radius.panel, outlineColor: focused ? theme.accentStrong : undefined, clip: true }), pressed && styles.pressed]}>
+    {content.leading.map((attachment) => <AttachmentContent key={attachment.id} attachment={attachment} />)}
+    <NoteContentView blocks={content.blocks} style={styles.inlineNote} maxImageHeight={Math.round(screenHeight * 0.45)} onImageLongPress={() => onLongPress(message)} renderText={(text) => <NoteText text={text} mode="compact" />} />
+    <View style={styles.inlineMetadata}><MessageMetadata message={message} inside onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /></View>
+  </Pressable>;
+}
+
 const MOSAIC_MAX_TILES = 4;
 
 // Aspect ratio of the whole mosaic (2 tiles side by side read best a little wider).
@@ -422,6 +440,7 @@ function GalleryPosition({ label }: { label: string }) {
 }
 
 function hiddenCopy(message: Message) {
+  if (message.content) return { title: 'Hidden Chit', accessibilityLabel: 'Hidden Chit. Double tap to reveal.' };
   const type = message.attachments[0]?.type ?? message.type;
   if (type === 'photo') return { title: 'Photo hidden', accessibilityLabel: 'Hidden photo. Double tap to reveal.' };
   if (type === 'video') return { title: 'Video hidden', accessibilityLabel: 'Hidden video. Double tap to reveal.' };
@@ -488,6 +507,7 @@ function MessageRowComponent({ message, onLongPress, onReveal, onHideAgain, temp
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
   const attachment = message.attachments[0];
+  const inline = noteRenderContent(message);
   const actions = () => onLongPress(message);
   const covered = message.isHiddenContent && !temporarilyRevealed;
   const availableWidth = Math.min(520, Math.round((screenWidth - spacing.md * 2) * 0.8));
@@ -502,7 +522,7 @@ function MessageRowComponent({ message, onLongPress, onReveal, onHideAgain, temp
     {covered
       ? <HiddenMessageCover message={message} height={coverHeight} focused={focused} onReveal={onReveal} onLongPress={onLongPress} />
       : <View style={styles.revealedWrap}>
-          <MessageContentRenderer message={message} mode="compact" focused={focused} onActions={actions} onHideAgain={message.isHiddenContent ? () => onHideAgain(message) : undefined} renderAttachments={() => attachment ? <AttachmentMessage message={message} attachment={attachment} focused={focused} onLongPress={onLongPress} onHideAgain={message.isHiddenContent ? () => onHideAgain(message) : undefined} /> : null} />
+          <MessageContentRenderer message={message} mode="compact" focused={focused} onActions={actions} onHideAgain={message.isHiddenContent ? () => onHideAgain(message) : undefined} renderAttachments={() => inline ? <InlineNoteMessage message={message} content={inline} focused={focused} onLongPress={onLongPress} onHideAgain={message.isHiddenContent ? () => onHideAgain(message) : undefined} /> : attachment ? <AttachmentMessage message={message} attachment={attachment} focused={focused} onLongPress={onLongPress} onHideAgain={message.isHiddenContent ? () => onHideAgain(message) : undefined} /> : null} />
         </View>}
   </View>;
 }
@@ -528,6 +548,8 @@ const styles = StyleSheet.create({
   focused: { borderWidth: 2 },
   attachmentMessage: { alignSelf: 'flex-end', overflow: 'hidden', width: '100%', maxWidth: 520, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.contentCard },
   descriptionSurface: { paddingTop: spacing.sm },
+  inlineNote: { paddingHorizontal: spacing.sm, paddingTop: spacing.sm },
+  inlineMetadata: { paddingHorizontal: spacing.xs },
   attachmentDescription: { paddingHorizontal: spacing.md, fontSize: 16, lineHeight: 23 },
   media: { width: '100%', alignItems: 'center', justifyContent: 'center' },
   chatMedia: { minHeight: 170, maxHeight: 340 },

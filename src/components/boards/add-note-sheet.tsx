@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
@@ -9,9 +9,12 @@ import { Icon } from '@/components/ui/icon';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { spacing } from '@/constants/theme';
 import { AttachmentDraftPreview } from '@/components/chat/attachment-draft-preview';
+import { discardPastedImages, NoteBlocksEditor, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
 import { pickAndStageFile, pickAndStageMedia, type AttachmentDraft } from '@/services/attachment-import';
+import { draftImageCount, noteBlocksText, textDraft, type NoteDraftBlock } from '@/services/note-content';
 
-export type NoteSubmission = { text: string; attachment: AttachmentDraft['attachment'] | null };
+// `blocks` is set only when the note has pasted images: its text and images in order.
+export type NoteSubmission = { text: string; attachment: AttachmentDraft['attachment'] | null; blocks: NoteDraftBlock[] | null };
 
 type Props = {
   visible: boolean;
@@ -34,15 +37,16 @@ const MAX_NOTE_LENGTH = 10000;
 // The lightweight composer for "+ Add note" — contextual capture straight into a
 // known board/column (or Unorganized), as opposed to Chat's own composer (deeply
 // tied to its scroll/keyboard machinery). A note can be text, one photo/video/file,
-// or both. Picking and storage are the same shared path Chat uses
+// or both — plus any number of images pasted from the clipboard, inline with the
+// text where the cursor was. Picking and storage are the same shared path Chat uses
 // (services/attachment-import), so media is optimized and stored identically; a
 // staged file is deleted again if the sheet is dismissed without adding.
 export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit }: Props) {
   const { tokens: theme } = useTheme();
   const controls = useStickyControls();
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<NoteBlocksEditorControl>(null);
   const wasVisible = useRef(false);
-  const [text, setText] = useState('');
+  const [blocks, setBlocks] = useState<NoteDraftBlock[]>(() => textDraft());
   const [saving, setSaving] = useState(false);
   const [staging, setStaging] = useState(false);
   const [draft, setDraft] = useState<AttachmentDraft | null>(null);
@@ -54,7 +58,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   useEffect(() => {
     if (visible && !wasVisible.current) {
       setFullscreen(false);
-      setText('');
+      setBlocks(textDraft());
       setSaving(false);
       setStaging(false);
       setDraft(null);
@@ -63,9 +67,12 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
     wasVisible.current = visible;
   }, [visible]);
 
-  const trimmed = text.trim();
-  const busy = saving || staging;
-  const canAdd = (Boolean(trimmed) || Boolean(draft)) && !busy;
+  const trimmed = noteBlocksText(blocks);
+  const imageCount = draftImageCount(blocks);
+  const changeBlocks = useCallback((update: (current: NoteDraftBlock[]) => NoteDraftBlock[]) => { setBlocks(update); setError(null); }, []);
+  const pasteImage = useNoteImagePaste({ active: visible, blocks, setBlocks: changeBlocks, editor: inputRef, onError: setError });
+  const busy = saving || staging || pasteImage.pasting;
+  const canAdd = (Boolean(trimmed) || Boolean(draft) || imageCount > 0) && !busy;
 
   const discardDraft = () => {
     if (!draft) return;
@@ -77,6 +84,8 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   const close = () => {
     if (busy) return;
     discardDraft();
+    discardPastedImages(blocks);
+    setBlocks(textDraft());
     onClose();
   };
 
@@ -101,32 +110,34 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   };
 
   const noteInput = (
-    <TextInput
+    <NoteBlocksEditor
       ref={inputRef}
       accessibilityLabel="Note text"
-      value={text}
-      onChangeText={(value) => { setText(value); setError(null); }}
+      blocks={blocks}
+      onChangeBlocks={changeBlocks}
       placeholder={fullscreen ? 'Start writing…' : 'Write something...'}
-      placeholderTextColor={theme.textMuted}
-      selectionColor={theme.accent}
-      cursorColor={theme.accent}
-      multiline
-      scrollEnabled
-      textAlignVertical="top"
       maxLength={MAX_NOTE_LENGTH}
       editable={!saving}
-      style={fullscreen
+      maxImageHeight={fullscreen ? 320 : 140}
+      singleInputStyle={fullscreen
         ? [styles.fullInput, { color: theme.textPrimary }]
         : [styles.input, controls.input, draft && styles.inputWithAttachment, { backgroundColor: theme.background, borderColor: theme.borderSubtle, color: theme.textPrimary }]}
+      blockContainerStyle={fullscreen
+        ? styles.fullBlocks
+        : [styles.blocksBox, controls.input as ViewStyle | null, { backgroundColor: theme.background, borderColor: theme.borderSubtle }]}
+      blockInputStyle={[fullscreen ? styles.fullBlockInput : styles.blockInput, !fullscreen && controls.input ? { fontFamily: controls.input.fontFamily, fontWeight: controls.input.fontWeight } : null, { color: theme.textPrimary }]}
     />
   );
+  const pasteButton = <PasteImageButton visible={pasteImage.canPaste} pasting={pasteImage.pasting} disabled={saving || staging} onPress={() => void pasteImage.paste()} />;
 
   const attachmentArea = draft ? (
     <View style={styles.attachmentPreview}>
       <AttachmentDraftPreview draft={draft} compact={fullscreen} onRemove={discardDraft} />
+      {pasteImage.canPaste || pasteImage.pasting ? <View style={styles.attachRow}>{pasteButton}</View> : null}
     </View>
   ) : (
     <View style={styles.attachRow}>
+      {pasteButton}
       {ATTACH_OPTIONS.map((option) => (
         <Pressable
           key={option.key}
@@ -154,9 +165,10 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
     setSaving(true);
     setError(null);
     try {
-      await onSubmit({ text: trimmed, attachment: draft?.attachment ?? null });
+      await onSubmit({ text: trimmed, attachment: draft?.attachment ?? null, blocks: imageCount ? blocks : null });
       // Saved: the file now belongs to the note, so it must not be removed.
       setDraft(null);
+      setBlocks(textDraft());
       onClose();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Couldn’t add that note. Try again.');
@@ -261,6 +273,11 @@ const styles = StyleSheet.create({
   attachLabel: { fontSize: 14, fontWeight: '600' },
   attachmentPreview: { marginTop: spacing.sm },
   input: { minHeight: 96, maxHeight: 220, borderWidth: 1, borderRadius: 16, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, fontSize: 16, lineHeight: 22, textAlignVertical: 'top' },
+  // With pasted images the box scrolls as a whole; its inputs grow with their text.
+  blocksBox: { flexGrow: 0, minHeight: 96, maxHeight: 280, borderWidth: 1, borderRadius: 16, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
+  blockInput: { minHeight: 24, padding: 0, fontSize: 16, lineHeight: 22, textAlignVertical: 'top' },
+  fullBlocks: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.xs },
+  fullBlockInput: { minHeight: 27, padding: 0, fontSize: 17, lineHeight: 27, textAlignVertical: 'top' },
   message: { marginTop: spacing.xs, fontSize: 12, lineHeight: 17 },
   actions: { minHeight: 48, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
   cancelButton: { minWidth: 80, minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md },

@@ -1,1 +1,1 @@
-export { MessageContentRenderer, MessageMetadata, NoteCard, QuickThoughtBubble, StructuredNoteCard } from './message-note-cards.native';
+export { MessageContentRenderer, MessageMetadata, NoteCard, NoteText, QuickThoughtBubble, StructuredNoteCard } from './message-note-cards.native';

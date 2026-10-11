@@ -3,12 +3,14 @@ import { useRouter } from 'expo-router';
 import { Linking, Pressable, StyleSheet, View, type StyleProp, type TextStyle } from 'react-native';
 
 import { classifyMessage, classifyText, parseInlineContent, parseParagraphs, parseStructuredText } from '@/components/chat/message-presentation';
+import { NoteContentView } from '@/components/notes/note-content-view';
 import { useTheme } from '@/components/theme-provider';
 import { useStickySurface } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { radii, spacing } from '@/constants/theme';
-import type { Message } from '@/db/types';
+import type { Attachment, Message } from '@/db/types';
+import { noteRenderContent } from '@/services/note-content';
 import { useBackgroundReadability } from './background-readability';
 
 type NoteProps = { message: Message; focused: boolean; onActions: () => void; onHideAgain?: () => void };
@@ -149,7 +151,18 @@ function StructuredContent({ text, mode, accentColor }: { text: string; mode: Co
   </View>;
 }
 
-export function MessageContentRenderer({ message, mode, focused = false, accentColor, onActions, onHideAgain, onPressText, textAccessibilityLabel, renderAttachments }: { message: Message; mode: ContentMode; focused?: boolean; accentColor?: string; onActions?: () => void; onHideAgain?: () => void; onPressText?: () => void; textAccessibilityLabel?: string; renderAttachments?: () => ReactNode }) {
+/** One run of a note's words, drawn the way a note's text always is (lists, links, paragraphs). */
+export function NoteText({ text, mode, color, accentColor }: { text: string; mode: ContentMode; color?: string; accentColor?: string }) {
+  const { tokens } = useTheme();
+  return classifyText(text) === 'structured-note'
+    ? <StructuredContent text={text} mode={mode} accentColor={accentColor} />
+    : <PlainTextContent text={text} mode={mode} color={color ?? tokens.textPrimary} />;
+}
+
+// `renderAttachments(items)`: draws the attachments it's given (all of the
+// message's by default). For a note with inline images that's only the ones
+// that aren't inline — those render in place, between its words.
+export function MessageContentRenderer({ message, mode, focused = false, accentColor, onActions, onHideAgain, onPressText, textAccessibilityLabel, renderAttachments, onImageLongPress }: { message: Message; mode: ContentMode; focused?: boolean; accentColor?: string; onActions?: () => void; onHideAgain?: () => void; onPressText?: () => void; textAccessibilityLabel?: string; renderAttachments?: (attachments?: Attachment[]) => ReactNode; onImageLongPress?: (attachment: Attachment) => void }) {
   const { tokens } = useTheme();
   const presentation = classifyMessage(message);
   const actions = onActions ?? (() => undefined);
@@ -158,6 +171,19 @@ export function MessageContentRenderer({ message, mode, focused = false, accentC
     if (presentation === 'structured-note') return <StructuredNoteCard message={message} focused={focused} onActions={actions} onHideAgain={onHideAgain} />;
     if (presentation === 'note') return <NoteCard message={message} focused={focused} onActions={actions} onHideAgain={onHideAgain} />;
     return <QuickThoughtBubble message={message} focused={focused} onActions={actions} onHideAgain={onHideAgain} />;
+  }
+  const inline = noteRenderContent(message);
+  if (inline) {
+    const text = (value: string) => <NoteText text={value} mode="detail" accentColor={accentColor} />;
+    return <View style={styles.detailContent}>
+      {inline.leading.length ? renderAttachments?.(inline.leading) : null}
+      <NoteContentView
+        blocks={inline.blocks}
+        maxImageHeight={480}
+        onImageLongPress={onImageLongPress ? (attachment) => onImageLongPress(attachment as Attachment) : undefined}
+        renderText={(value) => onPressText ? <Pressable accessibilityRole="button" accessibilityLabel={textAccessibilityLabel ?? 'Edit content'} hitSlop={8} onPress={onPressText} style={({ pressed }) => pressed && styles.pressed}>{text(value)}</Pressable> : text(value)}
+      />
+    </View>;
   }
   const textPresentation = classifyText(message.text);
   const content = message.text ? textPresentation === 'structured-note'

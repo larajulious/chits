@@ -227,6 +227,15 @@ const migrations: Migration[] = [{
       CREATE INDEX IF NOT EXISTS idx_card_subtasks_order ON card_subtasks(card_id, position, created_at);
     `);
   },
+}, {
+  version: 24,
+  up: async (database) => {
+    // Inline images: a note's text and pasted images in reading order, as JSON
+    // blocks that point at its own `attachments` rows (never image data). NULL
+    // for every existing note and every text-only note, which render as before;
+    // messages.text keeps holding the note's words for search and previews.
+    await database.execAsync('ALTER TABLE messages ADD COLUMN content_json TEXT;');
+  },
 }];
 
 /** The schema version this build of Chits understands (the last migration). */

@@ -210,8 +210,9 @@ export default function BoardsScreen() {
 
   // A note added from the Cards header isn't tied to a board yet, so it's
   // created like a Chat thought and shows up under Unorganized.
-  const addNote = async ({ text, attachment }: NoteSubmission) => {
-    if (attachment) await messageRepository.createAttachmentMessage(attachment, text || null);
+  const addNote = async ({ text, attachment, blocks }: NoteSubmission) => {
+    if (blocks) await messageRepository.createNote({ blocks, attachment });
+    else if (attachment) await messageRepository.createAttachmentMessage(attachment, text || null);
     else await messageRepository.createText(text);
     await Promise.all([load(), loadCards()]);
     setCardToast('Note added');

@@ -21,6 +21,7 @@ import { useTheme } from '@/components/theme-provider';
 import { useStickySurface } from '@/components/ui/surface';
 import { useSpaceShapes, useSpaceStyles, useSpaceUI, type SpaceUI } from '@/components/spaces/ink-surface';
 import { photoCaption, stickyText } from './sticky-note';
+import { NoteContentView } from '@/components/notes/note-content-view';
 
 type Props = {
   note: PinnedNote;
@@ -95,9 +96,11 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
     messageId: thought.messageId,
     number: index + 1,
     text: ((media && thought.messageId === media.messageId ? thought.caption : thought.text) ?? '').trim(),
+    // Words and pasted images in order, when the thought has images inline.
+    content: 'content' in thought ? thought.content ?? null : null,
   }));
   const primaryThoughts = thoughts.filter((thought) =>
-    (!isCard || thought.messageId === primaryMessageId) && thought.text && thought.text !== title && thought.text !== caption);
+    (!isCard || thought.messageId === primaryMessageId) && (thought.content || (thought.text && thought.text !== title && thought.text !== caption)));
   const moreThoughts = isCard ? thoughts.filter((thought) => thought.messageId !== primaryMessageId) : [];
   const moreExpanded = expandedNoteId === note.id;
   const onBoard = !isCard && !!note.boardId;
@@ -156,7 +159,9 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
             </View> : <>
               {title && !media ? <Text accessibilityRole="header" selectable style={[fonts.note, styles.title]}>{title}</Text> : null}
               {primaryThoughts.map((thought, index) => <View key={thought.messageId} style={[styles.thoughtSection, (index > 0 || (title && !media)) ? styles.thoughtDivider : null]}>
-                <Text selectable style={[fonts.note, styles.thought]}>{thought.text}</Text>
+                {thought.content
+                  ? <NoteContentView blocks={thought.content} maxImageHeight={180} gap={10} renderText={(text) => <Text selectable style={[fonts.note, styles.thought]}>{text}</Text>} />
+                  : <Text selectable style={[fonts.note, styles.thought]}>{thought.text}</Text>}
               </View>)}
             </>}
           </View>
@@ -167,7 +172,9 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
       {moreExpanded ? <View style={styles.expandedThoughts} onLayout={({ nativeEvent }) => scrollRef.current?.scrollTo({ y: nativeEvent.layout.y, animated: true })}>
         {moreThoughts.map((thought) => <View key={thought.messageId} style={styles.expandedThought}>
           <Text style={[fonts.uiSemi, styles.thoughtLabel]}>THOUGHT {thought.number}</Text>
-          <Text selectable style={[fonts.ui, styles.expandedThoughtText]}>{thought.text || 'Empty thought'}</Text>
+          {thought.content
+            ? <NoteContentView blocks={thought.content} maxImageHeight={160} gap={8} renderText={(text) => <Text selectable style={[fonts.ui, styles.expandedThoughtText]}>{text}</Text>} />
+            : <Text selectable style={[fonts.ui, styles.expandedThoughtText]}>{thought.text || 'Empty thought'}</Text>}
         </View>)}
       </View> : null}
       {moreThoughts.length > 0 ? <Pressable

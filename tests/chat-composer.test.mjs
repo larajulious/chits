@@ -4,6 +4,7 @@ import { loadModule, migration, runtime } from './helpers/backup-runtime.mjs';
 
 const { createMessageRepository } = await loadModule('src/db/repositories.ts');
 const { saveChatComposer, readChatDraft, writeChatDraft } = await loadModule('src/services/chat-composer.ts');
+const { draftContentForStorage, draftFromNote, draftPlainText } = await loadModule('src/services/note-content.ts');
 
 async function setup(t) {
   const env = runtime();
@@ -81,4 +82,53 @@ test('draft settings keep text and target together if the write fails', async (t
   const restored = await readChatDraft(db, repository);
   assert.equal(restored.text, 'Saved');
   assert.equal(restored.editing.id, first.id);
+});
+
+const pastedImage = (name) => ({ storagePath: `chits-attachments/chat/${name}.jpg`, originalName: 'Pasted image.jpg', mimeType: 'image/jpeg', size: 10, width: 800, height: 600 });
+const image = (name) => ({ type: 'image', attachmentId: null, image: pastedImage(name) });
+const words = (text) => ({ type: 'text', text });
+const order = (message) => message.content.map((block) => block.type === 'text' ? block.text : message.attachments.find((item) => item.id === block.attachmentId).storagePath.split('/').pop());
+
+test('pasted images send where the cursor was, between the words, as one thought', async (t) => {
+  const { db, repository } = await setup(t);
+  const sent = await saveChatComposer(repository, { text: 'ignored', editing: null, attachment: null, blocks: [words('Meeting notes'), image('first'), words(' Update the design above. '), image('second'), words('')] });
+  assert.equal(sent.text, 'Meeting notes\n\nUpdate the design above.');
+  assert.deepEqual(order(sent), ['Meeting notes', 'first.jpg', 'Update the design above.', 'second.jpg']);
+  // Images alone are enough to send.
+  const alone = await saveChatComposer(repository, { text: '', editing: null, attachment: null, blocks: [words(''), image('solo'), words('')] });
+  assert.equal(alone.text, null);
+  assert.equal((await db.getFirstAsync('SELECT COUNT(*) AS count FROM messages')).count, 2);
+});
+
+test('save as draft, then paste more and send: one thought, its images where they were put', async (t) => {
+  const { db, repository } = await setup(t);
+  const draft = await saveChatComposer(repository, { text: '', editing: null, attachment: null, blocks: [words('Draft'), image('a'), words('')] });
+  const [, savedA] = draftFromNote(draft).filter((block) => block.type !== 'text' || block.text);
+  const resumed = await saveChatComposer(repository, { text: '', editing: draft, attachment: null, blocks: [image('b'), words('Final'), savedA, words('')] });
+  assert.equal(resumed.id, draft.id);
+  assert.deepEqual(order(resumed), ['b.jpg', 'Final', 'a.jpg']);
+  // Removing a saved image in the composer removes it from the thought.
+  const trimmed = await saveChatComposer(repository, { text: '', editing: resumed, attachment: null, blocks: [words('Final only')] });
+  assert.deepEqual([trimmed.content, trimmed.attachments.length, trimmed.text], [null, 0, 'Final only']);
+  assert.equal((await db.getFirstAsync('SELECT COUNT(*) AS count FROM messages')).count, 1);
+});
+
+test('pasting into an older photo-and-caption thought keeps its photo first', async (t) => {
+  const { repository } = await setup(t);
+  const photo = await repository.createAttachmentMessage({ type: 'photo', storagePath: 'chits-attachments/chat/old.jpg', originalName: 'old.jpg', mimeType: 'image/jpeg', size: 1, duration: null, width: 10, height: 10 }, 'Caption');
+  const edited = await saveChatComposer(repository, { text: '', editing: photo, attachment: null, blocks: [words('Caption'), image('new'), words('')] });
+  assert.deepEqual(order(edited), ['old.jpg', 'Caption', 'new.jpg']);
+});
+
+test('a resumed draft keeps where its saved images sit among the words', async (t) => {
+  const { db, repository } = await setup(t);
+  const sent = await saveChatComposer(repository, { text: '', editing: null, attachment: null, blocks: [words('Before'), image('kept'), words('After')] });
+  const blocks = draftFromNote(sent).map((block) => block.type === 'text' && block.text === 'After' ? { ...block, text: 'After, edited' } : block);
+  await writeChatDraft(db, draftPlainText(blocks), sent.id, draftContentForStorage(blocks));
+  const restored = await readChatDraft(db, repository);
+  assert.equal(restored.editing.id, sent.id);
+  assert.deepEqual(restored.content.map((block) => block.type === 'text' ? block.text : 'image'), ['Before', 'image', 'After, edited']);
+  // No editing target: nothing structural is kept.
+  await writeChatDraft(db, 'Just words', null, draftContentForStorage(blocks));
+  assert.deepEqual(await readChatDraft(db, repository), { text: 'Just words', editing: null });
 });

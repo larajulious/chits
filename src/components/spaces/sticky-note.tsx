@@ -1,5 +1,7 @@
 import { memo } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { STICKY_SIZE, type SpaceId } from '@/constants/spaces';
 import { magnetColor } from '@/constants/spaces-theme';
@@ -45,7 +47,7 @@ export function stickyShape(note: Pick<PinnedNote, 'hidden'> & Partial<Pick<Pinn
 }
 
 export type StickyPaperProps = {
-  note: Pick<PinnedNote, 'title' | 'text' | 'hidden' | 'color' | 'rotation'> & Partial<Pick<PinnedNote, 'media'>>;
+  note: Pick<PinnedNote, 'title' | 'text' | 'hidden' | 'color' | 'rotation'> & Partial<Pick<PinnedNote, 'media' | 'imageCount'>>;
   space: SpaceId;
   /** Picks the magnet/pin/washi color and the tape's tilt. */
   seed?: number;
@@ -67,6 +69,17 @@ export const StickyPaper = memo(function StickyPaper({ note, space, seed = 0, un
       : <PaperNote kind="sticky" color={note.color} body={stickyText(note)} width={width} height={height} rotation={note.rotation} hidden={note.hidden} obscured={obscured} lifted={lifted} unit={unit} />}
     <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height, transform: [{ rotate: `${note.rotation}deg` }] }}>
       <PinDecoration space={space} color={magnetColor(seed)} noteWidth={width} unit={unit} seed={seed} />
+      {/* A note with pasted images says how many, in the paper's own ink. */}
+      {note.imageCount && !note.hidden && !note.media ? <View accessibilityLabel={`${note.imageCount} image${note.imageCount === 1 ? '' : 's'}`} style={[styles.images, { right: 8 * unit, bottom: 7 * unit, gap: 3 * unit, paddingHorizontal: 5 * unit, borderRadius: 8 * unit }]}>
+        <Ionicons name="image-outline" size={11 * unit} color={IMAGE_COUNT_INK} />
+        <Text style={[styles.imagesText, { fontSize: 11 * unit, lineHeight: 15 * unit }]}>{note.imageCount}</Text>
+      </View> : null}
     </View>
   </View>;
+});
+
+const IMAGE_COUNT_INK = 'rgba(42,38,34,0.72)';
+const styles = StyleSheet.create({
+  images: { position: 'absolute', flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.45)' },
+  imagesText: { color: IMAGE_COUNT_INK, fontWeight: '700', fontVariant: ['tabular-nums'] },
 });

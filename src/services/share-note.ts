@@ -44,7 +44,16 @@ export type ShareNoteSource = {
 };
 
 type SourceAttachment = Pick<AttachmentLike, 'id' | 'type' | 'storagePath' | 'width' | 'height'>;
-type SourceMessage = Pick<Message, 'text'> & { attachments: SourceAttachment[] };
+type SourceMessage = Pick<Message, 'text' | 'content'> & { attachments: SourceAttachment[] };
+
+// A note's images in the order it reads: anything not inline first (as it's
+// shown), then images pasted between its words, top to bottom.
+function readingOrder(message: SourceMessage): SourceAttachment[] {
+  const inlineIds = message.content?.flatMap((block) => block.type === 'image' ? [block.attachmentId] : []) ?? [];
+  if (!inlineIds.length) return message.attachments;
+  const inline = inlineIds.flatMap((id) => message.attachments.find((attachment) => attachment.id === id) ?? []);
+  return [...message.attachments.filter((attachment) => !inline.includes(attachment)), ...new Set(inline)];
+}
 
 /**
  * Maps a thought (one message) or a card (its thoughts plus the files added in
@@ -55,7 +64,7 @@ type SourceMessage = Pick<Message, 'text'> & { attachments: SourceAttachment[] }
  */
 export function buildShareNoteSource({ title, messages, cardAttachments = [], subtasks = [] }: { title?: string | null; messages: SourceMessage[]; cardAttachments?: SourceAttachment[]; subtasks?: ShareNoteSource['subtasks'] }): ShareNoteSource {
   const text = messages.map((message) => message.text?.trim() ?? '').filter(Boolean).join('\n\n') || null;
-  const attachments = [...messages.flatMap((message) => message.attachments), ...cardAttachments];
+  const attachments = [...messages.flatMap(readingOrder), ...cardAttachments];
   const images = attachments.filter((attachment) => attachment.type === 'photo').map(({ id, storagePath, width, height }) => ({ id, storagePath, width, height }));
   const cleanTitle = title?.trim() || null;
   const titleAddsSomething = cleanTitle && !(text ?? '').startsWith(cleanTitle.replace(/…$/, ''));

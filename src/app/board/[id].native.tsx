@@ -644,12 +644,12 @@ export default function BoardScreen() {
   // state — no Unorganized round-trip, no board reload/flicker. Position is computed
   // the same way the repository computes it server-side (append after the column's
   // current cards), safe here because this is a local-first, single-writer app.
-  const submitAddNote = useCallback(async ({ text, attachment }: NoteSubmission) => {
+  const submitAddNote = useCallback(async ({ text, attachment, blocks }: NoteSubmission) => {
     if (!id || !addNoteColumn) return;
     const targetColumn = addNoteColumn;
     const position = cards.filter((card) => card.columnId === targetColumn.id).length;
-    const { cardId } = await repository.createNoteCard({ boardId: id, columnId: targetColumn.id, text, attachment });
-    if (attachment) {
+    const { cardId } = await repository.createNoteCard({ boardId: id, columnId: targetColumn.id, text, attachment, blocks });
+    if (attachment || blocks) {
       // A card with media: re-read just this column so the new card arrives with
       // its thumbnail/counts exactly as the summary query builds them.
       await fetchColumn(targetColumn.id, { force: true });

@@ -1,4 +1,5 @@
 import type { SpaceId } from '../constants/spaces';
+import type { NoteBlock, NoteRenderBlock } from '../services/note-content';
 
 export type MessageType = 'text' | 'photo' | 'video' | 'audio' | 'file';
 
@@ -12,6 +13,8 @@ export interface MessageReminderState {
 export interface Message {
   id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number;
   archivedAt: number | null; pinned: boolean; isHiddenContent: boolean; deletedAt: number | null; attachments: Attachment[];
+  // Text and pasted images in reading order (see services/note-content); null for a plain note.
+  content?: NoteBlock[] | null;
   // The thought's own pending reminder, including overdue reminders.
   reminderAt?: number | null;
   // organization.reminderAt: the upcoming reminder on the card this thought belongs to (null when none).
@@ -124,12 +127,14 @@ export interface SpacePlacement {
 // neither the board nor a shared image can ever show it; `title` is a card's
 // own title, when it has one. `boardId` is a card's board, or for a thought the board it was organized into. `media` is set
 // when the note leads with a photo or video (a print) or a recording (a cassette), not a sticky.
-export interface PinnedNote extends SpacePlacement { title: string | null; text: string | null; hidden: boolean; boardId: string | null; media: SpaceNoteMedia | null; }
+// `imageCount`: images pasted inline in the lead thought — such a note stays a sticky (its words lead) with a count.
+export interface PinnedNote extends SpacePlacement { title: string | null; text: string | null; hidden: boolean; boardId: string | null; media: SpaceNoteMedia | null; imageCount?: number; }
 // A note's first photo, video or voice recording, and the words typed with it (null when it was sent alone).
 export interface SpaceNoteMedia { attachment: AttachmentLike & { type: 'photo' | 'video' | 'audio' }; messageId: string; caption: string | null; }
 // The whole of a stuck note, for the view sheet: where it lives and every
 // thought on it (empty while it's hidden in Chat).
 // `caption` is a thought's own words, without the "Photo"/"Video" stand-in `text` falls back to.
-export interface SpaceNoteDetail { context: string | null; thoughts: { messageId: string; text: string; caption: string | null }[]; }
+// `content` is set for a thought with inline images: its words and images in reading order.
+export interface SpaceNoteDetail { context: string | null; thoughts: { messageId: string; text: string; caption: string | null; content?: NoteRenderBlock[] | null }[]; }
 // A note that can be stuck on a space: a card or an unorganized thought.
 export interface SpaceCandidate { kind: SpaceNoteKind; id: string; title: string; context: string | null; hidden: boolean; updatedAt: number; }

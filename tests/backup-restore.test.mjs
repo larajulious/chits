@@ -11,7 +11,7 @@ async function fixture(t, populated = true) {
   await migration.migrateDatabase(db);
   if (populated) {
     db.raw.exec(`
-      INSERT INTO messages VALUES ('message','Keep my words','text',123,456,789,1,NULL,1);
+      INSERT INTO messages VALUES ('message','Keep my words','text',123,456,789,1,NULL,1,'[{"type":"text","text":"Keep my words"},{"type":"image","attachmentId":"photo"}]');
       INSERT INTO boards VALUES ('board','My board','star','#123456',123,456,789,1,99,1,0);
       INSERT INTO board_columns VALUES ('column','board','My column',3.5,123,456);
       INSERT INTO cards VALUES ('card','board','column','My card',2.5,789,123,456,1,99);
@@ -74,6 +74,8 @@ test('round trip preserves content, IDs, ordering, privacy, archives, settings a
   const data = JSON.parse(background.value); delete data.deviceAssetId; background.value = JSON.stringify(data);
   assert.deepEqual(after, before);
   assert.equal(restored.prepare('SELECT notification_id FROM card_reminders').get().notification_id, null);
+  // A note's inline image order travels with it, still pointing at its own (restored) photo.
+  assert.deepEqual(JSON.parse(restored.prepare("SELECT content_json FROM messages WHERE id = 'message'").get().content_json), [{ type: 'text', text: 'Keep my words' }, { type: 'image', attachmentId: 'photo' }]);
   assert.deepEqual({ ...restored.prepare('SELECT message_id, scheduled_at, notification_id, completed_at FROM message_reminders').get() }, { message_id: 'message', scheduled_at: 4102444800000, notification_id: null, completed_at: null });
   assert.equal(restored.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
   assert.equal(restored.prepare('PRAGMA foreign_key_check').all().length, 0);

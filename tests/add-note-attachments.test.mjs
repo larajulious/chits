@@ -10,20 +10,21 @@ test('Add note sheet can attach a photo, video or file and cleans up a discarded
   assert.match(sheet, /\{ key: 'video', label: 'Video'/);
   assert.match(sheet, /\{ key: 'file', label: 'File'/);
   assert.doesNotMatch(sheet, /key: 'audio'/);
-  assert.match(sheet, /const canAdd = \(Boolean\(trimmed\) \|\| Boolean\(draft\)\) && !busy;/);
+  assert.match(sheet, /const canAdd = \(Boolean\(trimmed\) \|\| Boolean\(draft\) \|\| imageCount > 0\) && !busy;/);
   // Dismissing deletes the staged copy; a successful save keeps it.
-  assert.match(sheet, /const close = \(\) => \{\s*if \(busy\) return;\s*discardDraft\(\);/);
-  assert.match(sheet, /await onSubmit\(\{ text: trimmed, attachment: draft\?\.attachment \?\? null \}\);\s*\/\/[^\n]*\n\s*setDraft\(null\);/);
+  assert.match(sheet, /const close = \(\) => \{\s*if \(busy\) return;\s*discardDraft\(\);\s*discardPastedImages\(blocks\);/);
+  assert.match(sheet, /await onSubmit\(\{ text: trimmed, attachment: draft\?\.attachment \?\? null, blocks: imageCount \? blocks : null \}\);\s*\/\/[^\n]*\n\s*setDraft\(null\);\s*setBlocks\(textDraft\(\)\);/);
 });
 
 test('both Add note entry points save the attachment through the existing storage paths', () => {
   const cards = read('src/app/(tabs)/index.native.tsx');
   assert.match(cards, /if \(attachment\) await messageRepository\.createAttachmentMessage\(attachment, text \|\| null\);/);
   const board = read('src/app/board/[id].native.tsx');
-  assert.match(board, /repository\.createNoteCard\(\{ boardId: id, columnId: targetColumn\.id, text, attachment \}\)/);
+  assert.match(board, /repository\.createNoteCard\(\{ boardId: id, columnId: targetColumn\.id, text, attachment, blocks \}\)/);
   const repository = read('src/db/repositories.ts');
   assert.match(repository, /async createNoteCard\(input: \{ boardId: string; columnId: string; text: string; attachment\?:/);
-  assert.match(repository, /if \(attachment\) await transaction\.runAsync\('INSERT INTO attachments/);
+  assert.match(cards, /if \(blocks\) await messageRepository\.createNote\(\{ blocks, attachment \}\);/);
+  assert.match(repository, /if \(attachment\) await transaction\.runAsync\(INSERT_ATTACHMENT_SQL,/);
 });
 
 test('Chat and the Add note sheet share one picking/staging implementation', () => {

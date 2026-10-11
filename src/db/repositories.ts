@@ -3,14 +3,15 @@ import { clearChatBackgroundForPaths, unreferencedAttachmentPaths } from './chat
 import { notifyChatBackgroundChanged } from '../services/chat-background';
 import { notifyAttachmentsChanged } from '../services/attachment-changes';
 import { notifySpacesChanged } from '../services/space-changes';
+import { noteBlocksText, noteRenderContent, parseNoteContent, serializeNoteContent, type NoteBlock, type NoteImageDetails, type NoteRenderBlock } from '../services/note-content';
 import { autoPlace, clampUnit, DEFAULT_STICKY_COLOR, randomRotation, resolveSpaceId, SELECTED_SPACE_SETTING_KEY, SPACE_CAPACITY, SPACE_IDS, STICKY_COLORS, type SpaceId, type SpacePoint } from '../constants/spaces';
 import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type AttachmentFilterType, type AttachmentLike, type AttachmentPage, type AttachmentPageOptions, type AttachmentSummary, type Board, type Message, type MessageReminderState, type MessageType, type PageOptions, type TimelineEvent, type TimelineEventType, type TimelineItem, type TimelinePage, type TimelinePageOptions , type PinnedNote, type SpaceCandidate, type SpaceNoteDetail, type SpaceNoteKind, type SpaceNoteMedia, type SpacePlacement } from './types';
 
 const DEFAULT_PAGE_SIZE = 50;
-type MessageRow = { id: string; text: string | null; type: Message['type']; created_at: number; updated_at: number; archived_at: number | null; pinned: number; is_hidden_content: number; deleted_at: number | null };
+type MessageRow = { id: string; text: string | null; type: Message['type']; created_at: number; updated_at: number; archived_at: number | null; pinned: number; is_hidden_content: number; deleted_at: number | null; content_json?: string | null };
 type AttachmentRow = { id: string; message_id: string; type: MessageType; storage_path: string; original_name: string | null; mime_type: string | null; size: number | null; duration: number | null; width: number | null; height: number | null; created_at: number };
 type EventRow = { id: string; event_type: TimelineEventType; created_at: number; related_message_id: string | null; related_card_id: string | null; related_board_id: string | null; metadata_json: string | null; live_board_name: string | null };
-const messageFromRow = (row: MessageRow): Message => ({ id: row.id, text: row.text, type: row.type, createdAt: row.created_at, updatedAt: row.updated_at, archivedAt: row.archived_at, pinned: row.pinned === 1, isHiddenContent: row.is_hidden_content === 1, deletedAt: row.deleted_at, attachments: [] });
+const messageFromRow = (row: MessageRow): Message => ({ id: row.id, text: row.text, type: row.type, createdAt: row.created_at, updatedAt: row.updated_at, archivedAt: row.archived_at, pinned: row.pinned === 1, isHiddenContent: row.is_hidden_content === 1, deletedAt: row.deleted_at, attachments: [], content: parseNoteContent(row.content_json) });
 const attachmentFromRow = (row: AttachmentRow): Attachment => ({ id: row.id, messageId: row.message_id, type: row.type, storagePath: row.storage_path, originalName: row.original_name, mimeType: row.mime_type, size: row.size, duration: row.duration, width: row.width, height: row.height, createdAt: row.created_at });
 // A board's name in an event's metadata_json is a creation-time snapshot; a global
 // board-name consistency rule means these Chits activity bubbles must reflect a
@@ -171,6 +172,51 @@ function newId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+// A note's content as an editor hands it over: text, saved images (by their
+// attachment id) and newly pasted ones (already copied into Chits storage).
+export type NoteContentInput = ({ type: 'text'; text: string } | { type: 'image'; attachmentId: string | null; image: NoteImageDetails })[];
+type StagedAttachment = Omit<Attachment, 'id' | 'messageId' | 'createdAt'>;
+const INSERT_ATTACHMENT_SQL = 'INSERT INTO attachments (id, message_id, type, storage_path, original_name, mime_type, size, duration, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+
+// Gives each newly pasted image its attachment id up front, so the messages row
+// (which content_json lives on) can be written before the attachments that
+// reference it. Pasted images are ordinary photo attachments — stored, backed
+// up, listed and cleaned up exactly like any other photo on a note.
+function planNoteContent(blocks: NoteContentInput) {
+  const stored: NoteBlock[] = [];
+  const inserts: { id: string; image: NoteImageDetails }[] = [];
+  const imageIds: string[] = [];
+  for (const block of blocks) {
+    if (block.type === 'text') { stored.push({ type: 'text', text: block.text }); continue; }
+    const id = block.attachmentId ?? newId();
+    if (!block.attachmentId) inserts.push({ id, image: block.image });
+    if (imageIds.includes(id)) continue;
+    imageIds.push(id);
+    stored.push({ type: 'image', attachmentId: id });
+  }
+  return { stored, inserts, imageIds, text: noteBlocksText(stored) || null, contentJson: serializeNoteContent(stored) };
+}
+
+async function insertPastedImages(transaction: Pick<SQLiteDatabase, 'runAsync'>, messageId: string, inserts: { id: string; image: NoteImageDetails }[], now: number) {
+  // created_at follows paste order, so anything sorting a note's attachments by
+  // age (thumbnails, the library) meets them in the order they appear.
+  for (const [index, { id, image }] of inserts.entries()) {
+    await transaction.runAsync(INSERT_ATTACHMENT_SQL, id, messageId, 'photo', image.storagePath, image.originalName, image.mimeType ?? 'image/jpeg', image.size, null, image.width, image.height, now + index + 1);
+  }
+}
+
+/** Inserts a new note (text, pasted images and an optional picked attachment); returns its words. */
+async function insertNoteMessage(transaction: Pick<SQLiteDatabase, 'runAsync'>, messageId: string, input: { blocks: NoteContentInput; attachment: StagedAttachment | null }, now: number) {
+  const plan = planNoteContent(input.blocks);
+  const attachment = input.attachment;
+  if (!plan.text && !attachment && !plan.imageIds.length) throw new Error('Write something or add an image before adding a note.');
+  const type: MessageType = attachment?.type ?? (plan.imageIds.length ? 'photo' : 'text');
+  await transaction.runAsync('INSERT INTO messages (id, text, type, created_at, updated_at, archived_at, pinned, deleted_at, content_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', messageId, plan.text, type, now, now, null, 0, null, plan.contentJson);
+  if (attachment) await transaction.runAsync(INSERT_ATTACHMENT_SQL, newId(), messageId, attachment.type, attachment.storagePath, attachment.originalName, attachment.mimeType, attachment.size, attachment.duration, attachment.width, attachment.height, now);
+  await insertPastedImages(transaction, messageId, plan.inserts, now);
+  return { text: plan.text, type, hasImages: plan.imageIds.length > 0 };
+}
+
 export type CardSubtask = {
   id: string; cardId: string; title: string; isCompleted: boolean; position: number;
   createdAt: number; updatedAt: number; completedAt: number | null;
@@ -276,6 +322,55 @@ export function createMessageRepository(database: SQLiteDatabase) {
         await transaction.runAsync('INSERT INTO attachments (id, message_id, type, storage_path, original_name, mime_type, size, duration, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', attachment.id, messageId, attachment.type, attachment.storagePath, attachment.originalName, attachment.mimeType, attachment.size, attachment.duration, attachment.width, attachment.height, now);
       });
       return { id: messageId, text: description, type: input.type, createdAt: now, updatedAt: now, archivedAt: null, pinned: false, isHiddenContent: false, deletedAt: null, attachments: [attachment] };
+    },
+    // A note from the Add note sheet that carries pasted images (and, optionally,
+    // one picked attachment). Plain notes keep using createText/createAttachmentMessage.
+    async createNote(input: { blocks: NoteContentInput; attachment?: StagedAttachment | null }): Promise<string> {
+      const messageId = newId();
+      await database.withExclusiveTransactionAsync(async (transaction) => {
+        await insertNoteMessage(transaction, messageId, { blocks: input.blocks, attachment: input.attachment ?? null }, Date.now());
+      });
+      notifyAttachmentsChanged();
+      return messageId;
+    },
+    // Edit Note's save: the note's words and its photos, in order. A photo left
+    // out of `blocks` was removed by the user — its row goes, and its file too
+    // once nothing else refers to it (returned for the caller to delete after
+    // the write commits). Video, audio and files on the note are never touched.
+    async updateContent(id: string, blocks: NoteContentInput): Promise<{ updatedAt: number; removablePaths: string[] }> {
+      const now = Date.now();
+      const removablePaths: string[] = [];
+      let attachmentsChanged = false;
+      await database.withExclusiveTransactionAsync(async (transaction) => {
+        const row = await transaction.getFirstAsync<MessageRow>('SELECT * FROM messages WHERE id = ? AND deleted_at IS NULL', id);
+        if (!row) throw new Error('That thought is no longer available.');
+        const attachments = (await transaction.getAllAsync<AttachmentRow>('SELECT * FROM attachments WHERE message_id = ? ORDER BY created_at ASC', id)).map(attachmentFromRow);
+        const owned = new Map(attachments.map((attachment) => [attachment.id, attachment]));
+        // Only this note's own photos can be kept; anything else is dropped rather than linked.
+        const plan = planNoteContent(blocks.filter((block) => block.type === 'text' || !block.attachmentId || owned.get(block.attachmentId)?.type === 'photo'));
+        const kept = new Set(plan.imageIds);
+        const removed = attachments.filter((attachment) => attachment.type === 'photo' && !kept.has(attachment.id));
+        const remaining = attachments.filter((attachment) => !removed.includes(attachment));
+        if (!plan.text && !remaining.length && !plan.inserts.length) throw new Error('Write something or add an image before saving.');
+        // A note that was never inline and still reads photos-then-words stays a
+        // plain note (content_json NULL), so editing a caption changes nothing else.
+        const photoIds = attachments.filter((attachment) => attachment.type === 'photo').map((attachment) => attachment.id);
+        const firstText = plan.stored.findIndex((block) => block.type === 'text' && block.text.trim());
+        const imagesLead = firstText < 0 || plan.stored.slice(firstText).every((block) => block.type === 'text');
+        const legacyLayout = !row.content_json && !plan.inserts.length && imagesLead && plan.imageIds.join() === photoIds.join();
+        const type: MessageType = remaining.find((attachment) => attachment.type !== 'photo')?.type ?? (remaining.length || plan.inserts.length ? 'photo' : 'text');
+        if (removed.length) {
+          const paths = removed.map((attachment) => attachment.storagePath);
+          await clearChatBackgroundForPaths(transaction, paths);
+          for (const attachment of removed) await transaction.runAsync('DELETE FROM attachments WHERE id = ?', attachment.id);
+          removablePaths.push(...await unreferencedAttachmentPaths(transaction, paths));
+        }
+        await transaction.runAsync('UPDATE messages SET text = ?, content_json = ?, type = ?, updated_at = ? WHERE id = ?', plan.text, legacyLayout ? null : plan.contentJson, type, now, id);
+        await insertPastedImages(transaction, id, plan.inserts, now);
+        attachmentsChanged = removed.length > 0 || plan.inserts.length > 0;
+      });
+      if (attachmentsChanged) { notifyAttachmentsChanged(); notifyChatBackgroundChanged(); }
+      return { updatedAt: now, removablePaths: [...new Set(removablePaths)] };
     },
     async createText(text: string): Promise<Message> {
       const now = Date.now();
@@ -399,6 +494,10 @@ export function createMessageRepository(database: SQLiteDatabase) {
       const updatedAt = Date.now();
       const result = await database.runAsync('UPDATE messages SET text = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL', text, updatedAt, id);
       if (result.changes !== 1) throw new Error('That thought is no longer available.');
+      // A text-only edit of an inline note (Edit Note handles these, but never
+      // lose an image if one arrives here): the words lead, its images follow.
+      const content = parseNoteContent((await database.getFirstAsync<{ content_json: string | null }>('SELECT content_json FROM messages WHERE id = ?', id))?.content_json);
+      if (content) await database.runAsync('UPDATE messages SET content_json = ? WHERE id = ?', serializeNoteContent([{ type: 'text', text }, ...content.filter((block) => block.type === 'image')]), id);
       return updatedAt;
     },
     async setPinned(id: string, pinned: boolean) {
@@ -675,23 +774,26 @@ export function createBoardRepository(database: SQLiteDatabase) {
     // thought — no separate "board card" concept, no new chat thread.
     // A note added straight into a column: text, an already-staged attachment
     // (photo/video/file, stored exactly like a Chat attachment message), or both.
-    async createNoteCard(input: { boardId: string; columnId: string; text: string; attachment?: Omit<Attachment, 'id' | 'messageId' | 'createdAt'> | null }) {
+    // `blocks` (optional) carries pasted images in order with the text; `text` alone stays the plain path.
+    async createNoteCard(input: { boardId: string; columnId: string; text: string; attachment?: Omit<Attachment, 'id' | 'messageId' | 'createdAt'> | null; blocks?: NoteContentInput | null }) {
       const trimmed = input.text.trim();
       const attachment = input.attachment ?? null;
-      if (!trimmed && !attachment) throw new Error('Write something or attach a file before adding a note.');
+      const blocks = input.blocks ?? [{ type: 'text', text: trimmed }];
+      const words = noteBlocksText(blocks) || null;
+      if (!words && !attachment && !blocks.some((block) => block.type === 'image')) throw new Error('Write something or attach a file before adding a note.');
       const now = Date.now();
       const messageId = newId();
       const cardId = newId();
-      const title = attachmentCardTitle({ text: trimmed || null, type: attachment?.type ?? null, originalName: attachment?.originalName ?? null });
+      const title = attachmentCardTitle({ text: words, type: attachment?.type ?? (blocks.some((block) => block.type === 'image') ? 'photo' : null), originalName: attachment?.originalName ?? null });
       await database.withExclusiveTransactionAsync(async (transaction) => {
         const column = await transaction.getFirstAsync<{ id: string }>('SELECT bc.id FROM board_columns bc INNER JOIN boards b ON b.id = bc.board_id WHERE bc.id = ? AND bc.board_id = ? AND b.archived_at IS NULL', input.columnId, input.boardId);
         if (!column) throw new Error('This column is no longer available.');
-        await transaction.runAsync('INSERT INTO messages (id, text, type, created_at, updated_at, archived_at, pinned, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', messageId, trimmed || null, attachment?.type ?? 'text', now, now, null, 0, null);
-        if (attachment) await transaction.runAsync('INSERT INTO attachments (id, message_id, type, storage_path, original_name, mime_type, size, duration, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', newId(), messageId, attachment.type, attachment.storagePath, attachment.originalName, attachment.mimeType, attachment.size, attachment.duration, attachment.width, attachment.height, now);
+        await insertNoteMessage(transaction, messageId, { blocks, attachment }, now);
         const position = await transaction.getFirstAsync<{ position: number }>('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM cards WHERE column_id = ? AND archived_at IS NULL', input.columnId);
         await transaction.runAsync('INSERT INTO cards (id, board_id, column_id, title, position, archived_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', cardId, input.boardId, input.columnId, title, position?.position ?? 0, null, now, now);
         await transaction.runAsync('INSERT INTO card_messages (card_id, message_id, position) VALUES (?, ?, ?)', cardId, messageId, 0);
       });
+      if (attachment || blocks.some((block) => block.type === 'image')) notifyAttachmentsChanged();
       return { cardId, messageId };
     },
     async mergeMessages(input: { boardId: string; columnId: string; messageIds: string[]; title?: string | null }) {
@@ -1098,6 +1200,20 @@ export function createSpaceRepository(database: SQLiteDatabase) {
     if (result.status === 'stuck') notifySpacesChanged();
     return result;
   };
+  // Each thought's words and inline images in reading order, for the view sheet (only thoughts that have them).
+  const inlineContent = async (messageIds: string[]) => {
+    const result = new Map<string, NoteRenderBlock[]>();
+    if (!messageIds.length) return result;
+    const placeholders = messageIds.map(() => '?').join(', ');
+    const rows = await database.getAllAsync<{ id: string; text: string | null; content_json: string }>(`SELECT id, text, content_json FROM messages WHERE id IN (${placeholders}) AND content_json IS NOT NULL`, ...messageIds);
+    if (!rows.length) return result;
+    const attachments = (await database.getAllAsync<AttachmentRow>(`SELECT * FROM attachments WHERE message_id IN (${rows.map(() => '?').join(', ')}) ORDER BY created_at ASC`, ...rows.map((row) => row.id))).map(attachmentFromRow);
+    for (const row of rows) {
+      const rendered = noteRenderContent({ text: row.text, content: parseNoteContent(row.content_json), attachments: attachments.filter((attachment) => attachment.messageId === row.id) });
+      if (rendered) result.set(row.id, rendered.blocks);
+    }
+    return result;
+  };
   return {
     stick,
     /** The space Spaces opens on; null until the user has picked one. */
@@ -1127,9 +1243,19 @@ export function createSpaceRepository(database: SQLiteDatabase) {
       const mediaRows = leadIds.length ? await database.getAllAsync<AttachmentRow & { caption: string | null }>(`SELECT a.*, NULLIF(TRIM(m.text), '') AS caption FROM attachments a INNER JOIN messages m ON m.id = a.message_id WHERE a.message_id IN (${leadIds.map(() => '?').join(', ')}) AND a.type IN ('photo', 'video', 'audio') ORDER BY a.created_at ASC`, ...leadIds) : [];
       const media = new Map<string, SpaceNoteMedia>();
       for (const row of mediaRows) if (!media.has(row.message_id)) media.set(row.message_id, { attachment: attachmentFromRow(row) as SpaceNoteMedia['attachment'], messageId: row.message_id, caption: row.caption });
+      // A lead thought with inline images is a note first: it stays a sticky
+      // showing its words, with a count of its images, never a print of one.
+      const inlineImages = new Map<string, number>();
+      const inlineRows = leadIds.length ? await database.getAllAsync<{ id: string; content_json: string }>(`SELECT id, content_json FROM messages WHERE id IN (${leadIds.map(() => '?').join(', ')}) AND content_json IS NOT NULL`, ...leadIds) : [];
+      for (const row of inlineRows) {
+        const imageIds = new Set((parseNoteContent(row.content_json) ?? []).flatMap((block) => block.type === 'image' ? [block.attachmentId] : []));
+        const count = mediaRows.filter((media) => media.message_id === row.id && imageIds.has(media.id)).length;
+        if (count) inlineImages.set(row.id, count);
+      }
       return rows.map((row) => {
         const hidden = row.hidden === 1;
-        return { ...placementFromRow(row), hidden, title: hidden ? null : row.title, text: hidden ? null : row.text ?? '', boardId: row.board_id, media: hidden || !row.lead_message_id ? null : media.get(row.lead_message_id) ?? null };
+        const imageCount = hidden || !row.lead_message_id ? 0 : inlineImages.get(row.lead_message_id) ?? 0;
+        return { ...placementFromRow(row), hidden, title: hidden ? null : row.title, text: hidden ? null : row.text ?? '', boardId: row.board_id, media: hidden || !row.lead_message_id || imageCount ? null : media.get(row.lead_message_id) ?? null, ...(imageCount ? { imageCount } : {}) };
       });
     },
     /**
@@ -1144,14 +1270,16 @@ export function createSpaceRepository(database: SQLiteDatabase) {
           database.getAllAsync<{ messageId: string; text: string; caption: string | null; hidden: number }>(`SELECT m.id AS messageId, ${MESSAGE_TEXT_SQL('m')} AS text, NULLIF(TRIM(m.text), '') AS caption, m.is_hidden_content AS hidden FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = ? AND m.deleted_at IS NULL ORDER BY cm.position ASC`, noteId),
         ]);
         const hidden = rows.some((row) => row.hidden === 1);
-        return { context: card ? `${card.board} · ${card.column}` : null, thoughts: hidden ? [] : rows.map(({ messageId, text, caption }) => ({ messageId, text, caption })) };
+        const content = hidden ? new Map() : await inlineContent(rows.map((row) => row.messageId));
+        return { context: card ? `${card.board} · ${card.column}` : null, thoughts: hidden ? [] : rows.map(({ messageId, text, caption }) => ({ messageId, text, caption, content: content.get(messageId) ?? null })) };
       }
       const [row, organized] = await Promise.all([
         database.getFirstAsync<{ text: string; caption: string | null; hidden: number }>(`SELECT ${MESSAGE_TEXT_SQL('m')} AS text, NULLIF(TRIM(m.text), '') AS caption, m.is_hidden_content AS hidden FROM messages m WHERE m.id = ?`, noteId),
         // Where a thought was organized to, same card the board list picks.
         database.getFirstAsync<{ board: string; column: string }>('SELECT b.name AS board, bc.name AS "column" FROM card_messages cm INNER JOIN cards c ON c.id = cm.card_id INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id WHERE cm.message_id = ? AND c.archived_at IS NULL AND b.archived_at IS NULL ORDER BY c.created_at ASC LIMIT 1', noteId),
       ]);
-      return { context: organized ? `${organized.board} · ${organized.column}` : 'Chat', thoughts: row && row.hidden !== 1 ? [{ messageId: noteId, text: row.text, caption: row.caption }] : [] };
+      const content = row && row.hidden !== 1 ? await inlineContent([noteId]) : new Map();
+      return { context: organized ? `${organized.board} · ${organized.column}` : 'Chat', thoughts: row && row.hidden !== 1 ? [{ messageId: noteId, text: row.text, caption: row.caption, content: content.get(noteId) ?? null }] : [] };
     },
     /** Live stickies per space, for the nav badge and "X of 12". */
     async counts(): Promise<Record<SpaceId, number>> {
