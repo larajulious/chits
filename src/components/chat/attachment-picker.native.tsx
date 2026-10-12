@@ -19,6 +19,7 @@ export type { AttachmentDraft } from '@/services/attachment-import';
 
 type Props = {
   disabled?: boolean;
+  onInlineSelected?: (draft: AttachmentDraft) => void;
   onSelected: (draft: AttachmentDraft) => void;
   onError: (message: string) => void;
   onRecordingChange?: (recording: boolean) => void;
@@ -36,7 +37,7 @@ function formatRecordingTime(durationMillis: number) {
   return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
 }
 
-export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(function AttachmentPicker({ disabled = false, onSelected, onError, onRecordingChange, onOpenChange }, ref) {
+export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(function AttachmentPicker({ disabled = false, onSelected, onInlineSelected, onError, onRecordingChange, onOpenChange }, ref) {
   const { tokens: theme } = useTheme();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder, 250);
@@ -49,14 +50,14 @@ export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(functi
   // Ref, not state: a fast double tap must not open two pickers or two
   // permission prompts before `saving` re-renders.
   const busy = useRef(false);
-  const run = async (task: () => Promise<AttachmentDraft | null>) => {
+  const run = async (task: () => Promise<AttachmentDraft | null>, selected = onSelected) => {
     if (busy.current) return;
     busy.current = true;
     setSaving(true);
     try {
       const draft = await task();
       if (!draft) return;
-      onSelected(draft);
+      selected(draft);
       setOpen(false);
     } catch (error) {
       onError(error instanceof Error ? error.message : 'The attachment could not be prepared.');
@@ -130,7 +131,7 @@ export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(functi
     <Pressable accessibilityRole="button" accessibilityLabel="Use recording" accessibilityHint="Stops recording and prepares it to send" onPress={() => void finishRecording()} style={({ pressed }) => [styles.recordingAction, { backgroundColor: theme.accent }, pressed && styles.actionPressed]}><Icon name="checkmark" size={22} color={theme.accentText} /></Pressable>
   </View>;
 
-  return <><Pressable accessibilityRole="button" accessibilityLabel="Add attachment" accessibilityState={{ disabled: disabled || saving }} disabled={disabled || saving} onPress={() => setOpen(true)} style={[styles.trigger, (disabled || saving) && styles.disabled]}><Icon name="add" size={24} color={theme.textSecondary} /></Pressable><Modal transparent visible={open} animationType="slide" onRequestClose={() => setOpen(false)}><Pressable style={styles.backdrop} onPress={() => setOpen(false)}><Pressable style={styles.sheetShield} onPress={() => undefined}><BottomSheetSurface><View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />{choose('Photo', 'image-outline', () => void pickMedia('photo'))}{choose('Video', 'videocam-outline', () => void pickMedia('video'))}{choose('Audio', 'mic-outline', () => void startRecording())}{choose('File', 'document-outline', () => void pickFile())}{choose('Cancel', 'close-outline', () => setOpen(false))}</BottomSheetSurface></Pressable></Pressable></Modal></>;
+  return <><Pressable accessibilityRole="button" accessibilityLabel="Add attachment" accessibilityState={{ disabled: disabled || saving }} disabled={disabled || saving} onPress={() => setOpen(true)} style={[styles.trigger, (disabled || saving) && styles.disabled]}><Icon name="add" size={24} color={theme.textSecondary} /></Pressable><Modal transparent visible={open} animationType="slide" onRequestClose={() => setOpen(false)}><Pressable style={styles.backdrop} onPress={() => setOpen(false)}><Pressable style={styles.sheetShield} onPress={() => undefined}><BottomSheetSurface><View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />{choose('Photo', 'image-outline', () => void pickMedia('photo'))}{onInlineSelected ? choose('Insert photo inline', 'image-outline', () => void run(() => pickAndStageMedia('photo'), onInlineSelected)) : null}{choose('Video', 'videocam-outline', () => void pickMedia('video'))}{choose('Audio', 'mic-outline', () => void startRecording())}{choose('File', 'document-outline', () => void pickFile())}{choose('Cancel', 'close-outline', () => setOpen(false))}</BottomSheetSurface></Pressable></Pressable></Modal></>;
 });
 
 const styles = StyleSheet.create({

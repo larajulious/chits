@@ -71,6 +71,7 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
   const ready = detail !== null || failedNoteId === note.noteId;
   const space = SPACES[note.spaceId];
   const paper = paperColor(note.color);
+  const [paperHeight, setPaperHeight] = useState(0);
   const isCard = note.kind === 'card';
 
   useEffect(() => {
@@ -150,8 +151,12 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
       {/* Keep long paper upright: rotation expands its visual bounds beyond
           the scrollable area as additional thoughts increase its height. */}
       {!media || primaryThoughts.length ? <View style={media ? styles.paperUnder : undefined}>
-        <View style={[styles.paper, { backgroundColor: paper.base, experimental_backgroundImage: `linear-gradient(176deg, ${paper.base} 0%, ${paper.base} 82%, ${paper.curl} 100%)` }]}>
-          <View style={styles.paperContent}>
+        <View onLayout={({ nativeEvent }) => setPaperHeight(nativeEvent.layout.height)} style={[styles.paper, { backgroundColor: paper.base, experimental_backgroundImage: note.paperStyle === 'sticky' ? `linear-gradient(176deg, ${paper.base} 0%, ${paper.base} 82%, ${paper.curl} 100%)` : undefined }]}>
+          {note.paperStyle === 'index' ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>
+            {Array.from({ length: Math.floor(paperHeight / 28) }, (_, index) => <View key={index} style={{ position: 'absolute', left: 0, right: 0, top: (index + 1) * 28, height: 1, backgroundColor: '#BCD2EA' }} />)}
+            <View style={{ position: 'absolute', top: 0, bottom: 0, left: 24, width: 1, backgroundColor: '#E9A3A3' }} />
+          </View> : null}
+          <View style={[styles.paperContent, note.paperStyle === 'index' && { paddingLeft: 32 }]}>
             {note.hidden ? <View accessible accessibilityLabel="Hidden Chit. Open it in Chat to see it." style={styles.hidden}>
               <Icon name="eye-off-outline" size={26} color={PAPER_INK} style={styles.hiddenIcon} />
               <Text style={[fonts.note, styles.hiddenText]}>Hidden Chit</Text>
@@ -166,6 +171,9 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
             </>}
           </View>
         </View>
+        {note.paperStyle === 'receipt' ? <View pointerEvents="none" style={{ flexDirection: 'row', height: 7, overflow: 'hidden' }}>
+          {Array.from({ length: Math.ceil(contentWidth / 8) }, (_, index) => <View key={index} style={{ width: 0, height: 0, borderLeftWidth: 4, borderRightWidth: 4, borderTopWidth: 7, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: paper.base }} />)}
+        </View> : null}
         {/* A print already carries the pin; the sticky under it just lies there. */}
         {media ? null : <View pointerEvents="none" style={StyleSheet.absoluteFill}>{pin}</View>}
       </View> : null}

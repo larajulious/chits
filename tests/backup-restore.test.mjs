@@ -3,7 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, truncateSync, writeF
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
-import { format, migration, recovery, runtime, service } from './helpers/backup-runtime.mjs';
+import { format, migration, recovery, runtime, service, loadModule } from './helpers/backup-runtime.mjs';
 
 async function fixture(t, populated = true) {
   const env = runtime(); t.after(() => env.cleanup());
@@ -21,7 +21,8 @@ async function fixture(t, populated = true) {
       INSERT INTO timeline_events VALUES ('event','card_created',123,'message','card','board','{}','unique');
       INSERT INTO card_reminders (card_id, scheduled_at, notification_id, created_at, updated_at) VALUES ('card',4102444800000,'OLD-DEVICE-ID',123,456);
       INSERT INTO message_reminders (message_id, scheduled_at, notification_id, created_at, updated_at) VALUES ('message',4102444800000,'OLD-MESSAGE-DEVICE-ID',123,456);
-      INSERT INTO space_placements VALUES ('on-fridge','message',NULL,'fridge',0.1,0.2,-2.5,'#FFC7CC',3,123,456),('on-desk',NULL,'card','desk',0.9,0.4,1.5,'#FFE58A',1,123,456);
+      INSERT INTO space_placements (id,message_id,card_id,space_id,x,y,rotation,color,z_index,pinned_at,updated_at) VALUES ('on-fridge','message',NULL,'fridge',0.1,0.2,-2.5,'#FFC7CC',3,123,456),('on-desk',NULL,'card','desk',0.9,0.4,1.5,'#FFE58A',1,123,456);
+      UPDATE space_placements SET paper_style = CASE id WHEN 'on-fridge' THEN 'index' ELSE 'receipt' END;
       INSERT INTO app_settings VALUES ('chat_title','My NoteSpace',123),('app_appearance','dark',123),('chat_color_theme','teal',123),('chat_draft_text','unfinished words',123),('chat_background','{"storagePath":"chits-attachments/backgrounds/photo.jpg","source":"device","deviceAssetId":"OLD-DEVICE","dim":0.6,"blur":true}',123);
     `);
     for (const [id, type, name] of [['photo','photo','photo.jpg'],['video','video','video.mp4'],['audio','audio','audio.m4a'],['pdf','file','document.pdf'],['file','file','file.bin']]) {
@@ -291,4 +292,35 @@ test('the app theme travels with the backup, and backups made before themes rest
   await legacy.db.runAsync('INSERT INTO app_settings VALUES (?, ?, ?)', THEME_SETTING_KEY, 'boss', 123);
   await service.restoreBackup(withoutTheme.checked, legacy.db);
   assert.equal(themeIn(legacy.env), 'default');
+});
+
+
+test('multiple inline images survive chat-to-board and space transfers, backup and restore with original bytes', async (t) => {
+  const { env, db } = await fixture(t, false);
+  const { createMessageRepository, createBoardRepository, createSpaceRepository } = await loadModule('src/db/repositories');
+  const messages = createMessageRepository(db);
+  const boards = createBoardRepository(db);
+  const spaces = createSpaceRepository(db);
+  const photo = (key) => {
+    const path = `chits-attachments/chat/${key}.jpg`;
+    env.write(path, `original-image-${key}`);
+    return { type: 'image', key, attachmentId: null, image: { storagePath: path, originalName: key + '.jpg', mimeType: 'image/jpeg', size: 20, width: 800, height: 600 } };
+  };
+  const id = await messages.createNote({ blocks: [{ type: 'text', text: '  Before\n' }, photo('first'), { type: 'text', text: '\nBetween\n' }, photo('second'), { type: 'text', text: '\nAfter  ' }] });
+  await spaces.stick('thought', id, 'desk');
+  db.raw.exec("INSERT INTO boards (id,name,created_at,updated_at) VALUES ('board','Ideas',1,1); INSERT INTO board_columns (id,board_id,name,position,created_at,updated_at) VALUES ('column','board','Inbox',0,1,1)");
+  await boards.organizeMessages('board', [id], 'column');
+  const before = await messages.getActiveById(id);
+  const { checked } = await validateCreated(db);
+  env.write('chits-attachments/chat/first.jpg', 'modified');
+  await service.restoreBackup(checked, db);
+  const restored = await env.sqlite.openDatabaseAsync('chits.db');
+  const after = await createMessageRepository(restored).getActiveById(id);
+  assert.deepEqual(after.content, before.content);
+  assert.deepEqual(after.attachments, before.attachments);
+  assert.deepEqual(after.content.map((block) => block.type), ['text','image','text','image','text']);
+  for (const key of ['first','second']) assert.equal(readFileSync(join(env.documents, `chits-attachments/chat/${key}.jpg`), 'utf8'), `original-image-${key}`);
+  assert.equal((await createSpaceRepository(restored).readNote('thought', id)).thoughts[0].content.length, 5);
+  assert.equal(restored.raw.prepare('SELECT COUNT(*) AS count FROM card_messages WHERE message_id = ?').get(id).count, 1);
+  assert.equal(restored.raw.prepare('PRAGMA foreign_key_check').all().length, 0);
 });

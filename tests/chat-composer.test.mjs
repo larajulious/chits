@@ -93,7 +93,7 @@ test('pasted images send where the cursor was, between the words, as one thought
   const { db, repository } = await setup(t);
   const sent = await saveChatComposer(repository, { text: 'ignored', editing: null, attachment: null, blocks: [words('Meeting notes'), image('first'), words(' Update the design above. '), image('second'), words('')] });
   assert.equal(sent.text, 'Meeting notes\n\nUpdate the design above.');
-  assert.deepEqual(order(sent), ['Meeting notes', 'first.jpg', 'Update the design above.', 'second.jpg']);
+  assert.deepEqual(order(sent), ['Meeting notes', 'first.jpg', ' Update the design above. ', 'second.jpg']);
   // Images alone are enough to send.
   const alone = await saveChatComposer(repository, { text: '', editing: null, attachment: null, blocks: [words(''), image('solo'), words('')] });
   assert.equal(alone.text, null);
@@ -131,4 +131,14 @@ test('a resumed draft keeps where its saved images sit among the words', async (
   // No editing target: nothing structural is kept.
   await writeChatDraft(db, 'Just words', null, draftContentForStorage(blocks));
   assert.deepEqual(await readChatDraft(db, repository), { text: 'Just words', editing: null });
+});
+
+test('composer cleanup runs after commit and a cleanup failure never reports the saved message as unsaved', async (t) => {
+  const { repository } = await setup(t);
+  const first = await saveChatComposer(repository, { text: '', editing: null, attachment: null, blocks: [words('Keep words'), image('cleanup')] });
+  let removed;
+  const saved = await saveChatComposer(repository, { text: '', editing: first, attachment: null, blocks: [words('Keep words')], removeImages: async (paths) => { removed = paths; throw new Error('Cleanup unavailable'); } });
+  assert.equal(saved.id, first.id);
+  assert.deepEqual(removed, ['chits-attachments/chat/cleanup.jpg']);
+  assert.equal(saved.attachments.length, 0);
 });

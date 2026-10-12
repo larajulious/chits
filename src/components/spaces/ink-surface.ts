@@ -6,23 +6,25 @@ import { SPACE_UI } from '@/constants/spaces-theme';
 
 export type SpaceUI = { [Key in keyof typeof SPACE_UI]: string };
 
-/**
- * Spaces' interface colors. Classic: its own dark ink-and-paper palette.
- * Sticky: the same roles in the app's Sticky colors — the ink background
- * becomes paper, paper text becomes the theme's text, buttons the accent —
- * so Spaces' sheets and screens match the rest of the app. (The surfaces and
- * notes are objects, drawn the same either way.)
- */
+/** Theme-aware interface colors; physical paper and pin colors remain independent. */
 export function useSpaceUI(): SpaceUI {
   const { tokens, styleTokens, styleColors } = useTheme();
   const sticky = styleTokens.elevation === 'edge';
-  return useMemo(() => sticky ? {
-    ink: styleColors.controlFill, inkRaised: tokens.surfaceElevated, inkBorder: styleColors.outline,
-    paper: tokens.textPrimary, paperWhite: styleColors.controlFill, textMuted: styleColors.textSecondary,
-    accent: styleColors.accentFill, accentText: styleColors.onAccent,
-    magnetRed: SPACE_UI.magnetRed, dangerBorder: tokens.danger, dangerText: tokens.danger,
-    dockIcon: styleColors.textSecondary, switchOff: tokens.borderSubtle,
-  } : SPACE_UI, [sticky, tokens, styleColors]);
+  return useMemo(() => ({
+    ink: sticky ? styleColors.controlFill : tokens.surface,
+    inkRaised: tokens.surfaceElevated,
+    inkBorder: sticky ? styleColors.outline : tokens.borderSubtle,
+    paper: tokens.textPrimary,
+    paperWhite: SPACE_UI.paperWhite,
+    textMuted: sticky ? styleColors.textSecondary : tokens.textSecondary,
+    accent: styleColors.accentFill,
+    accentText: styleColors.onAccent,
+    magnetRed: SPACE_UI.magnetRed,
+    dangerBorder: tokens.danger,
+    dangerText: tokens.danger,
+    dockIcon: sticky ? styleColors.textSecondary : tokens.textSecondary,
+    switchOff: tokens.borderSubtle,
+  }), [sticky, tokens, styleColors]);
 }
 
 const styleCache = new WeakMap<object, WeakMap<SpaceUI, unknown>>();

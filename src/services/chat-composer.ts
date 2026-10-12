@@ -10,16 +10,17 @@ type ComposerRepository = Pick<ReturnType<typeof createMessageRepository>, 'crea
 // `blocks` is the composer's content when it holds images pasted from the
 // clipboard: words and images in the order they were written (pasted images
 // already staged in Chits storage). Without it, `text` alone is the thought.
-export async function saveChatComposer(repository: ComposerRepository, { text, editing, attachment, blocks = null }: {
+export async function saveChatComposer(repository: ComposerRepository, { text, editing, attachment, blocks = null, removeImages }: {
   text: string;
   editing: Message | null;
   attachment: Omit<Attachment, 'id' | 'messageId' | 'createdAt'> | null;
   blocks?: NoteContentInput | null;
+  removeImages?: (paths: string[]) => Promise<void>;
 }): Promise<Message | null> {
   const words = blocks ? noteBlocksText(blocks) : text.trim();
   const images = blocks?.filter((block) => block.type === 'image') ?? [];
   if (!words && !attachment && !images.length && !editing?.attachments.length) return null;
-  if (images.length || editing?.content) {
+  if (blocks?.some((block) => block.type === 'text' && block.list) || images.length || editing?.content) {
     // Never empty a thought by clearing it: keep it unless something would remain.
     if (editing && !words && !images.length && !editing.attachments.some((item) => item.type !== 'photo')) return null;
     // Photos the composer doesn't show stay where they are, ahead of its content:
@@ -28,7 +29,8 @@ export async function saveChatComposer(repository: ComposerRepository, { text, e
     const kept = editing && (!editing.content || !blocks) ? draftFromNote(editing).filter((block) => block.type === 'image') : [];
     const content: NoteContentInput = [...kept, ...(blocks ?? [{ type: 'text', text: words }])];
     if (editing) {
-      await repository.updateContent(editing.id, content);
+      const { removablePaths } = await repository.updateContent(editing.id, content);
+      if (removablePaths.length) await removeImages?.(removablePaths).catch(() => undefined);
       return repository.getActiveById(editing.id);
     }
     return repository.getActiveById(await repository.createNote({ blocks: content, attachment }));
@@ -45,8 +47,10 @@ export async function saveChatComposer(repository: ComposerRepository, { text, e
 // thought that has them (images pasted but not yet sent aren't kept across restarts).
 export async function writeChatDraft(database: Pick<SQLiteDatabase, 'runAsync'>, text: string, messageId: string | null, content: string | null = null) {
   const now = Date.now();
+  const parsed = parseNoteContent(content);
+  const retained = messageId || (parsed && !parsed.some((block) => block.type === 'image')) ? content ?? '' : '';
   // One statement keeps the text, editing target and content together across restarts.
-  await database.runAsync('INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at', 'chat_draft_text', text, now, 'chat_draft_message_id', messageId ?? '', now, 'chat_draft_content', messageId ? content ?? '' : '', now);
+  await database.runAsync('INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at', 'chat_draft_text', text, now, 'chat_draft_message_id', messageId ?? '', now, 'chat_draft_content', retained, now);
 }
 
 export async function readChatDraft(database: Pick<SQLiteDatabase, 'getAllAsync'>, repository: Pick<ReturnType<typeof createMessageRepository>, 'getActiveById'>) {
@@ -56,6 +60,7 @@ export async function readChatDraft(database: Pick<SQLiteDatabase, 'getAllAsync'
   const message = id ? await repository.getActiveById(id) : null;
   // Hidden contents still require the existing reveal action.
   if (message?.isHiddenContent) return { text: '', editing: null };
-  const content = message ? parseNoteContent(values.get('chat_draft_content')) : null;
+  const storedContent = parseNoteContent(values.get('chat_draft_content'));
+  const content = message || (!id && storedContent && !storedContent.some((block) => block.type === 'image')) ? storedContent : null;
   return { text: values.get('chat_draft_text') ?? '', editing: message, ...(content ? { content } : {}) };
 }

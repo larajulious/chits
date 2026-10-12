@@ -84,3 +84,12 @@ export function formatReminderDay(date: Date, now: Date, locale?: string): strin
 export function formatReminderClock(date: Date, locale?: string): string {
   return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(date);
 }
+
+/** Validates numeric time entry, with explicit noon/midnight conversion. */
+export function parseReminderClock(hour: string, minute: string, period: 'AM' | 'PM' | null): { hours: number; minutes: number } | null {
+  if (!/^\d{1,2}$/.test(hour) || !/^\d{1,2}$/.test(minute)) return null;
+  const hours = Number(hour);
+  const minutes = Number(minute);
+  if (minutes > 59 || (period ? hours < 1 || hours > 12 : hours > 23)) return null;
+  return { hours: period ? hours % 12 + (period === 'PM' ? 12 : 0) : hours, minutes };
+}

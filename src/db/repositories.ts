@@ -1,10 +1,11 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { clearChatBackgroundForPaths, unreferencedAttachmentPaths } from './chat-background';
+import { isStoredAttachmentPath } from '../services/attachment-path';
 import { notifyChatBackgroundChanged } from '../services/chat-background';
 import { notifyAttachmentsChanged } from '../services/attachment-changes';
 import { notifySpacesChanged } from '../services/space-changes';
-import { noteBlocksText, noteRenderContent, parseNoteContent, serializeNoteContent, type NoteBlock, type NoteImageDetails, type NoteRenderBlock } from '../services/note-content';
-import { autoPlace, clampUnit, DEFAULT_STICKY_COLOR, randomRotation, resolveSpaceId, SELECTED_SPACE_SETTING_KEY, SPACE_CAPACITY, SPACE_IDS, STICKY_COLORS, type SpaceId, type SpacePoint } from '../constants/spaces';
+import { noteBlocksText, noteRenderContent, parseNoteContent, serializeNoteContent, type NoteBlock, type NoteText, readList, type NoteImageDetails, type NoteRenderBlock } from '../services/note-content';
+import { autoPlace, clampUnit, DEFAULT_PAPER_STYLE, DEFAULT_STICKY_COLOR, SPACE_PAPER_STYLES, resolvePaperStyle, type SpacePaperStyle, randomRotation, resolveSpaceId, SELECTED_SPACE_SETTING_KEY, SPACE_CAPACITY, SPACE_IDS, STICKY_COLORS, type SpaceId, type SpacePoint } from '../constants/spaces';
 import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type AttachmentFilterType, type AttachmentLike, type AttachmentPage, type AttachmentPageOptions, type AttachmentSummary, type Board, type Message, type MessageReminderState, type MessageType, type PageOptions, type TimelineEvent, type TimelineEventType, type TimelineItem, type TimelinePage, type TimelinePageOptions , type PinnedNote, type SpaceCandidate, type SpaceNoteDetail, type SpaceNoteKind, type SpaceNoteMedia, type SpacePlacement } from './types';
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -135,12 +136,23 @@ export function createAttachmentRepository(database: SQLiteDatabase) {
     async delete(attachment: { id: string; storagePath: string }) {
       let removable: string[] = [];
       await database.withExclusiveTransactionAsync(async (transaction) => {
-        const row = await transaction.getFirstAsync<{ source: string; storagePath: string }>(`SELECT 'message' AS source, storage_path AS storagePath FROM attachments WHERE id = ?
-          UNION ALL SELECT 'card' AS source, storage_path AS storagePath FROM card_attachments WHERE id = ?`, attachment.id, attachment.id);
+        const row = await transaction.getFirstAsync<{ source: string; storagePath: string; messageId: string | null }>(`SELECT 'message' AS source, storage_path AS storagePath, message_id AS messageId FROM attachments WHERE id = ?
+          UNION ALL SELECT 'card' AS source, storage_path AS storagePath, NULL AS messageId FROM card_attachments WHERE id = ?`, attachment.id, attachment.id);
         if (!row || row.storagePath !== attachment.storagePath) throw new Error('That attachment is no longer available.');
         await clearChatBackgroundForPaths(transaction, [row.storagePath]);
         const table = row.source === 'message' ? 'attachments' : 'card_attachments';
         await transaction.runAsync(`DELETE FROM ${table} WHERE id = ?`, attachment.id);
+        if (row.messageId) {
+          const message = await transaction.getFirstAsync<MessageRow>('SELECT * FROM messages WHERE id = ?', row.messageId);
+          const content = parseNoteContent(message?.content_json);
+          if (content?.some((block) => block.type === 'image' && block.attachmentId === attachment.id)) {
+            const remaining = content.filter((block) => block.type !== 'image' || block.attachmentId !== attachment.id);
+            const contentJson = serializeNoteContent(remaining);
+            const words = noteBlocksText(parseNoteContent(contentJson) ?? [{ type: 'text', text: remaining.flatMap((block) => block.type === 'text' ? [block.text] : []).join('') }]) || null;
+            const nextAttachment = await transaction.getFirstAsync<{ type: MessageType }>('SELECT type FROM attachments WHERE message_id = ? ORDER BY created_at ASC LIMIT 1', row.messageId);
+            await transaction.runAsync('UPDATE messages SET content_json = ?, text = ?, type = ?, updated_at = ? WHERE id = ?', contentJson, words, nextAttachment?.type ?? 'text', Date.now(), row.messageId);
+          }
+        }
         removable = await unreferencedAttachmentPaths(transaction, [row.storagePath]);
       });
       notifyChatBackgroundChanged();
@@ -174,7 +186,7 @@ function newId() {
 
 // A note's content as an editor hands it over: text, saved images (by their
 // attachment id) and newly pasted ones (already copied into Chits storage).
-export type NoteContentInput = ({ type: 'text'; text: string } | { type: 'image'; attachmentId: string | null; image: NoteImageDetails })[];
+export type NoteContentInput = (NoteText | { type: 'image'; attachmentId: string | null; image: NoteImageDetails })[];
 type StagedAttachment = Omit<Attachment, 'id' | 'messageId' | 'createdAt'>;
 const INSERT_ATTACHMENT_SQL = 'INSERT INTO attachments (id, message_id, type, storage_path, original_name, mime_type, size, duration, width, height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
@@ -187,11 +199,11 @@ function planNoteContent(blocks: NoteContentInput) {
   const inserts: { id: string; image: NoteImageDetails }[] = [];
   const imageIds: string[] = [];
   for (const block of blocks) {
-    if (block.type === 'text') { stored.push({ type: 'text', text: block.text }); continue; }
+    if (block.type === 'text') { stored.push({ type: 'text', text: block.text, ...readList(block.list) }); continue; }
+    if (!block.attachmentId && !isStoredAttachmentPath(block.image.storagePath)) throw new Error('Insert this image again before saving. Its file is not in Chits storage.');
     const id = block.attachmentId ?? newId();
     if (!block.attachmentId) inserts.push({ id, image: block.image });
-    if (imageIds.includes(id)) continue;
-    imageIds.push(id);
+    if (!imageIds.includes(id)) imageIds.push(id);
     stored.push({ type: 'image', attachmentId: id });
   }
   return { stored, inserts, imageIds, text: noteBlocksText(stored) || null, contentJson: serializeNoteContent(stored) };
@@ -207,6 +219,7 @@ async function insertPastedImages(transaction: Pick<SQLiteDatabase, 'runAsync'>,
 
 /** Inserts a new note (text, pasted images and an optional picked attachment); returns its words. */
 async function insertNoteMessage(transaction: Pick<SQLiteDatabase, 'runAsync'>, messageId: string, input: { blocks: NoteContentInput; attachment: StagedAttachment | null }, now: number) {
+  if (input.blocks.some((block) => block.type === 'image' && block.attachmentId)) throw new Error('Saved images must stay linked to their original thought.');
   const plan = planNoteContent(input.blocks);
   const attachment = input.attachment;
   if (!plan.text && !attachment && !plan.imageIds.length) throw new Error('Write something or add an image before adding a note.');
@@ -347,7 +360,8 @@ export function createMessageRepository(database: SQLiteDatabase) {
         const attachments = (await transaction.getAllAsync<AttachmentRow>('SELECT * FROM attachments WHERE message_id = ? ORDER BY created_at ASC', id)).map(attachmentFromRow);
         const owned = new Map(attachments.map((attachment) => [attachment.id, attachment]));
         // Only this note's own photos can be kept; anything else is dropped rather than linked.
-        const plan = planNoteContent(blocks.filter((block) => block.type === 'text' || !block.attachmentId || owned.get(block.attachmentId)?.type === 'photo'));
+        if (blocks.some((block) => block.type === 'image' && block.attachmentId && owned.get(block.attachmentId)?.type !== 'photo')) throw new Error('An image is no longer available. Reopen the note before saving.');
+        const plan = planNoteContent(blocks);
         const kept = new Set(plan.imageIds);
         const removed = attachments.filter((attachment) => attachment.type === 'photo' && !kept.has(attachment.id));
         const remaining = attachments.filter((attachment) => !removed.includes(attachment));
@@ -357,7 +371,7 @@ export function createMessageRepository(database: SQLiteDatabase) {
         const photoIds = attachments.filter((attachment) => attachment.type === 'photo').map((attachment) => attachment.id);
         const firstText = plan.stored.findIndex((block) => block.type === 'text' && block.text.trim());
         const imagesLead = firstText < 0 || plan.stored.slice(firstText).every((block) => block.type === 'text');
-        const legacyLayout = !row.content_json && !plan.inserts.length && imagesLead && plan.imageIds.join() === photoIds.join();
+        const legacyLayout = !plan.stored.some((block) => block.type === 'text' && block.list) && !row.content_json && !plan.inserts.length && imagesLead && plan.imageIds.join() === photoIds.join();
         const type: MessageType = remaining.find((attachment) => attachment.type !== 'photo')?.type ?? (remaining.length || plan.inserts.length ? 'photo' : 'text');
         if (removed.length) {
           const paths = removed.map((attachment) => attachment.storagePath);
@@ -492,12 +506,21 @@ export function createMessageRepository(database: SQLiteDatabase) {
     },
     async updateText(id: string, text: string): Promise<number> {
       const updatedAt = Date.now();
-      const result = await database.runAsync('UPDATE messages SET text = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL', text, updatedAt, id);
-      if (result.changes !== 1) throw new Error('That thought is no longer available.');
-      // A text-only edit of an inline note (Edit Note handles these, but never
-      // lose an image if one arrives here): the words lead, its images follow.
-      const content = parseNoteContent((await database.getFirstAsync<{ content_json: string | null }>('SELECT content_json FROM messages WHERE id = ?', id))?.content_json);
-      if (content) await database.runAsync('UPDATE messages SET content_json = ? WHERE id = ?', serializeNoteContent([{ type: 'text', text }, ...content.filter((block) => block.type === 'image')]), id);
+      await database.withExclusiveTransactionAsync(async (transaction) => {
+        const row = await transaction.getFirstAsync<MessageRow>('SELECT * FROM messages WHERE id = ? AND deleted_at IS NULL', id);
+        if (!row) throw new Error('That thought is no longer available.');
+        const content = parseNoteContent(row.content_json);
+        if (!content) {
+          await transaction.runAsync('UPDATE messages SET text = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL', text, updatedAt, id);
+          return;
+        }
+        if (content.some((block) => block.type === 'text' && block.list)) throw new Error('Open the note editor to edit formatted content.');
+        const runs = content.filter((block) => block.type === 'text');
+        // A flattened string cannot safely describe edits around several images.
+        if (runs.length > 1) throw new Error('Open Edit Note to edit text around inline images.');
+        const next: NoteBlock[] = runs.length ? content.map((block) => block.type === 'text' ? { type: 'text', text } : block) : [...content, { type: 'text', text }];
+        await transaction.runAsync('UPDATE messages SET text = ?, updated_at = ?, content_json = ? WHERE id = ?', text, updatedAt, serializeNoteContent(next), id);
+      });
       return updatedAt;
     },
     async setPinned(id: string, pinned: boolean) {
@@ -1144,10 +1167,10 @@ export function createReminderRepository(database: SQLiteDatabase) {
 
 // ── Spaces ───────────────────────────────────────────────────────────────────
 
-type PlacementRow = { id: string; message_id: string | null; card_id: string | null; space_id: SpaceId; x: number; y: number; rotation: number; color: string; z_index: number; pinned_at: number };
+type PlacementRow = { id: string; message_id: string | null; card_id: string | null; space_id: SpaceId; x: number; y: number; rotation: number; color: string; paper_style: string; z_index: number; pinned_at: number };
 const placementFromRow = (row: PlacementRow): SpacePlacement => ({
   id: row.id, kind: row.card_id ? 'card' : 'thought', noteId: row.card_id ?? row.message_id ?? '', spaceId: row.space_id,
-  x: row.x, y: row.y, rotation: row.rotation, color: row.color, zIndex: row.z_index, pinnedAt: row.pinned_at,
+  x: row.x, y: row.y, rotation: row.rotation, color: row.color, paperStyle: resolvePaperStyle(row.paper_style), zIndex: row.z_index, pinnedAt: row.pinned_at,
 });
 // A thought's text, or a label for what it holds when it has none.
 const MESSAGE_TEXT_SQL = (alias: string) => `COALESCE(NULLIF(TRIM(${alias}.text), ''), (SELECT CASE a.type WHEN 'file' THEN COALESCE(NULLIF(TRIM(a.original_name), ''), 'Attachment') WHEN 'photo' THEN 'Photo' WHEN 'video' THEN 'Video' WHEN 'audio' THEN 'Audio note' ELSE 'Attachment' END FROM attachments a WHERE a.message_id = ${alias}.id ORDER BY a.created_at ASC LIMIT 1), 'Attachment')`;
@@ -1192,7 +1215,7 @@ export function createSpaceRepository(database: SQLiteDatabase) {
         await transaction.runAsync('UPDATE space_placements SET space_id = ?, x = ?, y = ?, z_index = ?, pinned_at = ?, updated_at = ? WHERE id = ?', spaceId, x, y, zIndex, now, now, existing.id);
         result = { status: 'stuck', placement: { ...existing, spaceId, x, y, zIndex, pinnedAt: now } };
       } else {
-        const placement: SpacePlacement = { id: newId(), kind, noteId, spaceId, x, y, rotation: randomRotation(random), color: DEFAULT_STICKY_COLOR, zIndex, pinnedAt: now };
+        const placement: SpacePlacement = { id: newId(), kind, noteId, spaceId, x, y, rotation: randomRotation(random), color: DEFAULT_STICKY_COLOR, paperStyle: DEFAULT_PAPER_STYLE, zIndex, pinnedAt: now };
         await transaction.runAsync(`INSERT INTO space_placements (id, ${noteColumn(kind)}, space_id, x, y, rotation, color, z_index, pinned_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, placement.id, noteId, spaceId, x, y, placement.rotation, placement.color, zIndex, now, now);
         result = { status: 'stuck', placement };
       }
@@ -1299,6 +1322,10 @@ export function createSpaceRepository(database: SQLiteDatabase) {
     setColor: (id: string, color: string) => {
       if (!STICKY_COLORS.some((option) => option.hex === color)) throw new Error('That sticky color isn’t available.');
       return changed(database.runAsync('UPDATE space_placements SET color = ?, updated_at = ? WHERE id = ?', color, Date.now(), id));
+    },
+    setPaperStyle: (id: string, style: SpacePaperStyle) => {
+      if (!SPACE_PAPER_STYLES.some((option) => option.id === style)) throw new Error('That paper style isn’t available.');
+      return changed(database.runAsync('UPDATE space_placements SET paper_style = ?, updated_at = ? WHERE id = ?', style, Date.now(), id));
     },
     remove: (id: string) => changed(database.runAsync('DELETE FROM space_placements WHERE id = ?', id)),
     removeNote: (kind: SpaceNoteKind, noteId: string) => changed(database.runAsync(`DELETE FROM space_placements WHERE ${noteColumn(kind)} = ?`, noteId)),

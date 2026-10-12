@@ -53,6 +53,16 @@ export const STICKY_COLORS = [
   { name: 'Orange', hex: '#FFD6AE' },
 ] as const;
 export const DEFAULT_STICKY_COLOR = STICKY_COLORS[0].hex;
+export const SPACE_PAPER_STYLES = [
+  { id: 'sticky', name: 'Sticky note' },
+  { id: 'index', name: 'Lined paper' },
+  { id: 'receipt', name: 'Receipt' },
+] as const;
+export type SpacePaperStyle = typeof SPACE_PAPER_STYLES[number]['id'];
+export const DEFAULT_PAPER_STYLE: SpacePaperStyle = 'sticky';
+export function resolvePaperStyle(value: string | null | undefined): SpacePaperStyle {
+  return SPACE_PAPER_STYLES.find((style) => style.id === value)?.id ?? DEFAULT_PAPER_STYLE;
+}
 /** Ink on every sticky: they're paper, so it stays dark in dark mode too. */
 export const STICKY_INK = '#1C1B19';
 

@@ -30,19 +30,19 @@ export function MessageMetadata({ message, inside = false, onActions, onHideAgai
   const backgroundActive = useBackgroundReadability();
   const organization = message.organization;
   const openOrganization = () => {
-    if (organization) router.push({ pathname: '/board/[id]', params: { id: organization.boardId, highlightColumnId: organization.columnId } });
+    if (organization) router.push({ pathname: '/board/[id]', params: { id: organization.boardId, highlightColumnId: organization.columnId, ...(organization.cardId ? { highlightCardId: organization.cardId } : {}) } });
   };
   return <View style={[styles.metadata, inside && styles.metadataInside, backgroundActive && !inside && { alignSelf: 'flex-end', backgroundColor: tokens.surface, paddingHorizontal: 8, borderRadius: 12 }]}>
     {organization ? (splitPills ? <>
-      <Pressable accessibilityRole="link" accessibilityLabel={`Open board ${organization.boardName} at column ${organization.columnName}`} accessibilityHint="Opens this column on its board" hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.pill, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
+      <Pressable accessibilityRole="link" accessibilityLabel={`Open board ${organization.boardName} at column ${organization.columnName}`} accessibilityHint={organization.cardId ? "Opens this column and highlights the linked card" : "Opens this column on its board"} hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.pill, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
         <Icon name="folder-outline" size={11} color={tokens.accentStrong} />
         <AppText numberOfLines={1} style={[styles.pillText, { color: tokens.accentStrong }]}>{organization.boardName}</AppText>
       </Pressable>
-      <Pressable accessibilityRole="link" accessibilityLabel={`Open ${organization.columnName} in ${organization.boardName}`} accessibilityHint="Opens this column on its board" hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.pill, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
+      <Pressable accessibilityRole="link" accessibilityLabel={`Open ${organization.columnName} in ${organization.boardName}`} accessibilityHint={organization.cardId ? "Opens this column and highlights the linked card" : "Opens this column on its board"} hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.pill, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
         <Icon name="calendar-outline" size={11} color={tokens.accentStrong} />
         <AppText numberOfLines={1} style={[styles.pillText, { color: tokens.accentStrong }]}>{organization.columnName}</AppText>
       </Pressable>
-    </> : <Pressable accessibilityRole="link" accessibilityLabel={`Open ${organization.columnName} in ${organization.boardName}`} accessibilityHint="Opens this column on its board" hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.boardChip, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
+    </> : <Pressable accessibilityRole="link" accessibilityLabel={`Open ${organization.columnName} in ${organization.boardName}`} accessibilityHint={organization.cardId ? "Opens this column and highlights the linked card" : "Opens this column on its board"} hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.boardChip, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
       <Icon name="folder-outline" size={10} color={tokens.accentStrong} />
       <AppText numberOfLines={1} style={[styles.boardChipText, { color: tokens.accentStrong }]}>{organization.boardName} · {organization.columnName}</AppText>
     </Pressable>) : null}
@@ -167,7 +167,7 @@ export function MessageContentRenderer({ message, mode, focused = false, accentC
   const presentation = classifyMessage(message);
   const actions = onActions ?? (() => undefined);
   if (mode === 'compact') {
-    if (presentation === 'attachment') return <>{renderAttachments?.()}</>;
+    if (presentation === 'attachment' || presentation === 'rich-note') return <>{renderAttachments?.()}</>;
     if (presentation === 'structured-note') return <StructuredNoteCard message={message} focused={focused} onActions={actions} onHideAgain={onHideAgain} />;
     if (presentation === 'note') return <NoteCard message={message} focused={focused} onActions={actions} onHideAgain={onHideAgain} />;
     return <QuickThoughtBubble message={message} focused={focused} onActions={actions} onHideAgain={onHideAgain} />;

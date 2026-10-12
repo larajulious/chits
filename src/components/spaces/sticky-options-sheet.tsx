@@ -1,15 +1,16 @@
 import { useEffect, useState, type ComponentProps } from 'react';
-import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Icon } from '@/components/ui/icon';
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { SPACE_CAPACITY, SPACE_LIST, SPACES, STICKY_COLORS, type SpaceId } from '@/constants/spaces';
+import { SPACE_CAPACITY, SPACE_LIST, SPACE_PAPER_STYLES, type SpacePaperStyle, SPACES, STICKY_COLORS, type SpaceId } from '@/constants/spaces';
 import { paperColor } from '@/constants/spaces-theme';
 import type { PinnedNote } from '@/db/types';
 import { useSpaceFonts } from './space-fonts';
 import { useSpaceShapes, useSpaceStyles, useSpaceUI, type SpaceUI } from '@/components/spaces/ink-surface';
+import { PaperNote } from './paper-note';
 import { photoCaption, stickyText } from './sticky-note';
 
 type Props = {
@@ -17,6 +18,7 @@ type Props = {
   counts: Record<SpaceId, number>;
   onDismiss: () => void;
   onColor: (color: string) => void;
+  onPaperStyle: (style: SpacePaperStyle) => void;
   onOpen: () => void;
   onBringToFront: () => void;
   onMove: (spaceId: SpaceId) => void;
@@ -43,14 +45,15 @@ function Tile({ icon, label, onPress, danger = false }: { icon: IconName; label:
 
 /**
  * A sticky's options (long-press, or the screen reader's "Options" action):
- * its paper color, then Open, Bring to front, Move to another space and
+ * its paper color and style, then Open, Bring to front, Move to another space and
  * Remove — which are also the non-drag way to arrange the board. Drawn over
  * the dimmed surface by the screen, which lifts the note itself above the dim.
  */
-export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onOpen, onBringToFront, onMove, onRemove, onReminder }: Props) {
+export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onPaperStyle, onOpen, onBringToFront, onMove, onRemove, onReminder }: Props) {
   const ui = useSpaceUI();
   const styles = useSpaceStyles(createStyles);
   const insets = useSafeAreaInsets();
+  const window = useWindowDimensions();
   const fonts = useSpaceFonts();
   const shapes = useSpaceShapes();
   const [moving, setMoving] = useState(false);
@@ -63,10 +66,11 @@ export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onOpen, o
   // A photo print has no paper to color; a tape's label does.
   const isPrint = media?.attachment.type === 'photo' || media?.attachment.type === 'video';
   const title = note.hidden ? 'Hidden Chit' : media ? photoCaption(note) ?? MEDIA_NAMES[media.attachment.type] : stickyText(note).split('\n')[0] || 'Note';
-  return <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, shapes.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
+  return <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, shapes.sheet, { maxHeight: window.height - insets.top - 16, paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
     <View style={styles.grabber} />
     <Text accessibilityRole="header" numberOfLines={1} style={[fonts.uiHeavy, styles.title]}>{title}</Text>
     <Text style={[fonts.ui, styles.subtitle]}>On your {space.name}</Text>
+    <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} showsVerticalScrollIndicator={false}>
     {moving ? <View style={styles.moveList}>
       <Pressable accessibilityRole="button" accessibilityLabel="Back to options" onPress={() => setMoving(false)} style={({ pressed }) => [styles.moveRow, shapes.control, pressed && styles.pressed]}>
         <Icon name="chevron-back" size={20} color={ui.paper} />
@@ -94,6 +98,18 @@ export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onOpen, o
         })}
       </View>
       </>}
+      {!media ? <>
+        <Text style={[fonts.label, styles.styleSection]}>PAPER STYLE</Text>
+        <View accessibilityRole="radiogroup" accessibilityLabel="Paper style" style={styles.paperStyles}>
+          {SPACE_PAPER_STYLES.map((style) => {
+            const selected = note.paperStyle === style.id;
+            return <Pressable key={style.id} accessibilityRole="radio" accessibilityLabel={style.name} accessibilityState={{ selected }} onPress={() => { if (!selected) onPaperStyle(style.id); }} style={({ pressed }) => [styles.paperStyle, shapes.control, selected && styles.paperStyleSelected, pressed && styles.pressed]}>
+              <View pointerEvents="none"><PaperNote kind={style.id} color={note.color} body="Aa" width={52} height={46} rotation={0} unit={0.42} /></View>
+              <Text style={[fonts.uiSemi, styles.paperStyleLabel, selected && { color: ui.accentText }]}>{style.name}</Text>
+            </Pressable>;
+          })}
+        </View>
+      </> : null}
       <View style={styles.grid}>
         {onReminder ? <View style={styles.gridRow}><Tile icon="notifications-outline" label="Reminder" onPress={onReminder} /></View> : null}
         <View style={styles.gridRow}>
@@ -106,6 +122,7 @@ export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onOpen, o
         </View>
       </View>
     </>}
+    </ScrollView>
   </Animated.View>;
 }
 
@@ -132,6 +149,11 @@ const createStyles = (ui: SpaceUI) => StyleSheet.create({
   ringSelected: { borderColor: ui.paper },
   swatch: { width: 44, height: 44, borderRadius: 2, boxShadow: '0px 2px 3px rgba(0,0,0,0.3)' },
   printGap: { height: 18 },
+  styleSection: { fontSize: 11, letterSpacing: 1.6, color: ui.textMuted },
+  paperStyles: { flexDirection: 'row', gap: 8, marginTop: 10, marginBottom: 18 },
+  paperStyle: { flex: 1, gap: 8, alignItems: 'center', paddingVertical: 12, borderWidth: 1.5, borderColor: ui.inkBorder, backgroundColor: ui.inkRaised },
+  paperStyleSelected: { borderColor: ui.accent, backgroundColor: ui.accent },
+  paperStyleLabel: { fontSize: 12, color: ui.paper },
   grid: { gap: 10 },
   gridRow: { flexDirection: 'row', gap: 10 },
   tile: { flex: 1, height: 78, borderRadius: 16, padding: 12, justifyContent: 'space-between' },

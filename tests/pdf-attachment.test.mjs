@@ -52,5 +52,5 @@ test('native PDF module is autolinked for both platforms and requests no storage
   const config = JSON.parse(read('modules/chits-attachments/expo-module.config.json'));
   assert.deepEqual(config.platforms, ['apple', 'android']);
   const manifest = read('modules/chits-attachments/android/src/main/AndroidManifest.xml');
-  assert.doesNotMatch(manifest, /uses-permission/);
+  assert.doesNotMatch(manifest, /android\.permission\.(?:READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE|READ_MEDIA_\w+)/);
 });

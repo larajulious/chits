@@ -1,5 +1,6 @@
 package expo.modules.chitsattachments
 
+import android.widget.EditText
 import android.app.Activity
 import android.content.ClipData
 import android.content.ContentValues
@@ -36,6 +37,7 @@ internal class ExportInProgressException : CodedException("ERR_EXPORT_IN_PROGRES
 internal class UnsupportedOnThisAndroidException : CodedException("ERR_UNSUPPORTED", "Direct downloads need Android 10 or later.", null)
 
 class ChitsFilesModule : Module() {
+  private val inlinePaste = ChitsInlinePaste()
   private val context: Context
     get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
 
@@ -44,6 +46,22 @@ class ChitsFilesModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("ChitsFiles")
+    Events("inlineImagePaste")
+    AsyncFunction("attachInlinePaste") { tag: Int, key: String ->
+      val input = appContext.findView<EditText>(tag)
+      if (input == null) false else {
+        inlinePaste.attach(input, tag, key) { block, start, end, kind ->
+          sendEvent("inlineImagePaste", mapOf("key" to block, "start" to start, "end" to end, "kind" to kind))
+        }
+        true
+      }
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("detachInlinePaste") { tag: Int -> inlinePaste.detach(tag) }.runOnQueue(Queues.MAIN)
+    OnDestroy {
+      val paste = inlinePaste
+      android.os.Handler(android.os.Looper.getMainLooper()).post { paste.clear() }
+    }
+
 
     AsyncFunction("atomicWriteFileAsync") { uri: String, contents: String ->
       val destination = ChitsLocalFiles.fileFromSource(uri) ?: throw FileUnavailableException()

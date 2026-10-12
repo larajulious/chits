@@ -6,7 +6,7 @@ export const MESSAGE_PRESENTATION = {
   minimumListItems: 2,
 } as const;
 
-export type MessagePresentation = 'attachment' | 'quick-thought' | 'note' | 'structured-note';
+export type MessagePresentation = 'attachment' | 'rich-note' | 'quick-thought' | 'note' | 'structured-note';
 
 export type StructuredLine =
   | { kind: 'spacer'; key: string }
@@ -52,7 +52,7 @@ export function parseInlineContent(text: string): InlineSegment[] {
   return segments.length ? segments : [{ kind: 'text', text }];
 }
 
-export function classifyText(text: string | null): Exclude<MessagePresentation, 'attachment'> {
+export function classifyText(text: string | null): Exclude<MessagePresentation, 'attachment' | 'rich-note'> {
   const value = text?.trim() ?? '';
   const lines = value.split(/\r?\n/);
   const structuredLines = parseStructuredText(value);
@@ -62,7 +62,8 @@ export function classifyText(text: string | null): Exclude<MessagePresentation, 
   return 'quick-thought';
 }
 
-export function classifyMessage(message: Pick<Message, 'attachments' | 'text'>): MessagePresentation {
+export function classifyMessage(message: Pick<Message, 'attachments' | 'text' | 'content'>): MessagePresentation {
+  if (message.content?.some((block) => block.type === 'text' && block.list)) return 'rich-note';
   if (message.attachments.length) return 'attachment';
   return classifyText(message.text);
 }

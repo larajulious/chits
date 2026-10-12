@@ -6,10 +6,10 @@ import {
   draftFromNote, ensureEditableText, imageFingerprint, imageRows, insertImageAtCursor, noteBlocksText, noteRenderContent,
   parseNoteContent, removeImageBlock, serializeNoteContent,
 } from '../src/services/note-content.ts';
-import { buildShareNoteSource } from '../src/services/share-note.ts';
+import { buildShareNoteSource, paginateInlineShare } from '../src/services/share-note.ts';
 import { loadModule, migration, runtime } from './helpers/backup-runtime.mjs';
 
-const { createBoardRepository, createMessageRepository, createSpaceRepository } = await loadModule('src/db/repositories');
+const { createAttachmentRepository, createBoardRepository, createMessageRepository, createSpaceRepository } = await loadModule('src/db/repositories');
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
 const photo = (id, width = 1200, height = 900) => ({ id, messageId: 'm', type: 'photo', storagePath: `chits-attachments/chat/${id}.jpg`, originalName: 'Pasted image.jpg', mimeType: 'image/jpeg', size: 10, duration: null, width, height, createdAt: 1 });
@@ -18,7 +18,7 @@ const pasted = (key, path = `chits-attachments/chat/${key}.jpg`) => ({ key, type
 test('content is stored only for notes with images, as ordered references — never image data', () => {
   assert.equal(serializeNoteContent([{ type: 'text', text: 'Just words' }]), null);
   const json = serializeNoteContent([{ type: 'text', text: ' Meeting notes ' }, { type: 'image', attachmentId: 'a' }, { type: 'text', text: '' }, { type: 'text', text: 'Update the design above.' }, { type: 'image', attachmentId: 'b' }]);
-  assert.deepEqual(JSON.parse(json), [{ type: 'text', text: 'Meeting notes' }, { type: 'image', attachmentId: 'a' }, { type: 'text', text: 'Update the design above.' }, { type: 'image', attachmentId: 'b' }]);
+  assert.deepEqual(JSON.parse(json), [{ type: 'text', text: ' Meeting notes ' }, { type: 'image', attachmentId: 'a' }, { type: 'text', text: 'Update the design above.' }, { type: 'image', attachmentId: 'b' }]);
   assert.deepEqual(parseNoteContent(json), JSON.parse(json));
   // Damaged or text-only content reads as a plain note.
   assert.equal(parseNoteContent('not json'), null);
@@ -29,13 +29,13 @@ test('content is stored only for notes with images, as ordered references — ne
 test('pasting splits the text at the cursor and removing the image joins it back', () => {
   const start = [{ key: 't', type: 'text', text: 'Meeting notes Please update' }];
   const { blocks, cursor } = insertImageAtCursor(start, { key: 't', start: 13, end: 13 }, pasted('i1'));
-  assert.deepEqual(blocks.map((block) => block.type === 'text' ? block.text : block.key), ['Meeting notes', 'i1', 'Please update']);
+  assert.deepEqual(blocks.map((block) => block.type === 'text' ? block.text : block.key), ['Meeting notes', 'i1', ' Please update']);
   assert.equal(cursor.key, blocks[2].key);
   // A second paste lands where the cursor now is: right after the first image.
   const second = insertImageAtCursor(blocks, cursor, pasted('i2'));
-  assert.deepEqual(second.blocks.map((block) => block.type === 'text' ? block.text : block.key), ['Meeting notes', 'i1', '', 'i2', 'Please update']);
+  assert.deepEqual(second.blocks.map((block) => block.type === 'text' ? block.text : block.key), ['Meeting notes', 'i1', '', 'i2', ' Please update']);
   const removed = removeImageBlock(second.blocks, 'i1');
-  assert.deepEqual(removed.map((block) => block.type === 'text' ? block.text : block.key), ['Meeting notes', 'i2', 'Please update']);
+  assert.deepEqual(removed.map((block) => block.type === 'text' ? block.text : block.key), ['Meeting notes', 'i2', ' Please update']);
   // With no cursor an image goes at the end, with room to keep typing after it.
   const appended = insertImageAtCursor(start, null, pasted('i3'));
   assert.deepEqual(appended.blocks.map((block) => block.type), ['text', 'image', 'text']);
@@ -187,7 +187,7 @@ test('the editors paste through the shared clipboard service and clean up unsave
   assert.match(clipboard, /finally \{\s*await deleteAsync\(temporary/);
   const edit = read('src/app/card/edit-content.native.tsx');
   assert.match(edit, /discardPastedImages\(blocksRef\.current\)/);
-  assert.match(edit, /removablePaths\.map\(\(path\) => deleteAttachment\(path\)\)/);
+  assert.match(edit, /removablePaths\.map\(\(path\) => deleteAttachment\(path\)/);
   const chat = read('src/app/(tabs)/chat.native.tsx');
   assert.match(chat, /if \(selected\.content\) \{[^}]*router\.push\(`\/card\/edit-content\?messageId=/);
   // Chat's composer (docked and full screen) is the same block editor, pasting at the cursor.
@@ -195,4 +195,105 @@ test('the editors paste through the shared clipboard service and clean up unsave
   assert.match(chat, /useNoteImagePaste\(\{[^}]*editor: fullscreenEditing \? fullscreenInputRef : inputRef/);
   assert.match(chat, /useEffect\(\(\) => \(\) => discardPastedImages\(blocksRef\.current\), \[\]\);/);
   assert.match(read('src/components/chat/fullscreen-composer.tsx'), /<NoteBlocksEditor\s+ref=\{editorRef\}/);
+});
+
+test('cursor insertion preserves whitespace and removing the image restores the original text', () => {
+  const text = '  before\n\n  after  ';
+  const inserted = insertImageAtCursor([{ key: 't', type: 'text', text }], { key: 't', start: 10, end: 10 }, pasted('image'));
+  assert.equal(inserted.blocks[0].text + inserted.blocks[2].text, text);
+  assert.equal(removeImageBlock(inserted.blocks, 'image')[0].text, text);
+  const json = serializeNoteContent(inserted.blocks.map((block) => block.type === 'text' ? block : { type: 'image', attachmentId: 'saved' }));
+  const restored = draftFromNote({ text: 'preview', content: parseNoteContent(json), attachments: [photo('saved')] });
+  assert.equal(restored.filter((block) => block.type === 'text').map((block) => block.text).join(''), text);
+});
+
+test('gallery and clipboard insertion preserve selected text at every cursor boundary', () => {
+  for (const text of ['', 'Hello world', 'Before\n\nAfter', '日本 🐾 trip']) {
+    for (const start of [0, Math.floor(text.length / 2), text.length]) {
+      for (const end of [start, text.length]) {
+        const result = insertImageAtCursor([{ key: 'text', type: 'text', text }], { key: 'text', start, end }, pasted('photo'));
+        assert.equal(result.blocks[0].text, text.slice(0, start));
+        assert.equal(result.blocks[2].text, text.slice(start));
+        assert.deepEqual(result.cursor, { key: result.blocks[2].key, start: 0, end: 0 });
+        assert.equal(removeImageBlock(result.blocks, 'photo')[0].text, text);
+      }
+    }
+  }
+});
+
+test('replacing one repeated saved image keeps its other reference and authored position', async (t) => {
+  const { messages } = await fixture(t);
+  const id = await messages.createNote({ blocks: [{ type: 'text', text: 'Before\n' }, pasted('old'), { type: 'text', text: '\nAfter' }] });
+  const original = await messages.getActiveById(id);
+  const savedImage = draftFromNote(original).find((block) => block.type === 'image');
+  const result = await messages.updateContent(id, [
+    { key: 'before', type: 'text', text: 'Before\n' }, pasted('replacement'),
+    { key: 'middle', type: 'text', text: '\nMiddle\n' }, savedImage,
+    { key: 'after', type: 'text', text: '\nAfter' },
+  ]);
+  assert.deepEqual(result.removablePaths, []);
+  const saved = await messages.getActiveById(id);
+  const restored = draftFromNote(saved);
+  assert.deepEqual(restored.map((block) => block.type === 'text' ? block.text : block.image.storagePath), [
+    'Before\n', 'chits-attachments/chat/replacement.jpg', '\nMiddle\n', 'chits-attachments/chat/old.jpg', '\nAfter',
+  ]);
+});
+
+test('extreme image proportions remain accurate', () => {
+  for (const [width, height] of [[10000, 100], [100, 10000]]) {
+    const [row] = imageRows([{ width, height }], 300, 4, 360);
+    assert.ok(Math.abs(row.widths[0] / row.height - width / height) <= 1 / row.height);
+    assert.ok(row.widths[0] <= 300);
+  }
+});
+
+test('removing an image never deletes a file still shared by another message or card', async (t) => {
+  const { messages, db } = await fixture(t);
+  const path = 'chits-attachments/chat/shared.jpg';
+  const first = await messages.createNote({ blocks: [{ type: 'text', text: 'First' }, pasted('first', path)] });
+  const second = await messages.createNote({ blocks: [{ type: 'text', text: 'Second' }, pasted('second', path)] });
+  const { removablePaths } = await messages.updateContent(first, [{ type: 'text', text: 'First edited' }]);
+  assert.deepEqual(removablePaths, []);
+  const secondNote = await messages.getActiveById(second);
+  assert.equal(secondNote.attachments[0].storagePath, path);
+  // Deleting from the library also removes the inline reference atomically.
+  await createAttachmentRepository(db).delete(secondNote.attachments[0]);
+  const withoutImage = await messages.getActiveById(second);
+  assert.equal(withoutImage.content, null);
+  assert.equal(withoutImage.text, 'Second');
+  assert.equal(withoutImage.attachments.length, 0);
+  assert.equal(db.raw.prepare('PRAGMA foreign_key_check').all().length, 0);
+});
+
+
+test('rich image exports keep mixed reading order across bounded pages without losing words', () => {
+  const long = ('日本 🐾\n' + 'Words around images. '.repeat(50)).repeat(8);
+  const source = buildShareNoteSource({ messages: [{ text: long, content: [{ type: 'text', text: long }, { type: 'image', attachmentId: 'a' }, { type: 'text', text: 'After image' }, { type: 'image', attachmentId: 'b' }], attachments: [photo('b'), photo('a')] }] });
+  assert.deepEqual(source.blocks.filter((block) => block.type === 'image').map((block) => block.image.id), ['a', 'b']);
+  const pages = paginateInlineShare(source.blocks);
+  assert.ok(pages.length > 1);
+  const flat = pages.flat();
+  assert.equal(flat.filter((block) => block.type === 'text').map((block) => block.text).join(''), long + 'After image');
+  assert.deepEqual(flat.filter((block) => block.type === 'image').map((block) => block.image.id), ['a', 'b']);
+});
+
+test('flat text edits preserve the existing image position and reject ambiguous mixed edits atomically', async (t) => {
+  const { messages } = await fixture(t);
+  const simple = await messages.createNote({ blocks: [pasted('head'), { type: 'text', text: 'Caption' }] });
+  await messages.updateText(simple, 'Updated caption');
+  assert.deepEqual((await messages.getActiveById(simple)).content.map((block) => block.type), ['image', 'text']);
+  const mixed = await messages.createNote({ blocks: [{ type: 'text', text: 'Before' }, pasted('middle'), { type: 'text', text: 'After' }] });
+  const before = await messages.getActiveById(mixed);
+  await assert.rejects(messages.updateText(mixed, 'Flattened'), /Edit Note/);
+  assert.deepEqual(await messages.getActiveById(mixed), before);
+});
+
+test('invalid image references and temporary paths fail without replacing saved content', async (t) => {
+  const { messages } = await fixture(t);
+  const id = await messages.createNote({ blocks: [{ type: 'text', text: 'Keep' }, pasted('saved')] });
+  const before = await messages.getActiveById(id);
+  const foreign = { ...pasted('foreign'), attachmentId: 'not-owned' };
+  await assert.rejects(messages.updateContent(id, [{ type: 'text', text: 'Changed' }, foreign]), /no longer available/);
+  await assert.rejects(messages.updateContent(id, [{ type: 'text', text: 'Changed' }, pasted('temporary', 'file:///tmp/image.jpg')]), /Chits storage/);
+  assert.deepEqual(await messages.getActiveById(id), before);
 });

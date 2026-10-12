@@ -11,7 +11,7 @@ import { NoteBlocksEditor, type NoteBlocksEditorControl } from '@/components/not
 import { draftPlainText, type NoteDraftBlock } from '@/services/note-content';
 
 // The same draft as Chat's composer (words and pasted images, in order), with room to write.
-export function FullscreenComposer({ blocks, onChangeBlocks, editorRef, onClose, onSaveDraft, onSend, canSave, saving, error, savedText, attachmentLabel, pasteButton }: {
+export function FullscreenComposer({ blocks, onChangeBlocks, editorRef, onClose, onSaveDraft, onSend, canSave, saving, error, savedText, attachmentLabel, pasteButton, insertImageButton, listButtons, onReplaceImage }: {
   blocks: NoteDraftBlock[];
   onChangeBlocks: (update: (current: NoteDraftBlock[]) => NoteDraftBlock[]) => void;
   editorRef: RefObject<NoteBlocksEditorControl | null>;
@@ -25,6 +25,9 @@ export function FullscreenComposer({ blocks, onChangeBlocks, editorRef, onClose,
   attachmentLabel: string | null;
   // "Paste image", while the clipboard holds one (sits above the footer).
   pasteButton?: ReactNode;
+  insertImageButton?: ReactNode;
+  listButtons?: ReactNode;
+  onReplaceImage?: (key: string) => void;
 }) {
   const { tokens } = useTheme();
   const font = useFontStyle('body');
@@ -46,6 +49,7 @@ export function FullscreenComposer({ blocks, onChangeBlocks, editorRef, onClose,
             accessibilityLabel={attachmentLabel ? 'Attachment description' : 'Message note'}
             blocks={blocks}
             onChangeBlocks={onChangeBlocks}
+            onReplaceImage={onReplaceImage}
             editable={!saving}
             placeholder={attachmentLabel ? 'Add a description...' : 'Message note...'}
             maxLength={10000}
@@ -54,7 +58,7 @@ export function FullscreenComposer({ blocks, onChangeBlocks, editorRef, onClose,
             blockContainerStyle={styles.blocks}
             blockInputStyle={[styles.blockInput, font, { color: tokens.textPrimary }]}
           />
-          {pasteButton ? <View style={styles.paste}>{pasteButton}</View> : null}
+          <View style={styles.paste}>{insertImageButton}{listButtons}{pasteButton}</View>
           <SafeAreaView edges={keyboardVisible ? [] : ['bottom']} style={[styles.footer, { borderTopColor: tokens.borderSubtle }]}>
             <AppText accessibilityLiveRegion="polite" style={[styles.status, { color: error ? tokens.danger : tokens.textSecondary }]}>{error ?? (saving ? 'Saving...' : savedText === value.trim() ? 'Saved in chat' : savedText !== null ? 'Unsaved changes' : 'Save to chat and keep writing.')}</AppText>
             <View style={styles.actions}>
@@ -75,7 +79,7 @@ const styles = StyleSheet.create({
   attachment: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, fontSize: 13 },
   footer: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm, gap: spacing.sm },
   status: { fontSize: 13 },
-  paste: { flexDirection: 'row', paddingHorizontal: spacing.md, paddingBottom: spacing.xs },
+  paste: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, paddingBottom: spacing.xs },
   blocks: { flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.md },
   blockInput: { minHeight: 26, padding: 0, fontSize: 17, lineHeight: 26, textAlignVertical: 'top' },
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

@@ -259,10 +259,10 @@ function MediaMetadata({ message, timestampLeft = false, onActions, onHideAgain 
     {organization ? <Pressable
       accessibilityRole="link"
       accessibilityLabel={`Open ${organization.columnName} in ${organization.boardName}`}
-      accessibilityHint="Opens this column on its board"
+      accessibilityHint={organization.cardId ? "Opens this column and highlights the linked card" : "Opens this column on its board"}
       onPress={(event) => {
         event.stopPropagation();
-        router.push({ pathname: '/board/[id]', params: { id: organization.boardId, highlightColumnId: organization.columnId } });
+        router.push({ pathname: '/board/[id]', params: { id: organization.boardId, highlightColumnId: organization.columnId, ...(organization.cardId ? { highlightCardId: organization.cardId } : {}) } });
       }}
       style={({ pressed }) => [styles.mediaBoardChip, pressed && styles.pressed]}
     ><AppText numberOfLines={1} style={styles.mediaBoardChipText}>{organization.boardName} · {organization.columnName}</AppText></Pressable> : null}
@@ -272,9 +272,31 @@ function MediaMetadata({ message, timestampLeft = false, onActions, onHideAgain 
   </>;
 }
 
-function AttachmentMessage({ message, attachment, focused, onLongPress, onHideAgain }: { message: Message; attachment: Attachment; focused: boolean; onLongPress: (message: Message) => void; onHideAgain?: () => void }) {
+// Keep the clipping mask on a borderless native view. Updating a rounded,
+// bordered background on Android can invalidate its clip bounds and hide every
+// descendant; the content mask must not share that mutable painted background.
+function MediaMessageSurface({ focused, onLongPress, children }: { focused: boolean; onLongPress: () => void; children: ReactNode }) {
   const { tokens: theme, styleTokens } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
+  const sticky = useStickySurface();
+  const outlined = styleTokens.elevation === 'edge';
+  const border = outlined ? styleTokens.outline.width : focused ? 2 : StyleSheet.hairlineWidth;
+  const bottomBorder = outlined ? border + styleTokens.edgeDepth : border;
+  const radius = outlined ? styleTokens.radius.panel : radii.contentCard;
+  const messageMaxWidth = Math.min(520, Math.round((screenWidth - spacing.md * 2) * 0.8));
+  const contentRadius = {
+    borderTopLeftRadius: Math.max(0, radius - border),
+    borderTopRightRadius: Math.max(0, radius - border),
+    borderBottomLeftRadius: Math.max(0, radius - bottomBorder),
+    borderBottomRightRadius: Math.max(0, radius - bottomBorder),
+  };
+  return <Pressable accessible={false} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [styles.attachmentMessage, { maxWidth: messageMaxWidth, backgroundColor: theme.surface, borderColor: focused ? theme.accentStrong : theme.borderSubtle }, focused && styles.focused, sticky({ radius: styleTokens.radius.panel, outlineColor: focused ? theme.accentStrong : undefined, clip: true }), pressed && styles.pressed]}>
+    <View collapsable={false} style={[styles.mediaMessageContent, contentRadius]}>{children}</View>
+  </Pressable>;
+}
+
+function AttachmentMessage({ message, attachment, focused, onLongPress, onHideAgain }: { message: Message; attachment: Attachment; focused: boolean; onLongPress: (message: Message) => void; onHideAgain?: () => void }) {
+  const { tokens: theme } = useTheme();
   const database = useSQLiteContext();
   const [gallery, setGallery] = useState<{ items: AttachmentLike[]; initialIndex: number } | null>(null);
   const visual = attachment.type === 'photo' || attachment.type === 'video';
@@ -301,20 +323,14 @@ function AttachmentMessage({ message, attachment, focused, onLongPress, onHideAg
     : attachment.type === 'video'
       ? `Video${seconds ? `, ${seconds} seconds` : ''}.${message.text ? ` Description: ${message.text}.` : ''}${moreLabel} Play video.`
       : undefined;
-  // Wider than a short text bubble (this is the message surface, not a card inside
-  // one), but capped well short of the full chat width so it still reads as a
-  // message, not a full-bleed screen element.
-  const chatWidth = screenWidth - spacing.md * 2;
-  const sticky = useStickySurface();
-  const messageMaxWidth = Math.min(520, Math.round(chatWidth * 0.8));
-  return <Pressable accessible={false} onLongPress={() => onLongPress(message)} delayLongPress={350} style={({ pressed }) => [styles.attachmentMessage, { maxWidth: messageMaxWidth, backgroundColor: theme.surface, borderColor: focused ? theme.accentStrong : theme.borderSubtle }, focused && styles.focused, sticky({ radius: styleTokens.radius.panel, outlineColor: focused ? theme.accentStrong : undefined, clip: true }), pressed && styles.pressed]}>
+  return <MediaMessageSurface focused={focused} onLongPress={() => onLongPress(message)}>
     {mosaicItems.length > 1
       ? <MediaMosaic items={mosaicItems} total={totalAttachments} firstLabel={accessibilityLabel} onOpen={(startId) => void openGallery(startId)} onLongPress={() => onLongPress(message)} overlay={!message.text ? <MediaMetadata message={message} timestampLeft onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /> : null} />
       : <AttachmentContent attachment={attachment} accessibilityLabel={accessibilityLabel} onOpen={moreCount > 0 ? () => void openGallery() : undefined} overlay={visual && !message.text ? <MediaMetadata message={message} timestampLeft={attachment.type === 'video'} onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /> : null} />}
     {message.text ? <View style={[styles.descriptionSurface, visual && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.borderSubtle }]}><AppText accessible={!visual} style={[styles.attachmentDescription, { color: theme.textPrimary }]}>{message.text}</AppText><MessageMetadata message={message} inside splitPills={attachment.type === 'audio'} onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /></View> : null}
     {!visual && !message.text ? <MessageMetadata message={message} inside splitPills={attachment.type === 'audio'} onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /> : null}
     {gallery ? <AttachmentGallery attachments={gallery.items} initialIndex={gallery.initialIndex} onDismiss={() => setGallery(null)} /> : null}
-  </Pressable>;
+  </MediaMessageSurface>;
 }
 
 // A note with images pasted between its words: one bubble that reads top to
@@ -322,15 +338,12 @@ function AttachmentMessage({ message, attachment, focused, onLongPress, onHideAg
 // picked photo, video, recording or file) leads, as it always has; images
 // keep their own proportions, within a screen-relative height.
 function InlineNoteMessage({ message, content, focused, onLongPress, onHideAgain }: { message: Message; content: NonNullable<ReturnType<typeof noteRenderContent<Attachment>>>; focused: boolean; onLongPress: (message: Message) => void; onHideAgain?: () => void }) {
-  const { tokens: theme, styleTokens } = useTheme();
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const sticky = useStickySurface();
-  const messageMaxWidth = Math.min(520, Math.round((screenWidth - spacing.md * 2) * 0.8));
-  return <Pressable accessible={false} onLongPress={() => onLongPress(message)} delayLongPress={350} style={({ pressed }) => [styles.attachmentMessage, { maxWidth: messageMaxWidth, backgroundColor: theme.surface, borderColor: focused ? theme.accentStrong : theme.borderSubtle }, focused && styles.focused, sticky({ radius: styleTokens.radius.panel, outlineColor: focused ? theme.accentStrong : undefined, clip: true }), pressed && styles.pressed]}>
+  const { height: screenHeight } = useWindowDimensions();
+  return <MediaMessageSurface focused={focused} onLongPress={() => onLongPress(message)}>
     {content.leading.map((attachment) => <AttachmentContent key={attachment.id} attachment={attachment} />)}
     <NoteContentView blocks={content.blocks} style={styles.inlineNote} maxImageHeight={Math.round(screenHeight * 0.45)} onImageLongPress={() => onLongPress(message)} renderText={(text) => <NoteText text={text} mode="compact" />} />
     <View style={styles.inlineMetadata}><MessageMetadata message={message} inside onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /></View>
-  </Pressable>;
+  </MediaMessageSurface>;
 }
 
 const MOSAIC_MAX_TILES = 4;
@@ -546,7 +559,8 @@ const styles = StyleSheet.create({
   hiddenHint: { marginTop: 1, fontSize: 11, lineHeight: 15, fontWeight: '500' },
   pressed: { opacity: 0.72 },
   focused: { borderWidth: 2 },
-  attachmentMessage: { alignSelf: 'flex-end', overflow: 'hidden', width: '100%', maxWidth: 520, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.contentCard },
+  mediaMessageContent: { width: '100%', overflow: 'hidden' },
+  attachmentMessage: { alignSelf: 'flex-end', overflow: 'visible', width: '100%', maxWidth: 520, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.contentCard },
   descriptionSurface: { paddingTop: spacing.sm },
   inlineNote: { paddingHorizontal: spacing.sm, paddingTop: spacing.sm },
   inlineMetadata: { paddingHorizontal: spacing.xs },

@@ -66,7 +66,7 @@ test('native export uses the system pickers with copy semantics and no storage p
   const android = read('modules/chits-attachments/android/src/main/java/expo/modules/chitsattachments/ChitsFilesModule.kt');
   assert.match(android, /Intent\.ACTION_CREATE_DOCUMENT/);
   assert.match(android, /DocumentsContract\.deleteDocument\(resolver, destination\)/);
-  assert.doesNotMatch(read('modules/chits-attachments/android/src/main/AndroidManifest.xml'), /uses-permission/);
+  assert.doesNotMatch(read('modules/chits-attachments/android/src/main/AndroidManifest.xml'), /android\.permission\.(?:READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE|READ_MEDIA_\w+)/);
 });
 
 test('Download saves straight to the device where the platform allows it', async () => {

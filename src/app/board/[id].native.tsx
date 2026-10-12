@@ -346,9 +346,10 @@ export default function BoardScreen() {
   // (see below) — Screen must not ALSO reserve its own bottom safe-area inset
   // here, or the two stack into an oversized gap under the dock.
   const insets = useSafeAreaInsets();
-  // Set once by the initial load below (guarded so a later refreshActiveColumn or
-  // re-render never re-applies a stale redirect from Unorganized).
+  // Applied once after the linked card is measured, so later refreshes do not
+  // reapply the incoming navigation highlight.
   const highlightAppliedRef = useRef(false);
+  const pendingHighlightCardRef = useRef<string | null>(null);
   const { width: screenWidth } = useWindowDimensions();
   const columnWidth = Math.min(520, Math.max(272, Math.round(screenWidth * (screenWidth < 390 ? 0.78 : 0.74))));
   const columnGap = spacing.sm;
@@ -472,15 +473,18 @@ export default function BoardScreen() {
       if (nextBoard) void repository.markOpened('board', id);
       setBoardStatus('ready');
       if (highlightCardId && !highlightAppliedRef.current) {
-        highlightAppliedRef.current = true;
-        setJustAddedCardId(highlightCardId);
+        pendingHighlightCardRef.current = highlightCardId;
         boardListRef.current?.scrollToOffset({ offset: boundedIndex * columnInterval, animated: false });
-        // The active lane's cards (and layoutsRef) only exist once this render
-        // actually commits — one frame isn't always enough on a cold mount, so wait
-        // a second before reading the card's measured position.
+        // Reuse a measured position if this lane already exists. A cold or
+        // progressively loaded lane applies the pending highlight in onLayout.
         requestAnimationFrame(() => requestAnimationFrame(() => {
           const layout = layoutsRef.current[highlightCardId];
-          if (layout) scrollRef.current?.scrollTo({ y: Math.max(0, layout.y - spacing.md), animated: true });
+          if (layout && scrollRef.current && pendingHighlightCardRef.current === highlightCardId) {
+            pendingHighlightCardRef.current = null;
+            highlightAppliedRef.current = true;
+            scrollRef.current.scrollTo({ y: Math.max(0, layout.y - spacing.md), animated: false });
+            setJustAddedCardId(highlightCardId);
+          }
         }));
       }
     } catch {
@@ -705,7 +709,16 @@ export default function BoardScreen() {
   const buildLaneRows = (column: Column, laneCards: Card[]): ReactNode[] => {
     const isSource = drag?.sourceColumnId === column.id;
     const isDestination = drag?.destinationColumnId === column.id;
-    if (!drag || (!isSource && !isDestination)) { const columnPosition = columns.findIndex((item) => item.id === column.id); return laneCards.map((card, index) => <Animated.View key={`card:${card.id}`} layout={cardLayoutTransition} entering={!reduceMotion && card.id === justAddedCardId ? FadeIn.duration(240) : undefined} onLayout={(event) => { layoutsRef.current[card.id] = event.nativeEvent.layout; }}><BoardCardRow card={card} index={index} total={laneCards.length} translationY={gestureTranslationY} highlighted={card.id === justAddedCardId} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={column.name} canMovePrevColumn={columnPosition > 0} canMoveNextColumn={columnPosition >= 0 && columnPosition < columns.length - 1} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} onShowContent={showCardContent} scrollRef={scrollRef} pagerRef={boardListRef} activeDragCardId={activeDragCardId} /></Animated.View>); }
+    if (!drag || (!isSource && !isDestination)) { const columnPosition = columns.findIndex((item) => item.id === column.id); return laneCards.map((card, index) => <Animated.View key={`card:${card.id}`} layout={cardLayoutTransition} entering={!reduceMotion && card.id === justAddedCardId ? FadeIn.duration(240) : undefined} onLayout={(event) => {
+      const layout = event.nativeEvent.layout;
+      layoutsRef.current[card.id] = layout;
+      if (pendingHighlightCardRef.current === card.id && column.id === currentColumn?.id && scrollRef.current) {
+        pendingHighlightCardRef.current = null;
+        highlightAppliedRef.current = true;
+        scrollRef.current.scrollTo({ y: Math.max(0, layout.y - spacing.md), animated: false });
+        setJustAddedCardId(card.id);
+      }
+    }}><BoardCardRow card={card} index={index} total={laneCards.length} translationY={gestureTranslationY} highlighted={card.id === justAddedCardId} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={column.name} canMovePrevColumn={columnPosition > 0} canMoveNextColumn={columnPosition >= 0 && columnPosition < columns.length - 1} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} onShowContent={showCardContent} scrollRef={scrollRef} pagerRef={boardListRef} activeDragCardId={activeDragCardId} /></Animated.View>); }
     const rows: ReactNode[] = [];
     const displayCards = isSource ? laneCards.filter((card) => card.id !== drag.card.id) : laneCards;
     const placeholderIndex = isDestination ? drag.toIndex : undefined;
@@ -726,7 +739,16 @@ export default function BoardScreen() {
       const trueIndex = laneCards.indexOf(card);
       const filteredIndex = isSource && trueIndex > drag.fromIndex ? trueIndex - 1 : trueIndex;
       if (!isDragged && isDestination && filteredIndex === placeholderIndex) rows.push(placeholder);
-      rows.push(<Animated.View key={`card:${card.id}`} layout={cardLayoutTransition} entering={!reduceMotion && card.id === justAddedCardId ? FadeIn.duration(240) : undefined} onLayout={(event) => { layoutsRef.current[card.id] = event.nativeEvent.layout; }}><BoardCardRow card={card} index={isDragged ? drag.fromIndex : filteredIndex} total={total} translationY={gestureTranslationY} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={column.name} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} onShowContent={showCardContent} scrollRef={scrollRef} pagerRef={boardListRef} frozen={isDragged} activeDragCardId={activeDragCardId} /></Animated.View>);
+      rows.push(<Animated.View key={`card:${card.id}`} layout={cardLayoutTransition} entering={!reduceMotion && card.id === justAddedCardId ? FadeIn.duration(240) : undefined} onLayout={(event) => {
+      const layout = event.nativeEvent.layout;
+      layoutsRef.current[card.id] = layout;
+      if (pendingHighlightCardRef.current === card.id && column.id === currentColumn?.id && scrollRef.current) {
+        pendingHighlightCardRef.current = null;
+        highlightAppliedRef.current = true;
+        scrollRef.current.scrollTo({ y: Math.max(0, layout.y - spacing.md), animated: false });
+        setJustAddedCardId(card.id);
+      }
+    }}><BoardCardRow card={card} index={isDragged ? drag.fromIndex : filteredIndex} total={total} translationY={gestureTranslationY} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} columnName={column.name} onBeginDrag={beginDrag} onDragMove={moveDrag} onDragEnd={finishDrag} onDragCancel={cancelDrag} onOpenMove={openCardMove} onReorder={reorderCard} onMoveColumn={moveToAdjacentColumn} onShowContent={showCardContent} scrollRef={scrollRef} pagerRef={boardListRef} frozen={isDragged} activeDragCardId={activeDragCardId} /></Animated.View>);
     }
     if (isDestination && placeholderIndex === displayCards.length) rows.push(placeholder);
     return rows;

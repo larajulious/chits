@@ -1,4 +1,4 @@
-import type { SpaceId } from '../constants/spaces';
+import type { SpaceId, SpacePaperStyle } from '../constants/spaces';
 import type { NoteBlock, NoteRenderBlock } from '../services/note-content';
 
 export type MessageType = 'text' | 'photo' | 'video' | 'audio' | 'file';
@@ -121,7 +121,7 @@ export interface TimelinePage { items: TimelineItem[]; hasMore: boolean; nextCur
 export type SpaceNoteKind = 'thought' | 'card';
 export interface SpacePlacement {
   id: string; kind: SpaceNoteKind; noteId: string; spaceId: SpaceId;
-  x: number; y: number; rotation: number; color: string; zIndex: number; pinnedAt: number;
+  x: number; y: number; rotation: number; color: string; paperStyle: SpacePaperStyle; zIndex: number; pinnedAt: number;
 }
 // What a sticky draws. `text` is null while the note is hidden in Chat, so
 // neither the board nor a shared image can ever show it; `title` is a card's

@@ -13,7 +13,7 @@ test('Add note sheet can attach a photo, video or file and cleans up a discarded
   assert.match(sheet, /const canAdd = \(Boolean\(trimmed\) \|\| Boolean\(draft\) \|\| imageCount > 0\) && !busy;/);
   // Dismissing deletes the staged copy; a successful save keeps it.
   assert.match(sheet, /const close = \(\) => \{\s*if \(busy\) return;\s*discardDraft\(\);\s*discardPastedImages\(blocks\);/);
-  assert.match(sheet, /await onSubmit\(\{ text: trimmed, attachment: draft\?\.attachment \?\? null, blocks: imageCount \? blocks : null \}\);\s*\/\/[^\n]*\n\s*setDraft\(null\);\s*setBlocks\(textDraft\(\)\);/);
+  assert.match(sheet, /await onSubmit\(\{ text: trimmed, attachment: draft\?\.attachment \?\? null, blocks: draftHasRichContent\(blocks\) \? blocks : null \}\);\s*\/\/[^\n]*\n\s*setDraft\(null\);\s*setBlocks\(textDraft\(\)\);/);
 });
 
 test('both Add note entry points save the attachment through the existing storage paths', () => {

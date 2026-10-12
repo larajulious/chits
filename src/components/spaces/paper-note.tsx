@@ -2,10 +2,11 @@ import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { PAPER_INK, paperColor, SPACE_UI } from '@/constants/spaces-theme';
+import type { SpacePaperStyle as PaperKind } from '@/constants/spaces';
+import { PAPER_INK, paperColor } from '@/constants/spaces-theme';
 import { useSpaceFonts } from './space-fonts';
 
-export type PaperKind = 'sticky' | 'receipt' | 'index';
+export type { SpacePaperStyle as PaperKind } from '@/constants/spaces';
 
 type Props = {
   kind?: PaperKind;
@@ -38,6 +39,7 @@ const TOOTH_DEPTH = 7;
 export const PaperNote = memo(function PaperNote({ kind = 'sticky', color, title, body, width, height, rotation, lifted = false, hidden = false, obscured = false, unit = 1 }: Props) {
   const fonts = useSpaceFonts();
   const u = unit;
+  const paper = paperColor(color);
   const writing = hidden
     ? <View style={styles.hidden}>
       <Ionicons accessible={false} name="eye-off-outline" size={18 * u} color={PAPER_INK} style={{ opacity: 0.55 }} />
@@ -51,7 +53,7 @@ export const PaperNote = memo(function PaperNote({ kind = 'sticky', color, title
   if (kind === 'receipt') {
     const teeth = Math.ceil(width / (TEETH * u));
     return <View style={{ width, height, transform: [{ rotate: `${rotation}deg` }] }}>
-      <View style={{ flex: 1, backgroundColor: SPACE_UI.paperWhite, boxShadow: SHADOW(u, lifted), paddingHorizontal: 12 * u, paddingTop: 16 * u, overflow: 'hidden' }}>
+      <View style={{ flex: 1, backgroundColor: paper.base, boxShadow: SHADOW(u, lifted), paddingHorizontal: 12 * u, paddingTop: 16 * u, overflow: 'hidden' }}>
         {title ? <View style={{ borderBottomWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(42,38,34,0.4)', paddingBottom: 5 * u, marginBottom: 6 * u }}>
           <Text numberOfLines={1} style={[fonts.label, { fontSize: 11 * u, lineHeight: 14 * u, letterSpacing: 1.2 * u, color: PAPER_INK }]}>{title.toUpperCase()}</Text>
         </View> : null}
@@ -59,14 +61,14 @@ export const PaperNote = memo(function PaperNote({ kind = 'sticky', color, title
       </View>
       {/* The torn edge: a row of paper teeth below the receipt. */}
       <View style={[styles.teeth, { height: TOOTH_DEPTH * u }]}>
-        {Array.from({ length: teeth }, (_, index) => <View key={index} style={{ width: 0, height: 0, borderLeftWidth: (TEETH / 2) * u, borderRightWidth: (TEETH / 2) * u, borderTopWidth: TOOTH_DEPTH * u, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: SPACE_UI.paperWhite }} />)}
+        {Array.from({ length: teeth }, (_, index) => <View key={index} style={{ width: 0, height: 0, borderLeftWidth: (TEETH / 2) * u, borderRightWidth: (TEETH / 2) * u, borderTopWidth: TOOTH_DEPTH * u, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: paper.base }} />)}
       </View>
     </View>;
   }
 
   if (kind === 'index') {
     const rules = Math.floor(height / (22 * u));
-    return <View style={{ width, height, transform: [{ rotate: `${rotation}deg` }], backgroundColor: '#FFFFFF', boxShadow: SHADOW(u, lifted), overflow: 'hidden' }}>
+    return <View style={{ width, height, transform: [{ rotate: `${rotation}deg` }], backgroundColor: paper.base, boxShadow: SHADOW(u, lifted), overflow: 'hidden' }}>
       {Array.from({ length: rules }, (_, index) => <View key={index} style={[styles.rule, { top: (index + 1) * 22 * u, height: Math.max(1, u) }]} />)}
       <View style={[styles.margin, { left: 24 * u, width: Math.max(1, u) }]} />
       <View style={{ paddingLeft: 30 * u, paddingRight: 10 * u, paddingTop: 5 * u }}>
@@ -75,7 +77,6 @@ export const PaperNote = memo(function PaperNote({ kind = 'sticky', color, title
     </View>;
   }
 
-  const paper = paperColor(color);
   return <View style={{
     width, height, transform: [{ rotate: `${rotation}deg` }], borderRadius: 2 * u, backgroundColor: paper.base, overflow: 'hidden',
     experimental_backgroundImage: `linear-gradient(172deg, ${paper.base} 0%, ${paper.base} 70%, ${paper.curl} 100%)`,

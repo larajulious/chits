@@ -1,11 +1,13 @@
 import type { AttachmentLike } from '@/db/types';
 
-// A note's content in reading order: text and pasted images, interleaved.
-// Stored as messages.content_json only when a note has inline images —
+// A note's content in reading order: paragraphs, structured list items and images.
+// Stored as messages.content_json when a note has lists or inline images —
 // text-only notes keep content_json NULL and stay exactly as they were.
 // messages.text always holds the note's words alone (text blocks joined), so
 // search, titles, stickies and every text-only preview keep working unchanged.
-export type NoteBlock = { type: 'text'; text: string } | { type: 'image'; attachmentId: string };
+export type NoteList = { kind: 'bullet' | 'numbered'; id: string };
+export type NoteText = { type: 'text'; text: string; list?: NoteList };
+export type NoteBlock = NoteText | { type: 'image'; attachmentId: string };
 
 export type NoteImageDetails = Pick<AttachmentLike, 'storagePath' | 'originalName' | 'mimeType' | 'size' | 'width' | 'height'>;
 
@@ -13,11 +15,11 @@ export type NoteImageDetails = Pick<AttachmentLike, 'storagePath' | 'originalNam
 // the note and null for one pasted in this session (staged in Chits storage,
 // not yet in SQLite). `key` is stable across edits so React keeps each input.
 export type NoteDraftBlock =
-  | { key: string; type: 'text'; text: string }
+  | (NoteText & { key: string })
   | { key: string; type: 'image'; attachmentId: string | null; image: NoteImageDetails; fingerprint?: string | null; remove?: () => Promise<void> };
 
 // What a note renders, with each image block resolved to its attachment.
-export type NoteRenderBlock = { key: string; type: 'text'; text: string } | { key: string; type: 'image'; attachment: AttachmentLike };
+export type NoteRenderBlock = (NoteText & { key: string }) | { key: string; type: 'image'; attachment: AttachmentLike };
 
 export type NoteCursor = { key: string; start: number; end: number } | null;
 
@@ -39,31 +41,31 @@ export function parseNoteContent(json: string | null | undefined): NoteBlock[] |
     for (const item of value) {
       if (!item || typeof item !== 'object') continue;
       const block = item as Record<string, unknown>;
-      if (block.type === 'text' && typeof block.text === 'string') blocks.push({ type: 'text', text: block.text });
+      if (block.type === 'text' && typeof block.text === 'string') blocks.push({ type: 'text', text: block.text, ...readList(block.list) });
       else if (block.type === 'image' && typeof block.attachmentId === 'string' && block.attachmentId) blocks.push({ type: 'image', attachmentId: block.attachmentId });
     }
-    return blocks.some((block) => block.type === 'image') ? blocks : null;
+    return blocks.some((block) => block.type === 'image' || block.list) ? blocks : null;
   } catch {
     return null;
   }
 }
 
-/** The JSON stored for a note, or null when it has no images (a plain text note). */
+/** Structured content, or null for a note containing only plain text. */
 export function serializeNoteContent(blocks: NoteBlock[]): string | null {
   const cleaned = compactBlocks(blocks);
-  return cleaned.some((block) => block.type === 'image') ? JSON.stringify(cleaned) : null;
+  return cleaned.some((block) => block.type === 'image' || block.list) ? JSON.stringify(cleaned) : null;
 }
 
-/** Trims every text block and drops the empty ones, keeping images in place. */
+/** Preserve authored whitespace; drop empty editor slots, keeping images in place. */
 function compactBlocks(blocks: NoteBlock[]): NoteBlock[] {
   const result: NoteBlock[] = [];
   for (const block of blocks) {
     if (block.type === 'image') { result.push(block); continue; }
-    const text = block.text.trim();
-    if (!text) continue;
+    const text = block.text;
+    if (!text && !block.list) continue;
     const previous = result[result.length - 1];
-    if (previous?.type === 'text') previous.text = `${previous.text}${PARAGRAPH_JOIN}${text}`;
-    else result.push({ type: 'text', text });
+    if (previous?.type === 'text' && !previous.list && !block.list) previous.text = `${previous.text}${text}`;
+    else result.push({ type: 'text', text, ...readList(block.list) });
   }
   return result;
 }
@@ -73,6 +75,27 @@ export function noteBlocksText(blocks: Pick<NoteDraftBlock, 'type'>[] | NoteBloc
   return (blocks as { type: string; text?: string }[])
     .flatMap((block) => block.type === 'text' && block.text?.trim() ? [block.text.trim()] : [])
     .join(PARAGRAPH_JOIN);
+}
+
+export function readList(value: unknown): { list?: NoteList } {
+  if (!value || typeof value !== 'object') return {};
+  const list = value as Record<string, unknown>;
+  return (list.kind === 'bullet' || list.kind === 'numbered') && typeof list.id === 'string' && list.id.length > 0 ? { list: { kind: list.kind, id: list.id } } : {};
+}
+
+export function draftHasRichContent(blocks: NoteDraftBlock[]) {
+  return blocks.some((block) => block.type === 'image' || Boolean(block.list));
+}
+
+/** Number labels are derived from item order, never stored in the editable text. */
+export function noteListMarkers(blocks: (NoteBlock | NoteDraftBlock | NoteRenderBlock)[]) {
+  const counts = new Map<string, number>();
+  return blocks.map((block) => {
+    if (block.type !== 'text' || !block.list) return null;
+    const count = (counts.get(block.list.id) ?? 0) + 1;
+    counts.set(block.list.id, count);
+    return block.list.kind === 'bullet' ? '•' : `${count}.`;
+  });
 }
 
 export function draftHasImages(blocks: NoteDraftBlock[]) {
@@ -88,13 +111,13 @@ export function draftImageCount(blocks: NoteDraftBlock[]) {
  * note without images, or the trimmed words joined for one with them.
  */
 export function draftPlainText(blocks: NoteDraftBlock[]): string {
-  if (!draftHasImages(blocks)) return blocks.find((block) => block.type === 'text')?.text ?? '';
+  if (!draftHasRichContent(blocks)) return blocks.find((block) => block.type === 'text')?.text ?? '';
   return noteBlocksText(blocks);
 }
 
-/** A draft's order of words and saved images, to keep across restarts; null without saved images. */
+/** Ordered words, list metadata and saved images, retained across restarts. */
 export function draftContentForStorage(blocks: NoteDraftBlock[]): string | null {
-  return serializeNoteContent(blocks.flatMap((block): NoteBlock[] => block.type === 'text' ? [{ type: 'text', text: block.text }] : block.attachmentId ? [{ type: 'image', attachmentId: block.attachmentId }] : []));
+  return serializeNoteContent(blocks.flatMap((block): NoteBlock[] => block.type === 'text' ? [{ type: 'text', text: block.text, ...readList(block.list) }] : block.attachmentId ? [{ type: 'image', attachmentId: block.attachmentId }] : []));
 }
 
 /** Whether a draft holds images pasted in this session that aren't saved anywhere yet. */
@@ -124,7 +147,7 @@ export function draftFromNote(note: ContentSource): NoteDraftBlock[] {
     const inline = new Set(note.content.flatMap((block) => block.type === 'image' ? [block.attachmentId] : []));
     for (const attachment of note.attachments) if (attachment.type === 'photo' && !inline.has(attachment.id)) blocks.push(imageBlock(attachment));
     for (const block of note.content) {
-      if (block.type === 'text') blocks.push({ key: newBlockKey(), type: 'text', text: block.text });
+      if (block.type === 'text') blocks.push({ key: newBlockKey(), type: 'text', text: block.text, ...readList(block.list) });
       else { const attachment = byId.get(block.attachmentId); if (attachment) blocks.push(imageBlock(attachment)); }
     }
   } else {
@@ -146,8 +169,8 @@ export function ensureEditableText(blocks: NoteDraftBlock[]): NoteDraftBlock[] {
   const result: NoteDraftBlock[] = [];
   for (const block of blocks) {
     const previous = result[result.length - 1];
-    if (block.type === 'text' && previous?.type === 'text') {
-      result[result.length - 1] = { ...previous, text: [previous.text, block.text].filter(Boolean).join('\n') };
+    if (block.type === 'text' && previous?.type === 'text' && !block.list && !previous.list) {
+      result[result.length - 1] = { ...previous, text: previous.text + block.text };
       continue;
     }
     if (block.type === 'image' && previous?.type !== 'text') result.push({ key: newBlockKey(), type: 'text', text: '' });
@@ -159,7 +182,7 @@ export function ensureEditableText(blocks: NoteDraftBlock[]): NoteDraftBlock[] {
 
 /**
  * Pastes an image where the cursor is: the text block it's in splits around
- * the image (a selection is replaced), and the cursor moves to just after it.
+ * the image (selected text is preserved after it), and the cursor moves to just after it.
  * With no cursor the image goes at the end.
  */
 export function insertImageAtCursor(blocks: NoteDraftBlock[], cursor: NoteCursor, image: Extract<NoteDraftBlock, { type: 'image' }>): { blocks: NoteDraftBlock[]; cursor: NoteCursor } {
@@ -171,10 +194,9 @@ export function insertImageAtCursor(blocks: NoteDraftBlock[], cursor: NoteCursor
     return { blocks: next, cursor: { key: after.key, start: 0, end: 0 } };
   }
   const start = Math.max(0, Math.min(cursor.start, target.text.length));
-  const end = Math.max(start, Math.min(cursor.end, target.text.length));
-  const before = target.text.slice(0, start).replace(/\s+$/, '');
-  const afterText = target.text.slice(end).replace(/^\s+/, '');
-  const afterBlock: NoteDraftBlock = { key: newBlockKey(), type: 'text', text: afterText };
+  const before = target.text.slice(0, start);
+  const afterText = target.text.slice(start);
+  const afterBlock: NoteDraftBlock = { key: newBlockKey(), type: 'text', text: afterText, ...readList(target.list) };
   const next = [...blocks.slice(0, index), { ...target, text: before }, image, afterBlock, ...blocks.slice(index + 1)];
   return { blocks: ensureEditableText(next), cursor: { key: afterBlock.key, start: 0, end: 0 } };
 }
@@ -203,16 +225,16 @@ export function noteRenderContent<T extends AttachmentLike>(note: { text: string
   const blocks: NoteRenderBlock[] = [];
   note.content.forEach((block, index) => {
     if (block.type === 'text') {
-      const text = block.text.trim();
-      if (text) blocks.push({ key: `t${index}`, type: 'text', text });
+      const text = block.text;
+      if (text || block.list) blocks.push({ key: `t${index}`, type: 'text', text, ...readList(block.list) });
       return;
     }
     const attachment = byId.get(block.attachmentId);
-    if (!attachment || used.has(attachment.id)) return;
+    if (!attachment) return;
     used.add(attachment.id);
-    blocks.push({ key: attachment.id, type: 'image', attachment });
+    blocks.push({ key: `${attachment.id}:${index}`, type: 'image', attachment });
   });
-  if (!used.size) return null;
+  if (!used.size && !blocks.some((block) => block.type === 'text' && block.list)) return null;
   return { blocks, leading: note.attachments.filter((attachment) => !used.has(attachment.id)) };
 }
 
@@ -222,7 +244,7 @@ export function noteRenderContent<T extends AttachmentLike>(note: { text: string
  * a row to itself. Heights are capped, and a capped row narrows to fit.
  */
 export function imageRows(images: Pick<AttachmentLike, 'width' | 'height'>[], width: number, gap: number, maxHeight: number) {
-  const ratio = (image: Pick<AttachmentLike, 'width' | 'height'>) => image.width && image.height ? Math.max(0.25, Math.min(4, image.width / image.height)) : 4 / 3;
+  const ratio = (image: Pick<AttachmentLike, 'width' | 'height'>) => image.width && image.height ? image.width / image.height : 4 / 3;
   const rows: { indexes: number[]; height: number; widths: number[] }[] = [];
   for (let index = 0; index < images.length; index += 2) {
     const indexes = index + 1 < images.length ? [index, index + 1] : [index];

@@ -7,6 +7,8 @@ import { resolvePermission, type PermissionState } from '@/services/permissions'
 import { planReminderSync, reminderBody, REMINDER_NOTIFICATION_TYPE, REMINDER_TITLE, type ScheduledReminder } from '@/services/reminder-content';
 import { isBackupOperationActive } from '@/services/backup-operation';
 
+import { hasExactReminderAccess, restorePendingReminderAlarms } from './reminder-alarm-access';
+
 const CHANNEL_ID = 'reminders';
 
 // ---------------------------------------------------------------------------
@@ -112,7 +114,7 @@ async function scheduledReminders(): Promise<ScheduledReminder[]> {
 // ---------------------------------------------------------------------------
 // Setting and removing.
 
-export type SetReminderResult = { ok: true } | { ok: false; reason: 'declined' | 'blocked' | 'failed' };
+export type SetReminderResult = { ok: true } | { ok: false; reason: 'declined' | 'blocked' | 'exact-alarm' | 'failed' };
 
 /**
  * Sets (or changes) a card's reminder: permission first, then the new local
@@ -125,6 +127,7 @@ export function setCardReminder(database: SQLiteDatabase, cardId: string, schedu
       const access = await ensureNotificationPermission();
       if (access === 'denied') return { ok: false, reason: 'declined' };
       if (access === 'blocked') return { ok: false, reason: 'blocked' };
+      if (!await hasExactReminderAccess()) return { ok: false, reason: 'exact-alarm' };
       const repository = createReminderRepository(database);
       const previous = await repository.get(cardId);
       const source = (await repository.listForSync()).find((row) => row.cardId === cardId);
@@ -181,6 +184,7 @@ export function setMessageReminder(database: SQLiteDatabase, messageId: string, 
       const access = await ensureNotificationPermission();
       if (access === 'denied') return { ok: false, reason: 'declined' };
       if (access === 'blocked') return { ok: false, reason: 'blocked' };
+      if (!await hasExactReminderAccess()) return { ok: false, reason: 'exact-alarm' };
       const row = await database.getFirstAsync<{ text: string | null; hidden: number; attachmentType: MessageReminderRow['attachmentType'] }>(
         'SELECT m.text, m.is_hidden_content AS hidden, (SELECT a.type FROM attachments a WHERE a.message_id = m.id ORDER BY a.created_at LIMIT 1) AS attachmentType FROM messages m WHERE m.id = ? AND m.deleted_at IS NULL AND m.archived_at IS NULL', messageId);
       if (!row) return { ok: false, reason: 'failed' };
@@ -253,10 +257,17 @@ export function resumeReminderSync() {
 /** Registered by the root layout with the live database (again after a restore). */
 export function registerReminderDatabase(database: SQLiteDatabase | null) {
   syncDatabase = database;
-  if (database) syncPaused = false;
+  if (database) { syncPaused = false; restoredExactAlarms = false; }
 }
 
+let restoredExactAlarms = false;
 async function runSync(database: SQLiteDatabase) {
+  // Expo's request list survives a revoked permission/force stop, but its OS
+  // alarms may not. Re-register the same IDs once per process when allowed.
+  if (!restoredExactAlarms && await hasExactReminderAccess()) {
+    await restorePendingReminderAlarms();
+    restoredExactAlarms = true;
+  }
   const repository = createReminderRepository(database);
   const rows = await repository.listForSync();
   const scheduled = await scheduledReminders();

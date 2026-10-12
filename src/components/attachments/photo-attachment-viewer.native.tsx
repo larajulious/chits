@@ -13,7 +13,7 @@ import { exportActionLabel, shareAttachment } from '@/services/attachment-export
 import { resolveAttachmentUri } from '@/services/attachment-storage';
 import type { AttachmentLike } from '@/db/types';
 
-function PhotoContent({ attachment, onDismiss }: { attachment: AttachmentLike; onDismiss: () => void }) {
+function PhotoContent({ attachment, onDismiss, previewOnly = false }: { attachment: AttachmentLike; onDismiss: () => void; previewOnly?: boolean }) {
   const insets = useSafeAreaInsets();
   const { actionSheet } = useAppDialog();
   const { isCurrentBackground } = useChatBackground();
@@ -36,15 +36,15 @@ function PhotoContent({ attachment, onDismiss }: { attachment: AttachmentLike; o
     {deleted ? <Text style={styles.deleted}>Photo removed</Text> : <Image source={resolveAttachmentUri(attachment.storagePath)} contentFit="contain" autoplay={false} style={StyleSheet.absoluteFill} />}
     <View style={[styles.toolbar, { top: insets.top + 8 }]}>
       <Pressable accessibilityRole="button" accessibilityLabel="Close photo" onPress={onDismiss} style={styles.icon}><Ionicons accessible={false} name="close" size={24} color="#FFFFFF" /></Pressable>
-      {!deleted ? <Pressable accessibilityRole="button" accessibilityLabel="Photo options" onPress={more} style={styles.icon}><Ionicons accessible={false} name="ellipsis-horizontal" size={24} color="#FFFFFF" /></Pressable> : null}
+      {!deleted && !previewOnly ? <Pressable accessibilityRole="button" accessibilityLabel="Photo options" onPress={more} style={styles.icon}><Ionicons accessible={false} name="ellipsis-horizontal" size={24} color="#FFFFFF" /></Pressable> : null}
     </View>
-    {current && !deleted ? <View style={[styles.indicator, { bottom: insets.bottom + 16 }]}><Text style={styles.indicatorText}>Current Chat Background</Text></View> : null}
+    {current && !deleted && !previewOnly ? <View style={[styles.indicator, { bottom: insets.bottom + 16 }]}><Text style={styles.indicatorText}>Current Chat Background</Text></View> : null}
     {notice ? <View style={[styles.notice, { bottom: insets.bottom + 64 }]}><Text accessibilityRole={deletion.status ? 'alert' : undefined} accessibilityLiveRegion="polite" style={styles.noticeText}>{notice}</Text></View> : null}
   </SafeAreaView>;
 }
 
 // The photo and its background preview share one native modal host.
-export function PhotoAttachmentViewer({ attachment, onDismiss }: { attachment: AttachmentLike; onDismiss: () => void }) {
-  return <Modal visible animationType="fade" presentationStyle="fullScreen" onRequestClose={onDismiss}><SafeAreaProvider><AppDialogProvider><PhotoContent attachment={attachment} onDismiss={onDismiss} /></AppDialogProvider></SafeAreaProvider></Modal>;
+export function PhotoAttachmentViewer({ attachment, onDismiss, previewOnly = false }: { attachment: AttachmentLike; onDismiss: () => void; previewOnly?: boolean }) {
+  return <Modal visible animationType="fade" presentationStyle="fullScreen" onRequestClose={onDismiss}><SafeAreaProvider><AppDialogProvider><PhotoContent attachment={attachment} onDismiss={onDismiss} previewOnly={previewOnly} /></AppDialogProvider></SafeAreaProvider></Modal>;
 }
 const styles = StyleSheet.create({ screen: { flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' }, toolbar: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' }, icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.6)' }, indicator: { position: 'absolute', alignSelf: 'center', borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 14, paddingVertical: 8 }, indicatorText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' }, notice: { position: 'absolute', maxWidth: '86%', alignSelf: 'center', backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12 }, noticeText: { color: '#111111', textAlign: 'center', fontSize: 14 }, deleted: { color: '#FFFFFF', fontSize: 18 } });

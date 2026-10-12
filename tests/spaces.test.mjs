@@ -189,3 +189,36 @@ test('the fridge magnets spell the NoteSpace name, fitted to the row', async () 
     assert.ok(glyphs[index].rotation >= -8 && glyphs[index].rotation <= 9);
   }
 });
+
+
+test('paper styles persist independently of color, content and placement when moving and reopening', async (t) => {
+  const { db, spaces } = await fixture(t);
+  const { placement } = await spaces.stick('thought', 't0', 'fridge', sequence(0.5));
+  assert.equal(placement.paperStyle, 'sticky');
+  await spaces.setColor(placement.id, '#FFC7CC');
+  const before = await spaces.placementFor('thought', 't0');
+  for (const paperStyle of ['index', 'receipt', 'sticky']) {
+    await spaces.setPaperStyle(placement.id, paperStyle);
+    assert.deepEqual(await spaces.placementFor('thought', 't0'), { ...before, paperStyle });
+    assert.equal((await spaces.list('fridge'))[0].paperStyle, paperStyle);
+  }
+  await spaces.setPaperStyle(placement.id, 'receipt');
+  await spaces.moveToSpace(placement.id, 'desk');
+  const reopened = createSpaceRepository(db);
+  const moved = await reopened.placementFor('thought', 't0');
+  assert.equal(moved.paperStyle, 'receipt');
+  assert.equal(moved.color, '#FFC7CC');
+  assert.equal((await reopened.list('desk'))[0].text, 'Thought 0');
+  assert.throws(() => spaces.setPaperStyle(placement.id, 'unknown'), /isn’t available/);
+});
+
+test('schema 24 placements migrate to default sticky paper without altering stored fields', async (t) => {
+  const env = runtime(); t.after(() => env.cleanup());
+  const db = await env.sqlite.openDatabaseAsync('chits.db');
+  await migration.migrateDatabase(db);
+  await db.execAsync("ALTER TABLE space_placements DROP COLUMN paper_style;");
+  db.raw.exec("PRAGMA user_version = 24; INSERT INTO messages (id,text,type,created_at,updated_at) VALUES ('old','Keep me','text',1,1); INSERT INTO space_placements VALUES ('placement','old',NULL,'desk',0.4,0.7,-2,'#FFC7CC',9,1,1);");
+  const before = { ...db.raw.prepare('SELECT * FROM space_placements').get() };
+  await migration.migrateDatabase(db);
+  assert.deepEqual({ ...db.raw.prepare('SELECT * FROM space_placements').get() }, { ...before, paper_style: 'sticky' });
+});

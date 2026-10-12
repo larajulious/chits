@@ -1,9 +1,19 @@
 {
-  "platforms": ["apple", "android"],
+  "platforms": [
+    "apple",
+    "android"
+  ],
   "apple": {
-    "modules": ["ChitsPdfModule", "ChitsFilesModule"]
+    "modules": [
+      "ChitsPdfModule",
+      "ChitsFilesModule"
+    ]
   },
   "android": {
-    "modules": ["expo.modules.chitsattachments.ChitsPdfModule", "expo.modules.chitsattachments.ChitsFilesModule"]
+    "modules": [
+      "expo.modules.chitsattachments.ChitsPdfModule",
+      "expo.modules.chitsattachments.ChitsFilesModule",
+      "expo.modules.chitsattachments.ChitsReminderAlarmModule"
+    ]
   }
 }

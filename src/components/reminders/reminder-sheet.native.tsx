@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, AppState, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTimePicker } from '@expo/ui/community/datetime-picker';
 
+import { AndroidReminderTimePicker } from './android-reminder-time-picker';
 import { showPermissionSettingsPrompt } from '@/components/permissions/permission-settings-prompt';
 import { useTheme } from '@/components/theme-provider';
 import { useStickyControls } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { radii, spacing } from '@/constants/theme';
+import { hasExactReminderAccess, openReminderAlarmSettings } from '@/services/reminder-alarm-access';
 import type { SetReminderResult } from '@/services/reminders';
 import {
   defaultCustomReminderTime, formatReminder, formatReminderClock, formatReminderDay, isValidReminderTime,
@@ -37,9 +39,8 @@ const QUICK_ICONS: Record<ReminderQuickKey, React.ComponentProps<typeof Ionicons
 
 /**
  * "Remind me" for a note or card: quick choices, then a date and a time the user can
- * adjust, and one clear button. No text field, so no keyboard. The system
- * pickers are used for date/time (inline compact pickers on iOS, the Material
- * dialogs on Android).
+ * adjust, and one clear button. iOS uses compact native pickers; Android
+ * uses the Material date dialog and a numeric time-entry dialog.
  */
 export function ReminderSheet({ visible, existing, accent, accentOn, onClose, onSave, onRemove }: Props) {
   const { scheme, tokens: theme } = useTheme();
@@ -59,7 +60,7 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
   const [androidPicker, setAndroidPicker] = useState<'date' | 'time' | null>(null);
   // "Pick date & time" on Android runs the date dialog then the time dialog.
   const [chainTime, setChainTime] = useState(false);
-  const [problem, setProblem] = useState<'past' | 'declined' | 'failed' | null>(null);
+  const [problem, setProblem] = useState<'past' | 'declined' | 'exact-alarm' | 'failed' | null>(null);
   const [busy, setBusy] = useState<'save' | 'remove' | null>(null);
   const options = useMemo(() => reminderQuickOptions(now), [now]);
 
@@ -68,6 +69,17 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
     if (!visible) return;
     const timer = setInterval(() => setNow(new Date()), 30 * 1000);
     return () => clearInterval(timer);
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'android') return;
+    let active = true;
+    const checkAccess = () => void hasExactReminderAccess().then((allowed) => {
+      if (active) setProblem((current) => allowed ? (current === 'exact-alarm' ? null : current) : 'exact-alarm');
+    }).catch(() => { if (active) setProblem('failed'); });
+    checkAccess();
+    const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') checkAccess(); });
+    return () => { active = false; subscription.remove(); };
   }, [visible]);
 
   const valid = isValidReminderTime(value, now);
@@ -164,6 +176,15 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
               // prompt and no Settings shortcut (App Review Guideline 5.1.1(iv)).
               <View accessibilityRole="alert" style={styles.inline}><Icon name="notifications-off-outline" size={16} color={theme.textSecondary} /><AppText style={[styles.inlineText, { color: theme.textSecondary }]}>Reminder not set. Notifications aren’t allowed for Chits.</AppText></View>
             ) : null}
+            {problem === 'exact-alarm' ? <View accessibilityRole="alert" style={styles.inline}>
+              <Icon name="alarm-outline" size={16} color={theme.textSecondary} />
+              <View style={{ flex: 1, gap: 8 }}>
+                <AppText style={[styles.inlineText, { color: theme.textSecondary }]}>Allow Alarms &amp; reminders so Chits can notify you at the chosen time when the app is closed. Then return and tap Set Reminder.</AppText>
+                <Pressable accessibilityRole="button" accessibilityLabel="Allow alarms and reminders" onPress={() => void openReminderAlarmSettings().catch(() => setProblem('failed'))} style={{ minHeight: 44, justifyContent: 'center' }}>
+                  <AppText style={[styles.textButtonLabel, { color: accent }]}>Allow Alarms &amp; reminders</AppText>
+                </Pressable>
+              </View>
+            </View> : null}
             {problem === 'failed' ? (
               <View accessibilityRole="alert" style={styles.inline}><Icon name="alert-circle-outline" size={16} color={theme.danger} /><AppText style={[styles.inlineText, { color: theme.danger }]}>The reminder couldn’t be set. Please try again.</AppText></View>
             ) : null}
@@ -206,12 +227,11 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
         />
       ) : null}
       {Platform.OS === 'android' && androidPicker === 'time' ? (
-        <DateTimePicker
+        <AndroidReminderTimePicker
           value={value}
-          mode="time"
-          presentation="dialog"
-          accentColor={accent}
-          onValueChange={(_, date) => { setAndroidPicker(null); pick(withTime(value, date.getHours(), date.getMinutes()), 'custom'); }}
+          accent={accent}
+          accentOn={accentOn}
+          onConfirm={(hours, minutes) => { setAndroidPicker(null); pick(withTime(value, hours, minutes), 'custom'); }}
           onDismiss={() => setAndroidPicker(null)}
         />
       ) : null}

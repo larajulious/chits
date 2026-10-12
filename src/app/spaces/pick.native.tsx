@@ -15,7 +15,6 @@ import { SpaceSurface } from '@/components/spaces/space-surface';
 import { StickyPaper } from '@/components/spaces/sticky-note';
 import { Toast } from '@/components/ui/primitives';
 import { DEFAULT_SPACE_ID, SPACE_LIST, STICKY_COLORS, type SpaceDefinition, type SpaceId } from '@/constants/spaces';
-import { SPACE_UI } from '@/constants/spaces-theme';
 import { layout } from '@/constants/theme';
 import { createMessageRepository, createSpaceRepository } from '@/db/repositories';
 import { OnboardingMascot } from '@/features/onboarding/components/onboarding-mascot';
@@ -55,11 +54,11 @@ const SpaceCard = memo(function SpaceCard({ space, selected, count, onPress }: {
       <View style={[styles.sample, { right: 74 * nudge, top: 20 * nudge }]}><StickyPaper note={SAMPLES[0]} space={space.id} seed={1} unit={unit} /></View>
       <View style={[styles.sample, { right: 22 * nudge, top: 34 * nudge }]}><StickyPaper note={SAMPLES[1]} space={space.id} seed={2} unit={unit} /></View>
     </View> : null}
-    <LabelTape text={space.name} variant="dark" size={shortCard ? 'sm' : 'md'} rotation={-2} decorative style={[styles.cardLabel, shortCard && styles.cardLabelShort]} />
+    <LabelTape themed text={space.name} variant="dark" size={shortCard ? 'sm' : 'md'} rotation={-2} decorative style={[styles.cardLabel, shortCard && styles.cardLabelShort]} />
     <View pointerEvents="none" style={styles.cardDescription}>
       <Text numberOfLines={1} style={[fonts.uiSemi, styles.cardDescriptionText]}>{space.description}</Text>
     </View>
-    {count ? <LabelTape text={`${count} ${count === 1 ? 'note' : 'notes'}`} variant="red" size="sm" rotation={2} decorative style={styles.cardCount} /> : null}
+    {count ? <LabelTape themed text={`${count} ${count === 1 ? 'note' : 'notes'}`} variant="red" size="sm" rotation={2} decorative style={styles.cardCount} /> : null}
     {selected ? <MagnetButton size={30} icon="checkmark" style={styles.check} /> : null}
   </Pressable>;
 });
@@ -131,7 +130,7 @@ export default function PickSpaceScreen() {
         </Pressable>
         <OnboardingMascot size={compact ? 60 : 76} />
       </View>
-      <LabelTape text={saved ? 'Spaces' : 'New · Spaces'} variant="red" size="sm" rotation={-2} decorative />
+      <LabelTape themed text={saved ? 'Spaces' : 'New · Spaces'} variant="red" size="sm" rotation={-2} decorative />
       <Text accessibilityRole="header" style={[fonts.uiHeavy, styles.title, compact && styles.titleCompact]}>{saved ? 'Where to?' : 'Pick a spot for your notes.'}</Text>
       <Text style={[fonts.ui, styles.intro, compact && styles.introCompact]}>Stick notes on it and move them around, like the real thing.</Text>
       <View accessibilityRole="radiogroup" accessibilityLabel="Spaces" style={styles.cards}>
@@ -164,8 +163,8 @@ const createStyles = (ui: SpaceUI) => StyleSheet.create({
   sample: { position: 'absolute' },
   cardLabel: { position: 'absolute', left: 12, top: 12 },
   cardLabelShort: { top: 6 },
-  cardDescription: { position: 'absolute', left: 12, bottom: 8, maxWidth: '62%', borderRadius: 7, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: 'rgba(18,19,21,0.78)' },
-  cardDescriptionText: { color: SPACE_UI.paper, fontSize: 11, lineHeight: 14 },
+  cardDescription: { position: 'absolute', left: 12, bottom: 8, maxWidth: '62%', borderRadius: 7, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: ui.ink },
+  cardDescriptionText: { color: ui.paper, fontSize: 11, lineHeight: 14 },
   cardCount: { position: 'absolute', right: 12, bottom: 8 },
   check: { position: 'absolute', right: -8, top: -8 },
   footer: { paddingHorizontal: 20, paddingTop: 12, alignSelf: 'center', width: '100%', maxWidth: layout.maxContentWidth, gap: 10 },

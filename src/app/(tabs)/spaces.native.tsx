@@ -25,13 +25,13 @@ import { ReminderSheet } from '@/components/reminders/reminder-sheet';
 import { removeCardReminder, removeMessageReminder, setCardReminder, setMessageReminder } from '@/services/reminders';
 import { useTheme } from '@/components/theme-provider';
 import { Toast } from '@/components/ui/primitives';
-import { DEFAULT_STICKY_COLOR, SPACE_CAPACITY, SPACE_IDS, SPACE_LIST, SPACES, resolveSpaceId, toUnit, type SpaceId } from '@/constants/spaces';
-import { DARK_SURFACE, DOCK_ICONS, DOCK_LABELS, noteSeed, SPACE_UI } from '@/constants/spaces-theme';
+import { DEFAULT_STICKY_COLOR, SPACE_CAPACITY, SPACE_IDS, SPACE_LIST, SPACES, resolveSpaceId, toUnit, type SpaceId, type SpacePaperStyle } from '@/constants/spaces';
+import { DARK_SURFACE, DOCK_ICONS, DOCK_LABELS, noteSeed } from '@/constants/spaces-theme';
 import { createSpaceRepository } from '@/db/repositories';
 import type { PinnedNote, SpaceCandidate } from '@/db/types';
 import { subscribeToSpaceChanges } from '@/services/space-changes';
 import { ChitsGuide } from '@/components/mascot/chits-guide.native';
-import { useInkSurface } from '@/components/spaces/ink-surface';
+import { useInkSurface, useSpaceStyles, useSpaceUI, type SpaceUI } from '@/components/spaces/ink-surface';
 
 const EMPTY_COUNTS = Object.fromEntries(SPACE_IDS.map((id) => [id, 0])) as Record<SpaceId, number>;
 
@@ -54,7 +54,8 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
   const database = useSQLiteContext();
   const { tokens: theme, styleTokens, styleColors } = useTheme();
   const inkSurface = useInkSurface();
-  const sticky = styleTokens.elevation === 'edge';
+  const ui = useSpaceUI();
+  const styles = useSpaceStyles(createStyles);
   const repository = useMemo(() => createSpaceRepository(database), [database]);
   const insets = useSafeAreaInsets();
   const fonts = useSpaceFonts();
@@ -225,6 +226,12 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
     setNotes((current) => current?.map((note) => (note.id === selected.id ? { ...note, color } : note)) ?? current);
     run(() => repository.setColor(selected.id, color), 'That color couldn’t be saved.');
   };
+  const changePaperStyle = (paperStyle: SpacePaperStyle) => {
+    if (!selected) return;
+    void Haptics.selectionAsync();
+    setNotes((current) => current?.map((note) => note.id === selected.id ? { ...note, paperStyle } : note) ?? current);
+    run(() => repository.setPaperStyle(selected.id, paperStyle), 'That paper style couldn’t be saved.');
+  };
   const bringToFront = () => {
     if (!selected) return;
     setNotes((current) => (current ? [...current.filter((note) => note.id !== selected.id), selected] : current));
@@ -302,8 +309,8 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
       </View>
       <View style={styles.middle}>
         <View accessible accessibilityRole="header" accessibilityLabel={`${space.name}, ${count} of ${SPACE_CAPACITY} notes`} style={styles.titles}>
-          <LabelTape text={space.name} variant="dark" size="lg" rotation={-2} />
-          <LabelTape text={`${count} / ${SPACE_CAPACITY} notes`} variant="red" size="sm" rotation={2} style={styles.countTape} />
+          <LabelTape themed text={space.name} variant="dark" size="lg" rotation={-2} />
+          <LabelTape themed text={`${count} / ${SPACE_CAPACITY} notes`} variant="red" size="sm" rotation={2} style={styles.countTape} />
         </View>
       </View>
       <View style={[styles.sideGroup, styles.sideGroupEnd]}>
@@ -316,8 +323,8 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
       {SPACE_LIST.map((item) => {
         const active = item.id === spaceId;
         return <Pressable key={item.id} accessibilityRole="radio" accessibilityLabel={`${item.name}, ${counts[item.id]} ${counts[item.id] === 1 ? 'note' : 'notes'}`} accessibilityState={{ selected: active }} onPress={() => switchSpace(item.id)} style={({ pressed }) => [active ? styles.dockPill : styles.dockIcon, active && inkSurface({ fill: styleColors.accentFill, radius: styles.dockPill.height / 2, edge: false }), pressed && styles.pressed]}>
-          <MaterialCommunityIcons accessible={false} name={DOCK_ICONS[item.id]} size={active ? 20 : 23} color={sticky ? (active ? styleColors.onAccent : styleColors.textSecondary) : active ? SPACE_UI.ink : SPACE_UI.dockIcon} />
-          {active ? <Text numberOfLines={1} style={[fonts.uiSemi, styles.dockLabel, sticky && { color: styleColors.onAccent }]}>{DOCK_LABELS[item.id]}</Text> : null}
+          <MaterialCommunityIcons accessible={false} name={DOCK_ICONS[item.id]} size={active ? 20 : 23} color={active ? ui.accentText : ui.dockIcon} />
+          {active ? <Text numberOfLines={1} style={[fonts.uiSemi, styles.dockLabel, { color: ui.accentText }]}>{DOCK_LABELS[item.id]}</Text> : null}
         </Pressable>;
       })}
     </View>
@@ -343,7 +350,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
         note={selected}
         counts={counts}
         onDismiss={closeOptions}
-        onColor={recolor}
+        onColor={recolor} onPaperStyle={changePaperStyle}
         onOpen={() => { setSelectedId(null); openNote(selected); }}
         onBringToFront={bringToFront}
         onMove={(target) => void moveTo(target)}
@@ -369,10 +376,12 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
 
 /** A round paper button floating over the surface. */
 function RoundButton({ icon, label, onPress, disabled = false, size = 44, style }: { icon: 'chevron-back' | 'share-outline' | 'chatbox-outline'; label: string; onPress: () => void; disabled?: boolean; size?: number; style?: StyleProp<ViewStyle> }) {
-  const { tokens, styleTokens, styleColors } = useTheme();
+  const { styleTokens, styleColors } = useTheme();
   const inkSurface = useInkSurface();
+  const ui = useSpaceUI();
+  const styles = useSpaceStyles(createStyles);
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.round, size !== 44 && { width: size, height: size, borderRadius: size / 2 }, inkSurface({ fill: styleColors.controlFill, radius: size === 44 ? styleTokens.header.iconButton.radius : size / 2, edge: styleTokens.header.iconButton.edge }, pressed), style, disabled && styles.disabled, pressed && styles.pressed]}>
-    <Icon name={icon} size={icon === 'chevron-back' ? 24 : 21} color={styleTokens.outline.width ? tokens.textPrimary : SPACE_UI.ink} style={icon === 'chevron-back' ? { marginLeft: -2 } : undefined} />
+    <Icon name={icon} size={icon === 'chevron-back' ? 24 : 21} color={ui.paper} style={icon === 'chevron-back' ? { marginLeft: -2 } : undefined} />
   </Pressable>;
 }
 
@@ -380,8 +389,8 @@ const DOCK_HEIGHT = 60;
 // The empty board's one note, stuck there to say what to do.
 const EMPTY_NOTE = { title: null, text: 'Empty.\nTap + to\nadd a note.', hidden: false, color: DEFAULT_STICKY_COLOR, rotation: -2 };
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: SPACE_UI.ink },
+const createStyles = (ui: SpaceUI) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: ui.ink },
   letters: { position: 'absolute', left: 22 },
   board: { position: 'absolute', left: 0, right: 0 },
   emptyWrap: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' },
@@ -391,11 +400,11 @@ const styles = StyleSheet.create({
   middle: { flex: 1, alignItems: 'center' },
   titles: { alignItems: 'center', paddingTop: 4 },
   countTape: { alignSelf: 'flex-end', marginTop: -3, marginRight: -14 },
-  round: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(251,250,246,0.94)', boxShadow: '0px 3px 8px rgba(0,0,0,0.22)' },
-  dock: { position: 'absolute', left: 16, height: DOCK_HEIGHT, borderRadius: DOCK_HEIGHT / 2, backgroundColor: SPACE_UI.ink, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, gap: 2, boxShadow: '0px 14px 28px rgba(0,0,0,0.38)' },
-  dockPill: { height: 48, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 24, backgroundColor: SPACE_UI.paper },
+  round: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: ui.ink, boxShadow: '0px 3px 8px rgba(0,0,0,0.22)' },
+  dock: { position: 'absolute', left: 16, height: DOCK_HEIGHT, borderRadius: DOCK_HEIGHT / 2, backgroundColor: ui.ink, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, gap: 2, boxShadow: '0px 14px 28px rgba(0,0,0,0.38)' },
+  dockPill: { height: 48, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 24, backgroundColor: ui.accent },
   dockIcon: { width: 46, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  dockLabel: { fontSize: 14, color: SPACE_UI.ink },
+  dockLabel: { fontSize: 14, color: ui.accentText },
   bottomBack: { position: 'absolute', right: 16 },
   disabled: { opacity: 0.45 },
   pressed: { opacity: 0.8 },

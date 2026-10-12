@@ -10,13 +10,13 @@ import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { AppHeader, IconButton, Screen, HeaderIcon, useHeaderInk } from '@/components/ui/primitives';
 import { spacing } from '@/constants/theme';
-import { discardPastedImages, NoteBlocksEditor, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
+import { discardPastedImages, NoteBlocksEditor, InsertImageButton, NoteListButtons, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
 import { createMessageRepository } from '@/db/repositories';
 import { deleteAttachment } from '@/services/attachment-storage';
 import { draftFromNote, draftImageCount, noteBlocksText, textDraft, type NoteDraftBlock } from '@/services/note-content';
 
 // What a save would change: words, and which images sit where.
-const signature = (blocks: NoteDraftBlock[]) => JSON.stringify(blocks.map((block) => block.type === 'text' ? block.text : `img:${block.attachmentId ?? block.image.storagePath}`));
+const signature = (blocks: NoteDraftBlock[]) => JSON.stringify(blocks.map((block) => block.type === 'text' ? { text: block.text, list: block.list } : `img:${block.attachmentId ?? block.image.storagePath}`));
 
 // The dedicated full-screen "Edit Content" editor — see PHASE: FULL-SCREEN
 // CONTENT EDITOR. Card Details previously edited a message's text inline
@@ -29,7 +29,7 @@ const signature = (blocks: NoteDraftBlock[]) => JSON.stringify(blocks.map((block
 // without this screen needing to reach back into its caller's state.
 export default function EditContentScreen() {
   const database = useSQLiteContext();
-  const { messageId } = useLocalSearchParams<{ messageId: string }>();
+  const { messageId, autoFocus } = useLocalSearchParams<{ messageId: string; autoFocus?: string }>();
   const messageRepository = useMemo(() => createMessageRepository(database), [database]);
   const { tokens: theme } = useTheme();
   const headerInk = useHeaderInk();
@@ -59,10 +59,10 @@ export default function EditContentScreen() {
       setInitialSignature(signature(loaded));
       setBlocks(loaded);
       setHasOtherAttachments(Boolean(message?.attachments.some((attachment) => attachment.type !== 'photo')));
-      requestAnimationFrame(() => inputRef.current?.focus());
+      if (autoFocus !== '0') requestAnimationFrame(() => inputRef.current?.focus());
     });
     return () => { active = false; };
-  }, [messageId, messageRepository]);
+  }, [messageId, messageRepository, autoFocus]);
 
   const changeBlocks = useCallback((update: (current: NoteDraftBlock[]) => NoteDraftBlock[]) => { setBlocks(update); setError(null); }, []);
   const pasteImage = useNoteImagePaste({ active: initialSignature !== null, blocks, setBlocks: changeBlocks, editor: inputRef, onError: setError });
@@ -99,7 +99,7 @@ export default function EditContentScreen() {
     try {
       const { removablePaths } = await messageRepository.updateContent(messageId, blocks);
       // Removed images' files go only once the note no longer refers to them.
-      await Promise.all(removablePaths.map((path) => deleteAttachment(path)));
+      await Promise.all(removablePaths.map((path) => deleteAttachment(path).catch(() => undefined)));
       void requestReminderSync();
       justSavedRef.current = true;
       router.back();
@@ -113,7 +113,7 @@ export default function EditContentScreen() {
     <Screen edges={['top', 'left', 'right']}>
       <AppHeader
         title="Edit Note"
-        leading={<IconButton label="Cancel" onPress={() => router.back()}><HeaderIcon name="close" size={24} /></IconButton>}
+        leading={<IconButton label="Cancel" disabled={saving || pasteImage.pasting} onPress={() => router.back()}><HeaderIcon name="close" size={24} /></IconButton>}
         trailing={<IconButton label="Save" disabled={!canSave} onPress={() => void save()}><Icon name={saving ? 'ellipsis-horizontal' : 'checkmark'} size={24} color={canSave ? (headerInk.banded ? headerInk.ink : theme.accent) : headerInk.inkMuted} /></IconButton>}
       />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -128,17 +128,20 @@ export default function EditContentScreen() {
           accessibilityLabel="Note content"
           blocks={blocks}
           onChangeBlocks={changeBlocks}
+          onReplaceImage={(key) => void pasteImage.pick(key)}
           placeholder="Start writing…"
           maxLength={10000}
-          editable={!saving}
+          editable={!saving && !pasteImage.pasting}
           maxImageHeight={360}
           singleInputStyle={[styles.input, { color: theme.textPrimary }]}
           blockContainerStyle={styles.blocks}
           blockInputStyle={[styles.blockInput, { color: theme.textPrimary }]}
         />
-        {pasteImage.canPaste || pasteImage.pasting ? <View style={[styles.footer, { borderTopColor: theme.borderSubtle }]}>
-          <PasteImageButton visible={pasteImage.canPaste} pasting={pasteImage.pasting} disabled={saving} onPress={() => void pasteImage.paste()} />
-        </View> : null}
+        <View style={[styles.footer, { borderTopColor: theme.borderSubtle }]}>
+          <InsertImageButton disabled={saving} busy={pasteImage.pasting} onPress={() => void pasteImage.pick()} />
+          <NoteListButtons editor={inputRef} disabled={saving || pasteImage.pasting} />
+          <PasteImageButton visible={pasteImage.canPaste} pasting={pasteImage.pasting && !pasteImage.picking} disabled={saving || pasteImage.picking} onPress={() => void pasteImage.paste()} />
+        </View>
       </KeyboardAvoidingView>
     </Screen>
   );
@@ -149,8 +152,8 @@ const styles = StyleSheet.create({
   input: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md, fontSize: 17, lineHeight: 27 },
   blocks: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   blockInput: { minHeight: 27, padding: 0, fontSize: 17, lineHeight: 27, textAlignVertical: 'top' },
-  // The paste action sits just above the keyboard, only while the clipboard holds an image.
-  footer: { flexDirection: 'row', paddingHorizontal: spacing.lg, paddingVertical: spacing.xs, borderTopWidth: StyleSheet.hairlineWidth },
+  // Image actions sit above the keyboard.
+  footer: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.lg, paddingVertical: spacing.xs, borderTopWidth: StyleSheet.hairlineWidth },
   errorBanner: { marginHorizontal: spacing.lg, marginTop: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10 },
   errorText: { fontSize: 13, lineHeight: 18 },
 });

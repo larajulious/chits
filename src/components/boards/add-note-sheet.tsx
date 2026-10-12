@@ -9,9 +9,9 @@ import { Icon } from '@/components/ui/icon';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { spacing } from '@/constants/theme';
 import { AttachmentDraftPreview } from '@/components/chat/attachment-draft-preview';
-import { discardPastedImages, NoteBlocksEditor, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
+import { discardPastedImages, NoteBlocksEditor, InsertImageButton, NoteListButtons, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
 import { pickAndStageFile, pickAndStageMedia, type AttachmentDraft } from '@/services/attachment-import';
-import { draftImageCount, noteBlocksText, textDraft, type NoteDraftBlock } from '@/services/note-content';
+import { draftHasRichContent, draftImageCount, noteBlocksText, textDraft, type NoteDraftBlock } from '@/services/note-content';
 
 // `blocks` is set only when the note has pasted images: its text and images in order.
 export type NoteSubmission = { text: string; attachment: AttachmentDraft['attachment'] | null; blocks: NoteDraftBlock[] | null };
@@ -69,7 +69,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
 
   const trimmed = noteBlocksText(blocks);
   const imageCount = draftImageCount(blocks);
-  const changeBlocks = useCallback((update: (current: NoteDraftBlock[]) => NoteDraftBlock[]) => { setBlocks(update); setError(null); }, []);
+  const changeBlocks = useCallback((update: (current: NoteDraftBlock[]) => NoteDraftBlock[]) => { setBlocks(update); setError(null); }, [setBlocks, setError]);
   const pasteImage = useNoteImagePaste({ active: visible, blocks, setBlocks: changeBlocks, editor: inputRef, onError: setError });
   const busy = saving || staging || pasteImage.pasting;
   const canAdd = (Boolean(trimmed) || Boolean(draft) || imageCount > 0) && !busy;
@@ -89,13 +89,14 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
     onClose();
   };
 
-  const attach = async (kind: typeof ATTACH_OPTIONS[number]['key']) => {
+  const attach = async (kind: typeof ATTACH_OPTIONS[number]['key'], inline = false) => {
     if (busy || draft) return;
+    const cursor = inputRef.current?.cursor() ?? null;
     setStaging(true);
     setError(null);
     try {
       const staged = kind === 'file' ? await pickAndStageFile() : await pickAndStageMedia(kind);
-      if (staged) setDraft(staged);
+      if (staged) { if (inline) pasteImage.insertAttachment(staged, cursor); else setDraft(staged); }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'That attachment could not be added.');
     } finally {
@@ -115,9 +116,10 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
       accessibilityLabel="Note text"
       blocks={blocks}
       onChangeBlocks={changeBlocks}
+      onReplaceImage={(key) => void pasteImage.pick(key)}
       placeholder={fullscreen ? 'Start writing…' : 'Write something...'}
       maxLength={MAX_NOTE_LENGTH}
-      editable={!saving}
+      editable={!busy}
       maxImageHeight={fullscreen ? 320 : 140}
       singleInputStyle={fullscreen
         ? [styles.fullInput, { color: theme.textPrimary }]
@@ -128,7 +130,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
       blockInputStyle={[fullscreen ? styles.fullBlockInput : styles.blockInput, !fullscreen && controls.input ? { fontFamily: controls.input.fontFamily, fontWeight: controls.input.fontWeight } : null, { color: theme.textPrimary }]}
     />
   );
-  const pasteButton = <PasteImageButton visible={pasteImage.canPaste} pasting={pasteImage.pasting} disabled={saving || staging} onPress={() => void pasteImage.paste()} />;
+  const pasteButton = <PasteImageButton visible={pasteImage.canPaste} pasting={pasteImage.pasting && !pasteImage.picking} disabled={saving || staging || pasteImage.picking} onPress={() => void pasteImage.paste()} />;
 
   const attachmentArea = draft ? (
     <View style={styles.attachmentPreview}>
@@ -143,6 +145,8 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
           key={option.key}
           accessibilityRole="button"
           accessibilityLabel={`Attach ${option.label.toLowerCase()}`}
+          accessibilityHint={option.key === 'photo' ? 'Hold to insert a photo at the cursor' : undefined}
+          onLongPress={option.key === 'photo' ? () => void attach('photo', true) : undefined}
           accessibilityState={{ disabled: busy }}
           disabled={busy}
           onPress={() => void attach(option.key)}
@@ -165,7 +169,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
     setSaving(true);
     setError(null);
     try {
-      await onSubmit({ text: trimmed, attachment: draft?.attachment ?? null, blocks: imageCount ? blocks : null });
+      await onSubmit({ text: trimmed, attachment: draft?.attachment ?? null, blocks: draftHasRichContent(blocks) ? blocks : null });
       // Saved: the file now belongs to the note, so it must not be removed.
       setDraft(null);
       setBlocks(textDraft());
@@ -202,6 +206,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
             {noteInput}
             <View style={[styles.fullFooter, { borderTopColor: theme.borderSubtle }]}>
               {error ? <AppText accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</AppText> : null}
+              <View style={styles.attachRow}><InsertImageButton disabled={saving || staging} busy={pasteImage.pasting} onPress={() => void pasteImage.pick()} /><NoteListButtons editor={inputRef} disabled={busy} /></View>
               {attachmentArea}
             </View>
           </SafeAreaView>

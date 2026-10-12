@@ -155,7 +155,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
       border={paper.edge}
       accessibilityRole="button"
       accessibilityLabel={accessibleLabel}
-      accessibilityHint={item.kind === 'thought' ? 'Opens in Chat' : 'Opens card details'}
+      accessibilityHint="Opens note"
       onPress={onPress}
     >
       <View style={styles.noteContent}>

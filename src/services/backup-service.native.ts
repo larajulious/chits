@@ -69,7 +69,7 @@ async function validateDatabase(db: SQLiteDatabase, expectedSchema?: number, cur
     card_reminders: ['card_id', 'scheduled_at', 'notification_id', 'created_at', 'updated_at', ...(schema >= 22 ? ['completed_at'] : [])],
     message_reminders: ['message_id', 'scheduled_at', 'notification_id', 'completed_at', 'created_at', 'updated_at'],
     card_subtasks: ['id', 'card_id', 'title', 'is_completed', 'position', 'created_at', 'updated_at', 'completed_at'],
-    space_placements: ['id', 'message_id', 'card_id', 'space_id', 'x', 'y', 'rotation', 'color', 'z_index', 'pinned_at', 'updated_at'],
+    space_placements: ['id', 'message_id', 'card_id', 'space_id', 'x', 'y', 'rotation', 'color', 'z_index', 'pinned_at', 'updated_at', ...(schema >= 25 ? ['paper_style'] : [])],
   };
   for (const table of tables) {
     const actual = new Set((await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`)).map((row) => row.name));

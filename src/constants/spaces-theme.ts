@@ -1,9 +1,8 @@
 import { STICKY_COLORS, type SpaceId } from './spaces';
 
-// The look of Spaces: real objects — a fridge door, a desk, a cork board, a
-// wall — filling the screen, with dark "ink" controls floating on top. These
-// are fixed physical colors, not the app theme's, so a fridge looks like a
-// fridge whatever personality or light/dark mode Chits is in.
+// Spaces' physical surfaces, paper and pins keep their material colors.
+// Interface buttons and labels derive the active theme and accent through
+// useSpaceUI; SPACE_UI also supplies the fixed paper and pin material colors.
 //
 // Presentation only: stored data (a sticky's color id, its position) is
 // defined in spaces.ts and never changes because of anything here.

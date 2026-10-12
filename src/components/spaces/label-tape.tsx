@@ -1,6 +1,9 @@
 import { memo } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { useFontStyle } from '@/components/ui/app-text';
+import { luminance, mix } from '@/constants/style-tokens';
+import { useSpaceUI } from './ink-surface';
 import { useSpaceFonts } from './space-fonts';
 
 const VARIANTS = {
@@ -15,6 +18,8 @@ const SIZES = {
 
 type Props = {
   text: string;
+  /** Interface labels follow the theme; labels on physical objects retain their tape colors. */
+  themed?: boolean;
   variant?: keyof typeof VARIANTS;
   size?: keyof typeof SIZES;
   /** Degrees; label tape is never stuck on quite straight. */
@@ -31,9 +36,15 @@ type Props = {
  * words are real text (readable by screen readers); the emboss highlight is a
  * hidden copy one point lower.
  */
-export const LabelTape = memo(function LabelTape({ text, variant = 'dark', size = 'md', rotation = -2, unit = 1, style, decorative = false }: Props) {
+export const LabelTape = memo(function LabelTape({ text, themed = false, variant = 'dark', size = 'md', rotation = -2, unit = 1, style, decorative = false }: Props) {
   const fonts = useSpaceFonts();
-  const colors = VARIANTS[variant];
+  const ui = useSpaceUI();
+  const interfaceFont = useFontStyle('body', '700');
+  const fill = variant === 'red' ? ui.accent : ui.ink;
+  const foreground = variant === 'red' ? ui.accentText : ui.paper;
+  const shine = mix(fill, luminance(foreground) > 0.5 ? '#000000' : '#FFFFFF', 0.08);
+  const colors = themed ? { gradient: `linear-gradient(180deg, ${shine}, ${fill})`, text: foreground } : VARIANTS[variant];
+  const labelFont = themed ? interfaceFont : fonts.label;
   const metrics = SIZES[size];
   const label = text.toUpperCase();
   const type = { fontSize: metrics.fontSize * unit, lineHeight: metrics.lineHeight * unit, letterSpacing: metrics.fontSize * 0.18 * unit };
@@ -49,9 +60,9 @@ export const LabelTape = memo(function LabelTape({ text, variant = 'dark', size 
     }, style]}
   >
     {/* Emboss: a faint light edge one point below the letters… */}
-    <Text accessible={false} importantForAccessibility="no" numberOfLines={1} style={[fonts.label, type, styles.highlight, { top: (metrics.paddingVertical + 1) * unit, left: metrics.paddingHorizontal * unit }]}>{label}</Text>
+    <Text accessible={false} importantForAccessibility="no" numberOfLines={1} style={[labelFont, type, styles.highlight, { top: (metrics.paddingVertical + 1) * unit, left: metrics.paddingHorizontal * unit }]}>{label}</Text>
     {/* …and a dark edge one point above. */}
-    <Text numberOfLines={1} style={[fonts.label, type, { color: colors.text, textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: -1 * unit }, textShadowRadius: 0 }]}>{label}</Text>
+    <Text numberOfLines={1} style={[labelFont, type, { color: colors.text, textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: -1 * unit }, textShadowRadius: 0 }]}>{label}</Text>
   </View>;
 });
 

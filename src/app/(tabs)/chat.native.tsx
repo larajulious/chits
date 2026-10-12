@@ -28,8 +28,8 @@ import { CONTENT_RANGE, useChatTransition } from '@/components/navigation/chat-t
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { ChatComposerSurface } from '@/components/chat/chat-composer-surface';
 import { FullscreenComposer } from '@/components/chat/fullscreen-composer';
-import { discardPastedImages, NoteBlocksEditor, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
-import { draftContentForStorage, draftFromNote, draftHasImages, draftHasUnsavedImages, draftPlainText, textDraft, type NoteDraftBlock } from '@/services/note-content';
+import { discardPastedImages, NoteBlocksEditor, InsertImageButton, NoteListButtons, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
+import { draftContentForStorage, draftFromNote, draftHasRichContent, draftHasImages, draftHasUnsavedImages, draftPlainText, textDraft, type NoteDraftBlock } from '@/services/note-content';
 import { readChatDraft, saveChatComposer, writeChatDraft } from '@/services/chat-composer';
 import { BackgroundReadabilityProvider } from '@/components/chat/background-readability';
 import { ChatWallpaper } from '@/components/chat/chat-wallpaper';
@@ -318,6 +318,7 @@ export default function ChatScreen() {
   const draft = draftPlainText(blocks);
   const draftContent = draftContentForStorage(blocks);
   const draftImages = draftHasImages(blocks);
+  const draftRichContent = draftHasRichContent(blocks);
   const [fullscreenEditing, setFullscreenEditing] = useState(false);
   const [savedDraftMessageId, setSavedDraftMessageId] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
@@ -579,7 +580,7 @@ export default function ChatScreen() {
       .then((restored) => {
         if (!active || draftTouched.current) return;
         // A thought with images resumes with them in place, around the saved words.
-        setBlocks(restored.editing && restored.content ? draftFromNote({ text: restored.text, content: restored.content, attachments: restored.editing.attachments }) : textDraft(restored.text));
+        setBlocks(restored.content ? draftFromNote({ text: restored.text, content: restored.content, attachments: restored.editing?.attachments ?? [] }) : textDraft(restored.text));
         if (restored.editing) { setEditing(restored.editing); setSavedDraftMessageId(restored.editing.id); }
       })
       .catch(() => undefined)
@@ -597,7 +598,7 @@ export default function ChatScreen() {
     if (!prefill) return;
     const frame = requestAnimationFrame(() => {
       draftTouched.current = true;
-      setBlocks((current) => (draftPlainText(current).trim() || draftHasImages(current) ? current : textDraft(prefill)));
+      setBlocks((current) => (draftPlainText(current).trim() || draftHasRichContent(current) ? current : textDraft(prefill)));
       router.setParams({ prefill: undefined });
     });
     return () => cancelAnimationFrame(frame);
@@ -817,7 +818,7 @@ export default function ChatScreen() {
     hideSuggestion();
     setIsSaving(true); setError(null);
     try {
-      const message = await saveChatComposer(repository, { text: draft, editing, attachment: attachmentDraft?.attachment ?? null, blocks: draftImages || editing?.content ? blocks : null });
+      const message = await saveChatComposer(repository, { text: draft, editing, attachment: attachmentDraft?.attachment ?? null, blocks: draftRichContent || editing?.content ? blocks : null, removeImages: async (paths) => { await Promise.all(paths.map((path) => deleteAttachment(path))); } });
       if (!message) return;
       // Saved: pasted files now belong to the thought. Save as draft keeps
       // editing it, with its images (now saved) still in place.
@@ -859,7 +860,7 @@ export default function ChatScreen() {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch { setError(editing ? 'Your edit was not saved. Please try again.' : 'Your thought was not saved. Please try again.'); }
     finally { savingComposer.current = false; setIsSaving(false); }
-  }, [animateComposerTransition, attachmentDraft, blocks, draftImages, draft, editing, repository, onOrganizationSent, hideSuggestion, persistDraft, fullscreenEditing, scrollToLatest]);
+  }, [animateComposerTransition, attachmentDraft, blocks, draftRichContent, draft, editing, repository, onOrganizationSent, hideSuggestion, persistDraft, fullscreenEditing, scrollToLatest]);
 
   const changeBlocks = useCallback((update: (current: NoteDraftBlock[]) => NoteDraftBlock[]) => {
     draftTouched.current = true;
@@ -1026,12 +1027,12 @@ export default function ChatScreen() {
   // draft just because focus moved elsewhere temporarily; `attachmentPickerOpen`
   // covers the moment the "+" sheet itself is open, before anything has
   // actually been picked.
-  const composerExpanded = composerFocused || attachmentPickerOpen || Boolean(attachmentDraft) || draftImages || Boolean(editing) || isRecordingAudio || hasDraft;
+  const composerExpanded = composerFocused || attachmentPickerOpen || Boolean(attachmentDraft) || draftRichContent || Boolean(editing) || isRecordingAudio || hasDraft;
   // Pasting puts the image where the cursor is, in whichever composer is open.
-  const paste = useNoteImagePaste({ active: !searchOpen && !isRecordingAudio, blocks, setBlocks: changeBlocks, editor: fullscreenEditing ? fullscreenInputRef : inputRef, onError: setError });
+  const paste = useNoteImagePaste({ active: !searchOpen && !isRecordingAudio && !isSaving, blocks, setBlocks: changeBlocks, editor: fullscreenEditing ? fullscreenInputRef : inputRef, onError: setError });
   // "Paste image" is offered while the composer is open and the clipboard holds an image.
   const pasteButton = paste.canPaste && (composerExpanded || fullscreenEditing) || paste.pasting
-    ? <PasteImageButton visible={paste.canPaste} pasting={paste.pasting} disabled={isSaving} onPress={() => void paste.paste()} />
+    ? <PasteImageButton visible={paste.canPaste} pasting={paste.pasting && !paste.picking} disabled={isSaving || paste.picking} onPress={() => void paste.paste()} />
     : null;
   // Content size is only consulted to decide whether the (already auto-growing,
   // min/max-height-bound) input needs internal scrolling — it never drives the
@@ -1143,7 +1144,7 @@ export default function ChatScreen() {
               accessibilityLabel={attachmentDraft || editing?.attachments.length ? 'Attachment description' : 'Message note'}
               blocks={blocks}
               onChangeBlocks={changeBlocks}
-              editable={!isSaving}
+              editable={!isSaving && !paste.pasting}
               onFocus={focusComposer}
               onBlur={blurComposer}
               placeholder={attachmentDraft || editing?.attachments.length ? 'Add a description...' : editing ? 'Edit thought...' : 'Message note...'}
@@ -1154,7 +1155,7 @@ export default function ChatScreen() {
               blockContainerStyle={styles.composerBlocks}
               blockInputStyle={[styles.composerBlockInput, inputFont, { color: theme.textPrimary }]}
             /> : null}
-            <View pointerEvents={composerExpanded ? 'auto' : 'box-none'} style={[styles.composerActions, isRecordingAudio ? styles.composerActionsRecording : composerExpanded ? styles.composerActionsExpanded : styles.composerActionsCompact]}><AttachmentPicker ref={attachmentPickerRef} disabled={Boolean(attachmentDraft) || Boolean(editing) || isSaving} onSelected={attachmentSelected} onError={setError} onRecordingChange={recordingChanged} onOpenChange={(open) => { if (open) hideSuggestion(); setAttachmentPickerOpen(open); }} />{composerExpanded && !isRecordingAudio ? <IconButton label="Edit in fullscreen" disabled={isSaving || !draftHydrated} onPress={openFullscreenComposer}><Icon name="expand-outline" size={20} color={theme.textSecondary} /></IconButton> : null}{!isRecordingAudio ? <Pressable accessibilityRole="button" accessibilityLabel={canSend ? 'Send message' : 'Record audio'} accessibilityState={{ disabled: isSaving }} disabled={isSaving} onPress={() => { if (canSend) void send(); else attachmentPickerRef.current?.startAudio(); }} style={({ pressed }) => [styles.sendButton, { backgroundColor: isSaving ? theme.surfaceElevated : theme.accent }, sticky({ fill: isSaving ? theme.surfaceElevated : styleColors.accentFill, radius: styleTokens.radius.control }, pressed), pressed && styles.sendPressed]}><Icon name={canSend ? 'arrow-up' : 'mic-outline'} size={20} color={styleTokens.outline.width ? styleColors.onAccent : theme.accentText} /></Pressable> : null}</View>
+            <View pointerEvents={composerExpanded ? 'auto' : 'box-none'} style={[styles.composerActions, isRecordingAudio ? styles.composerActionsRecording : composerExpanded ? styles.composerActionsExpanded : styles.composerActionsCompact]}><AttachmentPicker ref={attachmentPickerRef} disabled={Boolean(attachmentDraft) || Boolean(editing) || isSaving || paste.pasting} onSelected={attachmentSelected} onInlineSelected={paste.insertAttachment} onError={setError} onRecordingChange={recordingChanged} onOpenChange={(open) => { if (open) hideSuggestion(); setAttachmentPickerOpen(open); }} />{composerExpanded && !isRecordingAudio ? <IconButton label="Edit in fullscreen" disabled={isSaving || !draftHydrated} onPress={openFullscreenComposer}><Icon name="expand-outline" size={20} color={theme.textSecondary} /></IconButton> : null}{!isRecordingAudio ? <Pressable accessibilityRole="button" accessibilityLabel={canSend ? 'Send message' : 'Record audio'} accessibilityState={{ disabled: isSaving }} disabled={isSaving} onPress={() => { if (paste.pasting) return; if (canSend) void send(); else attachmentPickerRef.current?.startAudio(); }} style={({ pressed }) => [styles.sendButton, { backgroundColor: isSaving ? theme.surfaceElevated : theme.accent }, sticky({ fill: isSaving ? theme.surfaceElevated : styleColors.accentFill, radius: styleTokens.radius.control }, pressed), pressed && styles.sendPressed]}><Icon name={canSend ? 'arrow-up' : 'mic-outline'} size={20} color={styleTokens.outline.width ? styleColors.onAccent : theme.accentText} /></Pressable> : null}</View>
           </ChatComposerSurface>
         </View> : null}
         <View style={styles.headerWrap} pointerEvents="box-none">
@@ -1175,7 +1176,7 @@ export default function ChatScreen() {
           </View>
         </View>
         </View>
-      {fullscreenEditing ? <FullscreenComposer blocks={blocks} onChangeBlocks={changeBlocks} editorRef={fullscreenInputRef} onClose={closeFullscreenComposer} onSaveDraft={() => send(true)} onSend={() => { void send(); }} canSave={canSend} saving={isSaving} error={error} savedText={editing ? editing.text ?? '' : null} attachmentLabel={attachmentDraft ? `${attachmentDraft.attachment.type} attachment ready to send` : editing?.attachments.length ? `${editing.attachments.length} attachment${editing.attachments.length === 1 ? '' : 's'} saved in chat` : null} pasteButton={pasteButton} /> : null}
+      {fullscreenEditing ? <FullscreenComposer blocks={blocks} onChangeBlocks={changeBlocks} editorRef={fullscreenInputRef} onClose={closeFullscreenComposer} onSaveDraft={() => send(true)} onSend={() => { void send(); }} canSave={canSend && !paste.pasting} saving={isSaving || paste.pasting} error={error} savedText={editing ? editing.text ?? '' : null} attachmentLabel={attachmentDraft ? `${attachmentDraft.attachment.type} attachment ready to send` : editing?.attachments.length ? `${editing.attachments.length} attachment${editing.attachments.length === 1 ? '' : 's'} saved in chat` : null} pasteButton={pasteButton} insertImageButton={<InsertImageButton disabled={isSaving} busy={paste.pasting} onPress={() => void paste.pick()} />} listButtons={<NoteListButtons editor={fullscreenInputRef} disabled={isSaving || paste.pasting} />} onReplaceImage={(key) => void paste.pick(key)} /> : null}
       <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => { afterActionsClosed.current = null; setSelected(null); }} onClosed={runAfterActionsClosed} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} spaceAction={spaceAction} onSpaceAction={runSpaceAction} onAddToBoard={addToBoard} onReminder={openMessageReminder} onDownload={(message) => { setSelected(null); if (message.attachments[0]) void download.exportAttachment(message.attachments[0]); }} onShareNote={(message) => { afterActionsClosed.current = () => router.push(shareNoteHref({ messageId: message.id })); setSelected(null); }} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
       <ReminderSheet key={reminderSheetKey} visible={reminderMessageId !== null} existing={reminderExisting} accent={theme.accent} accentOn={theme.accentText} onClose={() => setReminderMessageId(null)} onSave={async (date) => {
         if (!reminderMessageId) return { ok: false, reason: 'failed' };

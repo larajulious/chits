@@ -4,6 +4,7 @@ import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -145,8 +146,9 @@ export default function BoardsScreen() {
   const showLoader = useChitsLoading(!ready);
   const isNameValid = Boolean(name.trim());
 
-  // Boards | Cards. The screen opens on Boards; switching is session-local.
+  // Choose the initial tab after loading boards; subsequent choices are session-local.
   const [viewMode, setViewMode] = useState<ViewMode>('boards');
+  const initialViewResolved = useRef(false);
   const [addNoteOpen, setAddNoteOpen] = useState(false);
   const [cards, setCards] = useState<CardListItem[]>([]);
   // Chat thoughts not yet organized into any board/card — the Cards view
@@ -159,6 +161,26 @@ export default function BoardsScreen() {
   // session-local refinement rather than a standing preference.
   const [cardFilter, setCardFilter] = useState<CardFilter>('all');
   const [cardToast, setCardToast] = useState<string | null>(null);
+  const openingNote = useRef(false);
+
+  const openCardNote = async (item: CardListItem) => {
+    if (openingNote.current) return;
+    Keyboard.dismiss();
+    // Board cards open their details, including their board context and actions.
+    // Hidden content keeps its existing reveal flow.
+    const openDetails = () => router.push(item.kind === 'thought' ? `/chat?messageId=${item.id}` : `/card/${item.id}`);
+    if (item.hidden || (item.kind === 'card' && item.boardId)) { openDetails(); return; }
+    openingNote.current = true;
+    try {
+      const messages = item.kind === 'card' ? await boardRepository.listCardMessages(item.id) : null;
+      if (messages && (messages.length !== 1 || messages[0].isHiddenContent)) { openDetails(); return; }
+      router.push({ pathname: '/card/edit-content', params: { messageId: messages ? messages[0].id : item.id, autoFocus: '0' } });
+    } catch {
+      setCardToast('That note could not be opened. Please try again.');
+    } finally {
+      openingNote.current = false;
+    }
+  };
 
   useEffect(() => { if (!cardToast) return; const timer = setTimeout(() => setCardToast(null), 1800); return () => clearTimeout(timer); }, [cardToast]);
 
@@ -169,6 +191,10 @@ export default function BoardsScreen() {
       database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', 'chat_title'),
     ]);
     setBoards(nextBoards);
+    if (!initialViewResolved.current) {
+      initialViewResolved.current = true;
+      setViewMode(nextBoards.length ? 'boards' : 'cards');
+    }
     setUnorganizedCount(nextCount);
     setAppTitle(titleRow?.value.trim() || 'Chits');
     setReady(true);
@@ -205,6 +231,7 @@ export default function BoardsScreen() {
   }, [load, loadCards]));
 
   const changeViewMode = (next: ViewMode) => {
+    initialViewResolved.current = true;
     if (next !== viewMode) setViewMode(next);
   };
 
@@ -473,7 +500,7 @@ export default function BoardsScreen() {
                     <View style={noteCellStyle(cell.column)}>
                       <CardListRow
                         item={cell.item}
-                        onPress={() => router.push(cell.item.kind === 'thought' ? `/chat?messageId=${cell.item.id}` : `/card/${cell.item.id}`)}
+                        onPress={() => void openCardNote(cell.item)}
                         onMore={() => void openCardActions(cell.item)}
                       />
                     </View>

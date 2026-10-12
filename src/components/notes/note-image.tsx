@@ -15,19 +15,19 @@ type Props = {
   image: NoteImageDetails;
   width: number;
   height: number;
-  // A saved image opens full screen (with the usual photo actions) on tap; an
-  // image still being drafted in an editor has no attachment yet and doesn't.
+  // Saved images retain their photo actions; editor drafts open a preview only.
   attachment?: AttachmentLike | null;
+  previewOnly?: boolean;
   accessibilityLabel?: string;
   overlay?: ReactNode;
   onLongPress?: () => void;
 };
 
 // One image inside a note, drawn at exactly the box its caller computed from
-// the image's own proportions (see imageRows) — so `cover` fills it without
+// the image's own proportions (see imageRows) — `contain` avoids rounding-related
 // cropping or stretching. A subtle spinner shows while it decodes, and a file
 // that's gone (deleted, or missing after a restore) becomes a quiet placeholder.
-export function NoteImage({ image, width, height, attachment, accessibilityLabel, overlay, onLongPress }: Props) {
+export function NoteImage({ image, width, height, attachment, previewOnly = false, accessibilityLabel, overlay, onLongPress }: Props) {
   const { tokens: theme } = useTheme();
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -42,14 +42,14 @@ export function NoteImage({ image, width, height, attachment, accessibilityLabel
     </View>;
   }
   const picture = <>
-    <Image source={uri} contentFit="cover" transition={120} allowDownscaling recyclingKey={image.storagePath} onLoad={() => setLoaded(true)} onError={() => setFailed(true)} style={StyleSheet.absoluteFill} />
+    <Image source={uri} contentFit="contain" transition={120} allowDownscaling recyclingKey={image.storagePath} onLoad={() => setLoaded(true)} onError={() => setFailed(true)} style={StyleSheet.absoluteFill} />
     {!loaded ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center]}><ActivityIndicator size="small" color={theme.textMuted} /></View> : null}
   </>;
+  const previewAttachment: AttachmentLike = attachment ?? { id: `draft:${image.storagePath}`, type: 'photo', ...image, duration: null, createdAt: 0 };
   return <View style={[styles.frame, box]}>
-    {attachment ? <Pressable accessibilityRole="imagebutton" accessibilityLabel={accessibilityLabel ?? 'Image'} accessibilityHint="Opens the image full screen" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [StyleSheet.absoluteFill, pressed && styles.pressed]}>{picture}</Pressable>
-      : <View accessible accessibilityRole="image" accessibilityLabel={accessibilityLabel ?? 'Image'} style={StyleSheet.absoluteFill}>{picture}</View>}
+    <Pressable accessibilityRole="imagebutton" accessibilityLabel={accessibilityLabel ?? 'Image'} accessibilityHint="Opens the image full screen" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [StyleSheet.absoluteFill, pressed && styles.pressed]}>{picture}</Pressable>
     {overlay}
-    {viewerOpen && attachment ? <PhotoAttachmentViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}
+    {viewerOpen ? <PhotoAttachmentViewer attachment={previewAttachment} previewOnly={previewOnly || !attachment} onDismiss={() => setViewerOpen(false)} /> : null}
   </View>;
 }
 

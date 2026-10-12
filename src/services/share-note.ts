@@ -1,3 +1,4 @@
+import { noteListMarkers, type NoteList } from './note-content.ts';
 import type { AttachmentLike, Message } from '@/db/types';
 
 // Share Note turns a thought or card into a designed image. Everything here is
@@ -31,10 +32,13 @@ export const SHARE_NOTE_MODES: { key: ShareNoteMode; label: string }[] = [
 ];
 
 export type ShareNoteImage = Pick<AttachmentLike, 'id' | 'storagePath' | 'width' | 'height'>;
+export type ShareNoteBlock = { type: 'text'; text: string; list?: NoteList; marker?: string | null } | { type: 'image'; image: ShareNoteImage };
+
 export type ShareNoteSubtask = { title: string; isCompleted: boolean };
 
 /** What a thought or card can contribute to a Share Note: its words and its photos, nothing else. */
 export type ShareNoteSource = {
+  blocks?: ShareNoteBlock[];
   title: string | null;
   text: string | null;
   images: ShareNoteImage[];
@@ -66,9 +70,22 @@ export function buildShareNoteSource({ title, messages, cardAttachments = [], su
   const text = messages.map((message) => message.text?.trim() ?? '').filter(Boolean).join('\n\n') || null;
   const attachments = [...messages.flatMap(readingOrder), ...cardAttachments];
   const images = attachments.filter((attachment) => attachment.type === 'photo').map(({ id, storagePath, width, height }) => ({ id, storagePath, width, height }));
+  const blocks: ShareNoteBlock[] = [];
+  if (messages.some((message) => message.content)) {
+    for (const message of messages) {
+      const inline = new Set(message.content?.flatMap((block) => block.type === 'image' ? [block.attachmentId] : []) ?? []);
+      for (const attachment of message.attachments) if (attachment.type === 'photo' && !inline.has(attachment.id)) blocks.push({ type: 'image', image: attachment });
+      if (message.content) for (const block of message.content) {
+        if (block.type === 'text') blocks.push(block);
+        else { const image = images.find((image) => image.id === block.attachmentId); if (image) blocks.push({ type: 'image', image }); }
+      }
+      else if (message.text) blocks.push({ type: 'text', text: message.text });
+    }
+    for (const image of cardAttachments) if (image.type === 'photo') blocks.push({ type: 'image', image });
+  }
   const cleanTitle = title?.trim() || null;
   const titleAddsSomething = cleanTitle && !(text ?? '').startsWith(cleanTitle.replace(/…$/, ''));
-  return { title: titleAddsSomething ? cleanTitle : null, text, images, subtasks, unsupportedCount: attachments.length - images.length };
+  return { ...(blocks.length ? { blocks } : {}), title: titleAddsSomething ? cleanTitle : null, text, images, subtasks, unsupportedCount: attachments.length - images.length };
 }
 
 export const SHARE_NOTE_COPY = {
@@ -253,4 +270,30 @@ const pad = (value: number) => String(value).padStart(2, '0');
 /** "Chits Note 2026-09-29 14.03.12.png" — what the file is called in the share sheet, Photos and Downloads. */
 export function shareNoteFileName(at: Date, extension: 'png' | 'jpg', name = 'Chits Note'): string {
   return `${name} ${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}.${pad(at.getMinutes())}.${pad(at.getSeconds())}.${extension}`;
+}
+
+/** Conservative page boundaries keep full inline text and selected images in order. */
+export function paginateInlineShare(blocks: ShareNoteBlock[]): ShareNoteBlock[][] {
+  const pages: ShareNoteBlock[][] = [];
+  let page: ShareNoteBlock[] = [];
+  let cost = 0;
+  const add = (block: ShareNoteBlock, lines: number) => {
+    if (cost + lines > 90 && page.length) { pages.push(page); page = []; cost = 0; }
+    page.push(block); cost += lines;
+  };
+  const markers = noteListMarkers(blocks.map((block) => block.type === 'image' ? { type: 'image' as const, attachmentId: block.image.id } : block));
+  for (const [index, block] of blocks.entries()) {
+    if (block.type === 'image') { add(block, 16); continue; }
+    if (!block.text && block.list) { add({ ...block, marker: markers[index] }, 1); continue; }
+    let chunk = '', lines = 1, column = 0, first = true;
+    for (const char of block.text) {
+      chunk += char;
+      column += 1;
+      if (char === '\n' || column >= 12) { lines += 1; column = 0; }
+      if (lines >= 60) { add({ ...block, text: chunk, marker: first ? markers[index] : null }, lines); chunk = ''; lines = 1; column = 0; first = false; }
+    }
+    if (chunk) add({ ...block, text: chunk, marker: first ? markers[index] : null }, lines);
+  }
+  if (page.length) pages.push(page);
+  return pages;
 }

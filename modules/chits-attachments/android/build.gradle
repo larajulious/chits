@@ -9,7 +9,18 @@ version = '1.0.0'
 android {
   namespace "expo.modules.chitsattachments"
   defaultConfig {
+    testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     versionCode 1
     versionName '1.0.0'
   }
+}
+
+dependencies {
+  // SDK 57 uses a prebuilt Maven artifact unless notifications is built from source.
+  def notificationsProject = findProject(':expo-notifications')
+  def publication = new groovy.json.JsonSlurper().parse(rootProject.file('../node_modules/expo-notifications/expo-module.config.json')).android.publication
+  implementation notificationsProject ?: "${publication.groupId}:${publication.artifactId}:${publication.version}"
+  androidTestImplementation 'androidx.test:runner:1.7.0'
+  androidTestImplementation 'androidx.test:core:1.7.0'
+  androidTestImplementation 'junit:junit:4.13.2'
 }

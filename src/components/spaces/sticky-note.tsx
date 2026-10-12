@@ -47,7 +47,7 @@ export function stickyShape(note: Pick<PinnedNote, 'hidden'> & Partial<Pick<Pinn
 }
 
 export type StickyPaperProps = {
-  note: Pick<PinnedNote, 'title' | 'text' | 'hidden' | 'color' | 'rotation'> & Partial<Pick<PinnedNote, 'media' | 'imageCount'>>;
+  note: Pick<PinnedNote, 'title' | 'text' | 'hidden' | 'color' | 'rotation'> & Partial<Pick<PinnedNote, 'media' | 'imageCount' | 'paperStyle'>>;
   space: SpaceId;
   /** Picks the magnet/pin/washi color and the tape's tilt. */
   seed?: number;
@@ -66,7 +66,7 @@ export const StickyPaper = memo(function StickyPaper({ note, space, seed = 0, un
       ? <SpaceCassette color={note.color} caption={photoCaption({ title: note.title, media: note.media })} duration={note.media.attachment.duration} width={width} height={height} rotation={note.rotation} obscured={obscured} lifted={lifted} />
       : note.media && !note.hidden
       ? <SpacePhoto media={note.media} caption={photoCaption({ title: note.title, media: note.media })} width={width} height={height} rotation={note.rotation} obscured={obscured} lifted={lifted} unit={unit} />
-      : <PaperNote kind="sticky" color={note.color} body={stickyText(note)} width={width} height={height} rotation={note.rotation} hidden={note.hidden} obscured={obscured} lifted={lifted} unit={unit} />}
+      : <PaperNote kind={note.paperStyle} color={note.color} body={stickyText(note)} width={width} height={height} rotation={note.rotation} hidden={note.hidden} obscured={obscured} lifted={lifted} unit={unit} />}
     <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height, transform: [{ rotate: `${note.rotation}deg` }] }}>
       <PinDecoration space={space} color={magnetColor(seed)} noteWidth={width} unit={unit} seed={seed} />
       {/* A note with pasted images says how many, in the paper's own ink. */}

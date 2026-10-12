@@ -236,6 +236,11 @@ const migrations: Migration[] = [{
     // messages.text keeps holding the note's words for search and previews.
     await database.execAsync('ALTER TABLE messages ADD COLUMN content_json TEXT;');
   },
+}, {
+  version: 25,
+  up: async (database) => {
+    await database.execAsync("ALTER TABLE space_placements ADD COLUMN paper_style TEXT NOT NULL DEFAULT 'sticky' CHECK (paper_style IN ('sticky', 'index', 'receipt'));");
+  },
 }];
 
 /** The schema version this build of Chits understands (the last migration). */

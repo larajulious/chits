@@ -39,6 +39,7 @@ test('migration adds completion and message reminders while retaining existing c
   const db = await env.sqlite.openDatabaseAsync('upgrade.db');
   await db.execAsync(`
     PRAGMA foreign_keys = ON;
+    CREATE TABLE space_placements (id TEXT PRIMARY KEY, message_id TEXT, card_id TEXT, space_id TEXT, x REAL, y REAL, rotation REAL, color TEXT, z_index INTEGER, pinned_at INTEGER, updated_at INTEGER);
     CREATE TABLE cards (id TEXT PRIMARY KEY);
     CREATE TABLE messages (id TEXT PRIMARY KEY);
     CREATE TABLE card_reminders (card_id TEXT PRIMARY KEY, scheduled_at INTEGER NOT NULL, notification_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE);

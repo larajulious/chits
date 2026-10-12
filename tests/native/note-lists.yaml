@@ -1,0 +1,60 @@
+# Run on a disposable iPhone or Pixel 7 emulator with Gboard and a fresh Chits install.
+appId: com.larajulious.chitsapp
+---
+- launchApp
+- tapOn:
+    text: "Skip the welcome tour"
+    optional: true
+- tapOn: "Add note"
+- tapOn: "Write in full screen"
+- assertVisible: "Bullet list"
+- assertVisible: "Numbered list"
+- tapOn: "Bullet list"
+- assertVisible: "•"
+- inputText: "Milk"
+- assertVisible: "•"
+- pressKey: Enter
+- inputText: "Eggs"
+- assertVisible: "•"
+- pressKey: Enter
+- pressKey: Enter
+- inputText: "After list"
+- takeScreenshot: chits-list-qa-open
+- tapOn:
+    text: "Milk"
+- tapOn: "Numbered list"
+- assertVisible: "1\\."
+- assertVisible: "2\\."
+- tapOn: "Add note"
+- tapOn:
+    text: "(?s)Note\\. .*Milk.*"
+- assertVisible: "Edit Note"
+- assertVisible: "1\\."
+- assertVisible: "2\\."
+- assertVisible: "(?s).*After list.*"
+- assertNotVisible: "return"
+- takeScreenshot: chits-list-ios-reopened
+- tapOn: "After list"
+- tapOn: "Bullet list"
+- eraseText: 20
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - pressKey: Backspace
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      # Pixel 7 / Gboard soft delete key; RN Android does not emit hardware onKeyPress.
+      - tapOn:
+          point: "92%,84%"
+- assertNotVisible: "•"
+- inputText: "After list"
+- tapOn: "Save"
+- tapOn:
+    text: "(?s)Note\\. .*Milk.*"
+- assertVisible: "(?s).*After list.*"
+- assertVisible: "1\\."
+- assertVisible: "2\\."
+- takeScreenshot: chits-list-backspace-reopened

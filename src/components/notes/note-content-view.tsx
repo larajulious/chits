@@ -4,17 +4,18 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { NoteImage } from '@/components/notes/note-image';
 import { spacing } from '@/constants/theme';
 import type { AttachmentLike } from '@/db/types';
-import { imageRows, type NoteRenderBlock } from '@/services/note-content';
+import { imageRows, noteListMarkers, type NoteRenderBlock } from '@/services/note-content';
 
-type Segment = { key: string; type: 'text'; text: string } | { key: string; type: 'images'; images: AttachmentLike[] };
+type Segment = { key: string; type: 'text'; text: string; marker?: string | null } | { key: string; type: 'images'; images: { key: string; attachment: AttachmentLike }[] };
 
 function segmentsOf(blocks: NoteRenderBlock[]): Segment[] {
   const segments: Segment[] = [];
-  for (const block of blocks) {
+  const markers = noteListMarkers(blocks);
+  for (const [index, block] of blocks.entries()) {
     const previous = segments[segments.length - 1];
-    if (block.type === 'text') segments.push({ key: block.key, type: 'text', text: block.text });
-    else if (previous?.type === 'images') previous.images.push(block.attachment);
-    else segments.push({ key: block.key, type: 'images', images: [block.attachment] });
+    if (block.type === 'text') segments.push({ key: block.key, type: 'text', text: block.text, marker: markers[index] });
+    else if (previous?.type === 'images') previous.images.push({ key: block.key, attachment: block.attachment });
+    else segments.push({ key: block.key, type: 'images', images: [{ key: block.key, attachment: block.attachment }] });
   }
   return segments;
 }
@@ -43,14 +44,16 @@ export function NoteContentView({ blocks, renderText, maxImageHeight = 360, gap 
   const imageCount = imageNumbers.size;
   return <View style={[{ gap }, style]} onLayout={({ nativeEvent }) => { const next = Math.floor(nativeEvent.layout.width); setWidth((current) => current === next ? current : next); }}>
     {segments.map((segment) => {
-      if (segment.type === 'text') return <View key={segment.key}>{renderText(segment.text, segment.key)}</View>;
+      if (segment.type === 'text') return segment.marker
+        ? <View key={segment.key} style={styles.listRow}><View style={styles.listMarker}>{renderText(segment.marker, `${segment.key}:marker`)}</View><View style={styles.listBody}>{renderText(segment.text, segment.key)}</View></View>
+        : <View key={segment.key}>{renderText(segment.text, segment.key)}</View>;
       // Until the width is known, hold roughly the space the images will take.
       if (!width) return <View key={segment.key} style={{ height: Math.min(maxImageHeight, 160) }} />;
       return <View key={segment.key} style={styles.run}>
-        {imageRows(segment.images, width, IMAGE_GAP, maxImageHeight).map((row) => <View key={row.indexes.join('-')} style={styles.row}>
+        {imageRows(segment.images.map((image) => image.attachment), width, IMAGE_GAP, maxImageHeight).map((row) => <View key={row.indexes.join('-')} style={styles.row}>
           {row.indexes.map((index, position) => {
-            const attachment = segment.images[index];
-            return <NoteImage key={attachment.id} image={attachment} attachment={attachment} width={row.widths[position]} height={row.height} accessibilityLabel={imageCount > 1 ? `Image ${imageNumbers.get(attachment.id)} of ${imageCount}` : 'Image'} onLongPress={onImageLongPress ? () => onImageLongPress(attachment) : undefined} />;
+            const { key, attachment } = segment.images[index];
+            return <NoteImage key={key} image={attachment} attachment={attachment} width={row.widths[position]} height={row.height} accessibilityLabel={imageCount > 1 ? `Image ${imageNumbers.get(key)} of ${imageCount}` : 'Image'} onLongPress={onImageLongPress ? () => onImageLongPress(attachment) : undefined} />;
           })}
         </View>)}
       </View>;
@@ -61,6 +64,9 @@ export function NoteContentView({ blocks, renderText, maxImageHeight = 360, gap 
 const IMAGE_GAP = 4;
 
 const styles = StyleSheet.create({
+  listRow: { flexDirection: 'row', gap: 8 },
+  listMarker: { minWidth: 26, alignItems: 'flex-end' },
+  listBody: { flex: 1 },
   run: { gap: IMAGE_GAP },
   row: { flexDirection: 'row', gap: IMAGE_GAP },
 });

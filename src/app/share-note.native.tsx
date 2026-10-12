@@ -15,7 +15,7 @@ import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { layout as layoutTokens, radii, spacing } from '@/constants/theme';
 import { getShareNoteTheme, shareNoteThemeForIdentity } from '@/constants/chits-themes';
 import {
-  availableShareNoteModes, DEFAULT_SHARE_NOTE_FORMAT, defaultShareNoteMode, initialShareNoteImages, MAX_SHARE_NOTE_IMAGE_HEIGHT, paginateChecklistRows, SHARE_NOTE_COPY, SHARE_NOTE_FORMATS,
+  availableShareNoteModes, DEFAULT_SHARE_NOTE_FORMAT, defaultShareNoteMode, initialShareNoteImages, MAX_SHARE_NOTE_IMAGE_HEIGHT, paginateChecklistRows, paginateInlineShare, SHARE_NOTE_COPY, SHARE_NOTE_FORMATS,
   SHARE_NOTE_MODES, shareNoteAvailability, shareNoteLayout, toggleShareNoteImage, type ShareNoteFormat, type ShareNoteMode, type ShareNoteSource,
 } from '@/services/share-note';
 import { captureShareNote, discardShareNoteImage, saveShareNoteImage, shareNoteExportWidth, shareShareNoteImages, type ShareNoteImageFile } from '@/services/share-note-export';
@@ -76,8 +76,9 @@ export default function ShareNoteScreen() {
     text: mode === 'image' ? null : source?.text ?? null,
     images: mode === 'text' || !source ? [] : selectedIds.flatMap((id) => source.images.filter((image) => image.id === id)),
     subtasks: source?.subtasks ?? [],
+    blocks: mode !== 'image' ? source?.blocks?.filter((block) => block.type === 'text' || (mode === 'text-image' && selectedIds.includes(block.image.id))) : undefined,
   }), [mode, selectedIds, source]);
-  const standardMeasurement = hasChecklist ? null : measureShareNote({ content, theme: shareTheme, format, mode, showBranding });
+  const standardMeasurement = hasChecklist || content.blocks?.length ? null : measureShareNote({ content, theme: shareTheme, format, mode, showBranding });
 
   // Each checklist label is measured at the export width, using the same row
   // renderer as the final image. Page boundaries are chosen only after all
@@ -103,9 +104,9 @@ export default function ShareNoteScreen() {
   const laterOverhead = Math.max(frame.canvas.height, frame.card.top * 2 + frame.card.padding * 2 + (content.title ? 90 : 0) + (showBranding ? 44 : 0) + 110) + reserve.later;
   const ranges = useMemo(() => hasChecklist && rowsReady ? paginateChecklistRows(measuredRows, firstOverhead, laterOverhead, maxDesignHeight) : [], [hasChecklist, rowsReady, measuredRows, firstOverhead, laterOverhead, maxDesignHeight]);
   const pages: { content: ShareNoteContent; mode: ShareNoteMode }[] = hasChecklist
-    ? ranges.map((range, index) => ({ content: { ...content, text: index === 0 ? content.text : null, images: index === 0 ? content.images : [], subtasks: content.subtasks?.slice(range.start, range.end) }, mode: index === 0 ? mode : 'text' }))
-    : [{ content, mode }];
-  const renderKey = JSON.stringify([mode, themeId, format, selectedIds, showBranding, source?.title, source?.text, source?.subtasks, ranges]);
+    ? ranges.map((range, index) => ({ content: { ...content, text: index === 0 ? content.text : null, images: index === 0 ? content.images : [], blocks: index === 0 ? content.blocks : undefined, subtasks: content.subtasks?.slice(range.start, range.end) }, mode: index === 0 ? mode : 'text' }))
+    : content.blocks?.length ? paginateInlineShare(content.blocks).map((blocks, index) => ({ content: { ...content, title: index === 0 ? content.title : null, blocks, images: blocks.flatMap((block) => block.type === 'image' ? [block.image] : []) }, mode })) : [{ content, mode }];
+  const renderKey = JSON.stringify([mode, themeId, format, selectedIds, showBranding, source?.title, source?.text, source?.blocks, source?.subtasks, ranges]);
   const [pageMeasurements, setPageMeasurements] = useState<{ key: string; heights: number[] }>({ key: '', heights: [] });
   const pageHeights = useMemo(() => pageMeasurements.key === renderKey ? pageMeasurements.heights : [], [pageMeasurements, renderKey]);
   const onPageReady = useCallback((index: number, height: number) => {
@@ -120,8 +121,9 @@ export default function ShareNoteScreen() {
       setPageReserve((current) => ({ key: measurementKey, first: (current.key === measurementKey ? current.first : 0) + (index === 0 ? extra : 0), later: (current.key === measurementKey ? current.later : 0) + (index > 0 ? extra : 0) }));
     }
   }, [maxDesignHeight, measurementKey, pages.length, ranges, renderKey]);
-  const pagesReady = !hasChecklist || (rowsReady && pages.length > 0 && pageHeights.length === pages.length && pageHeights.every((height) => height > 0 && height <= maxDesignHeight));
-  const oversizedPage = hasChecklist && pageHeights.some((height) => height > maxDesignHeight);
+  const flowing = hasChecklist || Boolean(content.blocks?.length);
+  const pagesReady = !flowing || ((!hasChecklist || rowsReady) && pages.length > 0 && pageHeights.length === pages.length && pageHeights.every((height) => height > 0 && height <= maxDesignHeight));
+  const oversizedPage = flowing && pageHeights.some((height) => height > maxDesignHeight);
   const canExport = Boolean(content.text || content.title || content.images.length || content.subtasks?.length) && pagesReady;
 
   // ── Export: one cached file per page, so Save then Share reuse the same render.
@@ -154,7 +156,7 @@ export default function ShareNoteScreen() {
         const view = exportRefs.current[index];
         if (!view) throw new Error('Share Note canvas is not ready.');
         const name = pages.length > 1 ? `Chits Note Page ${index + 1} of ${pages.length}` : undefined;
-        const height = hasChecklist ? Math.round(pageHeights[index] * SHARE_NOTE_FORMATS[format].width / 360) : undefined;
+        const height = flowing ? Math.round(pageHeights[index] * SHARE_NOTE_FORMATS[format].width / 360) : undefined;
         files.push(await captureShareNote(view, format, pages[index].content.images.length > 0, name, height));
       }
     } catch (error) { files.forEach(discardShareNoteImage); throw error; }
@@ -244,7 +246,7 @@ export default function ShareNoteScreen() {
       {header}
       <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
         <Text style={[styles.helper, { color: theme.textMuted }]}>Turn this note into a beautiful image you can share or save.</Text>
-        {hasChecklist && !rowsReady ? <Text style={[styles.helper, { color: theme.textMuted }]}>Preparing checklist preview…</Text> : pages.map((page, index) => <View key={`preview:${renderKey}:${index}`} accessible accessibilityRole="image" accessibilityLabel={`Preview page ${index + 1} of ${pages.length}, ${shareTheme.name} theme`} style={[styles.preview, { width: previewWidth, backgroundColor: theme.surface }, !hasChecklist && { height: previewWidth * ratio }, index > 0 && { marginTop: spacing.md }]}>
+        {hasChecklist && !rowsReady ? <Text style={[styles.helper, { color: theme.textMuted }]}>Preparing checklist preview…</Text> : pages.map((page, index) => <View key={`preview:${renderKey}:${index}`} accessible accessibilityRole="image" accessibilityLabel={`Preview page ${index + 1} of ${pages.length}, ${shareTheme.name} theme`} style={[styles.preview, { width: previewWidth, backgroundColor: theme.surface }, !hasChecklist && !content.blocks?.length && { height: previewWidth * ratio }, index > 0 && { marginTop: spacing.md }]}>
           <ShareNoteTemplate content={page.content} theme={shareTheme} format={format} mode={page.mode} showBranding={showBranding} width={previewWidth} page={{ index, total: pages.length }} />
         </View>)}
         {oversizedPage ? <InfoLine icon="alert-circle-outline" tone="warning" message="A checklist item is too long for one image. Shorten it before saving or sharing." /> : null}

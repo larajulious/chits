@@ -30,12 +30,26 @@ internal final class ExportInProgressException: Exception, @unchecked Sendable {
 }
 
 public final class ChitsFilesModule: Module {
+  private let inlinePaste = ChitsInlinePaste()
+
   // UIKit holds these weakly; they must outlive the presented UI.
   private var interactionController: UIDocumentInteractionController?
   private var exportDelegate: ExportDelegate?
 
   public func definition() -> ModuleDefinition {
     Name("ChitsFiles")
+    Events("inlineImagePaste")
+    AsyncFunction("attachInlinePaste") { (tag: Int, key: String) -> Bool in
+      guard let root = self.appContext?.findView(withTag: tag, ofType: UIView.self) else { return false }
+      return self.inlinePaste.attach(root, tag: tag, key: key) { [weak self] key, start, end, kind in
+        self?.sendEvent("inlineImagePaste", ["key": key, "start": start, "end": end, "kind": kind])
+      }
+    }.runOnQueue(.main)
+    AsyncFunction("detachInlinePaste") { (tag: Int) in self.inlinePaste.detach(tag) }.runOnQueue(.main)
+    OnDestroy {
+      let paste = self.inlinePaste
+      DispatchQueue.main.async { paste.clear() }
+    }
 
     AsyncFunction("atomicWriteFileAsync") { (uri: String, contents: String) in
       guard let url = ChitsLocalFiles.fileURL(from: uri) else { throw FileUnavailableException() }
