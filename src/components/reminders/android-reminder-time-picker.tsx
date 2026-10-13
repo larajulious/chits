@@ -5,7 +5,7 @@ import { getCalendars } from 'expo-localization';
 import { AppText, useFontStyle } from '@/components/ui/app-text';
 import { useTheme } from '@/components/theme-provider';
 import { useStickyControls } from '@/components/ui/surface';
-import { parseReminderClock } from '@/services/reminder-time';
+import { parseReminderClock, dateFormat } from '@/services/reminder-time';
 
 type Props = {
   value: Date;
@@ -20,7 +20,7 @@ export function AndroidReminderTimePicker({ value, accent, accentOn, onConfirm, 
   const { tokens: theme } = useTheme();
   const controls = useStickyControls();
   const font = useFontStyle('body', '600');
-  const [is24Hour] = useState(() => getCalendars()[0].uses24hourClock ?? new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 === false);
+  const [is24Hour] = useState(() => getCalendars()[0].uses24hourClock ?? dateFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 === false);
   const [hour, setHour] = useState(() => String(is24Hour ? value.getHours() : value.getHours() % 12 || 12).padStart(2, '0'));
   const [minute, setMinute] = useState(() => String(value.getMinutes()).padStart(2, '0'));
   const [period, setPeriod] = useState<'AM' | 'PM'>(() => value.getHours() >= 12 ? 'PM' : 'AM');

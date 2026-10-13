@@ -5,17 +5,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateTimePicker } from '@expo/ui/community/datetime-picker';
 
 import { AndroidReminderTimePicker } from './android-reminder-time-picker';
+import { ExactAlarmNotice } from './exact-alarm-notice';
 import { showPermissionSettingsPrompt } from '@/components/permissions/permission-settings-prompt';
 import { useTheme } from '@/components/theme-provider';
 import { useStickyControls } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { radii, spacing } from '@/constants/theme';
-import { hasExactReminderAccess, openReminderAlarmSettings } from '@/services/reminder-alarm-access';
+import { hasExactReminderAccess } from '@/services/reminder-alarm-access';
 import type { SetReminderResult } from '@/services/reminders';
 import {
-  defaultCustomReminderTime, formatReminder, formatReminderClock, formatReminderDay, isValidReminderTime,
-  reminderQuickOptions, withDate, withTime, type ReminderQuickKey,
+  dateFormat, defaultCustomReminderTime, formatReminder, formatReminderClock, formatReminderDay, isValidReminderTime,
+  materialDialogDate, reminderQuickOptions, withDate, withTime, type ReminderQuickKey,
 } from '@/services/reminder-time';
 
 type Choice = ReminderQuickKey | 'custom';
@@ -176,15 +177,7 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
               // prompt and no Settings shortcut (App Review Guideline 5.1.1(iv)).
               <View accessibilityRole="alert" style={styles.inline}><Icon name="notifications-off-outline" size={16} color={theme.textSecondary} /><AppText style={[styles.inlineText, { color: theme.textSecondary }]}>Reminder not set. Notifications aren’t allowed for Chits.</AppText></View>
             ) : null}
-            {problem === 'exact-alarm' ? <View accessibilityRole="alert" style={styles.inline}>
-              <Icon name="alarm-outline" size={16} color={theme.textSecondary} />
-              <View style={{ flex: 1, gap: 8 }}>
-                <AppText style={[styles.inlineText, { color: theme.textSecondary }]}>Allow Alarms &amp; reminders so Chits can notify you at the chosen time when the app is closed. Then return and tap Set Reminder.</AppText>
-                <Pressable accessibilityRole="button" accessibilityLabel="Allow alarms and reminders" onPress={() => void openReminderAlarmSettings().catch(() => setProblem('failed'))} style={{ minHeight: 44, justifyContent: 'center' }}>
-                  <AppText style={[styles.textButtonLabel, { color: accent }]}>Allow Alarms &amp; reminders</AppText>
-                </Pressable>
-              </View>
-            </View> : null}
+            {problem === 'exact-alarm' ? <ExactAlarmNotice /> : null}
             {problem === 'failed' ? (
               <View accessibilityRole="alert" style={styles.inline}><Icon name="alert-circle-outline" size={16} color={theme.danger} /><AppText style={[styles.inlineText, { color: theme.danger }]}>The reminder couldn’t be set. Please try again.</AppText></View>
             ) : null}
@@ -216,10 +209,10 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
 
       {Platform.OS === 'android' && androidPicker === 'date' ? (
         <DateTimePicker
-          value={value}
+          value={materialDialogDate(value)}
           mode="date"
           presentation="dialog"
-          minimumDate={startOfDay(now)}
+          minimumDate={materialDialogDate(now)}
           accentColor={accent}
           // The Material date dialog returns UTC midnight of the chosen day.
           onValueChange={(_, date) => { setAndroidPicker(chainTime ? 'time' : null); setChainTime(false); pick(withDate(value, date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()), 'custom'); }}
@@ -242,7 +235,7 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
 // The option's label already names the day ("Later today", "Tomorrow"), so
 // only the time is added; the weekend option adds the weekday.
 function quickDetail(key: ReminderQuickKey, date: Date) {
-  if (key === 'weekend') return `${new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(date)}, ${formatReminderClock(date)}`;
+  if (key === 'weekend') return `${dateFormat(undefined, { weekday: 'short' }).format(date)}, ${formatReminderClock(date)}`;
   return formatReminderClock(date);
 }
 

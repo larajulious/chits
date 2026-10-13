@@ -21,6 +21,7 @@ import type { Attachment, Board, Message } from '@/db/types';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
 import { markOrganizationAccepted } from '@/services/chits-organization';
 import { OnboardingMascot } from '@/features/onboarding/components/onboarding-mascot';
+import { dateFormat } from '@/services/reminder-time';
 
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -42,7 +43,7 @@ function preview(message: Message) {
 }
 
 function formatDateTime(timestamp: number) {
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(timestamp);
+  return dateFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(timestamp);
 }
 
 function VideoThumb({ attachment }: { attachment: Attachment }) {

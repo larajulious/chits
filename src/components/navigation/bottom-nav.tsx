@@ -15,7 +15,7 @@ import { spacing } from '@/constants/theme';
 
 // Sizes come from the style (styleTokens.nav / .chat): Classic's 64pt pill
 // with a round 58pt Chat button poking 22pt above it, or Sticky's outlined
-// 72pt bar with a speech-bubble Chat button raised 34pt above it.
+// 64pt bar with a speech-bubble Chat button raised 28pt above it.
 
 // The custom bottom-tab-bar for Notes, Calendar, Chat, Attachments and Spaces —
 // see PHASE: REDESIGN CHITS BOTTOM NAVIGATION and PHASE: REDESIGN

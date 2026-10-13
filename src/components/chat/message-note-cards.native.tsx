@@ -12,12 +12,13 @@ import { radii, spacing } from '@/constants/theme';
 import type { Attachment, Message } from '@/db/types';
 import { noteRenderContent } from '@/services/note-content';
 import { useBackgroundReadability } from './background-readability';
+import { dateFormat } from '@/services/reminder-time';
 
 type NoteProps = { message: Message; focused: boolean; onActions: () => void; onHideAgain?: () => void };
 type ContentMode = 'compact' | 'detail';
 
 function formatTime(timestamp: number) {
-  return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(timestamp);
+  return dateFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(timestamp);
 }
 
 function messageLabel(message: Message) {

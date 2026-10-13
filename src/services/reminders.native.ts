@@ -3,6 +3,8 @@ import * as Notifications from './local-notifications.native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { createReminderRepository } from '@/db/repositories';
+import { listScheduledReminders, moveReminderTimes } from '@/features/calendar/calendar-data';
+import { planScheduleReminderUpdates } from '@/features/calendar/calendar-schedule';
 import { resolvePermission, type PermissionState } from '@/services/permissions';
 import { planReminderSync, reminderBody, REMINDER_NOTIFICATION_TYPE, REMINDER_TITLE, type ScheduledReminder } from '@/services/reminder-content';
 import { isBackupOperationActive } from '@/services/backup-operation';
@@ -268,6 +270,10 @@ async function runSync(database: SQLiteDatabase) {
     await restorePendingReminderAlarms();
     restoredExactAlarms = true;
   }
+  // Reminders set "15 min before" a calendar note follow its local time: after
+  // a timezone change, move them first so the passes below reschedule them.
+  const moved = planScheduleReminderUpdates(await listScheduledReminders(database), Date.now());
+  await moveReminderTimes(database, moved);
   const repository = createReminderRepository(database);
   const rows = await repository.listForSync();
   const scheduled = await scheduledReminders();
@@ -318,7 +324,7 @@ async function runSync(database: SQLiteDatabase) {
     } catch (error) { console.warn('[reminders] could not reschedule message', { messageId: row.messageId, error }); }
   }
   for (const item of deviceMessages) if (!keepMessages.has(item.identifier)) await cancelNotification(item.identifier);
-  if (changed || messageChanged) emitReminderChange();
+  if (changed || messageChanged || moved.length) emitReminderChange();
 }
 
 /**

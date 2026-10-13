@@ -13,6 +13,23 @@ export const SPACE_PLACEMENTS_SCHEMA = `
 
 export const CARD_REMINDERS_SCHEMA = 'CREATE TABLE IF NOT EXISTS card_reminders (card_id TEXT PRIMARY KEY NOT NULL, scheduled_at INTEGER NOT NULL, notification_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS idx_card_reminders_scheduled ON card_reminders(scheduled_at);';
 
+export const CALENDAR_ENTRIES_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS calendar_entries (
+    id TEXT PRIMARY KEY NOT NULL, message_id TEXT, card_id TEXT,
+    date_key TEXT NOT NULL CHECK (date_key GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]'),
+    start_minute INTEGER CHECK (start_minute IS NULL OR start_minute BETWEEN 0 AND 1439),
+    end_minute INTEGER CHECK (end_minute IS NULL OR (start_minute IS NOT NULL AND end_minute BETWEEN start_minute AND 1440)),
+    reminder_offset INTEGER CHECK (reminder_offset IS NULL OR reminder_offset >= 0),
+    created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+    CHECK ((message_id IS NULL) != (card_id IS NULL)),
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_entries_message ON calendar_entries(message_id) WHERE message_id IS NOT NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_entries_card ON calendar_entries(card_id) WHERE card_id IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_calendar_entries_date ON calendar_entries(date_key, start_minute);
+`;
+
 export const RETIRED_SCHEDULING_DATA_MIGRATION = "DROP TABLE IF EXISTS reminders; DELETE FROM app_settings WHERE key = 'reminder_default_minutes';";
 
 const migrations: Migration[] = [{
@@ -240,6 +257,19 @@ const migrations: Migration[] = [{
   version: 25,
   up: async (database) => {
     await database.execAsync("ALTER TABLE space_placements ADD COLUMN paper_style TEXT NOT NULL DEFAULT 'sticky' CHECK (paper_style IN ('sticky', 'index', 'receipt'));");
+  },
+}, {
+  version: 26,
+  up: async (database) => {
+    // Calendar: the day (and optional time) a note is planned for. Exactly one
+    // of message_id / card_id is set, a note has at most one entry, and both
+    // keys cascade so an entry never outlives its note. The date and minutes
+    // are local wall-clock values ('YYYY-MM-DD', minutes after midnight), so
+    // a note on Oct 15 at 9:00 stays there across timezone and DST changes.
+    // A missing start_minute means all day. reminder_offset is how many
+    // minutes before the start (09:00 for all day) the note's reminder in
+    // message_reminders / card_reminders was set; NULL for a custom time.
+    await database.execAsync(CALENDAR_ENTRIES_SCHEMA);
   },
 }];
 

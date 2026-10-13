@@ -19,7 +19,7 @@ export type CreatedBackup = { uri: string; manifest: BackupManifest; size: numbe
 export type ValidatedBackup = { valid: true; workDir: string; extractedDir: string; preparedDir: string; manifest: BackupManifest; preparedDatabaseHash: string; size: number };
 export type BackupValidation = ValidatedBackup | { valid: false; reason: string };
 const requiredTables = ['messages', 'attachments', 'boards', 'board_columns', 'cards', 'card_messages'];
-const currentTables = [...requiredTables, 'timeline_events', 'app_settings', 'card_comments', 'card_attachments', 'card_reminders', 'space_placements', 'message_reminders', 'card_subtasks'];
+const currentTables = [...requiredTables, 'timeline_events', 'app_settings', 'card_comments', 'card_attachments', 'card_reminders', 'space_placements', 'message_reminders', 'card_subtasks', 'calendar_entries'];
 const MARGIN = 16 * 1024 * 1024;
 function directory(value: string | null) {
   if (!value) throw new BackupError('Chits could not access private device storage.');
@@ -53,7 +53,7 @@ async function validateDatabase(db: SQLiteDatabase, expectedSchema?: number, cur
   if (integrity.length !== 1 || Object.values(integrity[0])[0] !== 'ok') throw new BackupError('The backup database is damaged and cannot be restored.');
   const schema = (await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version'))?.user_version ?? 0;
   if (schema < 1 || schema > LATEST_SCHEMA_VERSION || (expectedSchema !== undefined && schema !== expectedSchema)) throw new BackupError('The backup database version does not match its backup information.');
-  const tables = current ? currentTables : [...requiredTables, ...(schema >= 4 ? ['timeline_events'] : []), ...(schema >= 8 ? ['app_settings'] : []), ...(schema >= 16 ? ['card_comments'] : []), ...(schema >= 17 ? ['card_attachments'] : []), ...(schema >= 20 ? ['card_reminders'] : []), ...(schema >= 21 ? ['space_placements'] : []), ...(schema >= 22 ? ['message_reminders'] : []), ...(schema >= 23 ? ['card_subtasks'] : [])];
+  const tables = current ? currentTables : [...requiredTables, ...(schema >= 4 ? ['timeline_events'] : []), ...(schema >= 8 ? ['app_settings'] : []), ...(schema >= 16 ? ['card_comments'] : []), ...(schema >= 17 ? ['card_attachments'] : []), ...(schema >= 20 ? ['card_reminders'] : []), ...(schema >= 21 ? ['space_placements'] : []), ...(schema >= 22 ? ['message_reminders'] : []), ...(schema >= 23 ? ['card_subtasks'] : []), ...(schema >= 26 ? ['calendar_entries'] : [])];
   for (const table of tables) if (!await tableExists(db, table)) throw new BackupError('The backup database is incomplete. A required part of your Chits data is missing.');
   const columns: Record<string, string[]> = {
     messages: ['id', 'text', 'type', 'created_at', 'updated_at', 'archived_at', 'pinned', 'deleted_at', ...(schema >= 18 ? ['is_hidden_content'] : []), ...(schema >= 24 ? ['content_json'] : [])],
@@ -69,6 +69,7 @@ async function validateDatabase(db: SQLiteDatabase, expectedSchema?: number, cur
     card_reminders: ['card_id', 'scheduled_at', 'notification_id', 'created_at', 'updated_at', ...(schema >= 22 ? ['completed_at'] : [])],
     message_reminders: ['message_id', 'scheduled_at', 'notification_id', 'completed_at', 'created_at', 'updated_at'],
     card_subtasks: ['id', 'card_id', 'title', 'is_completed', 'position', 'created_at', 'updated_at', 'completed_at'],
+    calendar_entries: ['id', 'message_id', 'card_id', 'date_key', 'start_minute', 'end_minute', 'reminder_offset', 'created_at', 'updated_at'],
     space_placements: ['id', 'message_id', 'card_id', 'space_id', 'x', 'y', 'rotation', 'color', 'z_index', 'pinned_at', 'updated_at', ...(schema >= 25 ? ['paper_style'] : [])],
   };
   for (const table of tables) {
@@ -79,7 +80,7 @@ async function validateDatabase(db: SQLiteDatabase, expectedSchema?: number, cur
     if ((await db.getAllAsync('PRAGMA foreign_key_check')).length) throw new BackupError('The backup contains broken data relationships and cannot be restored.');
     const wrongColumns = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM cards c JOIN board_columns bc ON bc.id = c.column_id WHERE c.board_id != bc.board_id');
     if (wrongColumns?.count) throw new BackupError('The backup contains cards assigned to the wrong board.');
-    const relations = [['attachments', 'message_id', 'messages'], ['board_columns', 'board_id', 'boards'], ['cards', 'board_id', 'boards'], ['cards', 'column_id', 'board_columns'], ['card_messages', 'card_id', 'cards'], ['card_messages', 'message_id', 'messages'], ...(schema >= 16 ? [['card_comments', 'card_id', 'cards']] : []), ...(schema >= 17 ? [['card_attachments', 'card_id', 'cards']] : []), ...(schema >= 20 ? [['card_reminders', 'card_id', 'cards']] : []), ...(schema >= 21 ? [['space_placements', 'message_id', 'messages'], ['space_placements', 'card_id', 'cards']] : []), ...(schema >= 22 ? [['message_reminders', 'message_id', 'messages']] : []), ...(schema >= 23 ? [['card_subtasks', 'card_id', 'cards']] : [])];
+    const relations = [['attachments', 'message_id', 'messages'], ['board_columns', 'board_id', 'boards'], ['cards', 'board_id', 'boards'], ['cards', 'column_id', 'board_columns'], ['card_messages', 'card_id', 'cards'], ['card_messages', 'message_id', 'messages'], ...(schema >= 16 ? [['card_comments', 'card_id', 'cards']] : []), ...(schema >= 17 ? [['card_attachments', 'card_id', 'cards']] : []), ...(schema >= 20 ? [['card_reminders', 'card_id', 'cards']] : []), ...(schema >= 21 ? [['space_placements', 'message_id', 'messages'], ['space_placements', 'card_id', 'cards']] : []), ...(schema >= 22 ? [['message_reminders', 'message_id', 'messages']] : []), ...(schema >= 23 ? [['card_subtasks', 'card_id', 'cards']] : []), ...(schema >= 26 ? [['calendar_entries', 'message_id', 'messages'], ['calendar_entries', 'card_id', 'cards']] : [])];
     for (const [child, key, parent] of relations) {
       if (await db.getFirstAsync(`SELECT 1 FROM ${child} c LEFT JOIN ${parent} p ON p.id = c.${key} WHERE c.${key} IS NOT NULL AND p.id IS NULL LIMIT 1`)) throw new BackupError('The backup contains broken data relationships and cannot be restored.');
     }
@@ -143,6 +144,7 @@ async function repairSnapshotRelationships(db: SQLiteDatabase) {
     DELETE FROM card_subtasks WHERE NOT EXISTS (SELECT 1 FROM cards WHERE cards.id = card_subtasks.card_id);
     DELETE FROM message_reminders WHERE NOT EXISTS (SELECT 1 FROM messages WHERE messages.id = message_reminders.message_id);
     DELETE FROM space_placements WHERE (message_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM messages WHERE messages.id = space_placements.message_id)) OR (card_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM cards WHERE cards.id = space_placements.card_id));
+    DELETE FROM calendar_entries WHERE (message_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM messages WHERE messages.id = calendar_entries.message_id)) OR (card_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM cards WHERE cards.id = calendar_entries.card_id));
     UPDATE cards SET board_id = (SELECT board_columns.board_id FROM board_columns WHERE board_columns.id = cards.column_id)
       WHERE EXISTS (SELECT 1 FROM board_columns JOIN boards ON boards.id = board_columns.board_id WHERE board_columns.id = cards.column_id)
         AND board_id != (SELECT board_columns.board_id FROM board_columns WHERE board_columns.id = cards.column_id);
@@ -152,6 +154,7 @@ async function repairSnapshotRelationships(db: SQLiteDatabase) {
     DELETE FROM card_reminders WHERE card_id IN (SELECT cards.id FROM cards LEFT JOIN boards ON boards.id = cards.board_id LEFT JOIN board_columns ON board_columns.id = cards.column_id WHERE boards.id IS NULL OR board_columns.id IS NULL);
     DELETE FROM card_subtasks WHERE card_id IN (SELECT cards.id FROM cards LEFT JOIN boards ON boards.id = cards.board_id LEFT JOIN board_columns ON board_columns.id = cards.column_id WHERE boards.id IS NULL OR board_columns.id IS NULL);
     DELETE FROM space_placements WHERE card_id IN (SELECT cards.id FROM cards LEFT JOIN boards ON boards.id = cards.board_id LEFT JOIN board_columns ON board_columns.id = cards.column_id WHERE boards.id IS NULL OR board_columns.id IS NULL);
+    DELETE FROM calendar_entries WHERE card_id IN (SELECT cards.id FROM cards LEFT JOIN boards ON boards.id = cards.board_id LEFT JOIN board_columns ON board_columns.id = cards.column_id WHERE boards.id IS NULL OR board_columns.id IS NULL);
     DELETE FROM cards WHERE NOT EXISTS (SELECT 1 FROM boards WHERE boards.id = cards.board_id) OR NOT EXISTS (SELECT 1 FROM board_columns WHERE board_columns.id = cards.column_id);
     DELETE FROM board_columns WHERE NOT EXISTS (SELECT 1 FROM boards WHERE boards.id = board_columns.board_id);
   `);

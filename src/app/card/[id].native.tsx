@@ -22,12 +22,12 @@ import { spaceNoteAction, type SpaceNoteAction } from '@/components/spaces/space
 import { subscribeToSpaceChanges } from '@/services/space-changes';
 import { useTheme } from '@/components/theme-provider';
 import { useStickySurface } from '@/components/ui/surface';
+import { NotePaper } from '@/components/notes/note-paper';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { AppHeader, EmptyState, IconButton, Screen, Toast, HeaderIcon } from '@/components/ui/primitives';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { radii, spacing, type ThemeTokens } from '@/constants/theme';
-import { tintWithAccent } from '@/constants/board-appearance';
 import { createBoardRepository } from '@/db/repositories';
 import { persistCardAttachment, removeCardAttachmentFile } from '@/services/card-attachment-storage';
 import { exportActionLabel, shareAttachment } from '@/services/attachment-export';
@@ -35,7 +35,7 @@ import { detachConfirmationMessage } from '@/services/detach-card';
 import { ReminderSheet } from '@/components/reminders/reminder-sheet';
 import { createReminderRepository, type CardReminder } from '@/db/repositories';
 import { hasNotificationPermission, removeCardReminder, requestReminderSync, setCardReminder, subscribeToReminderChanges } from '@/services/reminders';
-import { formatReminder } from '@/services/reminder-time';
+import { formatReminder, dateFormat } from '@/services/reminder-time';
 import { shareNoteHref } from '@/services/share-note-source';
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
 import type { AttachmentLike, CardAttachment, Message } from '@/db/types';
@@ -68,7 +68,7 @@ export default function CardDetailScreen() {
   const database = useSQLiteContext();
   const { id } = useLocalSearchParams<{ id: string }>();
   const repository = useMemo(() => createBoardRepository(database), [database]);
-  const { tokens: theme, scheme, look, styleTokens, styleColors } = useTheme();
+  const { tokens: theme, styleTokens, styleColors } = useTheme();
   const sticky = useStickySurface();
   const panel = sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.panel });
   const { confirm, actionSheet } = useAppDialog();
@@ -107,7 +107,6 @@ export default function CardDetailScreen() {
   // Session-only peek at hidden content, mirroring Chat's temporary reveal — the
   // stored hidden flag only changes through the Hide/Show content action.
   const [temporarilyRevealed, setTemporarilyRevealed] = useState(false);
-  const [paperHeight, setPaperHeight] = useState(0);
   // Refresh on focus/reminder changes; Date.now() inside render is impure.
   const [renderedAt, setRenderedAt] = useState(() => Date.now());
   const scrollRef = useRef<ScrollView>(null);
@@ -365,8 +364,8 @@ export default function CardDetailScreen() {
 
   const isSameDay = (a: number, b: number) => { const da = new Date(a); const db = new Date(b); return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate(); };
   const commentTimeLabel = (timestamp: number) => {
-    const time = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(timestamp);
-    return isSameDay(timestamp, renderedAt) ? `Today · ${time}` : `${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(timestamp)} · ${time}`;
+    const time = dateFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(timestamp);
+    return isSameDay(timestamp, renderedAt) ? `Today · ${time}` : `${dateFormat(undefined, { month: 'short', day: 'numeric' }).format(timestamp)} · ${time}`;
   };
 
   // Non-destructive for the Chits themselves: the original Chat message(s)
@@ -459,7 +458,7 @@ export default function CardDetailScreen() {
     <EmptyState title="Card unavailable" description="It may have been archived or deleted." />
   </Screen>;
 
-  const detailDate = (timestamp: number) => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(timestamp);
+  const detailDate = (timestamp: number) => dateFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(timestamp);
   const createdLabel = detailDate(detail.createdAt);
   const editedAt = messages.reduce<number | null>((latest, message) => message.updatedAt !== message.createdAt ? Math.max(latest ?? 0, message.updatedAt) : latest, null);
   const firstMessageTitle = messages[0] ? messages[0].text?.trim().slice(0, 120) || messageFallback(messages[0]) : null;
@@ -471,8 +470,6 @@ export default function CardDetailScreen() {
   const covered = contentHidden && !temporarilyRevealed;
 
   const contentAccentStrong = detail.boardAccent ?? theme.accentStrong;
-  const paperColor = detail.boardAccent ? tintWithAccent(theme.cardBase, detail.boardAccent, scheme === 'dark' ? 0.16 : 0.1) : theme.cardPaper;
-  const paperEdge = detail.boardAccent ? tintWithAccent(theme.borderSubtle, detail.boardAccent, scheme === 'dark' ? 0.3 : 0.35) : theme.borderSubtle;
   // For solid fills (Save buttons) and the focused-input underline — the full
   // accent rather than the softer "strong" variant, matching what these already
   // used before they followed the board's color (tokens.accent, not accentStrong).
@@ -515,18 +512,7 @@ export default function CardDetailScreen() {
           </View>
         </View>
 
-        <View
-          onLayout={({ nativeEvent }) => {
-            const height = Math.ceil(nativeEvent.layout.height);
-            setPaperHeight((current) => current === height ? current : height);
-          }}
-          style={[styles.contentBody, { backgroundColor: paperColor, borderColor: paperEdge }, scheme !== 'dark' && [styles.paperShadow, { shadowOpacity: look.cardShadowOpacity }], sticky({ fill: styleColors.controlFill, radius: styleTokens.noteCard.radius, edge: styleTokens.noteCard.edge, edgeColor: detail.boardAccent ?? styleColors.outline })]}
-        >
-          <View pointerEvents="none" accessible={false} style={StyleSheet.absoluteFill}>
-            {Array.from({ length: Math.min(320, Math.max(0, Math.floor((Math.max(200, paperHeight) - 58) / 22) + 1)) }, (_, index) =>
-              <View key={index} style={[styles.paperRule, { top: 46 + index * 22, backgroundColor: scheme === 'dark' ? 'rgba(157,193,226,0.27)' : '#BCD2EA' }]} />)}
-            <View style={[styles.paperMargin, { backgroundColor: scheme === 'dark' ? 'rgba(233,163,163,0.46)' : '#E9A3A3' }]} />
-          </View>
+        <NotePaper accent={detail.boardAccent} style={styles.contentBody}>
           {covered ? <Pressable accessibilityRole="button" accessibilityLabel="Hidden content. Double tap to reveal." onPress={() => setTemporarilyRevealed(true)} style={({ pressed }) => [styles.hiddenCover, pressed && styles.pressed]}>
             <Icon name="eye-off-outline" size={24} color={theme.textMuted} />
             <AppText style={styles.hiddenCoverTitle}>Content hidden</AppText>
@@ -539,7 +525,7 @@ export default function CardDetailScreen() {
             {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={`Add a description to ${messageFallback(message)}`} onPress={() => openContentEditor(message)} style={styles.addDescription}><Icon name="add" size={16} color={contentAccentStrong} /><AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>Add description</AppText></Pressable> : null}
             {index < messages.length - 1 ? <View style={styles.contentThoughtDivider} /> : null}
           </View>)}
-        </View>
+        </NotePaper>
 
         {!covered ? <CardSubtasks cardId={id} scrollRef={scrollRef} /> : null}
 
@@ -739,10 +725,7 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   contentSectionHeader: { marginTop: spacing.md },
   // The ruled page follows the existing index-card treatment in Spaces. The
   // generous left inset places the writing after the margin rule.
-  contentBody: { marginTop: spacing.sm, minHeight: 200, paddingTop: 24, paddingBottom: 28, paddingLeft: 46, paddingRight: spacing.md, borderRadius: radii.contentCard, borderWidth: StyleSheet.hairlineWidth },
-  paperShadow: { shadowColor: '#000000', shadowRadius: 7, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
-  paperRule: { position: 'absolute', left: 0, right: 0, height: 1 },
-  paperMargin: { position: 'absolute', top: 0, bottom: 0, left: 30, width: 1 },
+  contentBody: { marginTop: spacing.sm },
   contentHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   hiddenTitle: { color: tokens.textMuted },
   hiddenCover: { minHeight: 132, alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: radii.contentCard, backgroundColor: tokens.surfaceElevated },

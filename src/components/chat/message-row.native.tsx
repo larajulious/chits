@@ -27,6 +27,7 @@ import { PhotoAttachmentViewer } from '@/components/attachments/photo-attachment
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
 import { exportActionLabel } from '@/services/attachment-export';
 import { noteRenderContent } from '@/services/note-content';
+import { dateFormat } from '@/services/reminder-time';
 
 let activeAudio: { token: symbol; pause: () => void } | null = null;
 const availabilityCache = new Map<string, boolean>();
@@ -34,7 +35,7 @@ const availabilityCache = new Map<string, boolean>();
 // replaces the files on disk, so start over whenever the app resets.
 subscribeToAppReset(() => availabilityCache.clear());
 
-function formatTime(timestamp: number) { return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(timestamp); }
+function formatTime(timestamp: number) { return dateFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(timestamp); }
 function formatDuration(duration: number | null) { if (!duration) return '0:00'; return `${Math.floor(duration / 60000)}:${String(Math.floor(duration / 1000) % 60).padStart(2, '0')}`; }
 function durationSeconds(duration: number | null) { return duration ? Math.max(1, Math.round(duration / 1000)) : null; }
 function formatSeconds(seconds: number) { return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds) % 60).padStart(2, '0')}`; }

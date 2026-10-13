@@ -9,11 +9,11 @@ import { NoteCard, NoteCategory, useNoteColors } from '@/components/ui/note-card
 import { mix } from '@/constants/style-tokens';
 import { spacing, type ThemeTokens } from '@/constants/theme';
 import { tintWithAccent } from '@/constants/board-appearance';
-import { formatReminder } from '@/services/reminder-time';
+import { formatReminder, dateFormat } from '@/services/reminder-time';
 import type { AttachmentLike, CardListItem } from '@/db/types';
 
 function formatCardDate(timestamp: number) {
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(timestamp);
+  return dateFormat(undefined, { month: 'short', day: 'numeric' }).format(timestamp);
 }
 
 // AttachmentLike.duration is milliseconds throughout the app (see attachment-

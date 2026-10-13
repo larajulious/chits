@@ -4,7 +4,8 @@ import type { AppPalette } from './chits-themes';
 // palette: it decides shape, depth, type and a few decorations, never color.
 // Classic is the look Chits has always had (every value below matches what
 // the screens drew before this file existed); Sticky is the outlined,
-// sticky-note look that matches the mascot. Colors a style needs that the
+// sticky-note look that matches the mascot — kept light: thin outlines and
+// shallow edges, so it reads as paper rather than as heavy buttons. Colors a style needs that the
 // palette doesn't have (a card's tint, the outline ink) are derived from the
 // active palette in styleColors(), so every theme works in both styles.
 //
@@ -102,16 +103,17 @@ export const STYLE_PRESETS: Record<AppStyle, StyleTokens> = {
     id: 'sticky',
     font: {
       display: faces('Fredoka_600SemiBold', 'Fredoka_500Medium', 'Fredoka_600SemiBold', 'Fredoka_600SemiBold', 'Fredoka_600SemiBold'),
-      body: faces('Nunito_700Bold', 'Nunito_700Bold', 'Nunito_700Bold', 'Nunito_700Bold', 'Nunito_800ExtraBold'),
+      // Semibold for everyday UI text; bold and heavier only where asked for.
+      body: faces('Nunito_600SemiBold', 'Nunito_600SemiBold', 'Nunito_600SemiBold', 'Nunito_700Bold', 'Nunito_800ExtraBold'),
       paragraph: faces('Nunito_600SemiBold', 'Nunito_600SemiBold', 'Nunito_700Bold', 'Nunito_700Bold', 'Nunito_800ExtraBold'),
     },
     radius: { card: corners(16, 16, 6, 16), control: 14, pill: 17, nav: 26, panel: 18, tile: 14, sheet: 22, toast: 16, bubble: 16 },
-    outline: { width: 2 },
+    outline: { width: 1.5 },
     elevation: 'edge',
-    edgeDepth: 3,
-    iconStroke: 2.5,
+    edgeDepth: 2,
+    iconStroke: 2,
     press: 'sink',
-    card: { tape: true, fold: true, tinted: true, tilt: 2 },
+    card: { tape: true, fold: true, tinted: true, tilt: 1 },
     chatButton: 'bubble',
     mascotEmptyStates: true,
     shadow: {
@@ -123,17 +125,17 @@ export const STYLE_PRESETS: Record<AppStyle, StyleTokens> = {
       nav: { opacity: 0, radius: 0, offsetY: 0, elevation: 0 },
       chat: { opacity: 0, radius: 0, offsetY: 0, elevation: 0 },
     },
-    header: { minHeight: 64, align: 'left', titleSize: 30, titleLineHeight: 36, countSize: 14, countBeside: true, iconButton: { size: 44, radius: 14, filled: true, edge: 3 } },
-    segmented: { height: 38, radius: 18, padding: 5, optionRadius: 13, labelSize: 14, edge: 3 },
-    chip: { height: 34, radius: 17, paddingHorizontal: 13, labelSize: 13, countSize: 12, activeEdge: 2 },
-    noteCard: { radius: corners(16, 16, 6, 16), detailRadius: { media: 10, badge: 6, tile: 10, strip: 10 }, padding: { top: 20, horizontal: 14, bottom: 12 }, edge: 4, columnGap: 12, rowGap: 18, pillOutline: 1.5, pillRadius: 10, pillSize: 11 },
-    tape: { width: 42, height: 15, radius: 4, edge: 2, overhang: 7, maxAngle: 3 },
-    fold: 18,
-    nav: { height: 72, radius: 26, edge: 4, marginHorizontal: 16, marginBottom: 18, labelSize: 12, activePill: { width: 52, height: 30 } },
-    chat: { width: 68, height: 58, radius: corners(24, 24, 24, 8), outline: 2.5, edge: 5, raise: 34, iconSize: 23 },
-    tip: { radius: 18, edge: 3, textSize: 16, textLineHeight: 21, mascotSize: 68, mascotTilt: 6, dismissSize: 40, tail: 12, guideRadius: 18, actionRadius: 14 },
-    emptyState: { titleSize: 25, bodySize: 16, bodyLineHeight: 23, maxWidth: 290, mascotWidth: 150, button: { height: 52, radius: 16, edge: 4 } },
-    button: { radius: 14, edge: 3 },
+    header: { minHeight: 56, align: 'left', titleSize: 24, titleLineHeight: 30, countSize: 13, countBeside: true, iconButton: { size: 40, radius: 12, filled: true, edge: 2 } },
+    segmented: { height: 34, radius: 16, padding: 4, optionRadius: 11, labelSize: 13, edge: 2 },
+    chip: { height: 30, radius: 15, paddingHorizontal: 11, labelSize: 12, countSize: 11, activeEdge: 1.5 },
+    noteCard: { radius: corners(16, 16, 6, 16), detailRadius: { media: 10, badge: 6, tile: 10, strip: 10 }, padding: { top: 16, horizontal: 13, bottom: 10 }, edge: 2.5, columnGap: 12, rowGap: 14, pillOutline: 1, pillRadius: 10, pillSize: 11 },
+    tape: { width: 34, height: 12, radius: 3, edge: 1.5, overhang: 6, maxAngle: 2 },
+    fold: 14,
+    nav: { height: 64, radius: 24, edge: 2, marginHorizontal: 16, marginBottom: 14, labelSize: 11, activePill: { width: 48, height: 28 } },
+    chat: { width: 62, height: 54, radius: corners(22, 22, 22, 8), outline: 2, edge: 3, raise: 28, iconSize: 22 },
+    tip: { radius: 18, edge: 2, textSize: 15, textLineHeight: 20, mascotSize: 60, mascotTilt: 4, dismissSize: 40, tail: 10, guideRadius: 18, actionRadius: 14 },
+    emptyState: { titleSize: 22, bodySize: 15, bodyLineHeight: 22, maxWidth: 290, mascotWidth: 128, button: { height: 46, radius: 14, edge: 2 } },
+    button: { radius: 12, edge: 2 },
   },
 };
 

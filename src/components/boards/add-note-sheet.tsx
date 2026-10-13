@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
@@ -24,6 +24,16 @@ type Props = {
   columnName?: string;
   onClose: () => void;
   onSubmit: (note: NoteSubmission) => Promise<void>;
+  /** Sheet title (default "Add note"). */
+  title?: string;
+  /** Replaces the "Adding to…" / "Saved to Unorganized" line. */
+  context?: ReactNode;
+  /** Extra fields under the note (Calendar's date, time and reminder); the sheet scrolls when set. */
+  extra?: ReactNode;
+  /** One line standing in for `extra` in full screen while the keyboard is up, so the note keeps the room. */
+  extraSummary?: string;
+  /** False while those fields aren't valid yet. */
+  canSubmit?: boolean;
 };
 
 const ATTACH_OPTIONS = [
@@ -41,7 +51,7 @@ const MAX_NOTE_LENGTH = 10000;
 // text where the cursor was. Picking and storage are the same shared path Chat uses
 // (services/attachment-import), so media is optimized and stored identically; a
 // staged file is deleted again if the sheet is dismissed without adding.
-export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit }: Props) {
+export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit, title = 'Add note', context, extra, extraSummary, canSubmit = true }: Props) {
   const { tokens: theme } = useTheme();
   const controls = useStickyControls();
   const inputRef = useRef<NoteBlocksEditorControl>(null);
@@ -54,6 +64,14 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   // Full-screen writing mode (like Edit Note) for longer notes; same state, so
   // text and any attachment carry over when switching either way.
   const [fullscreen, setFullscreen] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    if (!visible || !extra) return;
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
+    return () => { show.remove(); hide.remove(); };
+  }, [visible, extra]);
 
   useEffect(() => {
     if (visible && !wasVisible.current) {
@@ -72,7 +90,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   const changeBlocks = useCallback((update: (current: NoteDraftBlock[]) => NoteDraftBlock[]) => { setBlocks(update); setError(null); }, [setBlocks, setError]);
   const pasteImage = useNoteImagePaste({ active: visible, blocks, setBlocks: changeBlocks, editor: inputRef, onError: setError });
   const busy = saving || staging || pasteImage.pasting;
-  const canAdd = (Boolean(trimmed) || Boolean(draft) || imageCount > 0) && !busy;
+  const canAdd = (Boolean(trimmed) || Boolean(draft) || imageCount > 0) && canSubmit && !busy;
 
   const discardDraft = () => {
     if (!draft) return;
@@ -160,9 +178,9 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
     </View>
   );
 
-  const contextLine = boardName && columnName
+  const contextLine = context ?? (boardName && columnName
     ? <AppText accessibilityLabel={`Adding to ${boardName}, ${columnName}`} style={[styles.context, { color: theme.textSecondary }]}>Adding to <AppText style={{ color: theme.textPrimary, fontWeight: '700' }}>{boardName}</AppText>  ›  <AppText style={{ color: theme.textPrimary, fontWeight: '700' }}>{columnName}</AppText></AppText>
-    : <AppText style={[styles.context, { color: theme.textSecondary }]}>Saved to <AppText style={{ color: theme.textPrimary, fontWeight: '700' }}>Unorganized</AppText> — add it to a board anytime.</AppText>;
+    : <AppText style={[styles.context, { color: theme.textSecondary }]}>Saved to <AppText style={{ color: theme.textPrimary, fontWeight: '700' }}>Unorganized</AppText> — add it to a board anytime.</AppText>);
 
   const submit = async () => {
     if (!canAdd) return;
@@ -197,7 +215,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
               <Pressable accessibilityRole="button" accessibilityLabel="Exit full screen" hitSlop={8} disabled={saving} onPress={toggleFullscreen} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
                 <Icon name="contract-outline" size={22} color={theme.textPrimary} />
               </Pressable>
-              <AppText accessibilityRole="header" style={[styles.fullTitle, { color: theme.textPrimary }]}>Add note</AppText>
+              <AppText accessibilityRole="header" style={[styles.fullTitle, { color: theme.textPrimary }]}>{title}</AppText>
               <Pressable accessibilityRole="button" accessibilityLabel="Add note" accessibilityState={{ disabled: !canAdd }} disabled={!canAdd} hitSlop={8} onPress={() => void submit()} style={({ pressed }) => [styles.headerButton, pressed && canAdd && styles.pressed]}>
                 {saving ? <ActivityIndicator accessibilityLabel="Adding note" size="small" color={theme.accent} /> : <Icon name="checkmark" size={24} color={canAdd ? theme.accent : theme.textMuted} />}
               </Pressable>
@@ -205,6 +223,13 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
             <View style={styles.fullContext}>{contextLine}</View>
             {noteInput}
             <View style={[styles.fullFooter, { borderTopColor: theme.borderSubtle }]}>
+              {extra ? (keyboardVisible && extraSummary
+                ? <Pressable accessibilityRole="button" accessibilityLabel={`${extraSummary}. Hide keyboard to change`} onPress={() => Keyboard.dismiss()} style={({ pressed }) => [styles.summary, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>
+                  <Icon name="calendar-outline" size={16} color={theme.textSecondary} />
+                  <AppText numberOfLines={1} style={[styles.summaryText, { color: theme.textPrimary }]}>{extraSummary}</AppText>
+                  <Icon name="chevron-up" size={16} color={theme.textSecondary} />
+                </Pressable>
+                : <ScrollView bounces={false} keyboardShouldPersistTaps="handled" style={styles.extraFull}>{extra}</ScrollView>) : null}
               {error ? <AppText accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</AppText> : null}
               <View style={styles.attachRow}><InsertImageButton disabled={saving || staging} busy={pasteImage.pasting} onPress={() => void pasteImage.pick()} /><NoteListButtons editor={inputRef} disabled={busy} /></View>
               {attachmentArea}
@@ -216,9 +241,9 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
             <SafeAreaView edges={['bottom']} style={[styles.safeArea, { backgroundColor: theme.surface }]}>
               <GlassSurface style={[styles.sheet, { borderColor: theme.borderSubtle }]}>
                 <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
-                <View style={styles.content}>
+                <ScrollView scrollEnabled={Boolean(extra)} bounces={false} keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={styles.content}>
                   <View style={styles.titleRow}>
-                    <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Add note</AppText>
+                    <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{title}</AppText>
                     <Pressable accessibilityRole="button" accessibilityLabel="Write in full screen" hitSlop={8} disabled={busy} onPress={toggleFullscreen} style={({ pressed }) => [styles.expandButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>
                       <Icon name="expand-outline" size={18} color={theme.textSecondary} />
                     </Pressable>
@@ -226,6 +251,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
                   {contextLine}
                   {noteInput}
                   {attachmentArea}
+                  {extra ? <View style={styles.extra}>{extra}</View> : null}
                   {error ? <AppText accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</AppText> : null}
 
                   <View style={styles.actions}>
@@ -243,7 +269,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
                       {saving ? <ActivityIndicator accessibilityLabel="Adding note" size="small" color={theme.accentText} /> : <AppText style={[styles.addText, { color: theme.accentText }]}>Add</AppText>}
                     </Pressable>
                   </View>
-                </View>
+                </ScrollView>
               </GlassSurface>
             </SafeAreaView>
           </>
@@ -258,7 +284,13 @@ const styles = StyleSheet.create({
   safeArea: { width: '100%', flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   sheet: { flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth },
   handle: { alignSelf: 'center', width: 36, height: 4, marginTop: spacing.xs, borderRadius: 2 },
+  scroll: { flexGrow: 0, flexShrink: 1 },
   content: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.lg },
+  extra: { marginTop: spacing.sm },
+  // In full screen the fields never take more than about half the page from the note.
+  extraFull: { flexGrow: 0, maxHeight: 320, marginTop: spacing.xs },
+  summary: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm, borderRadius: 12, marginTop: spacing.xs },
+  summaryText: { flex: 1, fontSize: 13, fontWeight: '600' },
   title: { flex: 1, fontSize: 20, lineHeight: 25, fontWeight: '800' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   expandButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18 },

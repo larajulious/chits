@@ -1,5 +1,18 @@
 // Pure date logic for Chits reminders (no React Native imports, so it is unit-tested directly).
 
+const formatters = new Map<string, Intl.DateTimeFormat>();
+/**
+ * A shared Intl.DateTimeFormat for these options. Building one is costly on
+ * Hermes, and list rows (Chat, cards, calendar) format a date on every
+ * render, so each distinct format is created once and reused.
+ */
+export function dateFormat(locale: string | undefined, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${locale ?? ''}|${JSON.stringify(options)}`;
+  let formatter = formatters.get(key);
+  if (!formatter) { formatter = new Intl.DateTimeFormat(locale, options); formatters.set(key, formatter); }
+  return formatter;
+}
+
 export type ReminderQuickKey = 'later-today' | 'tomorrow' | 'weekend';
 export type ReminderQuickOption = { key: ReminderQuickKey; label: string; date: Date };
 
@@ -52,6 +65,16 @@ export function defaultCustomReminderTime(now: Date): Date {
   return date;
 }
 
+/**
+ * The value to hand Android's Material date dialog. It reads (and returns) a
+ * day as UTC midnight, so a local time — e.g. local midnight in UTC+8, which
+ * is still the previous day in UTC — would open on the wrong day and walk
+ * back a day each time the dialog is opened and confirmed.
+ */
+export function materialDialogDate(date: Date): Date {
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+}
+
 /** Keeps the time of `current` but moves it to the calendar day of `day`. */
 export function withDate(current: Date, year: number, month: number, dayOfMonth: number): Date {
   return new Date(year, month, dayOfMonth, current.getHours(), current.getMinutes(), 0, 0);
@@ -67,10 +90,10 @@ export function withTime(current: Date, hours: number, minutes: number): Date {
  * "Sep 30, 8:00 PM" ("Sep 30 2027, …" outside the current year).
  */
 export function formatReminder(date: Date, now: Date, locale?: string): string {
-  const time = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(date);
+  const time = dateFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(date);
   if (sameDay(date, now)) return `Today, ${time}`;
   if (sameDay(date, at(now, 1, 0))) return `Tomorrow, ${time}`;
-  const day = new Intl.DateTimeFormat(locale, date.getFullYear() === now.getFullYear() ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
+  const day = dateFormat(locale, date.getFullYear() === now.getFullYear() ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
   return `${day}, ${time}`;
 }
 
@@ -78,11 +101,11 @@ export function formatReminder(date: Date, now: Date, locale?: string): string {
 export function formatReminderDay(date: Date, now: Date, locale?: string): string {
   if (sameDay(date, now)) return 'Today';
   if (sameDay(date, at(now, 1, 0))) return 'Tomorrow';
-  return new Intl.DateTimeFormat(locale, date.getFullYear() === now.getFullYear() ? { weekday: 'short', month: 'short', day: 'numeric' } : { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).format(date);
+  return dateFormat(locale, date.getFullYear() === now.getFullYear() ? { weekday: 'short', month: 'short', day: 'numeric' } : { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).format(date);
 }
 
 export function formatReminderClock(date: Date, locale?: string): string {
-  return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(date);
+  return dateFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(date);
 }
 
 /** Validates numeric time entry, with explicit noon/midnight conversion. */

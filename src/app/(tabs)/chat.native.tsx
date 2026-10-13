@@ -44,6 +44,7 @@ import type { Message, TimelineCursor, TimelineEvent, TimelineItem } from '@/db/
 import { deleteAttachment } from '@/services/attachment-storage';
 import { ChitsGuide } from '@/components/mascot/chits-guide.native';
 import { useChitsOrganization } from '@/hooks/use-chits-organization';
+import { dateFormat } from '@/services/reminder-time';
 
 const PAGE_SIZE = 50;
 const MIN_COMPOSER_INPUT_HEIGHT = 40;
@@ -125,7 +126,7 @@ function eventCopy(event: TimelineEvent) {
 function ChitsRow({ event, onPress }: { event: TimelineEvent; onPress: () => void }) {
   const { tokens: theme } = useTheme();
   const copy = eventCopy(event);
-  const time = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(event.createdAt);
+  const time = dateFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(event.createdAt);
   return <View style={styles.chitsWrap}>
     <Pressable accessibilityRole="button" accessibilityLabel={`Chits: ${copy.title}${copy.detail ? `. ${copy.detail}` : ''}. ${time}`} onPress={onPress} style={({ pressed }) => [styles.chitsBubble, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.chitsPressed]}>
       <View style={[styles.chitsIcon, { backgroundColor: theme.accentSoft }]}><Icon name={copy.icon} size={15} color={theme.accentStrong} /></View>
@@ -178,7 +179,7 @@ function searchResultKind(message: Message): string | null {
 }
 
 function searchResultDateLabel(timestamp: number) {
-  return `${dateLabel(timestamp)} · ${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(timestamp)}`;
+  return `${dateLabel(timestamp)} · ${dateFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(timestamp)}`;
 }
 
 function SearchResultRow({ item, onPress }: { item: TimelineItem; onPress: () => void }) {
@@ -216,7 +217,7 @@ function dateLabel(timestamp: number) {
   const difference = (dayStart(Date.now()) - dayStart(timestamp)) / 86_400_000;
   if (difference === 0) return 'Today';
   if (difference === 1) return 'Yesterday';
-  return new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(timestamp);
+  return dateFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(timestamp);
 }
 
 function DateSeparator({ label }: { label: string }) {

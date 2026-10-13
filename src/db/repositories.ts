@@ -1189,6 +1189,39 @@ const NOT_ORGANIZED_SQL = 'NOT EXISTS (SELECT 1 FROM card_messages cm INNER JOIN
 
 export type StickResult = { status: 'stuck'; placement: SpacePlacement } | { status: 'full' };
 
+/**
+ * Notes that can be put somewhere — every card and unorganized thought,
+ * newest first, searchable — minus the ones already there: on a space, or
+ * (for the calendar) planned on a day or carrying a pending reminder, which
+ * the calendar already shows. Hidden notes are listed as Hidden Chit and
+ * never found by their words.
+ */
+export async function listNoteCandidates(database: SQLiteDatabase, scope: 'space' | 'calendar', searchTerm?: string): Promise<SpaceCandidate[]> {
+  const term = searchTerm?.trim();
+  const like = term ? `%${term.replace(/[%_]/g, '\\$&')}%` : null;
+  const cardFree = scope === 'space'
+    ? 'NOT EXISTS (SELECT 1 FROM space_placements p WHERE p.card_id = c.id)'
+    : 'NOT EXISTS (SELECT 1 FROM calendar_entries e WHERE e.card_id = c.id) AND NOT EXISTS (SELECT 1 FROM card_reminders r WHERE r.card_id = c.id AND r.completed_at IS NULL)';
+  const thoughtFree = scope === 'space'
+    ? 'NOT EXISTS (SELECT 1 FROM space_placements p WHERE p.message_id = m.id)'
+    : 'NOT EXISTS (SELECT 1 FROM calendar_entries e WHERE e.message_id = m.id) AND NOT EXISTS (SELECT 1 FROM message_reminders r WHERE r.message_id = m.id AND r.completed_at IS NULL)';
+  const rows = await database.getAllAsync<{ kind: SpaceNoteKind; id: string; title: string; context: string | null; hidden: number; updatedAt: number }>(`
+    SELECT * FROM (
+      SELECT 'card' AS kind, c.id, ${CARD_TITLE_SQL} AS title, b.name || ' · ' || bc.name AS context,
+        EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages hm ON hm.id = cm.message_id WHERE cm.card_id = c.id AND hm.is_hidden_content = 1) AS hidden, c.updated_at AS updatedAt
+      FROM cards c INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id
+      WHERE c.archived_at IS NULL AND b.archived_at IS NULL AND ${cardFree}
+      UNION ALL
+      SELECT 'thought' AS kind, m.id, ${MESSAGE_TEXT_SQL('m')} AS title, NULL AS context, m.is_hidden_content = 1 AS hidden, m.updated_at AS updatedAt
+      FROM messages m
+      WHERE m.deleted_at IS NULL AND m.archived_at IS NULL AND ${NOT_ORGANIZED_SQL} AND ${thoughtFree}
+    )
+    ${like ? "WHERE hidden = 0 AND (title LIKE ? ESCAPE '\\' OR context LIKE ? ESCAPE '\\')" : ''}
+    ORDER BY updatedAt DESC LIMIT 200`, ...(like ? [like, like] : []));
+  // A hidden note stays hidden here too: listed, but never by its words.
+  return rows.map((row) => ({ ...row, hidden: row.hidden === 1, title: row.hidden === 1 ? 'Hidden Chit' : row.title }));
+}
+
 export function createSpaceRepository(database: SQLiteDatabase) {
   const noteColumn = (kind: SpaceNoteKind) => (kind === 'card' ? 'card_id' : 'message_id');
   const getPlacement = async (executor: Pick<SQLiteDatabase, 'getFirstAsync'>, where: string, value: string) => {
@@ -1330,24 +1363,6 @@ export function createSpaceRepository(database: SQLiteDatabase) {
     remove: (id: string) => changed(database.runAsync('DELETE FROM space_placements WHERE id = ?', id)),
     removeNote: (kind: SpaceNoteKind, noteId: string) => changed(database.runAsync(`DELETE FROM space_placements WHERE ${noteColumn(kind)} = ?`, noteId)),
     /** Notes that can be stuck on: live cards and unorganized thoughts that aren't on any space, newest first. */
-    async listCandidates(searchTerm?: string): Promise<SpaceCandidate[]> {
-      const term = searchTerm?.trim();
-      const like = term ? `%${term.replace(/[%_]/g, '\\$&')}%` : null;
-      const rows = await database.getAllAsync<{ kind: SpaceNoteKind; id: string; title: string; context: string | null; hidden: number; updatedAt: number }>(`
-        SELECT * FROM (
-          SELECT 'card' AS kind, c.id, ${CARD_TITLE_SQL} AS title, b.name || ' · ' || bc.name AS context,
-            EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages hm ON hm.id = cm.message_id WHERE cm.card_id = c.id AND hm.is_hidden_content = 1) AS hidden, c.updated_at AS updatedAt
-          FROM cards c INNER JOIN boards b ON b.id = c.board_id INNER JOIN board_columns bc ON bc.id = c.column_id
-          WHERE c.archived_at IS NULL AND b.archived_at IS NULL AND NOT EXISTS (SELECT 1 FROM space_placements p WHERE p.card_id = c.id)
-          UNION ALL
-          SELECT 'thought' AS kind, m.id, ${MESSAGE_TEXT_SQL('m')} AS title, NULL AS context, m.is_hidden_content = 1 AS hidden, m.updated_at AS updatedAt
-          FROM messages m
-          WHERE m.deleted_at IS NULL AND m.archived_at IS NULL AND ${NOT_ORGANIZED_SQL} AND NOT EXISTS (SELECT 1 FROM space_placements p WHERE p.message_id = m.id)
-        )
-        ${like ? "WHERE hidden = 0 AND (title LIKE ? ESCAPE '\\' OR context LIKE ? ESCAPE '\\')" : ''}
-        ORDER BY updatedAt DESC LIMIT 200`, ...(like ? [like, like] : []));
-      // A hidden note stays hidden here too: listed, but never by its words.
-      return rows.map((row) => ({ ...row, hidden: row.hidden === 1, title: row.hidden === 1 ? 'Hidden Chit' : row.title }));
-    },
+    listCandidates: (searchTerm?: string) => listNoteCandidates(database, 'space', searchTerm),
   };
 }

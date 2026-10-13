@@ -4,13 +4,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/components/theme-provider';
 import { spacing } from '@/constants/theme';
 import type { Attachment, Message } from '@/db/types';
+import { dateFormat } from '@/services/reminder-time';
 
 export function AttachmentContent(_: { attachment: Attachment }) {
   return null;
 }
 
 function formatTime(timestamp: number) {
-  return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(timestamp);
+  return dateFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(timestamp);
 }
 
 function MessageRowComponent({ message, onLongPress, focused = false }: { message: Message; onLongPress: (message: Message) => void; focused?: boolean }) {
