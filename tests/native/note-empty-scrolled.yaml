@@ -1,0 +1,14 @@
+appId: com.larajulious.chitsapp
+---
+- openLink: chits://editor-empty-qa
+- longPressOn: Seed blank remnants
+- tapOn: Focus end
+- takeScreenshot: scrolled-before-exit
+- pressKey: Backspace
+- assertVisible: One empty paragraph
+- takeScreenshot: scrolled-cleared
+- inputText: Resumed
+- assertVisible: Resumed
+- eraseText: 15
+- assertVisible: One empty paragraph
+- takeScreenshot: scrolled-cleared-again

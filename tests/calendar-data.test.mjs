@@ -37,15 +37,18 @@ test('Calendar reads card and Chat reminders from their source rows once, includ
 test('migration adds completion and message reminders while retaining existing card schedules', async (t) => {
   const env = runtime(); t.after(() => env.cleanup());
   const db = await env.sqlite.openDatabaseAsync('upgrade.db');
+  // Exercise a real schema-21 database. Placeholder tables with only an id
+  // omit columns needed by later migrations and cannot represent an upgrade.
+  const stopAt21 = new Error('schema 21 ready');
+  await assert.rejects(migration.migrateDatabase({ ...db, async withExclusiveTransactionAsync(action) {
+    if ((await db.getFirstAsync('PRAGMA user_version')).user_version >= 21) throw stopAt21;
+    return db.withExclusiveTransactionAsync(action);
+  } }), (error) => error === stopAt21);
   await db.execAsync(`
-    PRAGMA foreign_keys = ON;
-    CREATE TABLE space_placements (id TEXT PRIMARY KEY, message_id TEXT, card_id TEXT, space_id TEXT, x REAL, y REAL, rotation REAL, color TEXT, z_index INTEGER, pinned_at INTEGER, updated_at INTEGER);
-    CREATE TABLE cards (id TEXT PRIMARY KEY);
-    CREATE TABLE messages (id TEXT PRIMARY KEY);
-    CREATE TABLE card_reminders (card_id TEXT PRIMARY KEY, scheduled_at INTEGER NOT NULL, notification_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE);
-    INSERT INTO cards VALUES ('old-card');
+    INSERT INTO boards(id,name,created_at,updated_at) VALUES ('b','Board',1,1);
+    INSERT INTO board_columns(id,board_id,name,position,created_at,updated_at) VALUES ('col','b','Note',0,1,1);
+    INSERT INTO cards(id,board_id,column_id,position,created_at,updated_at) VALUES ('old-card','b','col',0,1,1);
     INSERT INTO card_reminders VALUES ('old-card', 1000, 'old-notification', 1, 1);
-    PRAGMA user_version = 21;
   `);
   await migration.migrateDatabase(db);
   assert.deepEqual({ ...await db.getFirstAsync('SELECT scheduled_at, notification_id, completed_at FROM card_reminders') }, { scheduled_at: 1000, notification_id: 'old-notification', completed_at: null });

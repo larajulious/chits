@@ -1,6 +1,6 @@
 import type { createMessageRepository, NoteContentInput } from '@/db/repositories';
 import type { Attachment, Message } from '@/db/types';
-import { draftFromNote, noteBlocksText, parseNoteContent } from '@/services/note-content';
+import { draftFromNote, noteBlocksText, noteHasChecklist, parseNoteContent } from '@/services/note-content';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 type ComposerRepository = Pick<ReturnType<typeof createMessageRepository>, 'createText' | 'createAttachmentMessage' | 'updateText' | 'createNote' | 'updateContent' | 'getActiveById'>;
@@ -17,12 +17,13 @@ export async function saveChatComposer(repository: ComposerRepository, { text, e
   blocks?: NoteContentInput | null;
   removeImages?: (paths: string[]) => Promise<void>;
 }): Promise<Message | null> {
+  const hasChecklist = noteHasChecklist(blocks ?? []);
   const words = blocks ? noteBlocksText(blocks) : text.trim();
   const images = blocks?.filter((block) => block.type === 'image') ?? [];
-  if (!words && !attachment && !images.length && !editing?.attachments.length) return null;
+  if (!words && !hasChecklist && !attachment && !images.length && !editing?.attachments.length) return null;
   if (blocks?.some((block) => block.type === 'text' && block.list) || images.length || editing?.content) {
     // Never empty a thought by clearing it: keep it unless something would remain.
-    if (editing && !words && !images.length && !editing.attachments.some((item) => item.type !== 'photo')) return null;
+    if (editing && !words && !hasChecklist && !images.length && !editing.attachments.some((item) => item.type !== 'photo')) return null;
     // Photos the composer doesn't show stay where they are, ahead of its content:
     // an older photo-and-caption thought's photo, or every image of an inline
     // thought saved without its blocks.

@@ -57,13 +57,14 @@ function ReminderCoordinator() {
 }
 
 function ThemedApp() {
-  const { scheme, tokens, topBar } = useTheme();
+  const { scheme, tokens, topBar, customHeader, headerPhotoFailed } = useTheme();
+  const pathname = usePathname();
   useEffect(() => {
     const subscription = AppState.addEventListener('change', updateMascotAppState);
     return () => subscription.remove();
   }, []);
-  // Status-bar icons sit on the theme's top bar when there is one, otherwise on the page.
-  const statusBarStyle = topBar ? (topBar.dark ? 'light' : 'dark') : scheme === 'dark' ? 'light' : 'dark';
+  // Chat's status area and header share a fade in the page's light/dark palette.
+  const statusBarStyle = customHeader && !headerPhotoFailed && pathname !== '/chat' ? 'light' : topBar && pathname !== '/chat' ? (topBar.dark ? 'light' : 'dark') : scheme === 'dark' ? 'light' : 'dark';
   return (
     <AppDialogProvider>
       <View style={{ flex: 1, backgroundColor: tokens.background }}>

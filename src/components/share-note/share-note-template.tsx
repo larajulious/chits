@@ -165,6 +165,7 @@ function InlineShareNoteTemplate({ content, theme, format, showBranding, width, 
     <View onLayout={({ nativeEvent }) => setBodyHeight(nativeEvent.layout.height)} style={{ marginHorizontal: frame.card.left * u, marginTop: frame.card.top * u, padding: frame.card.padding * u, borderRadius: 26 * u, backgroundColor: colors.surface, gap: 12 * u }}>
       {content.title ? <Text style={[...textStyle, { color: colors.accent, fontWeight: '800' }]}>{content.title}</Text> : null}
       {content.blocks?.map((block, index) => {
+        if (block.type === 'text' && block.list?.kind === 'checklist') return <ChecklistRows key={index} subtasks={[{ title: block.text, isCompleted: block.list.checked }]} theme={theme} u={u} />;
         if (block.type === 'text') return block.marker ? <View key={index} style={{ flexDirection: 'row', gap: 8 * u }}><Text style={[...textStyle, { minWidth: 26 * u, textAlign: 'right' }]}>{block.marker}</Text><Text style={[...textStyle, { flex: 1, textAlign: 'left' }]}>{block.text}</Text></View> : <Text key={index} style={textStyle}>{block.text}</Text>;
         const image = block.image;
         const ratio = image.width && image.height ? image.width / image.height : 4 / 3;

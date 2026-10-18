@@ -5,7 +5,7 @@ import type { AttachmentLike } from '@/db/types';
 // text-only notes keep content_json NULL and stay exactly as they were.
 // messages.text always holds the note's words alone (text blocks joined), so
 // search, titles, stickies and every text-only preview keep working unchanged.
-export type NoteList = { kind: 'bullet' | 'numbered'; id: string };
+export type NoteList = { kind: 'bullet' | 'numbered'; id: string } | { kind: 'checklist'; id: string; checked: boolean };
 export type NoteText = { type: 'text'; text: string; list?: NoteList };
 export type NoteBlock = NoteText | { type: 'image'; attachmentId: string };
 
@@ -59,10 +59,12 @@ export function serializeNoteContent(blocks: NoteBlock[]): string | null {
 /** Preserve authored whitespace; drop empty editor slots, keeping images in place. */
 function compactBlocks(blocks: NoteBlock[]): NoteBlock[] {
   const result: NoteBlock[] = [];
-  for (const block of blocks) {
-    if (block.type === 'image') { result.push(block); continue; }
+  for (const [index, block] of blocks.entries()) {
+    if (block.type === 'image') { result.push({ type: 'image', attachmentId: block.attachmentId }); continue; }
     const text = block.text;
-    if (!text && !block.list) continue;
+    // Empty text beside another text block is an authored paragraph (for
+    // example the line before/after a formatted paragraph), not an image slot.
+    if (!text && !block.list && blocks[index - 1]?.type !== 'text' && blocks[index + 1]?.type !== 'text') continue;
     const previous = result[result.length - 1];
     if (previous?.type === 'text' && !previous.list && !block.list) previous.text = `${previous.text}${text}`;
     else result.push({ type: 'text', text, ...readList(block.list) });
@@ -80,6 +82,7 @@ export function noteBlocksText(blocks: Pick<NoteDraftBlock, 'type'>[] | NoteBloc
 export function readList(value: unknown): { list?: NoteList } {
   if (!value || typeof value !== 'object') return {};
   const list = value as Record<string, unknown>;
+  if (list.kind === 'checklist' && typeof list.id === 'string' && list.id.length > 0) return { list: { kind: 'checklist', id: list.id, checked: list.checked === true } };
   return (list.kind === 'bullet' || list.kind === 'numbered') && typeof list.id === 'string' && list.id.length > 0 ? { list: { kind: list.kind, id: list.id } } : {};
 }
 
@@ -87,11 +90,16 @@ export function draftHasRichContent(blocks: NoteDraftBlock[]) {
   return blocks.some((block) => block.type === 'image' || Boolean(block.list));
 }
 
+/** A deliberately inserted empty list item is not a cleared document. */
+export function isEmptyNoteDraft(blocks: NoteDraftBlock[]) {
+  return blocks.length === 1 && blocks[0].type === 'text' && blocks[0].text === '' && !blocks[0].list;
+}
+
 /** Number labels are derived from item order, never stored in the editable text. */
 export function noteListMarkers(blocks: (NoteBlock | NoteDraftBlock | NoteRenderBlock)[]) {
   const counts = new Map<string, number>();
   return blocks.map((block) => {
-    if (block.type !== 'text' || !block.list) return null;
+    if (block.type !== 'text' || !block.list || block.list.kind === 'checklist') return null;
     const count = (counts.get(block.list.id) ?? 0) + 1;
     counts.set(block.list.id, count);
     return block.list.kind === 'bullet' ? '•' : `${count}.`;
@@ -267,4 +275,20 @@ export function imageFingerprint(data: string) {
     hash = Math.imul(hash, 16777619) >>> 0;
   }
   return `${data.length.toString(36)}-${hash.toString(36)}`;
+}
+
+/** Real checkbox states only; ordinary text remains separate for mixed-note previews. */
+export function noteChecklistSummary(blocks: (NoteBlock | NoteDraftBlock | NoteRenderBlock)[]) {
+  const items = blocks.filter((block) => block.type === 'text' && block.list?.kind === 'checklist') as NoteText[];
+  if (!items.length) return null;
+  const completed = items.filter((block) => block.list?.kind === 'checklist' && block.list.checked).length;
+  return {
+    total: items.length, completed, percent: Math.round(completed / items.length * 100),
+    remaining: items.filter((block) => block.list?.kind === 'checklist' && !block.list.checked).slice(0, 3).map((block) => block.text.trim() || 'Empty item'),
+    text: blocks.flatMap((block) => block.type === 'text' && block.list?.kind !== 'checklist' && block.text.trim() ? [block.text.trim()] : []).join('\n\n'),
+  };
+}
+
+export function noteHasChecklist(blocks: { type: string; list?: NoteList }[]) {
+  return blocks.some((block) => block.type === 'text' && block.list?.kind === 'checklist');
 }

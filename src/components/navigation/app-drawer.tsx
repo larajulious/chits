@@ -6,10 +6,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
 import { spacing } from '@/constants/theme';
+import { CHITS_REVISIT_ENABLED } from '@/constants/revisit';
 
 type DrawerContextValue = { openDrawer: () => void; closeDrawer: () => void };
 type IconName = ComponentProps<typeof Ionicons>['name'];
-type Destination = { label: string; path: '/' | '/calendar' | '/archive' | '/settings' | '/onboarding'; icon: IconName };
+type Destination = { label: string; path: '/' | '/calendar' | '/archive' | '/settings' | '/onboarding' | '/revisit'; icon: IconName };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
 // Notes, Spaces, Chat, Attachments, and Calendar are in the bottom navigation; Archive
@@ -63,6 +64,7 @@ function DrawerContent({ close }: { close: () => void }) {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
         <NavigationRow destination={calendarDestination} pathname={pathname} close={close} />
         <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
+        {CHITS_REVISIT_ENABLED ? <NavigationRow destination={{ label: 'Revisit', path: '/revisit', icon: 'refresh-outline' }} pathname={pathname} close={close} /> : null}
       </ScrollView>
       <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }]}>
         <NavigationRow destination={gettingStartedDestination} pathname={pathname} close={close} />

@@ -1,5 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
+import { BlurTargetView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -14,6 +15,7 @@ import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-na
 import { AttachmentDraftPreview } from '@/components/chat/attachment-draft-preview';
 import { AttachmentPicker, type AttachmentDraft, type AttachmentPickerHandle } from '@/components/chat/attachment-picker';
 import { ChatHeader } from '@/components/chat/chat-header';
+import { CHAT_HEADER_BACKDROP_OVERHANG, ChatHeaderBackdrop } from '@/components/chat/chat-header-backdrop.native';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { MessageActions, getCopyableMessageText } from '@/components/chat/message-actions';
 import { ReminderSheet } from '@/components/reminders/reminder-sheet';
@@ -29,14 +31,15 @@ import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { ChatComposerSurface } from '@/components/chat/chat-composer-surface';
 import { FullscreenComposer } from '@/components/chat/fullscreen-composer';
 import { discardPastedImages, NoteBlocksEditor, InsertImageButton, NoteListButtons, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
-import { draftContentForStorage, draftFromNote, draftHasRichContent, draftHasImages, draftHasUnsavedImages, draftPlainText, textDraft, type NoteDraftBlock } from '@/services/note-content';
+import { noteHasChecklist, serializeNoteContent, draftContentForStorage, draftFromNote, draftHasRichContent, draftHasImages, draftHasUnsavedImages, draftPlainText, textDraft, type NoteDraftBlock } from '@/services/note-content';
 import { readChatDraft, saveChatComposer, writeChatDraft } from '@/services/chat-composer';
 import { BackgroundReadabilityProvider } from '@/components/chat/background-readability';
 import { ChatWallpaper } from '@/components/chat/chat-wallpaper';
 import { ChatThemeBackdrop } from '@/components/chat/chat-theme-backdrop';
 import { useChatBackground } from '@/components/chat/chat-background-context';
+import { subscribeToNoteChanges } from '@/services/note-changes';
 import { subscribeToAttachmentChanges } from '@/services/attachment-changes';
-import { EmptyState, IconButton, Screen, Toast, TopBarBackground } from '@/components/ui/primitives';
+import { EmptyState, IconButton, Screen, Toast } from '@/components/ui/primitives';
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
 import { radii, spacing } from '@/constants/theme';
 import { createMessageRepository } from '@/db/repositories';
@@ -262,7 +265,7 @@ export default function ChatScreen() {
   const repository = useMemo(() => createMessageRepository(database), [database]);
   const { messageId, prefill, focusInput, chitsOrganized, chitsRelationship } = useLocalSearchParams<{ messageId?: string; prefill?: string; focusInput?: string; chitsOrganized?: string; chitsRelationship?: string }>();
   const router = useRouter();
-  const { tokens: theme, topBar, styleTokens, styleColors } = useTheme();
+  const { tokens: theme, styleTokens, styleColors } = useTheme();
   const sticky = useStickySurface();
   const inputFont = useFontStyle('body');
   const { confirm } = useAppDialog();
@@ -381,6 +384,7 @@ export default function ChatScreen() {
   // included) feeds the list footer, jump-to-latest and editing bar offsets,
   // so they all follow this value automatically.
   const insets = useSafeAreaInsets();
+  const headerBlurTarget = useRef<View | null>(null);
   const composerBottomPadding = keyboardVisible ? spacing.xs : insets.bottom > 0 ? insets.bottom + spacing.xxs : spacing.sm;
   const [headerHeight, setHeaderHeight] = useState(72);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -470,7 +474,8 @@ export default function ChatScreen() {
       }).catch(() => undefined);
     };
     const stopAttachments = subscribeToAttachmentChanges(refreshLoadedMessages);
-    return () => { active = false; stopAttachments(); };
+    const stopNotes = subscribeToNoteChanges(refreshLoadedMessages);
+    return () => { active = false; stopAttachments(); stopNotes(); };
   }, [repository, refreshPinned]));
 
   useFocusEffect(useCallback(() => {
@@ -1018,7 +1023,7 @@ export default function ChatScreen() {
     onEvent={openEvent}
   />, [feed, focusedId, hideAgain, hideSuggestion, openEvent, revealContent, temporarilyRevealedIds]);
   const hasDraft = Boolean(draft.trim());
-  const canSend = hasDraft || Boolean(attachmentDraft) || draftImages || Boolean(editing?.attachments.length);
+  const canSend = hasDraft || noteHasChecklist(blocks) || Boolean(attachmentDraft) || draftImages || Boolean(editing?.attachments.length);
   // ONE source of truth for compact vs. expanded (see PHASE: FIX INCONSISTENT
   // CHAT COMPOSER EXPANSION) — any of these signals alone is enough to keep
   // the composer expanded; collapsing back to compact requires ALL of them to
@@ -1079,12 +1084,14 @@ export default function ChatScreen() {
 
   return (
     <Animated.View testID="chat-transition-container" style={[styles.flex, { backgroundColor: theme.chatBackground }, screenRevealStyle]}>
-      {/* A chosen Chat photo always wins over the theme's own backdrop. */}
-      {background ? <ChatWallpaper background={background} /> : <ChatThemeBackdrop />}
       <BackgroundReadabilityProvider active={background !== null}><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: 'transparent' }}>
-        {background ? <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: theme.chatBackground }} /> : null}
-        <View style={styles.timelineLayer} onLayout={() => { maybePerformInitialScroll(); if (hasPositionedRef.current && nearBottom.current) scrollToLatest(false); }}><View style={styles.flex}>{isInitialLoading ? (showInitialLoader ? <View style={styles.initialLoader}><ChitsLoader /></View> : null) : feed.length === 0 ? <View style={styles.initialLoader}><EmptyState title="What’s on your mind?" description="Send yourself anything. You can organize it later." style={background ? { flex: 0, alignSelf: 'stretch', marginHorizontal: spacing.md, paddingVertical: spacing.lg, borderRadius: radii.contentCard, backgroundColor: theme.surface } : undefined} /></View> : <FlatList
+      {/* The timeline reaches the top edge; only the floating controls reserve
+          the top inset, so scrolling content can pass under the system icons. */}
+      <Screen edges={['left', 'right']} style={{ backgroundColor: 'transparent' }}>
+        <BlurTargetView ref={headerBlurTarget} style={styles.timelineLayer} onLayout={() => { maybePerformInitialScroll(); if (hasPositionedRef.current && nearBottom.current) scrollToLatest(false); }}>
+        {/* Wallpaper stays window-sized while the keyboard resizes the feed. */}
+        {background ? <ChatWallpaper background={background} /> : <ChatThemeBackdrop />}
+        <View style={styles.flex}>{isInitialLoading ? (showInitialLoader ? <View style={styles.initialLoader}><ChitsLoader /></View> : null) : feed.length === 0 ? <View style={styles.initialLoader}><EmptyState title="What’s on your mind?" description="Send yourself anything. You can organize it later." style={background ? { flex: 0, alignSelf: 'stretch', marginHorizontal: spacing.md, paddingVertical: spacing.lg, borderRadius: radii.contentCard, backgroundColor: theme.surface } : undefined} /></View> : <FlatList
           ref={listRef} data={feed} keyExtractor={timelineKey}
           renderItem={renderFeedItem}
           // The feed is oldest-first, so a small default render window mounts the
@@ -1110,7 +1117,7 @@ export default function ChatScreen() {
             const shouldShowJump = distance > 320;
             setShowJumpToLatest((current) => current === shouldShowJump ? current : shouldShowJump);
             if (nativeEvent.contentOffset.y < 240) void loadOlder();
-          }} scrollEventThrottle={50} contentContainerStyle={[styles.list, { paddingTop: headerHeight }]}
+          }} scrollEventThrottle={50} contentContainerStyle={[styles.list, { paddingTop: insets.top + headerHeight }]}
           onContentSizeChange={() => {
             maybePerformInitialScroll();
             if (pendingScrollToLatest.current) { scrollToLatest(!reduceMotion.current); pendingScrollToLatest.current = false; return; }
@@ -1125,11 +1132,12 @@ export default function ChatScreen() {
         />}</View>
         {searchOpen && searchQuery.trim() ? <View style={[styles.searchOverlay, { backgroundColor: theme.chatBackground }]}>
           {showSearchLoader ? <View style={styles.initialLoader}><ChitsLoader size="small" /></View>
-          : searchResults.length === 0 ? <View style={[styles.noResults, { paddingTop: headerHeight }]}><AppText style={[styles.noResultsText, { color: theme.textSecondary }]}>No matching Chits.</AppText></View>
-          : <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.searchResultsList, { paddingTop: headerHeight, paddingBottom: spacing.lg + (keyboardVisible ? 0 : insets.bottom) }]}>
+          : searchResults.length === 0 ? <View style={[styles.noResults, { paddingTop: insets.top + headerHeight }]}><AppText style={[styles.noResultsText, { color: theme.textSecondary }]}>No matching Chits.</AppText></View>
+          : <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.searchResultsList, { paddingTop: insets.top + headerHeight, paddingBottom: spacing.lg + (keyboardVisible ? 0 : insets.bottom) }]}>
               {searchResults.map((item) => <SearchResultRow key={timelineKey(item)} item={item} onPress={() => openSearchResult(item)} />)}
             </ScrollView>}
         </View> : null}
+        </BlurTargetView>
         {!searchOpen ? <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.chatBackground}00`, `${theme.chatBackground}10`, `${theme.chatBackground}80`, `${theme.chatBackground}EF`, theme.chatBackground]} locations={[0, 0.2, 0.5, 0.8, 1]} style={[styles.bottomFade, { height: Math.min(composerHeight, MIN_COMPOSER_INPUT_HEIGHT + spacing.sm + composerBottomPadding) }]} /> : null}
         {!searchOpen && showJumpToLatest && !suggestion ? <Pressable accessibilityRole="button" accessibilityLabel="Jump to latest message" onPress={jumpToLatest} style={({ pressed }) => [styles.jumpToLatest, { bottom: composerHeight + (editing ? 52 : spacing.md), backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.control }, pressed), pressed && styles.sendPressed]}><Icon name="arrow-down" size={20} color={theme.textPrimary} /></Pressable> : null}
         {!searchOpen && editing && <View style={[styles.editing, { bottom: composerHeight + spacing.xs, backgroundColor: theme.surfaceElevated }]}><AppText style={[styles.editingText, { color: theme.textSecondary }]}>{editing.attachments.length ? 'Editing description' : 'Editing thought'}</AppText><Pressable accessibilityRole="button" onPress={cancelEditing}><AppText style={[styles.cancel, { color: theme.accent }]}>Cancel</AppText></Pressable></View>}
@@ -1159,11 +1167,10 @@ export default function ChatScreen() {
             <View pointerEvents={composerExpanded ? 'auto' : 'box-none'} style={[styles.composerActions, isRecordingAudio ? styles.composerActionsRecording : composerExpanded ? styles.composerActionsExpanded : styles.composerActionsCompact]}><AttachmentPicker ref={attachmentPickerRef} disabled={Boolean(attachmentDraft) || Boolean(editing) || isSaving || paste.pasting} onSelected={attachmentSelected} onInlineSelected={paste.insertAttachment} onError={setError} onRecordingChange={recordingChanged} onOpenChange={(open) => { if (open) hideSuggestion(); setAttachmentPickerOpen(open); }} />{composerExpanded && !isRecordingAudio ? <IconButton label="Edit in fullscreen" disabled={isSaving || !draftHydrated} onPress={openFullscreenComposer}><Icon name="expand-outline" size={20} color={theme.textSecondary} /></IconButton> : null}{!isRecordingAudio ? <Pressable accessibilityRole="button" accessibilityLabel={canSend ? 'Send message' : 'Record audio'} accessibilityState={{ disabled: isSaving }} disabled={isSaving} onPress={() => { if (paste.pasting) return; if (canSend) void send(); else attachmentPickerRef.current?.startAudio(); }} style={({ pressed }) => [styles.sendButton, { backgroundColor: isSaving ? theme.surfaceElevated : theme.accent }, sticky({ fill: isSaving ? theme.surfaceElevated : styleColors.accentFill, radius: styleTokens.radius.control }, pressed), pressed && styles.sendPressed]}><Icon name={canSend ? 'arrow-up' : 'mic-outline'} size={20} color={styleTokens.outline.width ? styleColors.onAccent : theme.accentText} /></Pressable> : null}</View>
           </ChatComposerSurface>
         </View> : null}
-        <View style={styles.headerWrap} pointerEvents="box-none">
-          {/* Default fades the conversation out under the header; a theme puts its Share Note band there instead. */}
-          {topBar ? null : <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.chatBackground}F2`, `${theme.chatBackground}B3`, `${theme.chatBackground}00`]} locations={[0, 0.65, 1]} style={[styles.headerFade, { height: headerHeight + spacing.xl }]} />}
+        <View style={[styles.headerWrap, { paddingTop: insets.top, paddingBottom: CHAT_HEADER_BACKDROP_OVERHANG }]} pointerEvents="box-none">
+          {/* Render after the timeline; controls stay crisp above its live blur. */}
+          <ChatHeaderBackdrop target={headerBlurTarget} height={insets.top + headerHeight} topInset={insets.top} />
           <View style={styles.headerBlock} onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setHeaderHeight((current) => (current === next ? current : next)); headerMeasuredRef.current = true; maybePerformInitialScroll(); }}>
-            <TopBarBackground />
             <ChatHeader
               ref={searchInputRef}
               searchOpen={searchOpen}
@@ -1176,8 +1183,7 @@ export default function ChatScreen() {
             {!searchOpen && pinnedMessages.length > 0 ? <QuickFilterRow pinned={pinnedMessages} onSelect={openPinned} /> : null}
           </View>
         </View>
-        </View>
-      {fullscreenEditing ? <FullscreenComposer blocks={blocks} onChangeBlocks={changeBlocks} editorRef={fullscreenInputRef} onClose={closeFullscreenComposer} onSaveDraft={() => send(true)} onSend={() => { void send(); }} canSave={canSend && !paste.pasting} saving={isSaving || paste.pasting} error={error} savedText={editing ? editing.text ?? '' : null} attachmentLabel={attachmentDraft ? `${attachmentDraft.attachment.type} attachment ready to send` : editing?.attachments.length ? `${editing.attachments.length} attachment${editing.attachments.length === 1 ? '' : 's'} saved in chat` : null} pasteButton={pasteButton} insertImageButton={<InsertImageButton disabled={isSaving} busy={paste.pasting} onPress={() => void paste.pick()} />} listButtons={<NoteListButtons editor={fullscreenInputRef} disabled={isSaving || paste.pasting} />} onReplaceImage={(key) => void paste.pick(key)} /> : null}
+      {fullscreenEditing ? <FullscreenComposer blocks={blocks} onChangeBlocks={changeBlocks} editorRef={fullscreenInputRef} onClose={closeFullscreenComposer} onSaveDraft={() => send(true)} onSend={() => { void send(); }} canSave={canSend && !paste.pasting} saving={isSaving || paste.pasting} error={error} savedText={editing ? editing.text ?? '' : null} savedContent={serializeNoteContent(editing?.content ?? [])} attachmentLabel={attachmentDraft ? `${attachmentDraft.attachment.type} attachment ready to send` : editing?.attachments.length ? `${editing.attachments.length} attachment${editing.attachments.length === 1 ? '' : 's'} saved in chat` : null} pasteButton={pasteButton} insertImageButton={<InsertImageButton disabled={isSaving} busy={paste.pasting} onPress={() => void paste.pick()} />} listButtons={<NoteListButtons editor={fullscreenInputRef} disabled={isSaving || paste.pasting} />} onReplaceImage={(key) => void paste.pick(key)} /> : null}
       <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => { afterActionsClosed.current = null; setSelected(null); }} onClosed={runAfterActionsClosed} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} spaceAction={spaceAction} onSpaceAction={runSpaceAction} onAddToBoard={addToBoard} onReminder={openMessageReminder} onDownload={(message) => { setSelected(null); if (message.attachments[0]) void download.exportAttachment(message.attachments[0]); }} onShareNote={(message) => { afterActionsClosed.current = () => router.push(shareNoteHref({ messageId: message.id })); setSelected(null); }} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
       <ReminderSheet key={reminderSheetKey} visible={reminderMessageId !== null} existing={reminderExisting} accent={theme.accent} accentOn={theme.accentText} onClose={() => setReminderMessageId(null)} onSave={async (date) => {
         if (!reminderMessageId) return { ok: false, reason: 'failed' };
@@ -1211,12 +1217,6 @@ const styles = StyleSheet.create({ flex: { flex: 1 }, timelineLayer: { flex: 1 }
   olderError: { fontSize: 12, lineHeight: 18, textAlign: 'center' },
   jumpToLatest: { position: 'absolute', right: spacing.lg, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4 },
   headerBlock: { backgroundColor: 'transparent', zIndex: 10 },
-  // Purely decorative protection behind the now-transparent header controls —
-  // derives from the current theme's background so it recolors with the
-  // selected app theme, and extends a bit past the header's own measured
-  // height so it dissolves into the conversation rather than cutting off flush
-  // with the last control.
-  headerFade: { position: 'absolute', top: 0, left: 0, right: 0 },
   dateSeparator: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.sm },
   dateSeparatorLine: { flex: 1, height: StyleSheet.hairlineWidth },
   dateSeparatorPill: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radii.pill },

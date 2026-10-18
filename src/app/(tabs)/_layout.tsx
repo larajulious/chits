@@ -4,7 +4,7 @@ import { BottomNav } from '@/components/navigation/bottom-nav';
 import { ChatTransitionProvider } from '@/components/navigation/chat-transition';
 import { useTheme } from '@/components/theme-provider';
 
-// Notes, Calendar, Chat, Attachments, and Spaces are the app's persistent destinations —
+// Notes, Attachments, Chat, Calendar, and Spaces are the app's persistent destinations —
 // a real Tabs navigator, not a Stack, so each keeps its own mounted state when
 // switching between them instead of remounting. Archive and Search stay
 // normal screens in this group but aren't among the BottomNav buttons.
@@ -18,9 +18,9 @@ export default function TabLayout() {
     <ChatTransitionProvider>
       <Tabs backBehavior="history" tabBar={(props) => <BottomNav {...props} />} screenOptions={{ headerShown: false, animation: 'none', sceneStyle: { backgroundColor: tokens.background } }}>
         <Tabs.Screen name="index" />
-        <Tabs.Screen name="calendar" />
-        <Tabs.Screen name="chat" />
         <Tabs.Screen name="attachments" />
+        <Tabs.Screen name="chat" />
+        <Tabs.Screen name="calendar" />
         <Tabs.Screen name="spaces" />
         <Tabs.Screen name="archive" />
         <Tabs.Screen name="search" />

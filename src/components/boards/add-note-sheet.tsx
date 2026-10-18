@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
 import { useStickyControls } from '@/components/ui/surface';
@@ -11,7 +11,7 @@ import { spacing } from '@/constants/theme';
 import { AttachmentDraftPreview } from '@/components/chat/attachment-draft-preview';
 import { discardPastedImages, NoteBlocksEditor, InsertImageButton, NoteListButtons, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
 import { pickAndStageFile, pickAndStageMedia, type AttachmentDraft } from '@/services/attachment-import';
-import { draftHasRichContent, draftImageCount, noteBlocksText, textDraft, type NoteDraftBlock } from '@/services/note-content';
+import { draftHasRichContent, noteHasChecklist, draftImageCount, noteBlocksText, textDraft, type NoteDraftBlock } from '@/services/note-content';
 
 // `blocks` is set only when the note has pasted images: its text and images in order.
 export type NoteSubmission = { text: string; attachment: AttachmentDraft['attachment'] | null; blocks: NoteDraftBlock[] | null };
@@ -90,7 +90,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   const changeBlocks = useCallback((update: (current: NoteDraftBlock[]) => NoteDraftBlock[]) => { setBlocks(update); setError(null); }, [setBlocks, setError]);
   const pasteImage = useNoteImagePaste({ active: visible, blocks, setBlocks: changeBlocks, editor: inputRef, onError: setError });
   const busy = saving || staging || pasteImage.pasting;
-  const canAdd = (Boolean(trimmed) || Boolean(draft) || imageCount > 0) && canSubmit && !busy;
+  const canAdd = (Boolean(trimmed) || noteHasChecklist(blocks) || Boolean(draft) || imageCount > 0) && canSubmit && !busy;
 
   const discardDraft = () => {
     if (!draft) return;
@@ -207,6 +207,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
       onRequestClose={close}
       onShow={() => requestAnimationFrame(() => inputRef.current?.focus())}
     >
+      <SafeAreaProvider>
       <KeyboardAvoidingView style={[styles.backdrop, fullscreen && { backgroundColor: theme.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         {fullscreen ? (
           <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={styles.fullScreen}>
@@ -275,6 +276,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
           </>
         )}
       </KeyboardAvoidingView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

@@ -16,7 +16,7 @@ import { useStickySurface } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { MessageContentRenderer, MessageMetadata, NoteText } from '@/components/chat/message-note-cards';
-import { NoteContentView } from '@/components/notes/note-content-view';
+import { SavedNoteContentView } from '@/components/notes/saved-note-content-view';
 import { createBoardRepository } from '@/db/repositories';
 import type { Attachment, AttachmentLike, Message } from '@/db/types';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
@@ -342,7 +342,7 @@ function InlineNoteMessage({ message, content, focused, onLongPress, onHideAgain
   const { height: screenHeight } = useWindowDimensions();
   return <MediaMessageSurface focused={focused} onLongPress={() => onLongPress(message)}>
     {content.leading.map((attachment) => <AttachmentContent key={attachment.id} attachment={attachment} />)}
-    <NoteContentView blocks={content.blocks} style={styles.inlineNote} maxImageHeight={Math.round(screenHeight * 0.45)} onImageLongPress={() => onLongPress(message)} renderText={(text) => <NoteText text={text} mode="compact" />} />
+    <SavedNoteContentView message={message} blocks={content.blocks} style={styles.inlineNote} maxImageHeight={Math.round(screenHeight * 0.45)} onImageLongPress={() => onLongPress(message)} renderText={(text) => <NoteText text={text} mode="compact" />} />
     <View style={styles.inlineMetadata}><MessageMetadata message={message} inside onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /></View>
   </MediaMessageSurface>;
 }

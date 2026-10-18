@@ -24,6 +24,7 @@ import { SegmentedControl, Toast } from '@/components/ui/primitives';
 import { OnboardingMascot } from '@/features/onboarding/components/onboarding-mascot';
 import { APP_STYLE_NAMES, APP_STYLES, type AppStyle } from '@/constants/style-tokens';
 import { spacing } from '@/constants/theme';
+import { CHITS_REVISIT_ENABLED } from '@/constants/revisit';
 import { createBoardRepository, createSpaceRepository } from '@/db/repositories';
 import { getCalendarItems } from '@/features/calendar/calendar-data';
 import { subscribeToReminderChanges } from '@/services/reminders';
@@ -42,7 +43,7 @@ type ContextItem = {
   accessibilityContext: string | null;
 };
 type IconName = ComponentProps<typeof Ionicons>['name'];
-type Destination = { label: string; path: '/' | '/spaces/pick' | '/calendar' | '/archive' | '/settings' | '/onboarding'; icon: IconName };
+type Destination = { label: string; path: '/' | '/spaces/pick' | '/calendar' | '/archive' | '/settings' | '/onboarding' | '/revisit'; icon: IconName };
 
 const STYLE_OPTIONS = APP_STYLES.map((key: AppStyle) => ({ key, label: APP_STYLE_NAMES[key], accessibilityLabel: `${APP_STYLE_NAMES[key]} style` }));
 
@@ -56,6 +57,7 @@ const DrawerContext = createContext<DrawerContextValue | null>(null);
 const spacesDestination: Destination = { label: 'Spaces', path: '/spaces/pick', icon: 'magnet-outline' };
 const calendarDestination: Destination = { label: 'Calendar', path: '/calendar', icon: 'calendar-outline' };
 const archiveDestination: Destination = { label: 'Archive', path: '/archive', icon: 'archive-outline' };
+const revisitDestination: Destination = { label: 'Revisit', path: '/revisit', icon: 'refresh-outline' };
 const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
 const gettingStartedDestination: Destination = { label: 'Getting started', path: '/onboarding', icon: 'compass-outline' };
 
@@ -273,6 +275,7 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
         <NavigationRow destination={spacesDestination} pathname={pathname} close={close} badge={stuckCount} />
         <NavigationRow destination={calendarDestination} pathname={pathname} close={close} badge={incomingReminderCount} badgeNoun="reminder" />
         <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
+        {CHITS_REVISIT_ENABLED ? <NavigationRow destination={revisitDestination} pathname={pathname} close={close} /> : null}
         {hasShortcuts ? <View style={[styles.divider, { backgroundColor: tokens.borderSubtle }, styleTokens.outline.width ? { height: styleTokens.outline.width, backgroundColor: styleColors.outline } : null]} /> : null}
         <PinnedSection items={pinned} close={close} onUnpin={unpinItem} />
         <RecentSection items={recentUnpinned.slice(0, 5)} close={close} />

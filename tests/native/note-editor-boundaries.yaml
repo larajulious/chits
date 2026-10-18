@@ -1,0 +1,23 @@
+# Copy note-editor-boundaries.fixture.tsx to src/app/editor-boundary-qa.tsx,
+# rebuild the native app, start Metro, then run this on a disposable draft.
+appId: com.larajulious.chitsapp
+---
+- openLink: chits://editor-boundary-qa
+- tapOn:
+    text: Open
+    optional: true
+- assertVisible: Boundary QA
+- tapOn: Reset QA document
+- tapOn: Focus document end
+- eraseText: 40
+- assertVisible: Document cleared
+- inputText: Still focused
+- assertVisible: Still focused
+- tapOn: Checkbox list
+- inputText: Task
+- pressKey: Enter
+- inputText: Next
+- eraseText: 60
+- assertVisible: Document cleared
+- inputText: End
+- takeScreenshot: editor-boundary-finish

@@ -1,19 +1,20 @@
 import { useState, type ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { NoteCheckbox } from './note-checkbox';
 import { NoteImage } from '@/components/notes/note-image';
 import { spacing } from '@/constants/theme';
 import type { AttachmentLike } from '@/db/types';
 import { imageRows, noteListMarkers, type NoteRenderBlock } from '@/services/note-content';
 
-type Segment = { key: string; type: 'text'; text: string; marker?: string | null } | { key: string; type: 'images'; images: { key: string; attachment: AttachmentLike }[] };
+type Segment = { key: string; type: 'text'; text: string; checked?: boolean; marker?: string | null } | { key: string; type: 'images'; images: { key: string; attachment: AttachmentLike }[] };
 
 function segmentsOf(blocks: NoteRenderBlock[]): Segment[] {
   const segments: Segment[] = [];
   const markers = noteListMarkers(blocks);
   for (const [index, block] of blocks.entries()) {
     const previous = segments[segments.length - 1];
-    if (block.type === 'text') segments.push({ key: block.key, type: 'text', text: block.text, marker: markers[index] });
+    if (block.type === 'text') segments.push({ key: block.key, type: 'text', text: block.text, marker: markers[index], checked: block.list?.kind === 'checklist' ? block.list.checked : undefined });
     else if (previous?.type === 'images') previous.images.push({ key: block.key, attachment: block.attachment });
     else segments.push({ key: block.key, type: 'images', images: [{ key: block.key, attachment: block.attachment }] });
   }
@@ -28,6 +29,7 @@ type Props = {
   maxImageHeight?: number;
   gap?: number;
   style?: StyleProp<ViewStyle>;
+  onToggleChecklist?: (key: string) => void;
   onImageLongPress?: (attachment: AttachmentLike) => void;
 };
 
@@ -37,19 +39,26 @@ type Props = {
  * order they were written in; consecutive images share rows of two (each at its
  * own proportions), within the width the note is given.
  */
-export function NoteContentView({ blocks, renderText, maxImageHeight = 360, gap = spacing.sm, style, onImageLongPress }: Props) {
+export function NoteContentView({ blocks, renderText, maxImageHeight = 360, gap = spacing.sm, style, onImageLongPress, onToggleChecklist }: Props) {
   const [width, setWidth] = useState(0);
   const segments = segmentsOf(blocks);
   const imageNumbers = new Map(blocks.filter((block) => block.type === 'image').map((block, index) => [block.key, index + 1]));
   const imageCount = imageNumbers.size;
-  return <View style={[{ gap }, style]} onLayout={({ nativeEvent }) => { const next = Math.floor(nativeEvent.layout.width); setWidth((current) => current === next ? current : next); }}>
-    {segments.map((segment) => {
+  return <View style={style} onLayout={({ nativeEvent }) => { const next = Math.floor(nativeEvent.layout.width); setWidth((current) => current === next ? current : next); }}>
+    {segments.map((segment, index) => {
+      const previous = segments[index - 1];
+      const consecutiveTasks = segment.type === 'text' && segment.checked !== undefined && previous?.type === 'text' && previous.checked !== undefined;
+      const spaceBefore = { marginTop: index ? (consecutiveTasks ? Math.min(gap, spacing.xxs) : gap) : 0 };
+      if (segment.type === 'text' && segment.checked !== undefined) return <View key={segment.key} style={[styles.listRow, spaceBefore]}>
+        <NoteCheckbox checked={segment.checked} label={segment.text} onPress={onToggleChecklist ? () => onToggleChecklist(segment.key) : undefined} />
+        <View style={[styles.listBody, segment.checked && { opacity: 0.6 }]}>{renderText(segment.text, segment.key)}</View>
+      </View>;
       if (segment.type === 'text') return segment.marker
-        ? <View key={segment.key} style={styles.listRow}><View style={styles.listMarker}>{renderText(segment.marker, `${segment.key}:marker`)}</View><View style={styles.listBody}>{renderText(segment.text, segment.key)}</View></View>
-        : <View key={segment.key}>{renderText(segment.text, segment.key)}</View>;
+        ? <View key={segment.key} style={[styles.listRow, spaceBefore]}><View style={styles.listMarker}>{renderText(segment.marker, `${segment.key}:marker`)}</View><View style={styles.listBody}>{renderText(segment.text, segment.key)}</View></View>
+        : <View key={segment.key} style={spaceBefore}>{renderText(segment.text, segment.key)}</View>;
       // Until the width is known, hold roughly the space the images will take.
-      if (!width) return <View key={segment.key} style={{ height: Math.min(maxImageHeight, 160) }} />;
-      return <View key={segment.key} style={styles.run}>
+      if (!width) return <View key={segment.key} style={[spaceBefore, { height: Math.min(maxImageHeight, 160) }]} />;
+      return <View key={segment.key} style={[styles.run, spaceBefore]}>
         {imageRows(segment.images.map((image) => image.attachment), width, IMAGE_GAP, maxImageHeight).map((row) => <View key={row.indexes.join('-')} style={styles.row}>
           {row.indexes.map((index, position) => {
             const { key, attachment } = segment.images[index];

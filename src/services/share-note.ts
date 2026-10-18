@@ -290,9 +290,9 @@ export function paginateInlineShare(blocks: ShareNoteBlock[]): ShareNoteBlock[][
       chunk += char;
       column += 1;
       if (char === '\n' || column >= 12) { lines += 1; column = 0; }
-      if (lines >= 60) { add({ ...block, text: chunk, marker: first ? markers[index] : null }, lines); chunk = ''; lines = 1; column = 0; first = false; }
+      if (lines >= 60) { add({ ...block, text: chunk, list: first ? block.list : undefined, marker: first ? markers[index] : null }, lines); chunk = ''; lines = 1; column = 0; first = false; }
     }
-    if (chunk) add({ ...block, text: chunk, marker: first ? markers[index] : null }, lines);
+    if (chunk) add({ ...block, text: chunk, list: first ? block.list : undefined, marker: first ? markers[index] : null }, lines);
   }
   if (page.length) pages.push(page);
   return pages;

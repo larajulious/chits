@@ -60,6 +60,20 @@ final class ChitsInlinePaste {
         return unsafeBitCast(actionIMP, to: Original.self)(view, #selector(UIResponder.canPerformAction(_:withSender:)), selector, sender)
       }
       class_addMethod(subclass, #selector(UIResponderStandardEditActions.paste(_:)), imp_implementationWithBlock(paste), method_getTypeEncoding(pasteMethod))
+      if let deleteMethod = class_getInstanceMethod(original, #selector(UIKeyInput.deleteBackward)) {
+        let deleteIMP = method_getImplementation(deleteMethod)
+        let delete: @convention(block) (UITextView) -> Void = { view in
+          if let registration = objc_getAssociatedObject(view, &Self.association) as? Registration,
+             view.selectedRange.location == 0, view.selectedRange.length == 0,
+             view.markedTextRange == nil {
+            registration.emit(registration.key, 0, 0, "backspace")
+          } else {
+            typealias Original = @convention(c) (AnyObject, Selector) -> Void
+            unsafeBitCast(deleteIMP, to: Original.self)(view, #selector(UIKeyInput.deleteBackward))
+          }
+        }
+        class_addMethod(subclass, #selector(UIKeyInput.deleteBackward), imp_implementationWithBlock(delete), method_getTypeEncoding(deleteMethod))
+      }
       class_addMethod(subclass, #selector(UIResponder.canPerformAction(_:withSender:)), imp_implementationWithBlock(action), method_getTypeEncoding(actionMethod))
       objc_registerClassPair(subclass)
       hooked = subclass

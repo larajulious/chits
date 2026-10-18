@@ -1,0 +1,40 @@
+appId: com.larajulious.chitsapp
+---
+- openLink: chits://editor-formatting-qa
+- assertVisible: Formatting QA
+- tapOn: Seed Existing
+- tapOn: Focus selected paragraph
+- tapOn: Checkbox list
+- assertVisible: Paragraphs preserved
+- assertVisible: Formatted items 1
+- tapOn: Read caret
+- assertVisible: Caret 13
+- tapOn: Checkbox list
+- assertVisible: Paragraphs preserved
+- assertVisible: Formatted items 0
+- tapOn: Seed Empty
+- tapOn: Focus selected paragraph
+- tapOn: Bullet list
+- assertVisible: Paragraphs preserved
+- assertVisible: Formatted items 1
+- tapOn: Read caret
+- assertVisible: Caret 0
+- tapOn: Bullet list
+- assertVisible: Paragraphs preserved
+- assertVisible: Formatted items 0
+- tapOn: Seed Middle
+- tapOn: Focus selected paragraph
+- tapOn: Numbered list
+- tapOn: Read caret
+- assertVisible: Caret 4
+- assertVisible: Paragraphs preserved
+- tapOn: Bullet list
+- assertVisible: Paragraphs preserved
+- tapOn: Checkbox list
+- assertVisible: Paragraphs preserved
+- tapOn: Seed Selected
+- tapOn: Focus selected paragraph
+- tapOn: Checkbox list
+- assertVisible: Paragraphs preserved
+- assertVisible: Formatted items 2
+- takeScreenshot: formatting-paragraphs

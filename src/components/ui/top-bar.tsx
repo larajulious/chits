@@ -6,6 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Decorations } from '@/components/share-note/share-note-template';
 import { useTheme } from '@/components/theme-provider';
+import { useHeaderPhoto } from './header-photo-context';
+import { HeaderPhotoLayer } from './header-photo-layer';
 import { AppText } from './app-text';
 import { TileInkContext } from './controls';
 import { Icon, type IconName } from './icon';
@@ -19,6 +21,8 @@ import { SHARE_NOTE_DESIGN_WIDTH } from '@/services/share-note';
  */
 export function useHeaderInk() {
   const { tokens, topBar } = useTheme();
+  const { photo } = useHeaderPhoto();
+  if (photo) return { ink: '#ffffff', inkMuted: '#ffffff', border: 'transparent', banded: true };
   return topBar
     ? { ink: topBar.ink, inkMuted: topBar.inkMuted, border: 'transparent', banded: true }
     : { ink: tokens.textPrimary, inkMuted: tokens.textMuted, border: tokens.borderSubtle, banded: false };
@@ -68,8 +72,10 @@ export function MenuIcon({ size = 24 }: { size?: number }) {
  */
 export const TopBarBackground = memo(function TopBarBackground({ extendIntoStatusBar = true }: { extendIntoStatusBar?: boolean }) {
   const { topBar } = useTheme();
+  const { photo, onError } = useHeaderPhoto();
   const insets = useSafeAreaInsets();
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  if (photo) return <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.band, { top: extendIntoStatusBar ? -insets.top : 0 }]}><HeaderPhotoLayer photo={photo} onError={onError} /></View>;
   if (!topBar) return null;
   const { share, colors } = topBar;
   const u = size ? size.width / SHARE_NOTE_DESIGN_WIDTH : 1;

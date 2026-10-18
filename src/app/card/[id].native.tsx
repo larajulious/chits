@@ -1,3 +1,5 @@
+import { subscribeToNoteChanges } from '@/services/note-changes';
+import { ConnectedNotes } from '@/components/notes/connected-notes.native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -140,7 +142,12 @@ export default function CardDetailScreen() {
     if (nextDetail) void repository.markOpened('card', id);
   }, [id, repository]);
 
-  useFocusEffect(useCallback(() => { void load(); return subscribeToAttachmentChanges(() => void load()); }, [load]));
+  useFocusEffect(useCallback(() => {
+    void load();
+    const attachments = subscribeToAttachmentChanges(() => void load());
+    const notes = subscribeToNoteChanges(() => void load());
+    return () => { attachments(); notes(); };
+  }, [load]));
 
   const loadReminder = useCallback(async () => {
     if (!id) return;
@@ -546,6 +553,7 @@ export default function CardDetailScreen() {
           <Icon name="chevron-forward" size={16} color={theme.textMuted} />
         </Pressable>
 
+        <ConnectedNotes noteKey={`card:${id}`} />
         <View style={styles.sectionHeader}><AppText accessibilityRole="header" style={styles.sectionTitle}>DETAILS</AppText></View>
         <View style={[styles.detailsCard, panel]}>
           <View style={styles.detailGroup}>

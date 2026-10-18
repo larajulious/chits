@@ -17,7 +17,7 @@ import { spacing } from '@/constants/theme';
 // with a round 58pt Chat button poking 22pt above it, or Sticky's outlined
 // 64pt bar with a speech-bubble Chat button raised 28pt above it.
 
-// The custom bottom-tab-bar for Notes, Calendar, Chat, Attachments and Spaces —
+// The custom bottom-tab-bar for Notes, Attachments, Chat, Calendar and Spaces —
 // see PHASE: REDESIGN CHITS BOTTOM NAVIGATION and PHASE: REDESIGN
 // CHAT TRANSITION — CONNECTED FLOATING BUTTON. Archive moved to the side drawer
 // (see PHASE: GLOBAL ATTACHMENTS SCREEN) but stays mounted in this same tabs
@@ -139,22 +139,22 @@ export function BottomNav({ state, navigation, insets }: BottomTabBarProps) {
             compact={compactLabels}
           />
           <NavItem
-            label="Calendar"
-            icon="calendar-outline"
-            focused={activeName === 'calendar'}
-            accessibilityLabel={`Calendar${activeName === 'calendar' ? '. Current screen.' : ''}`}
-            onPress={() => go(calendarRoute?.name)}
+            label="Attachments"
+            icon="attach-outline"
+            focused={activeName === 'attachments'}
+            accessibilityLabel={`Attachments${activeName === 'attachments' ? '. Current screen.' : ''}`}
+            onPress={() => go(attachmentsRoute?.name)}
             compact={compactLabels}
           />
           <View style={styles.centerSlot} pointerEvents="none">
             <AppText numberOfLines={1} weight={bubble ? '800' : '600'} style={{ fontSize: compactLabels ? Math.min(nav.labelSize, 10) : nav.labelSize, color: bubble ? styleColors.textSecondary : theme.textMuted }}>Chat</AppText>
           </View>
           <NavItem
-            label="Attachments"
-            icon="attach-outline"
-            focused={activeName === 'attachments'}
-            accessibilityLabel={`Attachments${activeName === 'attachments' ? '. Current screen.' : ''}`}
-            onPress={() => go(attachmentsRoute?.name)}
+            label="Calendar"
+            icon="calendar-outline"
+            focused={activeName === 'calendar'}
+            accessibilityLabel={`Calendar${activeName === 'calendar' ? '. Current screen.' : ''}`}
+            onPress={() => go(calendarRoute?.name)}
             compact={compactLabels}
           />
           <NavItem

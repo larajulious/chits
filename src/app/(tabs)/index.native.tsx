@@ -1,4 +1,5 @@
-import { FlashList } from '@shopify/flash-list';
+import { noteChecklistSummary, type NoteBlock } from '@/services/note-content';
+import { subscribeToNoteChanges } from '@/services/note-changes';
 import { router, useFocusEffect } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -10,7 +11,6 @@ import {
   StyleSheet,
   TextInput,
   View,
-  useWindowDimensions,
 } from 'react-native';
 
 import { useAppDrawer } from '@/components/navigation/app-drawer';
@@ -19,15 +19,16 @@ import { useTheme } from '@/components/theme-provider';
 import { useStickyControls } from '@/components/ui/surface';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
-import { AppHeader, AppText, Chip, ChipRow, EmptyState, Icon, IconButton, PressableSurface, Screen, SegmentedControl, Surface, Toast, HeaderIcon, MenuIcon, useFontStyle } from '@/components/ui/primitives';
+import { AppHeader, AppText, EmptyState, Icon, IconButton, PressableSurface, Screen, Surface, Toast, HeaderIcon, MenuIcon, useFontStyle } from '@/components/ui/primitives';
 import { AddNoteSheet, type NoteSubmission } from '@/components/boards/add-note-sheet';
 import { groupRecentNotes } from '@/services/card-grouping';
 import { detachConfirmationMessage } from '@/services/detach-card';
 import { requestReminderSync, subscribeToReminderChanges } from '@/services/reminders';
 import { BoardAppearanceFields } from '@/components/boards/board-appearance-fields';
-import { CardListRow } from '@/components/boards/card-list-row.native';
+import { BoardListItem } from '@/components/boards/board-list-item.native';
+import { CardsCollection, type CardSection } from '@/components/boards/cards-collection.native';
 import { shareNoteHref } from '@/services/share-note-source';
-import { resolveBoardIcon, type BoardIconName } from '@/constants/board-appearance';
+import { type BoardIconName } from '@/constants/board-appearance';
 import { spacing } from '@/constants/theme';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
 import { GettingStartedCard } from '@/features/onboarding/components/checklist-card';
@@ -39,8 +40,6 @@ import { StickyGreeting } from '@/components/mascot/sticky-greeting.native';
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 type ViewMode = 'boards' | 'cards';
 
-type CardSection = { key: string; title: string; pinned?: boolean; count: number; data: CardListItem[] };
-type CollectionCell = { kind: 'header'; section: CardSection } | { kind: 'note'; item: CardListItem; column: number };
 type UnorganizedSummaryRow = { id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; isHiddenContent: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number };
 
 function pluralize(count: number, singular: string) {
@@ -84,31 +83,7 @@ type CardFilter = 'all' | 'unorganized' | (string & {});
 
 type CardFilterChip = { key: CardFilter; label: string; count: number };
 
-function CardFilterChips({ chips, filter, onChange }: { chips: CardFilterChip[]; filter: CardFilter; onChange: (next: CardFilter) => void }) {
-  return (
-    <ChipRow style={styles.chipScroll}>
-      {chips.map((chip) => (
-        <Chip
-          key={chip.key}
-          label={chip.label}
-          count={chip.count}
-          selected={chip.key === filter}
-          accessibilityLabel={`Filter by ${chip.label}, ${pluralize(chip.count, 'card')}`}
-          onPress={() => onChange(chip.key)}
-        />
-      ))}
-    </ChipRow>
-  );
-}
-
-const VIEW_OPTIONS: { key: ViewMode; label: string; accessibilityLabel: string }[] = [
-  { key: 'boards', label: 'Boards', accessibilityLabel: 'Boards view' },
-  { key: 'cards', label: 'Cards', accessibilityLabel: 'Cards view' },
-];
-
 export default function BoardsScreen() {
-  const { width, fontScale } = useWindowDimensions();
-  const cardColumns = width < 350 || fontScale >= 1.3 ? 1 : 2;
   const database = useSQLiteContext();
   const boardRepository = useMemo(() => createBoardRepository(database), [database]);
   const messageRepository = useMemo(() => createMessageRepository(database), [database]);
@@ -116,12 +91,6 @@ export default function BoardsScreen() {
   const { actionSheet, confirm } = useAppDialog();
   const { tokens: theme, styleTokens, styleColors } = useTheme();
   const controls = useStickyControls();
-  // Sticky balances the masonry columns by height and spaces them evenly;
-  // Classic keeps its alternating columns exactly as they were.
-  const balanced = styleTokens.card.tinted;
-  const { columnGap, rowGap } = styleTokens.noteCard;
-  // Half a gap outside each balanced column, so columns sit at the screen inset.
-  const listInset = spacing.md - columnGap / 2;
   const inputFont = useFontStyle('body');
   // The floating bottom nav is absolutely positioned over this screen (see
   // PHASE: REDESIGN CHITS BOTTOM NAVIGATION) rather than reserving its own flex
@@ -148,6 +117,7 @@ export default function BoardsScreen() {
 
   // Choose the initial tab after loading boards; subsequent choices are session-local.
   const [viewMode, setViewMode] = useState<ViewMode>('boards');
+  const [headerSection, setHeaderSection] = useState<{ sections: CardSection[]; key: string } | null>(null);
   const initialViewResolved = useRef(false);
   const [addNoteOpen, setAddNoteOpen] = useState(false);
   const [cards, setCards] = useState<CardListItem[]>([]);
@@ -201,11 +171,18 @@ export default function BoardsScreen() {
   }, [boardRepository, database, messageRepository]);
 
   const loadCards = useCallback(async () => {
-    const [cardRows, thoughtRows, subtaskRows] = await Promise.all([
+    const [cardRows, thoughtRows, subtaskRows, checklistRows] = await Promise.all([
       boardRepository.listAllCardSummaries(),
       messageRepository.listUnorganizedSummaries(),
       boardRepository.listCardSubtaskPreviews(),
+      messageRepository.listChecklistSummaries(),
     ]);
+    const contentByCard = new Map<string, NoteBlock[]>();
+    const contentByThought = new Map<string, NoteBlock[]>();
+    for (const row of checklistRows) {
+      contentByThought.set(row.messageId, row.content);
+      if (row.cardId) contentByCard.set(row.cardId, [...(contentByCard.get(row.cardId) ?? []), ...row.content]);
+    }
     const subtasksByCard = new Map<string, { id: string; title: string; isCompleted: boolean }[]>();
     for (const row of subtaskRows) {
       const preview = subtasksByCard.get(row.cardId) ?? [];
@@ -215,13 +192,14 @@ export default function BoardsScreen() {
     // A card whose thought is hidden in Chat is covered here too, the same as on its board.
     setCards(cardRows.map(({ isHidden, ...row }) => isHidden === 1
       ? { ...row, kind: 'card' as const, title: 'Hidden Chit', preview: null, pinned: row.pinned === 1, hidden: true, previewMediaType: null, thumbnailPath: null, mediaDuration: null, mediaCount: 0 }
-      : { ...row, kind: 'card' as const, pinned: row.pinned === 1, hidden: false, mediaCount: row.mediaCount ?? 0, subtaskPreview: subtasksByCard.get(row.id) ?? [] }));
-    setUnorganizedThoughts(thoughtRows.map(unorganizedToCardListItem));
+      : { ...row, kind: 'card' as const, pinned: row.pinned === 1, hidden: false, mediaCount: row.mediaCount ?? 0, subtaskPreview: subtasksByCard.get(row.id) ?? [], checklistSummary: noteChecklistSummary(contentByCard.get(row.id) ?? []) }));
+    setUnorganizedThoughts(thoughtRows.map((row) => ({ ...unorganizedToCardListItem(row), checklistSummary: row.isHiddenContent ? null : noteChecklistSummary(contentByThought.get(row.id) ?? []) })));
   }, [boardRepository, messageRepository]);
   // Card deletes/archives/hides go through loadCards afterwards, so reconciling
   // here cancels notifications for removed cards and refreshes hidden text;
   // reminder changes made elsewhere (set, removed, fired) reload the list.
   useEffect(() => subscribeToReminderChanges(() => void loadCards()), [loadCards]);
+  useEffect(() => subscribeToNoteChanges(() => void loadCards()), [loadCards]);
 
   useFocusEffect(useCallback(() => {
     void load();
@@ -232,7 +210,10 @@ export default function BoardsScreen() {
 
   const changeViewMode = (next: ViewMode) => {
     initialViewResolved.current = true;
-    if (next !== viewMode) setViewMode(next);
+    if (next !== viewMode) {
+      setHeaderSection(null);
+      setViewMode(next);
+    }
   };
 
   // A note added from the Cards header isn't tied to a board yet, so it's
@@ -277,19 +258,15 @@ export default function BoardsScreen() {
     ];
   }, [cards, unorganizedThoughts, cardFilter]);
 
-  const collection = useMemo(() => {
-    const cells: CollectionCell[] = [];
-    const stickyHeaderIndices: number[] = [];
-    for (const section of cardSections) {
-      stickyHeaderIndices.push(cells.length);
-      cells.push({ kind: 'header', section });
-      for (const [index, item] of section.data.entries()) cells.push({ kind: 'note', item, column: index % cardColumns });
-    }
-    return { cells, stickyHeaderIndices };
-  }, [cardSections, cardColumns]);
-  const noteCellStyle = (column: number) => balanced
-    ? { paddingHorizontal: cardColumns === 1 ? spacing.md : columnGap / 2, paddingBottom: rowGap }
-    : [styles.noteCell, cardColumns === 1 ? styles.noteCellSingle : column === 0 ? styles.noteCellStart : styles.noteCellEnd];
+  const updateHeaderSection = useCallback((section: CardSection | null) => {
+    setHeaderSection((previous) => {
+      if (!section) return previous === null ? previous : null;
+      return previous?.sections === cardSections && previous.key === section.key ? previous : { sections: cardSections, key: section.key };
+    });
+  }, [cardSections]);
+  const activeHeaderSection = viewMode === 'cards' && headerSection?.sections === cardSections
+    ? cardSections.find((section) => section.key === headerSection.key)
+    : undefined;
 
   // "Move back to Unorganized" — always confirmed first. Fetches a lightweight
   // preview (this row doesn't have message/comment/attachment counts loaded the
@@ -429,13 +406,22 @@ export default function BoardsScreen() {
   return (
     <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: theme.background }}>
       <AppHeader
-        title={appTitle}
+        title={activeHeaderSection?.title ?? appTitle}
         actionWidth={88}
-        subtitle={viewMode === 'boards' ? pluralize(boards.length, 'board') : pluralize(cards.length + unorganizedThoughts.length, 'card')}
+        subtitle={viewMode === 'boards' ? pluralize(boards.length, 'board') : pluralize(activeHeaderSection?.count ?? cards.length + unorganizedThoughts.length, 'card')}
         leading={(
-          <IconButton label="Open navigation" onPress={openDrawer}>
-            <MenuIcon />
-          </IconButton>
+          <View style={[styles.headerActions, styleTokens.header.iconButton.filled && styles.headerActionsTiled]}>
+            <IconButton label="Open navigation" onPress={openDrawer}>
+              <MenuIcon />
+            </IconButton>
+            <IconButton
+              label={viewMode === 'boards' ? 'Boards view. Switch to Cards' : 'Cards view. Switch to Boards'}
+              disabled={!ready}
+              onPress={() => changeViewMode(viewMode === 'boards' ? 'cards' : 'boards')}
+            >
+              <HeaderIcon name={viewMode === 'boards' ? 'albums-outline' : 'reader-outline'} size={22} />
+            </IconButton>
+          </View>
         )}
         trailing={(
           <View style={[styles.headerActions, styleTokens.header.iconButton.filled && styles.headerActionsTiled]}>
@@ -458,10 +444,6 @@ export default function BoardsScreen() {
 
       {!ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : (
       <View style={styles.flex}>
-        <View style={styles.switchWrap}>
-          <SegmentedControl options={VIEW_OPTIONS} value={viewMode} onChange={changeViewMode} />
-        </View>
-
         {viewMode === 'cards' ? (
           totalCardCount === 0 ? (
             <EmptyState
@@ -471,44 +453,16 @@ export default function BoardsScreen() {
               action={{ label: 'Start a Chit', onPress: () => router.push('/chat?focusInput=1') }}
             />
           ) : (
-            <>
-              <CardFilterChips chips={cardFilterChips} filter={cardFilter} onChange={setCardFilter} />
-              {collection.cells.length === 0 ? (
-                <EmptyState pose="search" title="No cards in this filter" description="Choose another board or All cards." />
-              ) : (
-                <FlashList
-                  key={`cards-${cardColumns}`}
-                  style={styles.cardList}
-                  data={collection.cells}
-                  masonry
-                  numColumns={cardColumns}
-                  optimizeItemArrangement={balanced}
-                  overrideItemLayout={(layout, cell) => { layout.span = cell.kind === 'header' ? cardColumns : 1; }}
-                  keyExtractor={(cell) => cell.kind === 'header' ? `section-${cell.section.key}` : `${cell.item.kind}-${cell.item.id}`}
-                  getItemType={(cell) => cell.kind}
-                  stickyHeaderIndices={collection.stickyHeaderIndices}
-                  extraData={styleTokens}
-                  renderItem={({ item: cell }) => cell.kind === 'header' ? (
-                    <View accessibilityRole="header" accessibilityLabel={`${cell.section.title}, ${cell.section.count} ${cell.section.count === 1 ? 'note' : 'notes'}`} style={[styles.sectionHeaderRow, { backgroundColor: theme.background }, balanced && cardColumns > 1 && { marginHorizontal: -listInset }]}>
-                      <View style={styles.sectionHeaderTitle}>
-                        {cell.section.pinned ? <Icon name="pin" size={14} color={theme.textSecondary} /> : null}
-                        <AppText variant="display" weight="700" numberOfLines={1} style={[styles.cardSectionMonth, { color: theme.textPrimary }]}>{cell.section.title}</AppText>
-                      </View>
-                      <AppText weight="500" style={[styles.cardSectionCount, { color: theme.textMuted }]}>{cell.section.count}</AppText>
-                    </View>
-                  ) : (
-                    <View style={noteCellStyle(cell.column)}>
-                      <CardListRow
-                        item={cell.item}
-                        onPress={() => void openCardNote(cell.item)}
-                        onMore={() => void openCardActions(cell.item)}
-                      />
-                    </View>
-                  )}
-                  contentContainerStyle={[styles.cardListContent, balanced && cardColumns > 1 && { paddingHorizontal: listInset }, { paddingBottom: tabBarHeight + spacing.md }]}
-                />
-              )}
-            </>
+            <CardsCollection
+              sections={cardSections}
+              chips={cardFilterChips}
+              filter={cardFilter}
+              onFilter={setCardFilter}
+              onOpen={openCardNote}
+              onMore={openCardActions}
+              onSectionChange={updateHeaderSection}
+              bottomInset={tabBarHeight}
+            />
           )
         ) : (
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.md }]}>
@@ -540,44 +494,16 @@ export default function BoardsScreen() {
         </PressableSurface>
 
         <View style={styles.sectionHeader}>
-          <AppText accessibilityRole="header" weight={styleTokens.card.tinted ? '800' : '700'} style={[styles.sectionTitle, { color: theme.textMuted }]}>YOUR BOARDS</AppText>
+          <AppText accessibilityRole="header" variant="display" weight="700" style={[styles.sectionTitle, { color: theme.textPrimary }]}>Your boards</AppText>
           {boards.length > 0 ? (
-            <AppText style={[styles.sectionCount, { color: theme.textMuted }]}>{boards.length}</AppText>
+            <View style={[styles.boardCount, { backgroundColor: theme.surfaceElevated }]}><AppText weight="600" style={[styles.sectionCount, { color: theme.textSecondary }]}>{boards.length}</AppText></View>
           ) : null}
         </View>
 
         {boards.length > 0 ? (
-          <Surface fill={styleTokens.card.tinted ? styleColors.controlFill : theme.surface} border={theme.borderSubtle} radius={styleTokens.radius.panel} style={styles.boardList}>
-            {boards.map((board, index) => {
-              const detail = `${pluralize(board.columnCount, 'column')} · ${pluralize(board.cardCount, 'card')}`;
-              return (
-                <Pressable
-                  key={board.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${board.name}. ${detail}.`}
-                  onPress={() => router.push(`/board/${board.id}`)}
-                  style={({ pressed }) => [
-                    styles.boardRow,
-                    index < boards.length - 1 && { borderBottomColor: styleTokens.outline.width ? styleColors.outline : theme.borderSubtle, borderBottomWidth: styleTokens.outline.width || StyleSheet.hairlineWidth },
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Surface fill={board.accent ?? theme.accentSoft} radius={styleTokens.radius.control} outline={styleTokens.outline.width ? undefined : false} edge={false} style={styles.boardMark}>
-                    <Icon
-                      name={resolveBoardIcon(board.icon)}
-                      size={19}
-                      color={board.accent ? '#FFFFFF' : theme.accentStrong}
-                    />
-                  </Surface>
-                  <View style={styles.rowCopy}>
-                    <AppText weight="600" numberOfLines={1} style={[styles.boardName, { color: theme.textPrimary }]}>{board.name}</AppText>
-                    <AppText style={[styles.rowDetail, { color: styleTokens.mascotEmptyStates ? styleColors.textSecondary : theme.textSecondary }]}>{detail}</AppText>
-                  </View>
-                  <Icon name="chevron-forward" size={19} color={theme.textMuted} />
-                </Pressable>
-              );
-            })}
-          </Surface>
+          <View style={styles.boardList}>
+            {boards.map((board) => <BoardListItem key={board.id} board={board} onPress={() => router.push(`/board/${board.id}`)} />)}
+          </View>
         ) : (
           <EmptyState pose="empty-board" title="No boards yet." description="Organize your Chits when you’re ready." action={{ label: 'Create board', onPress: openCreate }} />
         )}
@@ -652,34 +578,19 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: spacing.md, flexGrow: 1 },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  switchWrap: { paddingHorizontal: spacing.md, paddingTop: 12, paddingBottom: 0 },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
   headerActionsTiled: { gap: spacing.xs },
-  cardList: { flex: 1 },
-  noteCell: { paddingBottom: 12 },
-  noteCellSingle: { paddingHorizontal: spacing.md },
-  noteCellStart: { paddingLeft: spacing.md, paddingRight: 6 },
-  noteCellEnd: { paddingLeft: 6, paddingRight: spacing.md },
-  cardListContent: { paddingTop: 0 },
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, minHeight: 48, paddingHorizontal: spacing.md, paddingTop: 10, paddingBottom: 8 },
-  sectionHeaderTitle: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  cardSectionMonth: { flexShrink: 1, fontSize: 17, lineHeight: 22, letterSpacing: -0.2 },
-  cardSectionCount: { fontSize: 12, fontVariant: ['tabular-nums'] },
-  // A compact gap separates the tabs from filters (ChipRow sizes itself to its chips).
-  chipScroll: { marginTop: 8, marginBottom: 2 },
   intro: { fontSize: 14, lineHeight: 20, marginBottom: spacing.md },
   unorganized: { minHeight: 76, flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: spacing.sm },
   unorganizedMark: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   rowCopy: { flex: 1, minWidth: 0 },
   unorganizedTitle: { fontSize: 16 },
   rowDetail: { marginTop: 3, fontSize: 13, lineHeight: 18 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.lg, marginBottom: spacing.xs, paddingHorizontal: spacing.xxs },
-  sectionTitle: { fontSize: 11, letterSpacing: 0.8 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, marginBottom: spacing.xs, paddingHorizontal: spacing.xxs },
+  sectionTitle: { fontSize: 18, lineHeight: 24 },
+  boardCount: { minWidth: 28, minHeight: 24, borderRadius: 12, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' },
   sectionCount: { fontSize: 12, fontVariant: ['tabular-nums'] },
-  boardList: { overflow: 'hidden' },
-  boardRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md },
-  boardMark: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  boardName: { fontSize: 16 },
+  boardList: { gap: 8 },
   pressed: { opacity: 0.58 },
   sheetContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.md, gap: spacing.xs },
   handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 4 / 2, marginBottom: spacing.xs },

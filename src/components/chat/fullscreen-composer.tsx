@@ -8,10 +8,10 @@ import { AppHeader, Button, IconButton } from '@/components/ui/primitives';
 import { Icon } from '@/components/ui/icon';
 import { spacing } from '@/constants/theme';
 import { NoteBlocksEditor, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
-import { draftPlainText, type NoteDraftBlock } from '@/services/note-content';
+import { draftContentForStorage, draftHasUnsavedImages, draftPlainText, type NoteDraftBlock } from '@/services/note-content';
 
 // The same draft as Chat's composer (words and pasted images, in order), with room to write.
-export function FullscreenComposer({ blocks, onChangeBlocks, editorRef, onClose, onSaveDraft, onSend, canSave, saving, error, savedText, attachmentLabel, pasteButton, insertImageButton, listButtons, onReplaceImage }: {
+export function FullscreenComposer({ blocks, onChangeBlocks, editorRef, onClose, onSaveDraft, onSend, canSave, saving, error, savedText, savedContent, attachmentLabel, pasteButton, insertImageButton, listButtons, onReplaceImage }: {
   blocks: NoteDraftBlock[];
   onChangeBlocks: (update: (current: NoteDraftBlock[]) => NoteDraftBlock[]) => void;
   editorRef: RefObject<NoteBlocksEditorControl | null>;
@@ -22,6 +22,7 @@ export function FullscreenComposer({ blocks, onChangeBlocks, editorRef, onClose,
   saving: boolean;
   error: string | null;
   savedText: string | null;
+  savedContent: string | null;
   attachmentLabel: string | null;
   // "Paste image", while the clipboard holds one (sits above the footer).
   pasteButton?: ReactNode;
@@ -60,7 +61,7 @@ export function FullscreenComposer({ blocks, onChangeBlocks, editorRef, onClose,
           />
           <View style={styles.paste}>{insertImageButton}{listButtons}{pasteButton}</View>
           <SafeAreaView edges={keyboardVisible ? [] : ['bottom']} style={[styles.footer, { borderTopColor: tokens.borderSubtle }]}>
-            <AppText accessibilityLiveRegion="polite" style={[styles.status, { color: error ? tokens.danger : tokens.textSecondary }]}>{error ?? (saving ? 'Saving...' : savedText === value.trim() ? 'Saved in chat' : savedText !== null ? 'Unsaved changes' : 'Save to chat and keep writing.')}</AppText>
+            <AppText accessibilityLiveRegion="polite" style={[styles.status, { color: error ? tokens.danger : tokens.textSecondary }]}>{error ?? (saving ? 'Saving...' : savedText === value.trim() && savedContent === draftContentForStorage(blocks) && !draftHasUnsavedImages(blocks) ? 'Saved in chat' : savedText !== null ? 'Unsaved changes' : 'Save to chat and keep writing.')}</AppText>
             <View style={styles.actions}>
               <Button label="Save as draft" onPress={() => { void onSaveDraft().then(() => requestAnimationFrame(() => editorRef.current?.focus())); }} disabled={!canSave || saving} style={styles.action} />
               <Button label="Send" onPress={onSend} disabled={!canSave || saving} style={styles.action} />
@@ -79,7 +80,7 @@ const styles = StyleSheet.create({
   attachment: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, fontSize: 13 },
   footer: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm, gap: spacing.sm },
   status: { fontSize: 13 },
-  paste: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, paddingBottom: spacing.xs },
+  paste: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, paddingBottom: spacing.xs },
   blocks: { flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.md },
   blockInput: { minHeight: 26, padding: 0, fontSize: 17, lineHeight: 26, textAlignVertical: 'top' },
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

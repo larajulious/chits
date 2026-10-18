@@ -6,6 +6,8 @@ import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.EditText
+import android.view.KeyEvent
+import android.view.inputmethod.BaseInputConnection
 
 // Wrap RN's existing menu callbacks; text cut/copy/paste continue through RN.
 internal class ChitsInlinePaste {
@@ -16,6 +18,18 @@ internal class ChitsInlinePaste {
     detach(tag)
     val registration = Registration(input, input.customSelectionActionModeCallback, input.customInsertionActionModeCallback)
     inputs[tag] = registration
+    // RN's InputConnection wrapper reports soft-keyboard boundary deletes via
+    // onKeyPress. Physical keyboards bypass that wrapper. Chits owns this
+    // listener on its registered RN inputs; leave all non-boundary keys to RN.
+    input.setOnKeyListener { _, keyCode, event ->
+      if (keyCode == KeyEvent.KEYCODE_DEL && event.action == KeyEvent.ACTION_DOWN &&
+        event.flags and KeyEvent.FLAG_SOFT_KEYBOARD == 0 &&
+        input.selectionStart == 0 && input.selectionEnd == 0 &&
+        BaseInputConnection.getComposingSpanStart(input.text) < 0) {
+        emit(key, 0, 0, "backspace")
+        true
+      } else false
+    }
     fun hasImage(): Boolean {
       val clipboard = input.context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
       return clipboard.primaryClipDescription?.hasMimeType("image/*") == true
@@ -54,6 +68,7 @@ internal class ChitsInlinePaste {
   }
   fun detach(tag: Int) {
     val registration = inputs.remove(tag) ?: return
+    registration.input.setOnKeyListener(null)
     registration.input.customSelectionActionModeCallback = registration.selection
     registration.input.customInsertionActionModeCallback = registration.insertion
   }

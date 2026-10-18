@@ -2,7 +2,7 @@ import { requireOptionalNativeModule } from 'expo';
 import { findNodeHandle, type TextInput } from 'react-native';
 import type { NoteCursor } from '@/services/note-content';
 
-type PasteEvent = NonNullable<NoteCursor> & { kind?: 'paste' | 'pick' };
+type PasteEvent = NonNullable<NoteCursor> & { kind?: 'paste' | 'pick' | 'backspace' };
 type PasteModule = {
   attachInlinePaste?: (tag: number, key: string) => Promise<boolean>;
   detachInlinePaste?: (tag: number) => Promise<void>;
@@ -23,8 +23,14 @@ export function bindNativeImagePaste(input: TextInput, key: string): () => void 
     void detached.finally(() => { if (pending.get(tag) === detached) pending.delete(tag); });
   };
 }
-export function subscribeNativeImagePaste(callback: (cursor: PasteEvent) => void) {
+export function subscribeNativeImagePaste(callback: (cursor: NonNullable<NoteCursor> & { kind?: 'paste' | 'pick' }) => void) {
   if (!native?.attachInlinePaste) return () => {};
-  const subscription = native.addListener('inlineImagePaste', callback);
+  const subscription = native.addListener('inlineImagePaste', (event) => { if (event.kind !== 'backspace') callback({ ...event, kind: event.kind }); });
+  return () => subscription.remove();
+}
+
+export function subscribeNativeBoundaryBackspace(callback: (cursor: NonNullable<NoteCursor>) => void) {
+  if (!native?.attachInlinePaste) return () => {};
+  const subscription = native.addListener('inlineImagePaste', (event) => { if (event.kind === 'backspace') callback(event); });
   return () => subscription.remove();
 }

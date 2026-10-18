@@ -5,10 +5,15 @@ import { useSQLiteContext, type SQLiteDatabase } from 'expo-sqlite';
 import { chatThemes, getThemeTokens, type ChatThemeKey, type ThemeTokens } from '@/constants/theme';
 import { CHITS_THEMES, resolveThemeIdentity, THEME_SETTING_KEY, topBarForIdentity, type ChitsLook, type ChitsThemeIdentity, type TopBarStyle } from '@/constants/chits-themes';
 import { resolveAppStyle, STICKY_FONT_FAMILIES, STYLE_PRESETS, STYLE_SETTING_KEY, styleColors, type AppStyle, type StyleColors, type StyleTokens } from '@/constants/style-tokens';
+import { attachmentExists, deleteAttachment } from '@/services/attachment-storage';
+import { HEADER_PHOTO_KEY, parseHeaderPhoto, type HeaderPhoto } from '@/services/header-photo';
+import { headerPhotoCanDelete, writeHeaderPhoto } from '@/db/header-photo';
 import { STICKY_FONTS } from '@/constants/style-fonts';
 
 export type AppAppearance = 'system' | 'light' | 'dark';
 type ThemeContextValue = {
+  customHeader: HeaderPhoto | null; setCustomHeader: (photo: HeaderPhoto | null) => Promise<void>;
+  headerPhotoFailed: boolean; failHeaderPhoto: () => void;
   appearance: AppAppearance; setAppearance: (value: AppAppearance) => Promise<void>; scheme: 'light' | 'dark';
   /** The app's personality (Settings → Appearance → Theme). */
   identity: ChitsThemeIdentity; setIdentity: (identity: ChitsThemeIdentity) => Promise<void>;
@@ -56,6 +61,27 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   const [themeKey, setTheme] = useState(stored.themeKey);
   const [appearance, updateAppearance] = useState(stored.appearance);
   const [style, setStyleState] = useState(stored.style);
+  const [customHeader, setHeaderState] = useState(() => {
+    try { return parseHeaderPhoto(database.getFirstSync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', HEADER_PHOTO_KEY)?.value); } catch { return null; }
+  });
+  const [headerPhotoFailed, setHeaderPhotoFailed] = useState(false);
+  const failHeaderPhoto = useCallback(() => setHeaderPhotoFailed(true), []);
+  useEffect(() => {
+    let active = true;
+    if (customHeader) void attachmentExists(customHeader.storagePath).then((exists) => { if (active && !exists) setHeaderPhotoFailed(true); }).catch(() => { if (active) setHeaderPhotoFailed(true); });
+    return () => { active = false; };
+  }, [customHeader]);
+  const setCustomHeader = useCallback(async (next: HeaderPhoto | null) => {
+    if (next && !await attachmentExists(next.storagePath)) throw new Error('This photo is no longer available. Choose it again.');
+    const previous = await writeHeaderPhoto(database, next);
+    setHeaderPhotoFailed(false);
+    setHeaderState(next);
+    // Cleanup is best effort after the setting commits; a cleanup failure must
+    // never make the editor delete the newly committed file as an unsaved draft.
+    if (previous && previous.storagePath !== next?.storagePath) {
+      try { if (await headerPhotoCanDelete(database, previous.storagePath)) await deleteAttachment(previous.storagePath); } catch { /* Keep the unreferenced copy. */ }
+    }
+  }, [database]);
   // Sticky's faces are bundled with the app; they register the first time
   // Sticky is worn, and the platform faces stand in for that frame or two.
   const [stickyFontsReady, setStickyFontsReady] = useState(() => STICKY_FONT_FAMILIES.every((family) => isLoaded(family)));
@@ -88,11 +114,12 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     const preset = STYLE_PRESETS[style];
     const styleTokens = preset.font.display && !stickyFontsReady ? { ...preset, font: STYLE_PRESETS.classic.font } : preset;
     return {
+      customHeader, setCustomHeader, headerPhotoFailed, failHeaderPhoto,
       appearance, setAppearance, scheme, identity, setIdentity, themeKey, setThemeKey,
       tokens, look: CHITS_THEMES[identity].look, themes: chatThemes, topBar: topBarForIdentity(identity),
       style, setStyle, styleTokens, styleColors: styleColors(tokens),
     };
-  }, [appearance, setAppearance, scheme, identity, setIdentity, setThemeKey, themeKey, style, setStyle, stickyFontsReady]);
+  }, [customHeader, setCustomHeader, headerPhotoFailed, failHeaderPhoto, appearance, setAppearance, scheme, identity, setIdentity, setThemeKey, themeKey, style, setStyle, stickyFontsReady]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 export function useTheme() { const value = useContext(ThemeContext); if (!value) throw new Error('useTheme must be used within ThemeProvider.'); return value; }

@@ -1,0 +1,26 @@
+appId: com.larajulious.chitsapp
+---
+- openLink: chits://editor-empty-qa
+- tapOn: Seed blank remnants
+- tapOn: Focus end
+- pressKey: Backspace
+- assertVisible: One empty paragraph
+- takeScreenshot: normalized-empty
+- inputText: After
+- assertVisible: After
+- eraseText: 10
+- assertVisible: One empty paragraph
+- tapOn: Checkbox list
+- assertVisible: Document contains content
+- takeScreenshot: intentional-empty-task
+- inputText: Task
+- eraseText: 4
+- assertVisible: Document contains content
+- pressKey: Backspace
+- assertVisible: One empty paragraph
+- takeScreenshot: after-task-exit
+- tapOn: Seed blank remnants
+- tapOn: Focus end
+- pressKey: Enter
+- assertVisible: One empty paragraph
+- takeScreenshot: after-empty-enter

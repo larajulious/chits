@@ -72,6 +72,7 @@ export interface CardListItem {
   // use message_reminders and appear in Calendar.
   reminderAt: number | null;
   subtaskCount: number; completedSubtaskCount: number;
+  checklistSummary?: ReturnType<typeof import('../services/note-content').noteChecklistSummary>;
   subtaskPreview?: { id: string; title: string; isCompleted: boolean }[];
   photoCount: number; videoCount: number; fileCount: number;
   // The single, deterministic media preview for this card/thought — resolved

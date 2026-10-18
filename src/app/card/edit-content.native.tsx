@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ConnectedNotes } from '@/components/notes/connected-notes.native';
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -13,7 +14,7 @@ import { spacing } from '@/constants/theme';
 import { discardPastedImages, NoteBlocksEditor, InsertImageButton, NoteListButtons, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
 import { createMessageRepository } from '@/db/repositories';
 import { deleteAttachment } from '@/services/attachment-storage';
-import { draftFromNote, draftImageCount, noteBlocksText, textDraft, type NoteDraftBlock } from '@/services/note-content';
+import { draftFromNote, noteHasChecklist, draftImageCount, noteBlocksText, textDraft, type NoteDraftBlock } from '@/services/note-content';
 
 // What a save would change: words, and which images sit where.
 const signature = (blocks: NoteDraftBlock[]) => JSON.stringify(blocks.map((block) => block.type === 'text' ? { text: block.text, list: block.list } : `img:${block.attachmentId ?? block.image.storagePath}`));
@@ -67,7 +68,7 @@ export default function EditContentScreen() {
   const changeBlocks = useCallback((update: (current: NoteDraftBlock[]) => NoteDraftBlock[]) => { setBlocks(update); setError(null); }, []);
   const pasteImage = useNoteImagePaste({ active: initialSignature !== null, blocks, setBlocks: changeBlocks, editor: inputRef, onError: setError });
   const hasChanges = initialSignature !== null && signature(blocks) !== initialSignature;
-  const canSave = hasChanges && (noteBlocksText(blocks).length > 0 || draftImageCount(blocks) > 0 || hasOtherAttachments) && !saving && !pasteImage.pasting;
+  const canSave = hasChanges && (noteBlocksText(blocks).length > 0 || noteHasChecklist(blocks) || draftImageCount(blocks) > 0 || hasOtherAttachments) && !saving && !pasteImage.pasting;
   // Images pasted here but not saved are deleted on every way out without saving.
   const blocksRef = useRef(blocks);
   useEffect(() => { blocksRef.current = blocks; }, [blocks]);
@@ -116,6 +117,7 @@ export default function EditContentScreen() {
         leading={<IconButton label="Cancel" disabled={saving || pasteImage.pasting} onPress={() => router.back()}><HeaderIcon name="close" size={24} /></IconButton>}
         trailing={<IconButton label="Save" disabled={!canSave} onPress={() => void save()}><Icon name={saving ? 'ellipsis-horizontal' : 'checkmark'} size={24} color={canSave ? (headerInk.banded ? headerInk.ink : theme.accent) : headerInk.inkMuted} /></IconButton>}
       />
+      <ConnectedNotes noteKey={`thought:${messageId}`} compact />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { borderColor: theme.danger }]}><AppText style={[styles.errorText, { color: theme.danger }]}>{error}</AppText></View> : null}
         {/* The screen itself is the editing surface — no boxed field, no
@@ -153,7 +155,7 @@ const styles = StyleSheet.create({
   blocks: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   blockInput: { minHeight: 27, padding: 0, fontSize: 17, lineHeight: 27, textAlignVertical: 'top' },
   // Image actions sit above the keyboard.
-  footer: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.lg, paddingVertical: spacing.xs, borderTopWidth: StyleSheet.hairlineWidth },
+  footer: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.lg, paddingVertical: spacing.xs, borderTopWidth: StyleSheet.hairlineWidth },
   errorBanner: { marginHorizontal: spacing.lg, marginTop: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10 },
   errorText: { fontSize: 13, lineHeight: 18 },
 });

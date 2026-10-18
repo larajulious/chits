@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { normalizeStoredAttachmentPath } from '@/services/attachment-path';
+import { REVISIT_SCHEMA } from './revisit-schema';
 
 type Migration = { version: number; up: (database: SQLiteDatabase) => Promise<void> };
 
@@ -271,6 +272,9 @@ const migrations: Migration[] = [{
     // message_reminders / card_reminders was set; NULL for a custom time.
     await database.execAsync(CALENDAR_ENTRIES_SCHEMA);
   },
+}, {
+  version: 27,
+  up: async (database) => { await database.execAsync(REVISIT_SCHEMA); },
 }];
 
 /** The schema version this build of Chits understands (the last migration). */

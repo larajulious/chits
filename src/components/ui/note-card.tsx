@@ -19,36 +19,40 @@ export function useNoteColors(accent: string | null | undefined): NoteColors {
  * a folded corner. `tilt` lets boards set the note itself slightly askew;
  * lists keep notes straight.
  */
-export function NoteCard({ id, accent, paper, border, tilt = false, children, style, ...props }: Omit<PressableProps, 'style' | 'children'> & {
+export function NoteCard({ id, accent, paper, border, tilt = false, variant = 'paper', children, style, ...props }: Omit<PressableProps, 'style' | 'children'> & {
   id: string;
   /** The note's board color, if any. */
   accent?: string | null;
   /** Classic paper and hairline. */
   paper: string; border: string;
   tilt?: boolean;
+  /** Collection cards use the note shape with a subtle frame and optional cover. */
+  variant?: 'paper' | 'collection';
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
   const { styleTokens: t, styleColors, scheme, look, tokens } = useTheme();
   const colors = useNoteColors(accent);
   const sticky = t.card.tinted;
-  const padding = { paddingTop: t.noteCard.padding.top, paddingHorizontal: t.noteCard.padding.horizontal, paddingBottom: t.noteCard.padding.bottom };
+  const collection = variant === 'collection';
+  const padding = collection ? null : { paddingTop: t.noteCard.padding.top, paddingHorizontal: t.noteCard.padding.horizontal, paddingBottom: t.noteCard.padding.bottom };
   const card = <PressableSurface
     {...props}
     fill={sticky ? colors.cardTint : paper}
     radius={t.noteCard.radius}
     border={border}
-    outline={false}
-    shadow={scheme === 'dark' ? false : { ...t.shadow.card, opacity: look.cardShadowOpacity }}
+    outline={collection ? StyleSheet.hairlineWidth : false}
+    outlineColor={border}
+    shadow={scheme === 'dark' ? false : { ...t.shadow.card, opacity: collection ? Math.min(0.045, look.cardShadowOpacity) : look.cardShadowOpacity }}
     edge={t.noteCard.edge || false}
     edgeColor={colors.cardEdge}
     pressedStyle={styles.classicPressed}
-    style={[styles.note, padding, style]}
+    style={[styles.note, padding, collection && { borderWidth: StyleSheet.hairlineWidth, borderColor: border }, style]}
   >
     {children}
-    {t.card.fold ? <View pointerEvents="none" style={[styles.fold, { borderTopWidth: t.fold, borderRightWidth: t.fold, borderTopColor: colors.cardEdge, borderRightColor: tokens.background }]} /> : null}
+    {t.card.fold && !collection ? <View pointerEvents="none" style={[styles.fold, { borderTopWidth: t.fold, borderRightWidth: t.fold, borderTopColor: colors.cardEdge, borderRightColor: tokens.background }]} /> : null}
   </PressableSurface>;
-  if (!t.card.tape && !tilt) return card;
+  if (collection || (!t.card.tape && !tilt)) return card;
   const tape = t.tape;
   return <View style={tilt && t.card.tilt ? { transform: [{ rotate: `${stableTilt(`${id}:note`, t.card.tilt)}deg` }] } : undefined}>
     {card}

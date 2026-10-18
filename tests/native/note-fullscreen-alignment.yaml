@@ -1,0 +1,23 @@
+# Mount note-formatting.fixture.tsx at /editor-formatting-qa; in-memory draft only.
+appId: com.larajulious.chitsapp
+---
+- openLink: chits://editor-formatting-qa
+- tapOn: Seed Fresh
+- tapOn: Open Chat fullscreen QA
+- waitForAnimationToEnd
+- takeScreenshot: fixed-fresh
+- inputText: Hello world
+- pressKey: Enter
+- tapOn: Numbered list
+- inputText: First
+- pressKey: Enter
+- inputText: Second
+- pressKey: Enter
+- tapOn: Checkbox list
+- inputText: Task
+- takeScreenshot: fixed-rich
+- eraseText: 80
+- takeScreenshot: fixed-cleared
+- inputText: New sentence
+- eraseText: 12
+- takeScreenshot: fixed-cleared-again

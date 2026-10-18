@@ -16,7 +16,7 @@ test('current paragraph converts at beginning, middle and end without touching a
   for (const kind of ['bullet', 'numbered']) {
     for (const position of [6, 8, 10]) {
       const result = toggleNoteList([plain('Title\nMilk\nFooter')], cursor(position), kind);
-      assert.deepEqual(textOf(result.blocks), ['Title\n', 'Milk', '\nFooter']);
+      assert.deepEqual(textOf(result.blocks), ['Title', 'Milk', 'Footer']);
       assert.equal(result.blocks[1].list.kind, kind);
       assert.equal(result.blocks[0].list, undefined);
       assert.equal(result.blocks[2].list, undefined);
@@ -26,16 +26,16 @@ test('current paragraph converts at beginning, middle and end without touching a
 
 test('selected paragraphs become structural items, and selection ending on the next line excludes it', () => {
   const result = toggleNoteList([plain('Intro\nMilk\nEggs\nCoffee\nEnd')], cursor(6, 22), 'bullet');
-  assert.deepEqual(textOf(result.blocks), ['Intro\n', 'Milk', 'Eggs', 'Coffee', '\nEnd']);
+  assert.deepEqual(textOf(result.blocks), ['Intro', 'Milk', 'Eggs', 'Coffee', 'End']);
   assert.deepEqual(noteListMarkers(result.blocks), [null, '•', '•', '•', null]);
   assert.equal(new Set(result.blocks.filter((block) => block.list).map((block) => block.list.id)).size, 1);
   const boundary = toggleNoteList([plain('First\nSecond\nThird')], cursor(0, 6), 'numbered');
-  assert.deepEqual(textOf(boundary.blocks), ['First', '\nSecond\nThird']);
+  assert.deepEqual(textOf(boundary.blocks), ['First', 'Second\nThird']);
 });
 
 test('a leading blank paragraph converts without consuming the paragraph after it', () => {
   const result = toggleNoteList([plain('\nAfter')], cursor(0), 'bullet');
-  assert.deepEqual(textOf(result.blocks), ['', '\nAfter']);
+  assert.deepEqual(textOf(result.blocks), ['', 'After']);
   assert.equal(result.blocks[0].list.kind, 'bullet');
   assert.equal(result.blocks[1].list, undefined);
 });

@@ -85,7 +85,7 @@ export default function CalendarScreen() {
   const router = useRouter();
   const { openDrawer } = useAppDrawer();
   const { actionSheet, confirm } = useAppDialog();
-  const { tokens: theme } = useTheme();
+  const { tokens: theme, styleTokens } = useTheme();
   const { ink } = useHeaderInk();
   const tabBarHeight = useBottomTabBarHeight();
   const { width } = useWindowDimensions();
@@ -339,9 +339,11 @@ export default function CalendarScreen() {
 
   const header = (
     <HeaderChromeContext.Provider value>
-      <View style={styles.header}>
+      <View style={[styles.header, { minHeight: styleTokens.header.minHeight }]}>
         <TopBarBackground />
-        <IconButton label="Open navigation" onPress={openDrawer}><MenuIcon /></IconButton>
+        <View style={styles.menuSlot}>
+          <IconButton label="Open navigation" onPress={openDrawer}><MenuIcon /></IconButton>
+        </View>
         {view !== 'agenda' ? (
           <Pressable accessibilityRole="button" accessibilityLabel={`${title}. Choose month`} onPress={() => { sheetKey.current += 1; setMonthPicker(sheetKey.current); }} style={({ pressed }) => [styles.titleButton, pressed && styles.pressed]}>
             <AppText accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.title, { color: ink }]}>{title}</AppText>
@@ -393,7 +395,7 @@ export default function CalendarScreen() {
   }
   const showFab = !(view === 'month' && panelOpen) && !searchOpen;
 
-  return <Screen>
+  return <Screen edges={['top', 'left', 'right']}>
     {header}
     {searchOpen ? (
       <View style={[styles.search, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
@@ -511,7 +513,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
   pressed: { opacity: 0.64 },
-  header: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: spacing.xs },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: spacing.md, flexShrink: 0 },
+  menuSlot: { width: 44, flexShrink: 0, alignItems: 'flex-start', justifyContent: 'center' },
   titleButton: { flex: 1, minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: spacing.xxs },
   title: { flexShrink: 1, fontSize: 19, fontWeight: '700' },
   chevron: { width: 34, height: 44, alignItems: 'center', justifyContent: 'center' },

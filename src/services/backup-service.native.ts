@@ -5,6 +5,7 @@ import { backupDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from 'exp
 import { listContents, NO_COMPRESSION, unzip, zip } from 'react-native-zip-archive';
 
 import { LATEST_SCHEMA_VERSION, migrateDatabase } from '@/db/migrations';
+import { REVISIT_COLUMNS } from '@/db/revisit-schema';
 import { ChitsFiles } from '../../modules/chits-attachments';
 import { archivePathForMedia, BACKUP_VERSION, BackupError, backupErrorMessage, INVALID_BACKUP, parseBackupMetadata, portableMediaPath, validateArchiveEntries, type BackupFile, type BackupManifest, type MissingAttachment } from './backup-format';
 import { beginBackupOperation, type BackupProgress } from './backup-operation';
@@ -19,7 +20,7 @@ export type CreatedBackup = { uri: string; manifest: BackupManifest; size: numbe
 export type ValidatedBackup = { valid: true; workDir: string; extractedDir: string; preparedDir: string; manifest: BackupManifest; preparedDatabaseHash: string; size: number };
 export type BackupValidation = ValidatedBackup | { valid: false; reason: string };
 const requiredTables = ['messages', 'attachments', 'boards', 'board_columns', 'cards', 'card_messages'];
-const currentTables = [...requiredTables, 'timeline_events', 'app_settings', 'card_comments', 'card_attachments', 'card_reminders', 'space_placements', 'message_reminders', 'card_subtasks', 'calendar_entries'];
+const currentTables = [...requiredTables, 'timeline_events', 'app_settings', 'card_comments', 'card_attachments', 'card_reminders', 'space_placements', 'message_reminders', 'card_subtasks', 'calendar_entries', ...Object.keys(REVISIT_COLUMNS)];
 const MARGIN = 16 * 1024 * 1024;
 function directory(value: string | null) {
   if (!value) throw new BackupError('Chits could not access private device storage.');
@@ -54,8 +55,10 @@ async function validateDatabase(db: SQLiteDatabase, expectedSchema?: number, cur
   const schema = (await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version'))?.user_version ?? 0;
   if (schema < 1 || schema > LATEST_SCHEMA_VERSION || (expectedSchema !== undefined && schema !== expectedSchema)) throw new BackupError('The backup database version does not match its backup information.');
   const tables = current ? currentTables : [...requiredTables, ...(schema >= 4 ? ['timeline_events'] : []), ...(schema >= 8 ? ['app_settings'] : []), ...(schema >= 16 ? ['card_comments'] : []), ...(schema >= 17 ? ['card_attachments'] : []), ...(schema >= 20 ? ['card_reminders'] : []), ...(schema >= 21 ? ['space_placements'] : []), ...(schema >= 22 ? ['message_reminders'] : []), ...(schema >= 23 ? ['card_subtasks'] : []), ...(schema >= 26 ? ['calendar_entries'] : [])];
+  if (!current && schema >= 27) tables.push(...Object.keys(REVISIT_COLUMNS));
   for (const table of tables) if (!await tableExists(db, table)) throw new BackupError('The backup database is incomplete. A required part of your Chits data is missing.');
   const columns: Record<string, string[]> = {
+    ...REVISIT_COLUMNS,
     messages: ['id', 'text', 'type', 'created_at', 'updated_at', 'archived_at', 'pinned', 'deleted_at', ...(schema >= 18 ? ['is_hidden_content'] : []), ...(schema >= 24 ? ['content_json'] : [])],
     attachments: ['id', 'message_id', 'type', schema >= 19 ? 'storage_path' : 'local_uri', 'original_name', 'mime_type', 'size', 'duration', 'width', 'height', 'created_at'],
     boards: ['id', 'name', 'icon', 'accent', 'created_at', 'updated_at', 'archived_at', ...(schema >= 2 ? ['pinned'] : []), ...(schema >= 3 ? ['last_opened_at'] : []), ...(schema >= 6 ? ['show_next_column_peek'] : []), ...(schema >= 7 ? ['show_column_navigator'] : [])],
@@ -81,8 +84,15 @@ async function validateDatabase(db: SQLiteDatabase, expectedSchema?: number, cur
     const wrongColumns = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM cards c JOIN board_columns bc ON bc.id = c.column_id WHERE c.board_id != bc.board_id');
     if (wrongColumns?.count) throw new BackupError('The backup contains cards assigned to the wrong board.');
     const relations = [['attachments', 'message_id', 'messages'], ['board_columns', 'board_id', 'boards'], ['cards', 'board_id', 'boards'], ['cards', 'column_id', 'board_columns'], ['card_messages', 'card_id', 'cards'], ['card_messages', 'message_id', 'messages'], ...(schema >= 16 ? [['card_comments', 'card_id', 'cards']] : []), ...(schema >= 17 ? [['card_attachments', 'card_id', 'cards']] : []), ...(schema >= 20 ? [['card_reminders', 'card_id', 'cards']] : []), ...(schema >= 21 ? [['space_placements', 'message_id', 'messages'], ['space_placements', 'card_id', 'cards']] : []), ...(schema >= 22 ? [['message_reminders', 'message_id', 'messages']] : []), ...(schema >= 23 ? [['card_subtasks', 'card_id', 'cards']] : []), ...(schema >= 26 ? [['calendar_entries', 'message_id', 'messages'], ['calendar_entries', 'card_id', 'cards']] : [])];
+    if (schema >= 27) relations.push(['revisit_notes','message_id','messages'], ['revisit_notes','card_id','cards']);
     for (const [child, key, parent] of relations) {
       if (await db.getFirstAsync(`SELECT 1 FROM ${child} c LEFT JOIN ${parent} p ON p.id = c.${key} WHERE c.${key} IS NOT NULL AND p.id IS NULL LIMIT 1`)) throw new BackupError('The backup contains broken data relationships and cannot be restored.');
+    }
+    if (schema >= 27) {
+      for (const table of ['note_relationships','revisit_rejections']) {
+        if (await db.getFirstAsync(`SELECT 1 FROM ${table} r LEFT JOIN revisit_notes a ON a.note_key = r.note_a LEFT JOIN revisit_notes b ON b.note_key = r.note_b WHERE a.note_key IS NULL OR b.note_key IS NULL OR r.note_a >= r.note_b LIMIT 1`)) throw new BackupError('The backup contains broken note connections.');
+      }
+      if (await db.getFirstAsync('SELECT 1 FROM revisit_events e LEFT JOIN revisit_notes n ON n.note_key = e.note_key WHERE n.note_key IS NULL LIMIT 1')) throw new BackupError('The backup contains broken review history.');
     }
   }
   // Compile required reads: a database with same-named, empty placeholder tables is invalid.
@@ -113,22 +123,24 @@ async function normalizeSnapshot(db: SQLiteDatabase) {
       if (storagePath !== row.storage_path) await db.runAsync(`UPDATE ${table} SET storage_path = ? WHERE id = ?`, storagePath, row.id);
     }
   }
-  const background = await db.getFirstAsync<{ value: string }>("SELECT value FROM app_settings WHERE key = 'chat_background'");
-  if (background) {
-    try {
-      const data = JSON.parse(background.value);
-      if (data && typeof data.storagePath === 'string') {
-        const source = portableMediaPath(data.storagePath);
-        const storagePath = canonicalPath(data.storagePath) ?? '';
-        if (source && storagePath) {
-          if (sources.has(storagePath) && sources.get(storagePath) !== source) throw new BackupError('The chat background refers to a conflicting file location. Your current data has not been changed.');
-          sources.set(storagePath, source);
+  for (const key of ['chat_background', 'custom_header_photo']) {
+    const background = await db.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', key);
+    if (background) {
+      try {
+        const data = JSON.parse(background.value);
+        if (data && typeof data.storagePath === 'string') {
+          const source = portableMediaPath(data.storagePath);
+          const storagePath = canonicalPath(data.storagePath) ?? '';
+          if (source && storagePath) {
+            if (sources.has(storagePath) && sources.get(storagePath) !== source) throw new BackupError('A saved photo refers to a conflicting file location. Your current data has not been changed.');
+            sources.set(storagePath, source);
+          }
+          data.storagePath = storagePath;
+          delete data.deviceAssetId; // A photo-library identifier belongs to the old installation.
+          await db.runAsync('UPDATE app_settings SET value = ? WHERE key = ?', JSON.stringify(data), key);
         }
-        data.storagePath = storagePath;
-        delete data.deviceAssetId; // A photo-library identifier belongs to the old installation.
-        await db.runAsync("UPDATE app_settings SET value = ? WHERE key = 'chat_background'", JSON.stringify(data));
-      }
-    } catch { throw new BackupError('The saved chat background information could not be read.'); }
+      } catch { throw new BackupError('The saved photo information could not be read.'); }
+    }
   }
   await db.execAsync('UPDATE card_reminders SET notification_id = NULL;');
   await db.execAsync('UPDATE message_reminders SET notification_id = NULL;');
@@ -158,16 +170,27 @@ async function repairSnapshotRelationships(db: SQLiteDatabase) {
     DELETE FROM cards WHERE NOT EXISTS (SELECT 1 FROM boards WHERE boards.id = cards.board_id) OR NOT EXISTS (SELECT 1 FROM board_columns WHERE board_columns.id = cards.column_id);
     DELETE FROM board_columns WHERE NOT EXISTS (SELECT 1 FROM boards WHERE boards.id = board_columns.board_id);
   `);
+  // Only private snapshots are repaired. Live notes and relationships are never
+  // removed by validation; old backups get these tables during migration.
+  if (await tableExists(db, 'revisit_notes')) await db.execAsync(`
+    DELETE FROM revisit_notes WHERE (message_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM messages WHERE id = message_id AND deleted_at IS NULL))
+      OR (card_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM cards WHERE id = card_id));
+    DELETE FROM note_relationships WHERE NOT EXISTS (SELECT 1 FROM revisit_notes WHERE note_key = note_a) OR NOT EXISTS (SELECT 1 FROM revisit_notes WHERE note_key = note_b);
+    DELETE FROM revisit_rejections WHERE NOT EXISTS (SELECT 1 FROM revisit_notes WHERE note_key = note_a) OR NOT EXISTS (SELECT 1 FROM revisit_notes WHERE note_key = note_b);
+    DELETE FROM revisit_events WHERE NOT EXISTS (SELECT 1 FROM revisit_notes WHERE note_key = revisit_events.note_key);
+  `);
 }
 async function references(db: SQLiteDatabase): Promise<Reference[]> {
   const rows: Reference[] = [];
   for (const table of ['attachments', 'card_attachments'] as const) {
     for (const row of await db.getAllAsync<{ id: string; storage_path: string }>(`SELECT id, storage_path FROM ${table}`)) rows.push({ attachmentId: row.id, table, storagePath: row.storage_path });
   }
-  const background = await db.getFirstAsync<{ value: string }>("SELECT value FROM app_settings WHERE key = 'chat_background'");
-  if (background) {
-    const data = JSON.parse(background.value);
-    if (data && typeof data.storagePath === 'string') rows.push({ attachmentId: 'chat_background', table: 'app_settings', storagePath: data.storagePath });
+  for (const key of ['chat_background', 'custom_header_photo']) {
+    const background = await db.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', key);
+    if (background) {
+      const data = JSON.parse(background.value);
+      if (data && typeof data.storagePath === 'string') rows.push({ attachmentId: key, table: 'app_settings', storagePath: data.storagePath });
+    }
   }
   return rows;
 }

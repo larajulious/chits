@@ -1,0 +1,24 @@
+# Same temporary route as note-formatting.yaml; submissions stay in fixture state.
+appId: com.larajulious.chitsapp
+---
+- openLink: chits://editor-formatting-qa
+- tapOn: Seed Empty
+- tapOn: Open Chat fullscreen QA
+- tapOn: Bullet list
+- tapOn: Return to chat with draft
+- assertVisible: Paragraphs preserved
+- assertVisible: Formatted items 1
+- tapOn: Open Chat fullscreen QA
+- tapOn: Bullet list
+- tapOn: Return to chat with draft
+- assertVisible: Paragraphs preserved
+- assertVisible: Formatted items 0
+- tapOn: Open Add Note QA
+- tapOn: Write in full screen
+- inputText: Meeting notes
+- pressKey: Enter
+- tapOn: Bullet list
+- inputText: Task
+- takeScreenshot: real-note-formatting
+- tapOn: Add note
+- assertVisible: Submission preserved

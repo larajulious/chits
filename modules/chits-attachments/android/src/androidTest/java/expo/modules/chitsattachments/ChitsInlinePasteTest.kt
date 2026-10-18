@@ -16,10 +16,46 @@ import android.view.Menu
 import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
+import android.view.KeyEvent
 import android.widget.EditText
 import android.widget.PopupMenu
 
 class ChitsInlinePasteTest {
+  @Test fun testHardwareBackspaceAtBoundaryAndNativeCharacterDeletion() {
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    val activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext, InlinePasteTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as InlinePasteTestActivity
+    instrumentation.waitForIdleSync()
+    instrumentation.runOnMainSync {
+      val input = activity.input
+      val bridge = ChitsInlinePaste()
+      var events = 0
+      try {
+        input.setText("😀Second")
+        input.setSelection(0)
+        bridge.attach(input, 9, "task") { key, start, end, kind ->
+          assertEquals("task", key)
+          assertEquals(0, start)
+          assertEquals(0, end)
+          assertEquals("backspace", kind)
+          events++
+        }
+        repeat(5) { input.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL)) }
+        assertEquals(5, events)
+        assertEquals("😀Second", input.text.toString())
+        input.setSelection(input.length())
+        input.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
+        assertEquals("😀Secon", input.text.toString())
+        assertEquals(5, events)
+        input.setSelection(0, input.length())
+        input.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
+        assertEquals("", input.text.toString())
+        assertEquals(5, events)
+        bridge.clear()
+        input.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
+        assertEquals(5, events)
+      } finally { bridge.clear(); activity.finish() }
+    }
+  }
   @Test fun testImageSelectionAndTextFallback() {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     val activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext, InlinePasteTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as InlinePasteTestActivity

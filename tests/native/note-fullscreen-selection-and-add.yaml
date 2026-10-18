@@ -1,0 +1,34 @@
+# Run after note-fullscreen-alignment.yaml on Android. Native Select All is limited to one input.
+appId: com.larajulious.chitsapp
+---
+- tapOn: Return to chat with draft
+- tapOn: Seed Fresh
+- tapOn: Open Chat fullscreen QA
+- inputText: Hello world
+- tapOn: Numbered list
+- tapOn: Numbered list
+- longPressOn: Hello world
+- tapOn: '[Ss]elect [Aa]ll'
+- pressKey: Backspace
+- takeScreenshot: select-all-cleared
+- inputText: New sentence
+- eraseText: 12
+- takeScreenshot: select-all-recleared
+- tapOn: Return to chat with draft
+- tapOn: Open Add Note QA
+- tapOn: Write in full screen
+- takeScreenshot: add-fresh
+- inputText: Hello world
+- pressKey: Enter
+- tapOn: Numbered list
+- inputText: First
+- pressKey: Enter
+- inputText: Second
+- pressKey: Enter
+- tapOn: Checkbox list
+- inputText: Task
+- eraseText: 80
+- takeScreenshot: add-cleared
+- inputText: New sentence
+- eraseText: 12
+- takeScreenshot: add-cleared-again

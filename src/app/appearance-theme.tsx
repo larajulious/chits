@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
+import { CustomHeaderSettings } from '@/components/settings/custom-header-settings';
 import { useTheme } from '@/components/theme-provider';
 import { AppHeader, IconButton, Screen, Toast, HeaderIcon } from '@/components/ui/primitives';
 import { CHITS_THEME_COLLECTIONS, TOP_BAR_IMAGE_SCRIM, topBarForIdentity, type ChitsTheme } from '@/constants/chits-themes';
@@ -85,6 +86,7 @@ export default function AppearanceThemeScreen() {
     <AppHeader title="Theme" leading={<IconButton label="Go back" onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
     <ScrollView contentContainerStyle={styles.content}>
       <Text style={[styles.intro, { color: tokens.textSecondary }]}>Choose the personality Chits wears. Your notes, boards and layout stay exactly the same.</Text>
+      <CustomHeaderSettings />
       {CHITS_THEME_COLLECTIONS.filter((collection) => collection.shown).map((collection) => <View key={collection.id} style={styles.collection}>
         <Text accessibilityRole="header" style={[styles.collectionTitle, { color: tokens.textPrimary }]}>{collection.name}</Text>
         {collection.id === 'generations' ? <Text style={[styles.collectionDetail, { color: tokens.textMuted }]}>Five design eras, told through type, color and texture.</Text> : null}
@@ -93,7 +95,7 @@ export default function AppearanceThemeScreen() {
           {collection.themes.map((theme) => <ThemePreviewCard key={theme.id} theme={theme} selected={theme.id === identity} width={cardWidth} onPress={() => choose(theme)} />)}
         </View>
       </View>)}
-      <Text style={[styles.footnote, { color: tokens.textMuted }]}>Light and dark follow App appearance. A Chat background photo stays in place whichever theme you choose.</Text>
+      <Text style={[styles.footnote, { color: tokens.textMuted }]}>Light and dark follow App appearance. Your custom header and Chat background stay in place whichever theme you choose.</Text>
     </ScrollView>
     <Toast message={toast} />
   </Screen>;

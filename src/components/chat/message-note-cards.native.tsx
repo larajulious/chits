@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { Linking, Pressable, StyleSheet, View, type StyleProp, type TextStyle } from 'react-native';
 
 import { classifyMessage, classifyText, parseInlineContent, parseParagraphs, parseStructuredText } from '@/components/chat/message-presentation';
-import { NoteContentView } from '@/components/notes/note-content-view';
+import { SavedNoteContentView } from '@/components/notes/saved-note-content-view';
 import { useTheme } from '@/components/theme-provider';
 import { useStickySurface } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
@@ -178,7 +178,7 @@ export function MessageContentRenderer({ message, mode, focused = false, accentC
     const text = (value: string) => <NoteText text={value} mode="detail" accentColor={accentColor} />;
     return <View style={styles.detailContent}>
       {inline.leading.length ? renderAttachments?.(inline.leading) : null}
-      <NoteContentView
+      <SavedNoteContentView message={message}
         blocks={inline.blocks}
         maxImageHeight={480}
         onImageLongPress={onImageLongPress ? (attachment) => onImageLongPress(attachment as Attachment) : undefined}

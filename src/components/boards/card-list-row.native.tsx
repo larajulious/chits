@@ -5,9 +5,9 @@ import { AttachmentContent } from '@/components/chat/message-row';
 import { useTheme } from '@/components/theme-provider';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
-import { NoteCard, NoteCategory, useNoteColors } from '@/components/ui/note-card';
+import { NoteCard, useNoteColors } from '@/components/ui/note-card';
 import { mix } from '@/constants/style-tokens';
-import { spacing, type ThemeTokens } from '@/constants/theme';
+import { type ThemeTokens } from '@/constants/theme';
 import { tintWithAccent } from '@/constants/board-appearance';
 import { formatReminder, dateFormat } from '@/services/reminder-time';
 import type { AttachmentLike, CardListItem } from '@/db/types';
@@ -86,7 +86,12 @@ type NoteContent =
 function noteContent(item: CardListItem, hasMedia: boolean): NoteContent {
   if (item.hidden) return { kind: 'hidden' };
   const title = item.title.trim();
-  const preview = item.preview?.trim() || null;
+  const preview = (item.checklistSummary ? item.checklistSummary.text : item.preview)?.trim() || null;
+  if (item.checklistSummary) {
+    const heading = preview?.split('\n')[0] ?? null;
+    const explicitTitle = item.kind === 'card' && !item.preview?.trim().startsWith(title.replace(/…$/, ''));
+    return { kind: 'text', title: explicitTitle ? title : heading, body: explicitTitle ? preview : preview?.slice(heading?.length ?? 0).trim() || null };
+  }
   if (preview) {
     return preview.startsWith(title) || title.startsWith(preview)
       ? { kind: 'text', title: null, body: preview }
@@ -113,12 +118,8 @@ function paperColors(accent: string | null, dark: boolean, theme: Pick<ThemeToke
   return { paper: tintWithAccent(theme.cardBase, accent, dark ? 0.16 : 0.1), edge: tintWithAccent(theme.borderSubtle, accent, dark ? 0.3 : 0.35) };
 }
 
-// One note in the Cards grid, designed as a *note* rather than a list item: a
-// sheet of paper whose content leads, with photos/videos inset at the top like
-// a clipped picture, voice notes as an audio pill, files as a document chip,
-// and a quiet footer saying where the note lives and when. Heights follow
-// content, so a quick thought is as compact as it should be. Memoized since this list
-// can grow into the hundreds.
+// A content-first note tile: a quiet paper surface, optional cover, a bounded
+// preview and small metadata. The entire tile keeps its existing open action.
 export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: { item: CardListItem; onPress: () => void; onMore: () => void }) {
   const { scheme, tokens, styleTokens } = useTheme();
   const dark = scheme === 'dark';
@@ -137,100 +138,109 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
   const audio = media?.type === 'audio' ? media : null;
   const overflowCount = Math.max(0, item.mediaCount - 1);
   const content = noteContent(item, Boolean(media));
+  const checklist = item.hidden ? null : item.checklistSummary;
   const showFileBadge = item.fileCount > 0 && content.kind !== 'file' && !item.hidden;
 
   const paper = paperColors(accent, dark, tokens);
+  const cardFill = tinted ? note.cardTint : paper.paper;
+  const frame = mix(cardFill, tinted ? note.cardEdge : tokens.textSecondary, dark ? 0.24 : 0.12);
+  const progressColor = tinted ? note.cardInk : dark ? '#E6A5B6' : '#802743';
+  const hasCopy = content.kind !== 'text' || Boolean(content.title || content.body || checklist || item.subtaskPreview?.length || audio || item.reminderAt);
   // Half-width notes: the board name alone reads cleanly; the column is in the label for screen readers.
   const location = item.boardName ?? 'Unorganized';
   const mediaPhrase = mediaAccessibilityPhrase(item);
   const overflowPhrase = overflowCount > 0 ? `${overflowCount} more attachment${overflowCount === 1 ? '' : 's'}.` : '';
   const reminderLabel = item.reminderAt ? formatReminder(new Date(item.reminderAt), new Date()) : null;
-  const accessibleLabel = `${item.hidden ? 'Hidden note' : `Note. ${accessibleTitle(item)}`}. ${mediaPhrase ? `${mediaPhrase} ` : ''}${overflowPhrase ? `${overflowPhrase} ` : ''}${item.pinned ? 'Pinned. ' : ''}${!item.hidden && item.subtaskCount ? `${item.completedSubtaskCount} of ${item.subtaskCount} subtasks completed. ` : ''}${reminderLabel ? `Reminder ${reminderLabel}. ` : ''}${item.boardName ?? 'Unorganized'}${item.columnName ? `, ${item.columnName}` : ''}.`;
+  const accessibleLabel = `${item.hidden ? 'Hidden note' : `Note. ${accessibleTitle(item)}`}. ${checklist ? `${checklist.completed} of ${checklist.total} checklist items completed. ` : ''}${mediaPhrase ? `${mediaPhrase} ` : ''}${overflowPhrase ? `${overflowPhrase} ` : ''}${item.pinned ? 'Pinned. ' : ''}${!item.hidden && item.subtaskCount ? `${item.completedSubtaskCount} of ${item.subtaskCount} subtasks completed. ` : ''}${reminderLabel ? `Reminder ${reminderLabel}. ` : ''}${item.boardName ?? 'Unorganized'}${item.columnName ? `, ${item.columnName}` : ''}.`;
 
   return (
     <NoteCard
       id={item.id}
       accent={accent}
       paper={paper.paper}
-      border={paper.edge}
+      border={frame}
+      variant="collection"
       accessibilityRole="button"
       accessibilityLabel={accessibleLabel}
       accessibilityHint="Opens note"
       onPress={onPress}
+      style={styles.card}
     >
-      <View style={styles.noteContent}>
       {picture ? (
-        // pointerEvents="none": the whole note is the tap target (Card
-        // Details / Chat); the picture must not open its own viewer.
-        <View pointerEvents="none" style={[styles.picture, { borderRadius: r.media, backgroundColor: theme.surfaceElevated }]}>
+        <View pointerEvents="none" style={[styles.picture, { borderTopLeftRadius: styleTokens.noteCard.radius.topLeft, borderTopRightRadius: styleTokens.noteCard.radius.topRight, backgroundColor: theme.surfaceElevated }]}>
           <AttachmentContent attachment={picture} variant="grid" />
-          {picture.type === 'video' ? <View style={styles.videoPlay}><Icon name="play" size={20} color="#FFFFFF" /></View> : null}
-          {picture.type === 'video' && picture.duration ? <View style={[styles.durationBadge, { borderRadius: r.badge }]}><AppText weight="600" style={styles.durationBadgeText}>{formatDurationSeconds(picture.duration)}</AppText></View> : null}
+          {picture.type === 'video' ? <View style={styles.videoPlay}><Icon name="play" size={18} color="#FFFFFF" /></View> : null}
+          {picture.type === 'video' && picture.duration ? <View style={styles.durationBadge}><AppText weight="600" style={styles.durationBadgeText}>{formatDurationSeconds(picture.duration)}</AppText></View> : null}
           {overflowCount > 0 ? <View style={styles.overflowBadge}><AppText weight="700" style={styles.overflowBadgeText}>+{overflowCount}</AppText></View> : null}
         </View>
       ) : null}
 
-      {content.kind === 'hidden' ? (
-        <View style={styles.hiddenRow}>
-          <View style={[styles.hiddenIcon, { backgroundColor: theme.surfaceElevated }]}><Icon name="eye-off-outline" size={16} color={theme.textMuted} /></View>
-          <View style={styles.flexCopy}>
+      {hasCopy ? <View style={[styles.noteContent, !picture && styles.textOnlyContent]}>
+        {content.kind === 'hidden' ? (
+          <View style={styles.hiddenRow}>
+            <Icon name="lock-closed-outline" size={18} color={theme.textMuted} />
             <AppText weight="600" style={[styles.hiddenTitle, { color: theme.textSecondary }]}>Hidden Chit</AppText>
-            <AppText style={[styles.hiddenCopy, { color: theme.textMuted }]}>Content is hidden</AppText>
+            <AppText style={[styles.hiddenCopy, { color: theme.textMuted }]}>Open to reveal</AppText>
           </View>
-        </View>
-      ) : content.kind === 'file' ? (
-        <View style={styles.fileRow}>
-          <View style={[styles.fileIcon, { borderRadius: r.tile, backgroundColor: theme.surfaceElevated }]}><Icon name={/\.pdf$/i.test(content.name) ? 'document-text-outline' : 'document-outline'} size={20} color={theme.textSecondary} /></View>
-          <View style={styles.flexCopy}>
+        ) : content.kind === 'file' ? (
+          <View style={styles.fileRow}>
+            <View style={[styles.fileIcon, { borderRadius: r.tile, backgroundColor: theme.surfaceElevated }]}><Icon name={/\.pdf$/i.test(content.name) ? 'document-text-outline' : 'document-outline'} size={22} color={theme.textSecondary} /></View>
             <AppText weight="600" numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{content.name}</AppText>
             <AppText style={[styles.fileMeta, { color: theme.textMuted }]}>{fileKindLabel(content.name, item.fileCount)}</AppText>
           </View>
-        </View>
-      ) : (
-        <>
-          {content.title ? <AppText variant="display" weight="700" numberOfLines={3} style={[styles.title, { color: theme.textPrimary }]}>{content.title}</AppText> : null}
-          {content.body ? <AppText variant="paragraph" numberOfLines={content.title ? 5 : 8} style={[content.title ? styles.bodyUnderTitle : styles.body, { color: content.title ? theme.textSecondary : theme.textPrimary }]}>{content.body}</AppText> : null}
-        </>
-      )}
+        ) : <>
+          {content.title ? <AppText variant="display" weight="600" numberOfLines={2} style={[styles.title, { color: theme.textPrimary }]}>{content.title}</AppText> : null}
+          {content.body ? <AppText variant="paragraph" numberOfLines={checklist || item.subtaskPreview?.length ? 3 : content.title ? 4 : 6} style={[content.title ? styles.bodyUnderTitle : styles.body, { color: content.title ? theme.textSecondary : theme.textPrimary }]}>{content.body}</AppText> : null}
+          {checklist && !content.title && !content.body ? <AppText variant="display" weight="600" style={[styles.title, { color: theme.textPrimary }]}>Checklist</AppText> : null}
+        </>}
 
-      {!item.hidden && item.subtaskPreview?.length ? (
-        <View style={styles.checklist}>
-          {item.subtaskPreview.map((subtask) => (
-            <View key={subtask.id} style={styles.checklistRow}>
-              <Icon name={subtask.isCompleted ? 'checkbox' : 'square-outline'} size={15} color={theme.textMuted} />
-              <AppText variant="paragraph" numberOfLines={2} style={[styles.checklistText, { color: subtask.isCompleted ? theme.textMuted : theme.textPrimary }, subtask.isCompleted && styles.completedText]}>{subtask.title}</AppText>
-            </View>
-          ))}
-          {item.subtaskCount > 4 ? <AppText style={[styles.checklistMore, { color: theme.textMuted }]}>+{item.subtaskCount - 4} more</AppText> : null}
-          <AppText style={[styles.checklistProgress, { color: theme.textMuted }]}>{item.subtaskCount - item.completedSubtaskCount} remaining</AppText>
-        </View>
-      ) : null}
+        {checklist ? <View style={styles.checklist}>
+          <View style={styles.progressLabels}>
+            <AppText weight="600" style={[styles.progressCount, { color: theme.textSecondary }]}>{checklist.completed} of {checklist.total} done</AppText>
+            <AppText style={[styles.progressPercent, { color: theme.textMuted }]}>{checklist.percent}%</AppText>
+          </View>
+          <View style={[styles.progressTrack, { backgroundColor: mix(cardFill, progressColor, 0.12) }]}>
+            <View style={[styles.progressFill, { width: `${checklist.percent}%`, backgroundColor: progressColor }]} />
+          </View>
+          {checklist.remaining.map((text, index) => <View key={index} style={styles.checklistRow}>
+            <View style={[styles.previewCheckbox, { borderColor: theme.textMuted }]} />
+            <AppText variant="paragraph" numberOfLines={2} style={[styles.checklistText, { color: theme.textSecondary }]}>{text}</AppText>
+          </View>)}
+          {checklist.total - checklist.completed > 3 ? <AppText style={[styles.checklistMore, { color: theme.textMuted }]}>+{checklist.total - checklist.completed - 3} more</AppText> : null}
+        </View> : null}
 
-      {audio ? (
-        <View style={[styles.audioPill, { borderRadius: r.strip, backgroundColor: theme.accentSoft }]}>
+        {!item.hidden && item.subtaskPreview?.length ? <View style={styles.checklist}>
+          <AppText weight="600" style={[styles.progressCount, { color: theme.textSecondary }]}>{checklist ? 'Card tasks · ' : ''}{item.completedSubtaskCount} of {item.subtaskCount} done</AppText>
+          {item.subtaskPreview.slice(0, 3).map((subtask) => <View key={subtask.id} style={styles.checklistRow}>
+            <View style={[styles.previewCheckbox, { borderColor: theme.textMuted, backgroundColor: subtask.isCompleted ? theme.textMuted : 'transparent' }]}>{subtask.isCompleted ? <Icon name="checkmark" size={10} color={cardFill} /> : null}</View>
+            <AppText variant="paragraph" numberOfLines={2} style={[styles.checklistText, { color: subtask.isCompleted ? theme.textMuted : theme.textSecondary }, subtask.isCompleted && styles.completedText]}>{subtask.title}</AppText>
+          </View>)}
+          {item.subtaskCount > 3 ? <AppText style={[styles.checklistMore, { color: theme.textMuted }]}>+{item.subtaskCount - 3} more</AppText> : null}
+        </View> : null}
+
+        {audio ? <View style={[styles.audioPill, { borderRadius: r.strip, backgroundColor: theme.accentSoft }]}>
           <View style={styles.waveform}>{[7, 14, 10, 18, 9, 14, 6].map((height, index) => <View key={index} style={[styles.waveformBar, { height, backgroundColor: theme.accentStrong }]} />)}</View>
-          <AppText weight="700" style={[styles.audioText, { color: theme.accentStrong }]}>Voice note{audio.duration ? ` · ${formatDurationSeconds(audio.duration)}` : ''}</AppText>
-        </View>
-      ) : null}
-      {/* Secondary metadata, not a due date: a small muted bell and time. */}
-      {reminderLabel ? (
-        <View style={styles.reminderLine}>
-          <Icon name="notifications-outline" size={12} color={theme.textMuted} />
-          <AppText weight="600" numberOfLines={1} style={[styles.reminderText, { color: theme.textMuted }]}>{reminderLabel}</AppText>
-        </View>
-      ) : null}
-      </View>
+          <AppText weight="600" style={[styles.audioText, { color: theme.accentStrong }]}>{audio.duration ? formatDurationSeconds(audio.duration) : 'Voice note'}</AppText>
+        </View> : null}
+        {reminderLabel ? <View style={styles.reminderLine}>
+          <Icon name="notifications-outline" size={11} color={theme.textMuted} />
+          <AppText numberOfLines={2} style={[styles.reminderText, { color: theme.textMuted }]}>{reminderLabel}</AppText>
+        </View> : null}
+      </View> : null}
 
       <View style={styles.footer}>
         <View style={styles.footerLeft}>
-          <NoteCategory label={location} color={theme.textSecondary} />
+          <View style={styles.locationRow}>
+            {accent ? <View style={[styles.locationDot, { backgroundColor: tinted ? note.cardInkMuted : accent }]} /> : null}
+            <AppText weight="500" numberOfLines={1} style={[styles.location, { color: theme.textMuted }]}>{location}</AppText>
+          </View>
+          <View style={styles.footerMeta}>
+            <AppText style={[styles.date, { color: theme.textMuted }]}>{formatCardDate(item.updatedAt)}</AppText>
+            {item.pinned ? <Icon name="pin" size={10} color={theme.textMuted} /> : null}
+            {showFileBadge ? <View style={styles.fileBadge}><Icon name="attach" size={11} color={theme.textMuted} /><AppText style={[styles.fileBadgeText, { color: theme.textMuted }]}>{item.fileCount}</AppText></View> : null}
+          </View>
         </View>
-        <View style={styles.footerMeta}>
-          {item.pinned ? <Icon name="pin" size={12} color={theme.textMuted} /> : null}
-          {showFileBadge ? <View style={styles.fileBadge}><Icon name="attach" size={13} color={theme.textMuted} /><AppText weight="600" style={[styles.fileBadgeText, { color: theme.textMuted }]}>{item.fileCount}</AppText></View> : null}
-          <AppText style={[styles.date, { color: theme.textMuted }]}>{formatCardDate(item.updatedAt)}</AppText>
-        </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Card actions" hitSlop={10} onPress={(event) => { event.stopPropagation(); onMore(); }} style={styles.more}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Card actions" onPress={(event) => { event.stopPropagation(); onMore(); }} style={({ pressed }) => [styles.more, pressed && { opacity: 0.5 }]}>
           <Icon name="ellipsis-horizontal" size={17} color={theme.textMuted} />
         </Pressable>
       </View>
@@ -239,42 +249,50 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
 });
 
 const styles = StyleSheet.create({
-  noteContent: { minWidth: 0, alignSelf: 'stretch' },
-  picture: { height: 118, marginBottom: 10, overflow: 'hidden' },
-  videoPlay: { position: 'absolute', alignSelf: 'center', top: 39, width: 40, height: 40, borderRadius: 40 / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.55)' },
-  durationBadge: { position: 'absolute', left: 7, bottom: 7, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: 'rgba(0,0,0,0.62)' },
+  card: { minHeight: 124 },
+  noteContent: { minWidth: 0, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4, gap: 0 },
+  textOnlyContent: { minHeight: 70 },
+  picture: { height: 128, overflow: 'hidden' },
+  videoPlay: { position: 'absolute', alignSelf: 'center', top: 46, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)' },
+  durationBadge: { position: 'absolute', left: 10, bottom: 10, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.55)' },
   durationBadgeText: { color: '#FFFFFF', fontSize: 10 },
-  overflowBadge: { position: 'absolute', right: 8, bottom: 8, minWidth: 26, height: 20, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 20 / 2, backgroundColor: 'rgba(0,0,0,0.62)' },
-  overflowBadgeText: { color: '#FFFFFF', fontSize: 11 },
-  title: { fontSize: 16, lineHeight: 22, letterSpacing: -0.1 },
-  body: { fontSize: 15.5, lineHeight: 22 },
-  bodyUnderTitle: { marginTop: 5, fontSize: 14, lineHeight: 20 },
-  checklist: { marginTop: 12, gap: 6 },
-  checklistRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  checklistText: { flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 17 },
+  overflowBadge: { position: 'absolute', right: 10, bottom: 10, minWidth: 26, height: 22, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: 'rgba(0,0,0,0.55)' },
+  overflowBadgeText: { color: '#FFFFFF', fontSize: 10.5 },
+  title: { fontSize: 15.5, lineHeight: 21, letterSpacing: -0.2 },
+  body: { fontSize: 15, lineHeight: 21, letterSpacing: -0.15 },
+  bodyUnderTitle: { marginTop: 5, fontSize: 13, lineHeight: 19 },
+  checklist: { marginTop: 12, gap: 7 },
+  progressLabels: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 },
+  progressCount: { flexShrink: 1, fontSize: 11, lineHeight: 15 },
+  progressPercent: { fontSize: 10.5, lineHeight: 15, fontVariant: ['tabular-nums'] },
+  progressTrack: { height: 3, borderRadius: 2, overflow: 'hidden', marginBottom: 3 },
+  progressFill: { height: '100%', borderRadius: 2 },
+  checklistRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
+  previewCheckbox: { width: 13, height: 13, marginTop: 2, borderWidth: 1, borderRadius: 4, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  checklistText: { flex: 1, minWidth: 0, fontSize: 12, lineHeight: 17 },
   completedText: { textDecorationLine: 'line-through' },
-  checklistMore: { fontSize: 11.5, marginLeft: 21 },
-  checklistProgress: { fontSize: 11, marginTop: 2 },
-  flexCopy: { flex: 1, minWidth: 0 },
-  hiddenRow: { gap: spacing.xs },
-  hiddenIcon: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 34 / 2 },
-  hiddenTitle: { fontSize: 15, lineHeight: 20 },
-  hiddenCopy: { fontSize: 12, lineHeight: 16 },
-  fileRow: { gap: spacing.xs },
-  fileIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  fileName: { fontSize: 14, lineHeight: 19 },
-  fileMeta: { marginTop: 1, fontSize: 12, lineHeight: 16 },
-  audioPill: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 34, marginTop: 10, paddingHorizontal: 9 },
+  checklistMore: { fontSize: 10.5, lineHeight: 15, marginLeft: 20 },
+  hiddenRow: { gap: 6, paddingTop: 2 },
+  hiddenTitle: { fontSize: 14, lineHeight: 20 },
+  hiddenCopy: { fontSize: 12, lineHeight: 17 },
+  fileRow: { gap: 6 },
+  fileIcon: { width: 38, height: 42, marginBottom: 3, alignItems: 'center', justifyContent: 'center' },
+  fileName: { fontSize: 13, lineHeight: 19 },
+  fileMeta: { fontSize: 10.5, lineHeight: 15 },
+  audioPill: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 9, minHeight: 36, marginTop: 10, paddingHorizontal: 10 },
   waveform: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  waveformBar: { width: 2, borderRadius: 2 / 2, opacity: 0.8 },
-  audioText: { fontSize: 12, fontVariant: ['tabular-nums'] },
-  reminderLine: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 },
-  reminderText: { flexShrink: 1, fontSize: 11.5, fontVariant: ['tabular-nums'] },
-  footer: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 12 },
-  footerLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  footerMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  waveformBar: { width: 2, borderRadius: 1, opacity: 0.7 },
+  audioText: { flexShrink: 1, fontSize: 12, fontVariant: ['tabular-nums'] },
+  reminderLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginTop: 10 },
+  reminderText: { flex: 1, fontSize: 10.5, lineHeight: 15 },
+  footer: { minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 14, paddingRight: 4, paddingBottom: 2, marginTop: 6 },
+  footerLeft: { flex: 1, minWidth: 0, gap: 2, paddingVertical: 5 },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  locationDot: { width: 5, height: 5, borderRadius: 2.5 },
+  location: { flexShrink: 1, fontSize: 10.5, lineHeight: 14 },
+  footerMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 5 },
   fileBadge: { flexDirection: 'row', alignItems: 'center', gap: 1 },
-  fileBadgeText: { fontSize: 11, fontVariant: ['tabular-nums'] },
-  date: { fontSize: 11.5, fontVariant: ['tabular-nums'] },
-  more: { width: 26, height: 28, alignItems: 'center', justifyContent: 'center', marginRight: -6 },
+  fileBadgeText: { fontSize: 10, lineHeight: 13 },
+  date: { fontSize: 10, lineHeight: 13, fontVariant: ['tabular-nums'] },
+  more: { width: 44, minHeight: 44, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
 });

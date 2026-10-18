@@ -3,8 +3,9 @@ import { clearChatBackgroundForPaths, unreferencedAttachmentPaths } from './chat
 import { isStoredAttachmentPath } from '../services/attachment-path';
 import { notifyChatBackgroundChanged } from '../services/chat-background';
 import { notifyAttachmentsChanged } from '../services/attachment-changes';
+import { notifyNoteChanged } from '../services/note-changes';
 import { notifySpacesChanged } from '../services/space-changes';
-import { noteBlocksText, noteRenderContent, parseNoteContent, serializeNoteContent, type NoteBlock, type NoteText, readList, type NoteImageDetails, type NoteRenderBlock } from '../services/note-content';
+import { noteBlocksText, noteHasChecklist, noteRenderContent, parseNoteContent, serializeNoteContent, type NoteBlock, type NoteText, readList, type NoteImageDetails, type NoteRenderBlock } from '../services/note-content';
 import { autoPlace, clampUnit, DEFAULT_PAPER_STYLE, DEFAULT_STICKY_COLOR, SPACE_PAPER_STYLES, resolvePaperStyle, type SpacePaperStyle, randomRotation, resolveSpaceId, SELECTED_SPACE_SETTING_KEY, SPACE_CAPACITY, SPACE_IDS, STICKY_COLORS, type SpaceId, type SpacePoint } from '../constants/spaces';
 import { CHAT_TIMELINE_EVENT_TYPES, type Attachment, type AttachmentFilterType, type AttachmentLike, type AttachmentPage, type AttachmentPageOptions, type AttachmentSummary, type Board, type Message, type MessageReminderState, type MessageType, type PageOptions, type TimelineEvent, type TimelineEventType, type TimelineItem, type TimelinePage, type TimelinePageOptions , type PinnedNote, type SpaceCandidate, type SpaceNoteDetail, type SpaceNoteKind, type SpaceNoteMedia, type SpacePlacement } from './types';
 
@@ -222,7 +223,7 @@ async function insertNoteMessage(transaction: Pick<SQLiteDatabase, 'runAsync'>, 
   if (input.blocks.some((block) => block.type === 'image' && block.attachmentId)) throw new Error('Saved images must stay linked to their original thought.');
   const plan = planNoteContent(input.blocks);
   const attachment = input.attachment;
-  if (!plan.text && !attachment && !plan.imageIds.length) throw new Error('Write something or add an image before adding a note.');
+  if (!plan.text && !attachment && !plan.imageIds.length && !noteHasChecklist(plan.stored)) throw new Error('Write something or add an image before adding a note.');
   const type: MessageType = attachment?.type ?? (plan.imageIds.length ? 'photo' : 'text');
   await transaction.runAsync('INSERT INTO messages (id, text, type, created_at, updated_at, archived_at, pinned, deleted_at, content_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', messageId, plan.text, type, now, now, null, 0, null, plan.contentJson);
   if (attachment) await transaction.runAsync(INSERT_ATTACHMENT_SQL, newId(), messageId, attachment.type, attachment.storagePath, attachment.originalName, attachment.mimeType, attachment.size, attachment.duration, attachment.width, attachment.height, now);
@@ -365,7 +366,7 @@ export function createMessageRepository(database: SQLiteDatabase) {
         const kept = new Set(plan.imageIds);
         const removed = attachments.filter((attachment) => attachment.type === 'photo' && !kept.has(attachment.id));
         const remaining = attachments.filter((attachment) => !removed.includes(attachment));
-        if (!plan.text && !remaining.length && !plan.inserts.length) throw new Error('Write something or add an image before saving.');
+        if (!plan.text && !remaining.length && !plan.inserts.length && !noteHasChecklist(plan.stored)) throw new Error('Write something or add an image before saving.');
         // A note that was never inline and still reads photos-then-words stays a
         // plain note (content_json NULL), so editing a caption changes nothing else.
         const photoIds = attachments.filter((attachment) => attachment.type === 'photo').map((attachment) => attachment.id);
@@ -384,7 +385,37 @@ export function createMessageRepository(database: SQLiteDatabase) {
         attachmentsChanged = removed.length > 0 || plan.inserts.length > 0;
       });
       if (attachmentsChanged) { notifyAttachmentsChanged(); notifyChatBackgroundChanged(); }
+      notifyNoteChanged(id);
       return { updatedAt: now, removablePaths: [...new Set(removablePaths)] };
+    },
+    /** Change one state against the version the reader saw, without rewriting attachments. */
+    async setChecklistChecked(id: string, index: number, checked: boolean, expectedContent: string) {
+      let content: NoteBlock[] = [];
+      const updatedAt = Date.now();
+      await database.withExclusiveTransactionAsync(async (transaction) => {
+        const row = await transaction.getFirstAsync<MessageRow>('SELECT * FROM messages WHERE id = ? AND deleted_at IS NULL AND archived_at IS NULL', id);
+        const current = parseNoteContent(row?.content_json);
+        if (!row || !current || serializeNoteContent(current) !== expectedContent) throw new Error('This note changed. Reopen it and try again.');
+        const block = current[index];
+        if (block?.type !== 'text' || block.list?.kind !== 'checklist') throw new Error('This checklist item is no longer available.');
+        content = current.map((item, position) => position === index ? { ...block, list: { ...block.list!, kind: 'checklist' as const, checked } } : item);
+        await transaction.runAsync('UPDATE messages SET content_json = ?, updated_at = ? WHERE id = ?', serializeNoteContent(content), updatedAt, id);
+      });
+      notifyNoteChanged(id);
+      notifySpacesChanged();
+      return { content, updatedAt };
+    },
+    /** Batched summaries for Cards; never infer tasks from plain-text symbols. */
+    async listChecklistSummaries() {
+      const rows = await database.getAllAsync<{ messageId: string; cardId: string | null; contentJson: string }>(`
+        SELECT m.id AS messageId, cm.card_id AS cardId, m.content_json AS contentJson
+        FROM messages m LEFT JOIN card_messages cm ON cm.message_id = m.id
+        WHERE m.deleted_at IS NULL AND m.archived_at IS NULL AND m.is_hidden_content = 0 AND m.content_json IS NOT NULL
+        ORDER BY cm.position ASC, m.created_at ASC`);
+      return rows.flatMap((row) => {
+        const content = parseNoteContent(row.contentJson);
+        return content ? [{ ...row, content }] : [];
+      });
     },
     async createText(text: string): Promise<Message> {
       const now = Date.now();
