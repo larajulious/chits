@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { getCalendars } from 'expo-localization';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
@@ -40,10 +42,10 @@ import { subscribeToSpaceChanges } from '@/services/space-changes';
 
 type CalendarView = 'month' | 'week' | 'day' | 'agenda';
 const VIEW_OPTIONS: { key: CalendarView; label: string; icon: React.ComponentProps<typeof Icon>['name'] }[] = [
-  { key: 'month', label: 'Month', icon: 'calendar-outline' },
-  { key: 'week', label: 'Week', icon: 'albums-outline' },
-  { key: 'day', label: 'Day', icon: 'today-outline' },
-  { key: 'agenda', label: 'Agenda', icon: 'list-outline' },
+  { key: 'month', get label() { return tr("calendar.month"); }, icon: 'calendar-outline' },
+  { key: 'week', get label() { return tr("calendar.week"); }, icon: 'albums-outline' },
+  { key: 'day', get label() { return tr("calendar.day"); }, icon: 'today-outline' },
+  { key: 'agenda', get label() { return tr("calendar.agenda"); }, icon: 'list-outline' },
 ];
 const CHAT: CalendarDestination = { type: 'chat' };
 const FAB_SIZE = 56;
@@ -63,7 +65,7 @@ function windowAround(month: number, weekStart: number): CalendarRange {
 function scheduleSummary(draft: ScheduleDraft): string {
   const day = parseDayKey(draft.dateKey);
   const parts = [day ? dateFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(day) : draft.dateKey, formatScheduleTime(draft)];
-  if (draft.reminder.mode === 'offset') parts.push(reminderPresetLabel(draft, draft.reminder.offset) ?? 'Reminder');
+  if (draft.reminder.mode === 'offset') parts.push(reminderPresetLabel(draft, draft.reminder.offset) ?? tr("id.reminder"));
   else if (draft.reminder.mode === 'custom') parts.push(`Remind ${formatReminder(new Date(draft.reminder.at), new Date())}`);
   return parts.join(' · ');
 }
@@ -81,6 +83,9 @@ function draftFor(item: CalendarItem): ScheduleDraft {
 }
 
 export default function CalendarScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const router = useRouter();
   const { openDrawer } = useAppDrawer();
@@ -195,7 +200,7 @@ export default function CalendarScreen() {
   };
   const goToday = () => { selectDay(localDayKey(new Date())); };
   const chooseView = () => actionSheet({
-    title: 'View',
+    title: tr("calendar.view"),
     options: VIEW_OPTIONS.map((option) => ({ label: option.label, icon: view === option.key ? 'checkmark-circle' : option.icon, onPress: () => { setView(option.key); setSearchOpen(false); setQuery(''); } })),
   });
   const toggleSearch = () => {
@@ -247,8 +252,8 @@ export default function CalendarScreen() {
   const chooseAdd = (dateKey: string, startMinute: number | null = null) => actionSheet({
     title: dateFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(parseDayKey(dateKey) ?? today),
     options: [
-      { label: 'New Note', icon: 'create-outline', onPress: () => openComposer(dateKey, startMinute) },
-      { label: 'Existing Note or Card', icon: 'documents-outline', onPress: () => { sheetKey.current += 1; setPicker({ key: sheetKey.current, dateKey, visible: true }); } },
+      { label: tr("calendar.newNote"), icon: 'create-outline', onPress: () => openComposer(dateKey, startMinute) },
+      { label: tr("calendar.existingNoteOrCard"), icon: 'documents-outline', onPress: () => { sheetKey.current += 1; setPicker({ key: sheetKey.current, dateKey, visible: true }); } },
     ],
   });
 
@@ -259,10 +264,10 @@ export default function CalendarScreen() {
     // Missing alarm access is the one people miss in a toast: say it in a dialog with the way out.
     if (outcome === 'exact-alarm') {
       confirm({
-        type: 'warning', icon: 'alarm-outline', title: 'Reminder not set',
-        message: 'Your note is saved, but Android needs Alarms & reminders turned on for Chits before it can remind you. Allow it, then set the reminder again from the note’s details.',
-        confirmText: 'Open Settings', cancelText: 'Not Now',
-        onConfirm: () => openReminderAlarmSettings().catch(() => setToast('Open Settings › Apps › Chits › Alarms & reminders.')),
+        type: 'warning', icon: 'alarm-outline', title: tr("calendar.reminderNotSet"),
+        message: tr("calendar.yourNoteIsSavedButAndroidNeedsAlarms"),
+        confirmText: tr("calendar.openSettings"), cancelText: tr("calendar.notNow"),
+        onConfirm: () => openReminderAlarmSettings().catch(() => setToast(tr("calendar.openSettingsAppsChitsAlarmsReminders"))),
       });
       return;
     }
@@ -275,8 +280,8 @@ export default function CalendarScreen() {
     const result = await createCalendarNote(database, submission, destination, draft);
     selectDay(draft.dateKey);
     if (view === 'month') setPanelOpen(true);
-    if (result.spaceFull) setToast('Saved. That space is full, so the note stayed in Chat.');
-    else reportOutcome(result.reminder, result.reminder === 'set' ? 'Note added with a reminder' : 'Note added');
+    if (result.spaceFull) setToast(tr("calendar.savedThatSpaceIsFullSoTheNote"));
+    else reportOutcome(result.reminder, result.reminder === 'set' ? tr("calendar.noteAddedWithAReminder") : tr("calendar.noteAdded"));
     await reload();
   };
 
@@ -298,13 +303,13 @@ export default function CalendarScreen() {
   const removeReminder = async (item: CalendarItem) => {
     try {
       if (item.kind === 'card') await removeCardReminder(database, item.id); else await removeMessageReminder(database, item.id);
-      setToast('Reminder off');
-    } catch { setToast('Could not turn off the reminder. Try again.'); }
+      setToast(tr("calendar.reminderOff"));
+    } catch { setToast(tr("calendar.couldNotTurnOffTheReminderTryAgain")); }
     await reload();
   };
   const deleteNote = (item: CalendarItem) => confirm(item.kind === 'card'
-    ? { type: 'destructive', icon: 'archive-outline', title: 'Archive card?', message: 'It leaves its board and the calendar. You can restore it from Archive.', confirmText: 'Archive Card', onConfirm: async () => { await createBoardRepository(database).archiveCard(item.id); void requestReminderSync(); setToast('Card archived'); await reload(); } }
-    : { type: 'destructive', icon: 'trash-outline', title: 'Delete note?', message: 'It’s removed from Chat and the calendar, and its reminder is cancelled.', confirmText: 'Delete Note', onConfirm: async () => { await createMessageRepository(database).softDelete(item.id); void requestReminderSync(); setToast('Note deleted'); await reload(); } });
+    ? { type: 'destructive', icon: 'archive-outline', title: tr("calendar.archiveCard"), message: tr("calendar.itLeavesItsBoardAndTheCalendarYou"), confirmText: tr("calendar.archiveCard2"), onConfirm: async () => { await createBoardRepository(database).archiveCard(item.id); void requestReminderSync(); setToast(tr("calendar.cardArchived")); await reload(); } }
+    : { type: 'destructive', icon: 'trash-outline', title: tr("calendar.deleteNote"), message: tr("calendar.itSRemovedFromChatAndTheCalendar"), confirmText: tr("calendar.deleteNote2"), onConfirm: async () => { await createMessageRepository(database).softDelete(item.id); void requestReminderSync(); setToast(tr("calendar.noteDeleted")); await reload(); } });
 
   // Tapping an entry (or its ⋯) shows it in a details sheet; its actions run from there.
   const showDetail = useCallback((item: CalendarItem) => { Keyboard.dismiss(); setDetail({ item, visible: true }); }, []);
@@ -315,8 +320,8 @@ export default function CalendarScreen() {
       case 'schedule': editSchedule(item); break;
       case 'reminder': sheetKey.current += 1; setReminderItem({ key: sheetKey.current, item }); break;
       case 'reminder-off': void removeReminder(item); break;
-      case 'reminder-done': void completeReminder(database, item.kind, item.id).then(() => setToast('Reminder done')).catch(() => setToast('Could not complete the reminder.')); break;
-      case 'unschedule': void removeCalendarEntry(database, item).then(() => setToast('Removed from calendar — the note is still in Chits')); break;
+      case 'reminder-done': void completeReminder(database, item.kind, item.id).then(() => setToast(tr("calendar.reminderDone"))).catch(() => setToast(tr("calendar.couldNotCompleteTheReminder"))); break;
+      case 'unschedule': void removeCalendarEntry(database, item).then(() => setToast(tr("calendar.removedFromCalendarTheNoteIsStillIn"))); break;
       case 'delete': deleteNote(item); break;
     }
   };
@@ -333,7 +338,7 @@ export default function CalendarScreen() {
       ? `${dateFormat(undefined, { month: 'short', day: 'numeric' }).format(weekFirst)} – ${dateFormat(undefined, { month: weekFirst.getMonth() === addLocalDays(weekFirst, 6).getMonth() ? undefined : 'short', day: 'numeric' }).format(addLocalDays(weekFirst, 6))}`
       : view === 'day'
         ? dateFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(selectedDate)
-        : 'Agenda';
+        : tr("calendar.agenda");
   const stepUnit = view === 'month' ? 'month' : view === 'week' ? 'week' : 'day';
   const pickerMonth = view === 'month' ? visible : { year: selectedDate.getFullYear(), month: selectedDate.getMonth() };
 
@@ -342,23 +347,23 @@ export default function CalendarScreen() {
       <View style={[styles.header, { minHeight: styleTokens.header.minHeight }]}>
         <TopBarBackground />
         <View style={styles.menuSlot}>
-          <IconButton label="Open navigation" onPress={openDrawer}><MenuIcon /></IconButton>
+          <IconButton label={tr("archive.openNavigation")} onPress={openDrawer}><MenuIcon /></IconButton>
         </View>
         {view !== 'agenda' ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={`${title}. Choose month`} onPress={() => { sheetKey.current += 1; setMonthPicker(sheetKey.current); }} style={({ pressed }) => [styles.titleButton, pressed && styles.pressed]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr("calendar.valueChooseMonth", { value1: title })} onPress={() => { sheetKey.current += 1; setMonthPicker(sheetKey.current); }} style={({ pressed }) => [styles.titleButton, pressed && styles.pressed]}>
             <AppText accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.title, { color: ink }]}>{title}</AppText>
             <Icon name="chevron-down" size={16} color={ink} />
           </Pressable>
         ) : <AppText accessibilityRole="header" numberOfLines={1} style={[styles.title, styles.titleButton, { color: ink }]}>{title}</AppText>}
         {view !== 'agenda' ? <>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Previous ${stepUnit}`} hitSlop={{ top: 4, bottom: 4 }} onPress={() => step(-1)} style={({ pressed }) => [styles.chevron, pressed && styles.pressed]}><Icon name="chevron-back" size={20} color={ink} /></Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Next ${stepUnit}`} hitSlop={{ top: 4, bottom: 4 }} onPress={() => step(1)} style={({ pressed }) => [styles.chevron, pressed && styles.pressed]}><Icon name="chevron-forward" size={20} color={ink} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr("calendar.previousValue", { value1: stepUnit })} hitSlop={{ top: 4, bottom: 4 }} onPress={() => step(-1)} style={({ pressed }) => [styles.chevron, pressed && styles.pressed]}><Icon name="chevron-back" size={20} color={ink} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr("calendar.nextValue", { value1: stepUnit })} hitSlop={{ top: 4, bottom: 4 }} onPress={() => step(1)} style={({ pressed }) => [styles.chevron, pressed && styles.pressed]}><Icon name="chevron-forward" size={20} color={ink} /></Pressable>
         </> : null}
-        <IconButton label={searchOpen ? 'Close search' : 'Search calendar'} onPress={toggleSearch}><HeaderIcon name={searchOpen ? 'close' : 'search-outline'} size={21} /></IconButton>
-        <IconButton label={`Today, ${dateFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(today)}`} onPress={goToday}>
+        <IconButton label={searchOpen ? tr("search.closeSearch") : tr("calendar.searchCalendar")} onPress={toggleSearch}><HeaderIcon name={searchOpen ? 'close' : 'search-outline'} size={21} /></IconButton>
+        <IconButton label={tr("calendar.todayValue", { value1: dateFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(today) })} onPress={goToday}>
           <TodayGlyph day={today.getDate()} />
         </IconButton>
-        <IconButton label={`View: ${VIEW_OPTIONS.find((option) => option.key === view)!.label}. Change view`} onPress={chooseView}><HeaderIcon name={VIEW_OPTIONS.find((option) => option.key === view)!.icon} size={21} /></IconButton>
+        <IconButton label={tr("calendar.viewValueChangeView", { value1: VIEW_OPTIONS.find((option) => option.key === view)!.label })} onPress={chooseView}><HeaderIcon name={VIEW_OPTIONS.find((option) => option.key === view)!.icon} size={21} /></IconButton>
       </View>
     </HeaderChromeContext.Provider>
   );
@@ -370,7 +375,7 @@ export default function CalendarScreen() {
   const handlers = { now, onOpen: showDetail, onActions: showDetail };
   let body: React.ReactNode;
   if (error && !items.length) {
-    body = <Pressable accessibilityRole="button" onPress={() => void reload()} style={styles.center}><AppText style={{ color: theme.danger }}>Could not load the calendar. Tap to retry.</AppText></Pressable>;
+    body = <Pressable accessibilityRole="button" onPress={() => void reload()} style={styles.center}><AppText style={{ color: theme.danger }}>{tr("calendar.couldNotLoadTheCalendarTapToRetry")}</AppText></Pressable>;
   } else if (searchOpen) {
     body = <SearchResults items={query.trim() ? visibleItems : []} query={query} bottomInset={listInset} {...handlers} onOpen={(item) => { setSearchOpen(false); setQuery(''); setView('month'); pressDay(item.dateKey); }} />;
   } else if (view === 'month') {
@@ -391,7 +396,7 @@ export default function CalendarScreen() {
   } else if (view === 'day') {
     body = <DayView dateKey={selectedKey} items={selectedItems} todayKey={todayKey} bottomInset={listInset} onAddAt={(minute) => openComposer(selectedKey, minute)} {...handlers} />;
   } else {
-    body = loaded ? <AgendaView items={items} todayKey={todayKey} bottomInset={listInset} emptyText="Nothing coming up. Tap + to plan a note on a day." {...handlers} /> : null;
+    body = loaded ? <AgendaView items={items} todayKey={todayKey} bottomInset={listInset} emptyText={tr("calendar.nothingComingUpTapToPlanANote")} {...handlers} /> : null;
   }
   const showFab = !(view === 'month' && panelOpen) && !searchOpen;
 
@@ -400,14 +405,14 @@ export default function CalendarScreen() {
     {searchOpen ? (
       <View style={[styles.search, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
         <Icon name="search-outline" size={17} color={theme.textMuted} />
-        <TextInput autoFocus accessibilityLabel="Search notes and reminders" value={query} onChangeText={setQuery} placeholder="Search notes and reminders" placeholderTextColor={theme.textMuted} returnKeyType="search" onSubmitEditing={Keyboard.dismiss} style={[styles.searchInput, { color: theme.textPrimary }]} />
+        <TextInput autoFocus accessibilityLabel={tr("calendar.searchNotesAndReminders")} value={query} onChangeText={setQuery} placeholder={tr("calendar.searchNotesAndReminders")} placeholderTextColor={theme.textMuted} returnKeyType="search" onSubmitEditing={Keyboard.dismiss} style={[styles.searchInput, { color: theme.textPrimary }]} />
       </View>
     ) : null}
     <View style={styles.flex}>{body}</View>
     {showFab ? (
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Add note on ${dateFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(view === 'agenda' ? today : selectedDate)}`}
+        accessibilityLabel={tr("calendar.addNoteOnValue", { value1: dateFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(view === 'agenda' ? today : selectedDate) })}
         onPress={() => chooseAdd(view === 'agenda' ? todayKey : selectedKey, view === 'day' ? defaultStartMinute(selectedKey) : null)}
         style={({ pressed }) => [styles.fab, { bottom: tabBarHeight + spacing.md, backgroundColor: theme.accentStrong, shadowColor: theme.textPrimary }, pressed && styles.pressed]}
       >
@@ -419,8 +424,8 @@ export default function CalendarScreen() {
       <AddNoteSheet
         key={composer.key}
         visible
-        title="New note"
-        context={<AppText style={[styles.context, { color: theme.textSecondary }]}>A regular Chits note, planned on your calendar.</AppText>}
+        title={tr("calendar.newNote2")}
+        context={<AppText style={[styles.context, { color: theme.textSecondary }]}>{tr("calendar.aRegularChitsNotePlannedOnYourCalendar")}</AppText>}
         canSubmit={!reminderInPast(composer.draft)}
         extraSummary={scheduleSummary(composer.draft)}
         onClose={() => setComposer(null)}
@@ -444,11 +449,11 @@ export default function CalendarScreen() {
         onClose={() => setEditing(null)}
         onSave={async (draft) => {
           const outcome = await applySchedule(database, editing.note, draft, editing.previous);
-          reportOutcome(outcome, editing.scheduled ? 'Rescheduled' : 'Added to calendar');
+          reportOutcome(outcome, editing.scheduled ? tr("calendar.rescheduled") : tr("calendar.addedToCalendar"));
           selectDay(draft.dateKey);
           await reload();
         }}
-        onRemove={async () => { await removeCalendarEntry(database, editing.note); setToast('Removed from calendar — the note is still in Chits'); }}
+        onRemove={async () => { await removeCalendarEntry(database, editing.note); setToast(tr("calendar.removedFromCalendarTheNoteIsStillIn")); }}
       />
     ) : null}
     {reminderItem ? (
@@ -462,7 +467,7 @@ export default function CalendarScreen() {
         onSave={async (date) => {
           const { item } = reminderItem;
           const result = item.kind === 'card' ? await setCardReminder(database, item.id, date.getTime()) : await setMessageReminder(database, item.id, date.getTime());
-          if (result.ok) { setToast('Reminder rescheduled'); await reload(); }
+          if (result.ok) { setToast(tr("calendar.reminderRescheduled")); await reload(); }
           return result;
         }}
         onRemove={() => removeReminder(reminderItem.item)}
@@ -504,6 +509,9 @@ export default function CalendarScreen() {
 
 /** Today's date in a small calendar tile, inked like the header's other icons. */
 function TodayGlyph({ day }: { day: number }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { ink: headerInk } = useHeaderInk();
   const ink = useContext(TileInkContext) ?? headerInk;
   return <View style={[styles.todayBadge, { borderColor: ink }]}><AppText maxFontSizeMultiplier={1} style={[styles.todayBadgeText, { color: ink }]}>{day}</AppText></View>;

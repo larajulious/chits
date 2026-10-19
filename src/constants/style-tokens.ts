@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import type { AppPalette } from './chits-themes';
 
 // Style is the second appearance axis, independent of the theme/accent
@@ -15,7 +16,7 @@ export const APP_STYLES = ['classic', 'sticky'] as const;
 export type AppStyle = typeof APP_STYLES[number];
 export const DEFAULT_APP_STYLE: AppStyle = 'classic';
 export const STYLE_SETTING_KEY = 'app_style';
-export const APP_STYLE_NAMES: Record<AppStyle, string> = { classic: 'Classic', sticky: 'Sticky' };
+export const APP_STYLE_NAMES: Record<AppStyle, string> = { get classic() { return tr("styletokens.classic"); }, get sticky() { return tr("styletokens.sticky"); } };
 
 export function resolveAppStyle(value: string | null | undefined): AppStyle {
   return APP_STYLES.find((style) => style === value) ?? DEFAULT_APP_STYLE;

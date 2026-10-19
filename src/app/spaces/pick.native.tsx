@@ -1,3 +1,5 @@
+import { countLabel, tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { memo, useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Icon } from '@/components/ui/icon';
@@ -26,11 +28,14 @@ const CARD_MAX_HEIGHT = 112;
 const CARD_MIN_HEIGHT = 56;
 // Two small overlapping notes on every card, so the four spaces compare like for like.
 const SAMPLES = [
-  { title: null, text: 'Oat milk\nEggs', hidden: false, color: STICKY_COLORS[0].hex, rotation: -6 },
-  { title: null, text: 'Big idea!', hidden: false, color: STICKY_COLORS[2].hex, rotation: 5 },
+  { title: null, get text() { return tr("pick.oatMilkEggs"); }, hidden: false, color: STICKY_COLORS[0].hex, rotation: -6 },
+  { title: null, get text() { return tr("pick.bigIdea"); }, hidden: false, color: STICKY_COLORS[2].hex, rotation: 5 },
 ];
 
 const SpaceCard = memo(function SpaceCard({ space, selected, count, onPress }: { space: SpaceDefinition; selected: boolean; count: number; onPress: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const ui = useSpaceUI();
   const styles = useSpaceStyles(createStyles);
   const fonts = useSpaceFonts();
@@ -42,7 +47,7 @@ const SpaceCard = memo(function SpaceCard({ space, selected, count, onPress }: {
   const shortCard = size !== null && size.height < 72;
   return <Pressable
     accessibilityRole="radio"
-    accessibilityLabel={`${space.name}. ${space.description}.${count ? ` ${count} ${count === 1 ? 'note' : 'notes'}.` : ''}`}
+    accessibilityLabel={`${space.name}. ${space.description}.${count ? ' ' + countLabel('note', count) + '.' : ''}`}
     accessibilityState={{ selected }}
     onPress={onPress}
     onLayout={({ nativeEvent: { layout } }) => setSize((current) => (current && current.width === layout.width && current.height === layout.height ? current : { width: layout.width, height: layout.height }))}
@@ -69,6 +74,9 @@ const SpaceCard = memo(function SpaceCard({ space, selected, count, onPress }: {
  * (selected_space_id) and opens that space; the dock switches any time after.
  */
 export default function PickSpaceScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const ui = useSpaceUI();
   const styles = useSpaceStyles(createStyles);
   const database = useSQLiteContext();
@@ -103,21 +111,21 @@ export default function PickSpaceScreen() {
       await repository.setSelectedSpace(selected);
       if (guidedPending && messageId) {
         const message = await createMessageRepository(database).getActiveById(messageId);
-        if (!message) throw new Error('That note is no longer available.');
+        if (!message) throw new Error(tr("pick.thatNoteIsNoLongerAvailable"));
         const result = await repository.stick('thought', messageId, selected);
-        if (result.status === 'full') { setToast('This space is full. Choose another space.'); setSaving(false); return; }
+        if (result.status === 'full') { setToast(tr("pick.thisSpaceIsFullChooseAnotherSpace")); setSaving(false); return; }
         const first = await markOrganizationAccepted(database, 'space').catch(() => false);
         setGuidedPending(false);
         router.push({ pathname: '/spaces', params: { spaceId: selected, noteId: messageId, chitsGuided: '1', chitsRelationship: first ? '1' : undefined } });
         setSaving(false);
         return;
       }
-      // On top of this screen, so going back from the space returns here.
+      // Space details handles its back button by returning directly to Cards.
       router.push('/spaces');
       setSaving(false);
     } catch {
       setSaving(false);
-      setToast('That space couldn’t be saved. Please try again.');
+      setToast(tr("pick.thatSpaceCouldnTBeSavedPleaseTry"));
     }
   };
 
@@ -125,23 +133,23 @@ export default function PickSpaceScreen() {
     <StatusBar style="light" />
     <View style={styles.content}>
       <View style={[styles.topRow, compact && styles.topRowCompact]}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={({ pressed }) => [styles.back, shapes.round, pressed && styles.pressed]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={tr("search.goBack")} onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={({ pressed }) => [styles.back, shapes.round, pressed && styles.pressed]}>
           <Icon name="chevron-back" size={24} color={ui.paper} style={{ marginLeft: -2 }} />
         </Pressable>
         <OnboardingMascot size={compact ? 60 : 76} />
       </View>
-      <LabelTape themed text={saved ? 'Spaces' : 'New · Spaces'} variant="red" size="sm" rotation={-2} decorative />
-      <Text accessibilityRole="header" style={[fonts.uiHeavy, styles.title, compact && styles.titleCompact]}>{saved ? 'Where to?' : 'Pick a spot for your notes.'}</Text>
-      <Text style={[fonts.ui, styles.intro, compact && styles.introCompact]}>Stick notes on it and move them around, like the real thing.</Text>
-      <View accessibilityRole="radiogroup" accessibilityLabel="Spaces" style={styles.cards}>
+      <LabelTape themed text={saved ? tr("pick.spaces") : 'New · Spaces'} variant="red" size="sm" rotation={-2} decorative />
+      <Text accessibilityRole="header" style={[fonts.uiHeavy, styles.title, compact && styles.titleCompact]}>{saved ? tr("pick.whereTo") : tr("pick.pickASpotForYourNotes")}</Text>
+      <Text style={[fonts.ui, styles.intro, compact && styles.introCompact]}>{tr("pick.stickNotesOnItAndMoveThemAround")}</Text>
+      <View accessibilityRole="radiogroup" accessibilityLabel={tr("pick.spaces")} style={styles.cards}>
         {SPACE_LIST.map((item) => <SpaceCard key={item.id} space={item} selected={item.id === selected} count={counts[item.id] ?? 0} onPress={() => { if (item.id !== selected) { void Haptics.selectionAsync(); setSelected(item.id); } }} />)}
       </View>
     </View>
     <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
       <Pressable accessibilityRole="button" accessibilityState={{ disabled: saving }} disabled={saving} onPress={() => void choose()} style={({ pressed }) => [styles.primary, shapes.button, (pressed || saving) && styles.pressed]}>
-        <Text style={[fonts.uiSemi, styles.primaryText]}>{saved ? `Go to your ${space.name}` : `Stick them on the ${space.name}`}</Text>
+        <Text style={[fonts.uiSemi, styles.primaryText]}>{saved ? tr("pick.goToYourValue", { value1: space.name }) : tr("pick.stickThemOnTheValue", { value1: space.name })}</Text>
       </Pressable>
-      <Text style={[fonts.ui, styles.helper]}>You can switch spaces any time from the dock.</Text>
+      <Text style={[fonts.ui, styles.helper]}>{tr("pick.youCanSwitchSpacesAnyTimeFromThe")}</Text>
     </View>
     <Toast message={toast} />
   </View>;

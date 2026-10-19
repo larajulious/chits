@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -14,12 +16,18 @@ import { createBoardRepository } from '@/db/repositories';
 type Result = { id: string; title: string; context: string; kind: 'message' | 'card' | 'board' | 'file' };
 
 export default function SearchScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { source, boardId, boardName } = useLocalSearchParams<{ source?: string; boardId?: string; boardName?: string }>();
   const scopedBoardId = source === 'board' ? boardId : undefined;
   return <SearchContent key={scopedBoardId ?? 'global'} scopedBoardId={scopedBoardId} boardName={boardName} />;
 }
 
 function SearchContent({ scopedBoardId, boardName }: { scopedBoardId?: string; boardName?: string }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const { openDrawer } = useAppDrawer();
   const { tokens: theme } = useTheme();
@@ -58,29 +66,29 @@ function SearchContent({ scopedBoardId, boardName }: { scopedBoardId?: string; b
 
   return <Screen edges={['top', 'left', 'right']}>
     <AppHeader
-      title={scopedBoardId ? `Search in ${boardName || 'Board'}` : 'Search'}
+      title={scopedBoardId ? tr("index.searchInValue", { value1: boardName || tr("id.board") }) : tr("search.search")}
       leading={scopedBoardId
-        ? <IconButton label="Go back" onPress={goBack}><HeaderIcon name="chevron-back" size={24} /></IconButton>
-        : <IconButton label="Open navigation" onPress={openDrawer}><MenuIcon /></IconButton>}
-      trailing={<IconButton label="Close search" onPress={goBack}><HeaderIcon name="close" size={24} /></IconButton>}
+        ? <IconButton label={tr("search.goBack")} onPress={goBack}><HeaderIcon name="chevron-back" size={24} /></IconButton>
+        : <IconButton label={tr("archive.openNavigation")} onPress={openDrawer}><MenuIcon /></IconButton>}
+      trailing={<IconButton label={tr("search.closeSearch")} onPress={goBack}><HeaderIcon name="close" size={24} /></IconButton>}
     />
     <View style={styles.searchWrap}>
       <SearchField
-        accessibilityLabel={scopedBoardId ? 'Search cards in this board' : 'Search your thoughts'}
+        accessibilityLabel={scopedBoardId ? tr("search.searchCardsInThisBoard") : tr("search.searchYourThoughts")}
         value={term}
         onChangeText={(value) => { setTerm(value); queueSearch(value); }}
-        placeholder={scopedBoardId ? 'Search cards in this board' : 'Search your thoughts'}
+        placeholder={scopedBoardId ? tr("search.searchCardsInThisBoard") : tr("search.searchYourThoughts")}
       />
     </View>
     <Pressable accessibilityRole="button" onPress={() => { const next = !archived; setArchived(next); void search(term, next); }} style={[styles.filter, { backgroundColor: theme.surfaceElevated }]}>
-      <Text style={[styles.filterText, { color: theme.textSecondary }]}>{archived ? 'Including archived' : 'Active items'}</Text>
+      <Text style={[styles.filterText, { color: theme.textSecondary }]}>{archived ? tr("search.includingArchived") : tr("search.activeItems")}</Text>
     </Pressable>
     {term ? (showSearchLoader ? <ChitsLoader /> : <ScrollView contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + spacing.md }]}>
       {results.length ? results.map((result) => <Pressable key={`${result.kind}-${result.id}`} accessibilityRole="button" onPress={() => open(result)} style={[styles.result, { borderBottomColor: theme.borderSubtle }]}>
         <Text style={[styles.title, { color: theme.textPrimary }]}>{result.title}</Text>
         <Text style={[styles.context, { color: theme.textSecondary }]}>{result.context}</Text>
-      </Pressable>) : <EmptyState title="No matches" description="Try a different word or include archived items." />}
-    </ScrollView>) : <EmptyState title={scopedBoardId ? 'Find a card in this board' : 'Find anything later'} description={scopedBoardId ? 'Search card titles, thoughts, columns, and attachment names.' : 'Search messages, cards, boards, and attachment names.'} />}
+      </Pressable>) : <EmptyState title={tr("search.noMatches")} description={tr("search.tryADifferentWordOrIncludeArchivedItems")} />}
+    </ScrollView>) : <EmptyState title={scopedBoardId ? tr("search.findACardInThisBoard") : tr("search.findAnythingLater")} description={scopedBoardId ? tr("search.searchCardTitlesThoughtsColumnsAndAttachmentNames") : tr("search.searchMessagesCardsBoardsAndAttachmentNames")} />}
   </Screen>;
 }
 

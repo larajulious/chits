@@ -1,3 +1,4 @@
+import { useLocale } from '@/localization/provider';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -13,6 +14,9 @@ import { ot } from '../strings';
 import { endTour, startTour } from '../tour';
 
 export default function OnboardingHubScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const router = useRouter();
   const { tokens: theme, look } = useTheme();

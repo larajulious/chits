@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,6 +24,9 @@ const MAX_NOTESPACE_NAME_LENGTH = 40;
 // name-field shape so the two "rename this identity" flows in the app feel
 // consistent even though a NoteSpace and a Board are different concepts.
 export function EditNoteSpaceNameSheet({ visible, currentName, onClose, onSave }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const controls = useStickyControls();
   const inputRef = useRef<TextInput>(null);
@@ -44,7 +49,7 @@ export function EditNoteSpaceNameSheet({ visible, currentName, onClose, onSave }
   }, [currentName, visible]);
 
   const trimmedName = name.trim();
-  const validation = touched && !trimmedName ? 'NoteSpace name can’t be empty.' : null;
+  const validation = touched && !trimmedName ? tr("editnotespacenamesheet.notespaceNameCanTBeEmpty") : null;
   const canSave = Boolean(trimmedName && trimmedName !== originalName && !saving);
 
   const close = () => {
@@ -60,7 +65,7 @@ export function EditNoteSpaceNameSheet({ visible, currentName, onClose, onSave }
       await onSave(trimmedName);
       onClose();
     } catch {
-      setError('Couldn’t update your NoteSpace name. Try again.');
+      setError(tr("editnotespacenamesheet.couldnTUpdateYourNotespaceNameTryAgain"));
     } finally {
       setSaving(false);
     }
@@ -78,19 +83,19 @@ export function EditNoteSpaceNameSheet({ visible, currentName, onClose, onSave }
         style={styles.backdrop}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <Pressable accessibilityRole="button" accessibilityLabel="Cancel editing NoteSpace name" style={StyleSheet.absoluteFill} onPress={close} />
+        <Pressable accessibilityRole="button" accessibilityLabel={tr("editnotespacenamesheet.cancelEditingNotespaceName")} style={StyleSheet.absoluteFill} onPress={close} />
         <SafeAreaView edges={['bottom']} style={[styles.safeArea, { backgroundColor: theme.surface }]}>
           <GlassSurface style={[styles.sheet, { borderColor: theme.borderSubtle }]}>
             <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
             <View style={styles.content}>
-              <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Edit NoteSpace name</AppText>
-              <AppText style={[styles.supportingCopy, { color: theme.textSecondary }]}>Choose a name for your NoteSpace.</AppText>
+              <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{tr("settings.editNotespaceName")}</AppText>
+              <AppText style={[styles.supportingCopy, { color: theme.textSecondary }]}>{tr("editnotespacenamesheet.chooseANameForYourNotespace")}</AppText>
 
-              <AppText nativeID="notespace-name-label" style={[styles.label, { color: theme.textSecondary }]}>NoteSpace name</AppText>
+              <AppText nativeID="notespace-name-label" style={[styles.label, { color: theme.textSecondary }]}>{tr("editnotespacenamesheet.notespaceName")}</AppText>
               <TextInput
                 ref={inputRef}
                 autoFocus
-                accessibilityLabel="NoteSpace name"
+                accessibilityLabel={tr("editnotespacenamesheet.notespaceName")}
                 accessibilityLabelledBy="notespace-name-label"
                 value={name}
                 onChangeText={(value) => {
@@ -117,11 +122,11 @@ export function EditNoteSpaceNameSheet({ visible, currentName, onClose, onSave }
 
               <View style={styles.actions}>
                 <Pressable accessibilityRole="button" disabled={saving} onPress={close} style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
-                  <AppText style={[styles.cancelText, { color: theme.textSecondary }]}>Cancel</AppText>
+                  <AppText style={[styles.cancelText, { color: theme.textSecondary }]}>{tr("chat.cancel")}</AppText>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Save NoteSpace name"
+                  accessibilityLabel={tr("editnotespacenamesheet.saveNotespaceName")}
                   accessibilityState={{ disabled: !canSave }}
                   disabled={!canSave}
                   onPress={() => void save()}
@@ -132,7 +137,7 @@ export function EditNoteSpaceNameSheet({ visible, currentName, onClose, onSave }
                     pressed && canSave && styles.pressed,
                   ]}
                 >
-                  {saving ? <ActivityIndicator accessibilityLabel="Saving NoteSpace name" size="small" color={theme.accentText} /> : <AppText style={[styles.saveText, { color: theme.accentText }]}>Save</AppText>}
+                  {saving ? <ActivityIndicator accessibilityLabel={tr("editnotespacenamesheet.savingNotespaceName")} size="small" color={theme.accentText} /> : <AppText style={[styles.saveText, { color: theme.accentText }]}>{tr("editcontent.save")}</AppText>}
                 </Pressable>
               </View>
             </View>

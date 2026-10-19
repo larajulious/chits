@@ -11,7 +11,7 @@ test('pinning targets the message selected by the action sheet', () => {
   const repository = read('src/db/repositories.ts');
 
   assert.match(sheet, /onPin: \(message: Message\) => void/);
-  assert.match(sheet, /label=\{message\.pinned \? 'Unpin' : 'Pin'\} onPress=\{\(\) => onPin\(message\)\}/);
+  assert.match(sheet, /label=\{message\.pinned \? tr\("index\.unpin"\) : tr\("index\.pin"\)\} onPress=\{\(\) => onPin\(message\)\}/);
   assert.match(screen, /const togglePin = \(message: Message\) => \{ const pinned = !message\.pinned;/);
   assert.match(screen, /repository\.setPinned\(message\.id, pinned\)/);
   assert.match(screen, /repository\.setPinned\(message\.id, pinned\);[\s\S]*?await refreshPinned\(\)/);
@@ -23,7 +23,7 @@ test('pinned thoughts stay in Chat quick access and can be reopened', () => {
   const screen = read('src/app/(tabs)/chat.native.tsx');
 
   assert.match(screen, /function QuickFilterRow/);
-  assert.match(screen, /accessibilityLabel=\{`Pinned: \$\{quickFilterPreview\(message\)\}`\}/);
+  assert.match(screen, /accessibilityLabel=\{tr\("chat\.pinnedValue", \{ value1: quickFilterPreview\(message\) \}\)\}/);
   assert.match(screen, /<ChatHeader[\s\S]*?<QuickFilterRow pinned=\{pinnedMessages\}/);
   assert.match(screen, /const openPinned = useCallback\(\(message: Message\) => \{[\s\S]*?setFocusedId\(message\.id\);/);
 });
@@ -31,7 +31,7 @@ test('pinned thoughts stay in Chat quick access and can be reopened', () => {
 test('the action sheet backdrop cannot receive taps meant for Pin', () => {
   const sheet = read('src/components/chat/message-actions.tsx');
 
-  assert.match(sheet, /<Pressable accessibilityRole="button" accessibilityLabel="Close thought actions" onPress=\{onDismiss\} style=\{StyleSheet\.absoluteFill\} \/>/);
+  assert.match(sheet, /<Pressable accessibilityRole="button" accessibilityLabel=\{tr\("messageactions\.closeThoughtActions"\)\} onPress=\{onDismiss\} style=\{StyleSheet\.absoluteFill\} \/>/);
   assert.match(sheet, /<SafeAreaView edges=\{\['bottom'\]\} style=\{styles\.sheet\}>\s*<BottomSheetSurface>/);
   assert.doesNotMatch(sheet, /sheetTapShield/);
 });

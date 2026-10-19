@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { subscribeToNoteChanges } from '@/services/note-changes';
 import { ConnectedNotes } from '@/components/notes/connected-notes.native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -53,20 +55,26 @@ type Comment = { id: string; cardId: string; text: string; createdAt: number; up
 // on AttachmentContent already opens the same menu; this is purely about
 // making that entry point visible, matching the established pattern.
 function AttachmentActionsButton({ onPress, style, iconColor }: { onPress: () => void; style: StyleProp<ViewStyle>; iconColor: string }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel="Attachment actions" hitSlop={8} onPress={onPress} style={style}>
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
+  return <Pressable accessibilityRole="button" accessibilityLabel={tr("id.attachmentActions")} hitSlop={8} onPress={onPress} style={style}>
     <Icon name="ellipsis-horizontal" size={17} color={iconColor} />
   </Pressable>;
 }
 const messageFallback = (message: Message) => {
   const attachment = message.attachments[0];
-  if (attachment?.type === 'file') return attachment.originalName || 'Attachment';
-  if (attachment?.type === 'photo') return 'Photo';
-  if (attachment?.type === 'video') return 'Video';
-  if (attachment?.type === 'audio') return 'Audio note';
+  if (attachment?.type === 'file') return attachment.originalName || tr("attachmentexportnaming.attachment");
+  if (attachment?.type === 'photo') return tr("id.photo");
+  if (attachment?.type === 'video') return tr("addcardattachmentsheet.video");
+  if (attachment?.type === 'audio') return tr("messagerow.audioNote");
   return `${message.type[0].toUpperCase()}${message.type.slice(1)} attachment`;
 };
 
 export default function CardDetailScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const { id } = useLocalSearchParams<{ id: string }>();
   const repository = useMemo(() => createBoardRepository(database), [database]);
@@ -171,14 +179,14 @@ export default function CardDetailScreen() {
     const result = await setCardReminder(database, id, date.getTime());
     if (result.ok) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setToast(`Reminder set for ${formatReminder(date, new Date())}`);
+      setToast(tr("id.reminderSetForValue", { value1: formatReminder(date, new Date()) }));
       await loadReminder();
     }
     return result;
   };
   const deleteReminder = async () => {
     await removeCardReminder(database, id);
-    setToast('Reminder removed');
+    setToast(tr("chat.reminderRemoved"));
     await loadReminder();
   };
 
@@ -199,7 +207,7 @@ export default function CardDetailScreen() {
       setTitleEditing(false);
       await load();
     } catch {
-      setNotice('Chits could not save the card title.');
+      setNotice(tr("id.chitsCouldNotSaveTheCardTitle"));
     } finally {
       setSavingEdit(false);
     }
@@ -229,7 +237,7 @@ export default function CardDetailScreen() {
       setCommentDraft('');
       requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
     } catch {
-      setNotice('Chits could not save that comment.');
+      setNotice(tr("id.chitsCouldNotSaveThatComment"));
     } finally {
       setSavingComment(false);
     }
@@ -243,7 +251,7 @@ export default function CardDetailScreen() {
   const saveCommentEdit = async () => {
     if (!editingCommentId || savingComment) return;
     const text = commentEditDraft.trim();
-    if (!text) { setNotice('Comment cannot be empty.'); return; }
+    if (!text) { setNotice(tr("id.commentCannotBeEmpty")); return; }
     setSavingComment(true);
     setNotice(null);
     try {
@@ -251,7 +259,7 @@ export default function CardDetailScreen() {
       setComments((current) => current.map((comment) => comment.id === editingCommentId ? { ...comment, text, updatedAt } : comment));
       setEditingCommentId(null);
     } catch {
-      setNotice('Chits could not save that comment.');
+      setNotice(tr("id.chitsCouldNotSaveThatComment"));
     } finally {
       setSavingComment(false);
     }
@@ -261,33 +269,33 @@ export default function CardDetailScreen() {
     try {
       await Clipboard.setStringAsync(comment.text);
       void Haptics.selectionAsync();
-      setToast('Copied to clipboard');
+      setToast(tr("chat.copiedToClipboard"));
     } catch {
-      setNotice('Couldn’t copy. Try again.');
+      setNotice(tr("chat.couldnTCopyTryAgain"));
     }
   };
 
   const deleteComment = (comment: Comment) => {
     const previous = comments;
     setComments((current) => current.filter((item) => item.id !== comment.id));
-    void repository.deleteComment(comment.id).catch(() => { setComments(previous); setNotice('Chits could not delete that comment.'); });
+    void repository.deleteComment(comment.id).catch(() => { setComments(previous); setNotice(tr("id.chitsCouldNotDeleteThatComment")); });
   };
 
   const confirmDeleteComment = (comment: Comment) => confirm({
     type: 'destructive',
     icon: 'trash-outline',
-    title: 'Delete comment?',
-    message: 'This can’t be undone.',
-    confirmText: 'Delete comment',
+    title: tr("id.deleteComment"),
+    message: tr("index.thisCanTBeUndone"),
+    confirmText: tr("id.deleteComment2"),
     onConfirm: () => deleteComment(comment),
   });
 
   const openCommentActions = (comment: Comment) => actionSheet({
-    title: 'Comment',
+    title: tr("id.comment"),
     options: [
-      { label: 'Edit', icon: 'create-outline', onPress: () => startCommentEdit(comment) },
-      { label: 'Copy', icon: 'copy-outline', onPress: () => void copyComment(comment) },
-      { label: 'Delete', icon: 'trash-outline', destructive: true, onPress: () => confirmDeleteComment(comment) },
+      { label: tr("id.edit"), icon: 'create-outline', onPress: () => startCommentEdit(comment) },
+      { label: tr("id.copy"), icon: 'copy-outline', onPress: () => void copyComment(comment) },
+      { label: tr("id.delete"), icon: 'trash-outline', destructive: true, onPress: () => confirmDeleteComment(comment) },
     ],
   });
 
@@ -307,7 +315,7 @@ export default function CardDetailScreen() {
         const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
         if (result.canceled) return;
         const asset = result.assets?.[0];
-        if (!asset?.uri) { setNotice('That file could not be read. Please try another one.'); return; }
+        if (!asset?.uri) { setNotice(tr("id.thatFileCouldNotBeReadPleaseTry")); return; }
         sourceUri = asset.uri;
         details = { type: 'file', originalName: asset.name, mimeType: asset.mimeType ?? null, size: asset.size ?? null, width: null, height: null, duration: null };
       } else {
@@ -324,7 +332,7 @@ export default function CardDetailScreen() {
         });
         if (result.canceled) return;
         const asset = result.assets?.[0];
-        if (!asset?.uri) { setNotice('That media item could not be read. Please try another one.'); return; }
+        if (!asset?.uri) { setNotice(tr("id.thatMediaItemCouldNotBeReadPlease")); return; }
         sourceUri = asset.uri;
         details = { type: kind, originalName: asset.fileName ?? null, mimeType: asset.mimeType ?? null, size: asset.fileSize ?? null, duration: asset.duration ?? null, width: asset.width || null, height: asset.height || null };
       }
@@ -337,34 +345,34 @@ export default function CardDetailScreen() {
         throw dbError;
       }
     } catch (cause) {
-      setNotice(cause instanceof Error ? cause.message : 'That attachment could not be added.');
+      setNotice(cause instanceof Error ? cause.message : tr("id.thatAttachmentCouldNotBeAdded"));
     } finally {
       setAttachmentBusy(false);
     }
   };
 
   const shareCardAttachment = async (attachment: CardAttachment) => {
-    if (!await shareAttachment(attachment)) setNotice('This attachment could not be shared.');
+    if (!await shareAttachment(attachment)) setNotice(tr("id.thisAttachmentCouldNotBeShared"));
   };
 
   const openPhotoActions = (attachment: AttachmentLike) => actionSheet({
-    title: 'Photo',
-    message: isCurrentBackground(attachment) ? 'Current Chat Background' : undefined,
+    title: tr("id.photo"),
+    message: isCurrentBackground(attachment) ? tr("photoattachmentviewer.currentChatBackground") : undefined,
     options: [
-      { label: 'View', icon: 'expand-outline', onPress: () => { Keyboard.dismiss(); setViewingPhoto(attachment); } },
+      { label: tr("calendar.view"), icon: 'expand-outline', onPress: () => { Keyboard.dismiss(); setViewingPhoto(attachment); } },
       { label: exportActionLabel(attachment), icon: 'download-outline', disabled: download.busy, onPress: () => void download.exportAttachment(attachment) },
-      { label: 'Use as Chat Background', icon: 'image-outline', onPress: () => openBackgroundPreview(attachmentBackgroundImage(attachment), () => router.navigate('/chat')) },
-      { label: 'Delete Attachment', icon: 'trash-outline', destructive: true, onPress: () => attachmentDeletion.confirmDelete(attachment) },
+      { label: tr("id.useAsChatBackground"), icon: 'image-outline', onPress: () => openBackgroundPreview(attachmentBackgroundImage(attachment), () => router.navigate('/chat')) },
+      { label: tr("attachments.deleteAttachment"), icon: 'trash-outline', destructive: true, onPress: () => attachmentDeletion.confirmDelete(attachment) },
     ],
   });
   const openCardAttachmentActions = (attachment: CardAttachment) => {
     if (attachment.type === 'photo') { openPhotoActions(attachment); return; }
     actionSheet({
-      title: attachment.type === 'file' ? (attachment.originalName ?? 'File') : 'Video',
+      title: attachment.type === 'file' ? (attachment.originalName ?? tr("addcardattachmentsheet.file")) : tr("addcardattachmentsheet.video"),
       options: [
-        { label: 'Share', icon: 'share-outline', onPress: () => void shareCardAttachment(attachment) },
+        { label: tr("attachments.share"), icon: 'share-outline', onPress: () => void shareCardAttachment(attachment) },
         { label: exportActionLabel(attachment), icon: 'download-outline', disabled: download.busy, onPress: () => void download.exportAttachment(attachment) },
-        { label: 'Delete Attachment', icon: 'trash-outline', destructive: true, onPress: () => attachmentDeletion.confirmDelete(attachment) },
+        { label: tr("attachments.deleteAttachment"), icon: 'trash-outline', destructive: true, onPress: () => attachmentDeletion.confirmDelete(attachment) },
       ],
     });
   };
@@ -372,7 +380,7 @@ export default function CardDetailScreen() {
   const isSameDay = (a: number, b: number) => { const da = new Date(a); const db = new Date(b); return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate(); };
   const commentTimeLabel = (timestamp: number) => {
     const time = dateFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(timestamp);
-    return isSameDay(timestamp, renderedAt) ? `Today · ${time}` : `${dateFormat(undefined, { month: 'short', day: 'numeric' }).format(timestamp)} · ${time}`;
+    return isSameDay(timestamp, renderedAt) ? tr('dates.withTime', { day: tr('dates.today'), time }) : `${dateFormat(undefined, { month: 'short', day: 'numeric' }).format(timestamp)} · ${time}`;
   };
 
   // Non-destructive for the Chits themselves: the original Chat message(s)
@@ -390,9 +398,9 @@ export default function CardDetailScreen() {
     confirm({
       type: 'default',
       icon: 'arrow-undo-outline',
-      title: 'Move this card back to Unorganized?',
+      title: tr("index.moveThisCardBackToUnorganized"),
       message: detachConfirmationMessage({ boardName: detail?.boardName ?? null, messageCount: messages.length, commentCount: comments.length, attachmentCount: cardAttachments.length }),
-      confirmText: 'Move',
+      confirmText: tr("index.move"),
       accentColor: detail?.boardAccent ?? null,
       onConfirm: run,
     });
@@ -405,11 +413,11 @@ export default function CardDetailScreen() {
       setMessages((current) => current.map((message) => ({ ...message, isHiddenContent: hidden })));
       setTemporarilyRevealed(false);
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setToast(hidden ? 'Content hidden' : 'Content visible');
+      setToast(hidden ? tr("id.contentHidden") : tr("id.contentVisible2"));
       // A hidden card's reminder must stop showing its words on the lock screen.
       void requestReminderSync();
     } catch {
-      setNotice('Chits could not change this card’s visibility.');
+      setNotice(tr("id.chitsCouldNotChangeThisCardSVisibility"));
     }
   };
 
@@ -422,14 +430,14 @@ export default function CardDetailScreen() {
       icon: action.icon,
       title: `${action.label}?`,
       message: removing
-        ? 'This removes the sticky note from its space. Your card stays on its board.'
-        : 'This adds a sticky note you can move around on the space. Your card stays on its board.',
+        ? tr("id.thisRemovesTheStickyNoteFromItsSpace")
+        : tr("id.thisAddsAStickyNoteYouCanMove"),
       confirmText: action.label,
-      cancelText: 'Cancel',
+      cancelText: tr("chat.cancel"),
       accentColor: detail?.boardAccent ?? null,
       onConfirm: async () => {
         try { setToast(await action.run()); }
-        catch { setToast('That couldn’t be saved. Please try again.'); }
+        catch { setToast(tr("chat.thatCouldnTBeSavedPleaseTryAgain")); }
       },
     });
   };
@@ -437,9 +445,9 @@ export default function CardDetailScreen() {
   const archive = () => confirm({
     type: 'default',
     icon: 'archive-outline',
-    title: 'Archive card?',
-    message: 'You can restore it later from Archive. Your original messages remain in Chat.',
-    confirmText: 'Archive card',
+    title: tr("calendar.archiveCard"),
+    message: tr("index.youCanRestoreItLaterFromArchiveYour"),
+    confirmText: tr("index.archiveCard"),
     accentColor: detail?.boardAccent ?? null,
     onConfirm: async () => { await repository.archiveCard(id); void requestReminderSync(); router.back(); },
   });
@@ -447,9 +455,9 @@ export default function CardDetailScreen() {
   const destroy = () => confirm({
     type: 'destructive',
     icon: 'trash-outline',
-    title: 'Delete card?',
-    message: 'This deletes the card and its Chits, including from Chat. This can’t be undone.',
-    confirmText: 'Delete card',
+    title: tr("index.deleteCard2"),
+    message: tr("index.thisDeletesTheCardAndItsChitsIncluding"),
+    confirmText: tr("index.deleteCard"),
     onConfirm: async () => {
       const removableUris = await repository.deleteCard(id);
       await Promise.all(removableUris.map((uri) => removeCardAttachmentFile(uri)));
@@ -459,10 +467,10 @@ export default function CardDetailScreen() {
     },
   });
 
-  if (detail === undefined) return <Screen>{showCardLoader ? <View style={styles.cardLoader}><ChitsLoader label="Loading card…" /></View> : null}</Screen>;
+  if (detail === undefined) return <Screen>{showCardLoader ? <View style={styles.cardLoader}><ChitsLoader label={tr("id.loadingCard")} /></View> : null}</Screen>;
   if (!detail) return <Screen>
-    <AppHeader title="Card details" leading={<IconButton label="Go back" onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
-    <EmptyState title="Card unavailable" description="It may have been archived or deleted." />
+    <AppHeader title={tr("id.cardDetails")} leading={<IconButton label={tr("search.goBack")} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
+    <EmptyState title={tr("id.cardUnavailable")} description={tr("id.itMayHaveBeenArchivedOrDeleted")} />
   </Screen>;
 
   const detailDate = (timestamp: number) => dateFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(timestamp);
@@ -485,24 +493,24 @@ export default function CardDetailScreen() {
 
   return <Screen edges={['top', 'left', 'right']}>
     <AppHeader
-      title="Card details"
-      leading={<IconButton label="Go back" onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>}
-      trailing={<IconButton label="Open in Chat" onPress={() => router.push(messages[0] ? `/chat?messageId=${messages[0].id}` : '/chat')}><HeaderIcon name="chatbubble-outline" size={22} /></IconButton>}
+      title={tr("id.cardDetails")}
+      leading={<IconButton label={tr("search.goBack")} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>}
+      trailing={<IconButton label={tr("id.openInChat")} onPress={() => router.push(messages[0] ? `/chat?messageId=${messages[0].id}` : '/chat')}><HeaderIcon name="chatbubble-outline" size={22} /></IconButton>}
     />
     {viewingPhoto ? <PhotoAttachmentViewer attachment={viewingPhoto} onDismiss={() => setViewingPhoto(null)} /> : null}
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView ref={scrollRef} style={styles.flex} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          {covered ? <View style={styles.titleRow}><AppText variant="display" style={[styles.title, styles.hiddenTitle]}>Hidden Chit</AppText></View> : titleEditing ? <View style={styles.editor}>
-            <TextInput autoFocus accessibilityLabel="Card title" value={titleDraft} onChangeText={setTitleDraft} placeholder="Card title" placeholderTextColor={theme.textMuted} maxLength={120} returnKeyType="done" onSubmitEditing={() => void saveTitle()} style={[styles.titleInput, { borderColor: contentAccentSolid }]} />
+          {covered ? <View style={styles.titleRow}><AppText variant="display" style={[styles.title, styles.hiddenTitle]}>{tr("index.hiddenChit")}</AppText></View> : titleEditing ? <View style={styles.editor}>
+            <TextInput autoFocus accessibilityLabel={tr("id.cardTitle")} value={titleDraft} onChangeText={setTitleDraft} placeholder={tr("id.cardTitle")} placeholderTextColor={theme.textMuted} maxLength={120} returnKeyType="done" onSubmitEditing={() => void saveTitle()} style={[styles.titleInput, { borderColor: contentAccentSolid }]} />
             <View style={styles.editActions}>
-              <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => void saveTitle()} style={[styles.editSave, { backgroundColor: contentAccentSolid }, sticky({ fill: contentAccentSolid, radius: styleTokens.button.radius, edge: false }), savingEdit && styles.disabled]}><AppText style={[styles.editSaveText, { color: contentAccentOn }]}>{savingEdit ? 'Saving…' : 'Save title'}</AppText></Pressable>
-              <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => { setTitleDraft(detail.explicitTitle ?? ''); setTitleEditing(false); }} style={styles.editCancel}><AppText style={styles.editCancelText}>Cancel</AppText></Pressable>
+              <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => void saveTitle()} style={[styles.editSave, { backgroundColor: contentAccentSolid }, sticky({ fill: contentAccentSolid, radius: styleTokens.button.radius, edge: false }), savingEdit && styles.disabled]}><AppText style={[styles.editSaveText, { color: contentAccentOn }]}>{savingEdit ? tr("id.saving") : tr("id.saveTitle")}</AppText></Pressable>
+              <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => { setTitleDraft(detail.explicitTitle ?? ''); setTitleEditing(false); }} style={styles.editCancel}><AppText style={styles.editCancelText}>{tr("chat.cancel")}</AppText></Pressable>
             </View>
-          </View> : displayTitle ? <Pressable accessibilityRole="button" accessibilityLabel="Edit card title" onPress={startTitleEdit} style={({ pressed }) => [styles.titleRow, pressed && styles.pressed]}>
+          </View> : displayTitle ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.editCardTitle")} onPress={startTitleEdit} style={({ pressed }) => [styles.titleRow, pressed && styles.pressed]}>
             <AppText variant="display" style={styles.title}>{displayTitle}</AppText>
             <View style={styles.titleEditButton}><Icon name="create-outline" size={17} color={contentAccentStrong} /></View>
-          </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel={detail.explicitTitle ? 'Edit card title' : 'Add a card title'} onPress={startTitleEdit} style={({ pressed }) => [styles.addTitle, pressed && styles.pressed]}><Icon name={detail.explicitTitle ? 'create-outline' : 'add'} size={17} color={contentAccentStrong} /><AppText style={[styles.editHint, { color: contentAccentStrong }]}>{detail.explicitTitle ? 'Edit title' : 'Add title'}</AppText></Pressable>}
+          </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel={detail.explicitTitle ? tr("id.editCardTitle") : tr("id.addACardTitle")} onPress={startTitleEdit} style={({ pressed }) => [styles.addTitle, pressed && styles.pressed]}><Icon name={detail.explicitTitle ? 'create-outline' : 'add'} size={17} color={contentAccentStrong} /><AppText style={[styles.editHint, { color: contentAccentStrong }]}>{detail.explicitTitle ? tr("id.editTitle") : tr("id.addTitle")}</AppText></Pressable>}
         </View>
 
         {notice ? <View accessibilityRole="alert" style={styles.noticePanel}>
@@ -511,25 +519,25 @@ export default function CardDetailScreen() {
         </View> : null}
 
         <View style={[styles.sectionHeader, styles.contentSectionHeader]}>
-          <AppText accessibilityRole="header" style={styles.sectionTitle}>CONTENT</AppText>
+          <AppText accessibilityRole="header" style={styles.sectionTitle}>{tr("id.content")}</AppText>
           <View style={styles.contentHeaderActions}>
-            {!covered ? <Pressable accessibilityRole="button" accessibilityLabel="Share Note" hitSlop={8} onPress={openShareNote} style={styles.inlineEdit}><Icon name="images-outline" size={16} color={contentAccentStrong} /></Pressable> : null}
-            {contentHidden && !covered ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" hitSlop={8} onPress={() => setTemporarilyRevealed(false)} style={styles.inlineEdit}><Icon name="eye-off-outline" size={16} color={theme.textMuted} /><AppText style={[styles.inlineEditText, { color: theme.textMuted }]}>Hide again</AppText></Pressable> : null}
+            {!covered ? <Pressable accessibilityRole="button" accessibilityLabel={tr("index.shareNote")} hitSlop={8} onPress={openShareNote} style={styles.inlineEdit}><Icon name="images-outline" size={16} color={contentAccentStrong} /></Pressable> : null}
+            {contentHidden && !covered ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.hideAgain")} hitSlop={8} onPress={() => setTemporarilyRevealed(false)} style={styles.inlineEdit}><Icon name="eye-off-outline" size={16} color={theme.textMuted} /><AppText style={[styles.inlineEditText, { color: theme.textMuted }]}>{tr("id.hideAgain")}</AppText></Pressable> : null}
             {messages.length > 1 ? <View style={styles.countBadge}><AppText style={styles.countText}>{messages.length}</AppText></View> : null}
           </View>
         </View>
 
         <NotePaper accent={detail.boardAccent} style={styles.contentBody}>
-          {covered ? <Pressable accessibilityRole="button" accessibilityLabel="Hidden content. Double tap to reveal." onPress={() => setTemporarilyRevealed(true)} style={({ pressed }) => [styles.hiddenCover, pressed && styles.pressed]}>
+          {covered ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.hiddenContentDoubleTapToReveal")} onPress={() => setTemporarilyRevealed(true)} style={({ pressed }) => [styles.hiddenCover, pressed && styles.pressed]}>
             <Icon name="eye-off-outline" size={24} color={theme.textMuted} />
-            <AppText style={styles.hiddenCoverTitle}>Content hidden</AppText>
-            <AppText style={styles.hiddenCoverCopy}>Tap to reveal</AppText>
+            <AppText style={styles.hiddenCoverTitle}>{tr("id.contentHidden")}</AppText>
+            <AppText style={styles.hiddenCoverCopy}>{tr("id.tapToReveal")}</AppText>
           </Pressable> : messages.map((message, index) => <View key={message.id} style={index > 0 && styles.thought}>
             {messages.length > 1 ? <View style={styles.thoughtHeader}>
-              <AppText style={styles.thoughtLabel}>THOUGHT {index + 1}</AppText>
+              <AppText style={styles.thoughtLabel}>{tr("id.thought")}{' '}{index + 1}</AppText>
             </View> : null}
-            <MessageContentRenderer message={message} mode="detail" accentColor={detail.boardAccent ?? undefined} onPressText={message.text ? () => openContentEditor(message) : undefined} textAccessibilityLabel={messages.length > 1 ? `Edit thought ${index + 1}` : 'Edit content'} onImageLongPress={openPhotoActions} renderAttachments={(items = message.attachments) => <View style={styles.attachmentList}>{items.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} onLongPress={attachment.type === 'photo' ? () => openPhotoActions(attachment) : undefined} overlay={attachment.type === 'photo' ? <AttachmentActionsButton onPress={() => openPhotoActions(attachment)} style={styles.attachmentActionsOverlay} iconColor="#FFFFFF" /> : undefined} /></View>)}</View>} />
-            {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={`Add a description to ${messageFallback(message)}`} onPress={() => openContentEditor(message)} style={styles.addDescription}><Icon name="add" size={16} color={contentAccentStrong} /><AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>Add description</AppText></Pressable> : null}
+            <MessageContentRenderer message={message} mode="detail" accentColor={detail.boardAccent ?? undefined} onPressText={message.text ? () => openContentEditor(message) : undefined} textAccessibilityLabel={messages.length > 1 ? tr("id.editThoughtValue", { value1: index + 1 }) : tr("id.editContent")} onImageLongPress={openPhotoActions} renderAttachments={(items = message.attachments) => <View style={styles.attachmentList}>{items.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} onLongPress={attachment.type === 'photo' ? () => openPhotoActions(attachment) : undefined} overlay={attachment.type === 'photo' ? <AttachmentActionsButton onPress={() => openPhotoActions(attachment)} style={styles.attachmentActionsOverlay} iconColor="#FFFFFF" /> : undefined} /></View>)}</View>} />
+            {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addADescriptionToValue", { value1: messageFallback(message) })} onPress={() => openContentEditor(message)} style={styles.addDescription}><Icon name="add" size={16} color={contentAccentStrong} /><AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>{tr("id.addDescription")}</AppText></Pressable> : null}
             {index < messages.length - 1 ? <View style={styles.contentThoughtDivider} /> : null}
           </View>)}
         </NotePaper>
@@ -539,7 +547,7 @@ export default function CardDetailScreen() {
         {/* One quiet row: "Remind me", or the reminder's time once set. */}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={reminder ? `Reminder, ${reminder.scheduledAt < renderedAt ? 'Overdue. ' : ''}${formatReminder(new Date(reminder.scheduledAt), new Date())}${notificationsAllowed ? '' : '. Notifications are off'}. Change or remove` : 'Remind me. Get notified about this card'}
+          accessibilityLabel={reminder ? tr("id.reminderValueValueValueChangeOrRemove", { value1: reminder.scheduledAt < renderedAt ? 'Overdue. ' : '', value2: formatReminder(new Date(reminder.scheduledAt), new Date()), value3: notificationsAllowed ? '' : tr("id.notificationsAreOff2") }) : tr("id.remindMeGetNotifiedAboutThisCard")}
           onPress={openReminderSheet}
           style={({ pressed }) => [styles.reminderRow, panel, pressed && styles.pressed]}
         >
@@ -547,42 +555,42 @@ export default function CardDetailScreen() {
             <Icon name={reminder ? 'notifications' : 'notifications-outline'} size={17} color={reminder ? contentAccentStrong : theme.textSecondary} />
           </View>
           <View style={styles.flexCopy}>
-            <AppText style={styles.actionTitle}>{reminder ? formatReminder(new Date(reminder.scheduledAt), new Date()) : 'Remind me'}</AppText>
-            <AppText style={styles.actionCopy}>{reminder ? reminder.scheduledAt < renderedAt ? 'Overdue · Change or remove' : notificationsAllowed ? 'Reminder' : 'Notifications are off' : 'Get notified about this card'}</AppText>
+            <AppText style={styles.actionTitle}>{reminder ? formatReminder(new Date(reminder.scheduledAt), new Date()) : tr("id.remindMe")}</AppText>
+            <AppText style={styles.actionCopy}>{reminder ? reminder.scheduledAt < renderedAt ? tr("id.overdueChangeOrRemove") : notificationsAllowed ? tr("id.reminder") : tr("id.notificationsAreOff") : tr("id.getNotifiedAboutThisCard")}</AppText>
           </View>
           <Icon name="chevron-forward" size={16} color={theme.textMuted} />
         </Pressable>
 
         <ConnectedNotes noteKey={`card:${id}`} />
-        <View style={styles.sectionHeader}><AppText accessibilityRole="header" style={styles.sectionTitle}>DETAILS</AppText></View>
+        <View style={styles.sectionHeader}><AppText accessibilityRole="header" style={styles.sectionTitle}>{tr("id.details")}</AppText></View>
         <View style={[styles.detailsCard, panel]}>
           <View style={styles.detailGroup}>
-            <Pressable accessibilityRole="link" accessibilityLabel={`Open board ${detail.boardName}`} onPress={() => router.push({ pathname: '/board/[id]', params: { id: detail.boardId } })} style={({ pressed }) => [styles.detailRow, styles.detailLinkRow, pressed && styles.pressed]}>
-              <AppText style={styles.detailLabel}>Board</AppText><AppText style={[styles.detailValue, styles.detailLinkValue]}>{detail.boardName}</AppText>
+            <Pressable accessibilityRole="link" accessibilityLabel={tr("id.openBoardValue", { value1: detail.boardName })} onPress={() => router.push({ pathname: '/board/[id]', params: { id: detail.boardId } })} style={({ pressed }) => [styles.detailRow, styles.detailLinkRow, pressed && styles.pressed]}>
+              <AppText style={styles.detailLabel}>{tr("id.board")}</AppText><AppText style={[styles.detailValue, styles.detailLinkValue]}>{detail.boardName}</AppText>
               <Icon name="chevron-forward" size={16} color={theme.textMuted} />
             </Pressable>
-            <Pressable accessibilityRole="link" accessibilityLabel={`Open column ${detail.columnName} in ${detail.boardName}`} onPress={() => router.push({ pathname: '/board/[id]', params: { id: detail.boardId, highlightColumnId: detail.columnId } })} style={({ pressed }) => [styles.detailRow, styles.detailLinkRow, pressed && styles.pressed]}>
-              <AppText style={styles.detailLabel}>Column</AppText><AppText style={[styles.detailValue, styles.detailLinkValue]}>{detail.columnName}</AppText>
+            <Pressable accessibilityRole="link" accessibilityLabel={tr("id.openColumnValueInValue", { value1: detail.columnName, value2: detail.boardName })} onPress={() => router.push({ pathname: '/board/[id]', params: { id: detail.boardId, highlightColumnId: detail.columnId } })} style={({ pressed }) => [styles.detailRow, styles.detailLinkRow, pressed && styles.pressed]}>
+              <AppText style={styles.detailLabel}>{tr("id.column")}</AppText><AppText style={[styles.detailValue, styles.detailLinkValue]}>{detail.columnName}</AppText>
               <Icon name="chevron-forward" size={16} color={theme.textMuted} />
             </Pressable>
           </View>
           <View style={styles.detailDivider} />
           <View style={styles.detailGroup}>
-            <View style={styles.detailRow}><AppText style={styles.detailLabel}>Created</AppText><AppText style={styles.detailValue}>{createdLabel}</AppText></View>
-            {editedAt ? <View style={styles.detailRow}><AppText style={styles.detailLabel}>Edited</AppText><AppText style={styles.detailValue}>{detailDate(editedAt)}</AppText></View> : null}
-            {detail.pinned ? <View style={styles.detailRow}><AppText style={styles.detailLabel}>Pinned</AppText><AppText style={styles.detailValue}>Yes</AppText></View> : null}
+            <View style={styles.detailRow}><AppText style={styles.detailLabel}>{tr("id.created")}</AppText><AppText style={styles.detailValue}>{createdLabel}</AppText></View>
+            {editedAt ? <View style={styles.detailRow}><AppText style={styles.detailLabel}>{tr("id.edited")}</AppText><AppText style={styles.detailValue}>{detailDate(editedAt)}</AppText></View> : null}
+            {detail.pinned ? <View style={styles.detailRow}><AppText style={styles.detailLabel}>{tr("index.pinned")}</AppText><AppText style={styles.detailValue}>{tr("id.yes")}</AppText></View> : null}
           </View>
         </View>
 
         <View style={styles.sectionHeader}>
-          <AppText accessibilityRole="header" style={styles.sectionTitle}>ATTACHMENTS</AppText>
+          <AppText accessibilityRole="header" style={styles.sectionTitle}>{tr("id.attachments2")}</AppText>
           {cardAttachments.length ? <View style={styles.countBadge}><AppText style={styles.countText}>{cardAttachments.length}</AppText></View> : null}
         </View>
         {cardAttachments.length === 0 ? <View style={styles.commentsEmpty}>
-          <AppText style={styles.commentsEmptyTitle}>No attachments yet.</AppText>
-          <Pressable accessibilityRole="button" accessibilityLabel="Add attachment" disabled={attachmentBusy} onPress={openAddAttachment} style={styles.addDescription}>
+          <AppText style={styles.commentsEmptyTitle}>{tr("id.noAttachmentsYet")}</AppText>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addAttachment")} disabled={attachmentBusy} onPress={openAddAttachment} style={styles.addDescription}>
             {showAttachmentLoader ? <ChitsLoader size="small" /> : <Icon name="add" size={16} color={contentAccentStrong} />}
-            <AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>Add attachment</AppText>
+            <AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>{tr("id.addAttachment")}</AppText>
           </Pressable>
         </View> : <>
           {cardAttachments.some((attachment) => attachment.type !== 'file') ? <View style={styles.attachmentGrid}>
@@ -591,96 +599,96 @@ export default function CardDetailScreen() {
           {cardAttachments.some((attachment) => attachment.type === 'file') ? <View style={[styles.attachmentList, styles.attachmentFileList]}>
             {cardAttachments.filter((attachment) => attachment.type === 'file').map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} onLongPress={() => openCardAttachmentActions(attachment)} overlay={<AttachmentActionsButton onPress={() => openCardAttachmentActions(attachment)} style={styles.attachmentActionsInline} iconColor={theme.textMuted} />} /></View>)}
           </View> : null}
-          <Pressable accessibilityRole="button" accessibilityLabel="Add attachment" disabled={attachmentBusy} onPress={openAddAttachment} style={styles.addAttachmentRow}>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addAttachment")} disabled={attachmentBusy} onPress={openAddAttachment} style={styles.addAttachmentRow}>
             {showAttachmentLoader ? <ChitsLoader size="small" /> : <Icon name="add" size={16} color={contentAccentStrong} />}
-            <AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>Add attachment</AppText>
+            <AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>{tr("id.addAttachment")}</AppText>
           </Pressable>
         </>}
 
         <View style={styles.sectionHeader}>
-          <AppText accessibilityRole="header" style={styles.sectionTitle}>COMMENTS</AppText>
+          <AppText accessibilityRole="header" style={styles.sectionTitle}>{tr("id.comments")}</AppText>
           {comments.length ? <View style={styles.countBadge}><AppText style={styles.countText}>{comments.length}</AppText></View> : null}
         </View>
         {comments.length === 0 ? <View style={styles.commentsEmpty}>
-          <AppText style={styles.commentsEmptyTitle}>No comments yet.</AppText>
-          <AppText style={styles.commentsEmptyCopy}>Add context, updates, or notes here.</AppText>
+          <AppText style={styles.commentsEmptyTitle}>{tr("id.noCommentsYet")}</AppText>
+          <AppText style={styles.commentsEmptyCopy}>{tr("id.addContextUpdatesOrNotesHere")}</AppText>
         </View> : <View style={styles.commentList}>
           {comments.map((comment, index) => { const isBeingEdited = editingCommentId === comment.id; return <View key={comment.id}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Comment. ${comment.text} ${commentTimeLabel(comment.createdAt)}${comment.updatedAt !== comment.createdAt ? '. Edited' : ''}.${isBeingEdited ? ' Currently editing.' : ''}`}
-              accessibilityHint={isBeingEdited ? undefined : 'Hold for edit, copy, and delete options'}
+              accessibilityLabel={tr("id.commentValueValueValueValue", { value1: comment.text, value2: commentTimeLabel(comment.createdAt), value3: comment.updatedAt !== comment.createdAt ? '. Edited' : '', value4: isBeingEdited ? tr("id.currentlyEditing") : '' })}
+              accessibilityHint={isBeingEdited ? undefined : tr("id.holdForEditCopyAndDeleteOptions")}
               onLongPress={isBeingEdited ? undefined : () => openCommentActions(comment)}
               delayLongPress={350}
               style={({ pressed }) => [styles.commentBody, isBeingEdited && styles.commentBeingEdited, pressed && !isBeingEdited && styles.pressed]}
             >
               <AppText style={styles.commentText}>{comment.text}</AppText>
               <View style={styles.commentMetaRow}>
-                <AppText style={styles.commentMeta}>{isBeingEdited ? 'Editing…' : `${commentTimeLabel(comment.createdAt)}${comment.updatedAt !== comment.createdAt ? ' · Edited' : ''}`}</AppText>
-                {isBeingEdited ? null : <Pressable accessibilityRole="button" accessibilityLabel="Comment options" hitSlop={8} onPress={() => openCommentActions(comment)} style={styles.commentMore}><Icon name="ellipsis-horizontal" size={16} color={theme.textMuted} /></Pressable>}
+                <AppText style={styles.commentMeta}>{isBeingEdited ? tr("id.editing") : `${commentTimeLabel(comment.createdAt)}${comment.updatedAt !== comment.createdAt ? ' · Edited' : ''}`}</AppText>
+                {isBeingEdited ? null : <Pressable accessibilityRole="button" accessibilityLabel={tr("id.commentOptions")} hitSlop={8} onPress={() => openCommentActions(comment)} style={styles.commentMore}><Icon name="ellipsis-horizontal" size={16} color={theme.textMuted} /></Pressable>}
               </View>
             </Pressable>
             {index < comments.length - 1 ? <View style={styles.thoughtDivider} /> : null}
           </View>; })}
         </View>}
 
-        <View style={styles.sectionHeader}><AppText accessibilityRole="header" style={styles.sectionTitle}>CARD ACTIONS</AppText></View>
+        <View style={styles.sectionHeader}><AppText accessibilityRole="header" style={styles.sectionTitle}>{tr("id.cardActions")}</AppText></View>
         <View style={[styles.cardActions, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.panel, clip: true })]}>
           {!covered ? <>
-            <Pressable accessibilityRole="button" accessibilityHint="Turn this card into an image you can share or save." onPress={openShareNote} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
+            <Pressable accessibilityRole="button" accessibilityHint={tr("id.turnThisCardIntoAnImageYouCan")} onPress={openShareNote} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
               <Icon name="images-outline" size={18} color={theme.textSecondary} />
-              <View style={styles.flexCopy}><AppText style={styles.actionTitle}>Share Note</AppText><AppText style={styles.actionCopy}>Turn this card into an image you can share or save.</AppText></View>
+              <View style={styles.flexCopy}><AppText style={styles.actionTitle}>{tr("index.shareNote")}</AppText><AppText style={styles.actionCopy}>{tr("id.turnThisCardIntoAnImageYouCan")}</AppText></View>
             </Pressable>
             <View style={styles.actionDivider} />
           </> : null}
           {spaceAction ? <>
             <Pressable accessibilityRole="button" onPress={confirmSpaceAction} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
               <Icon name={spaceAction.icon} size={18} color={theme.textSecondary} />
-              <View style={styles.flexCopy}><AppText style={styles.actionTitle}>{spaceAction.label}</AppText><AppText style={styles.actionCopy}>{spaceAction.icon === 'magnet-outline' ? 'Put this card on a space as a sticky note you can move around.' : 'Take this card’s sticky note off its space.'}</AppText></View>
+              <View style={styles.flexCopy}><AppText style={styles.actionTitle}>{spaceAction.label}</AppText><AppText style={styles.actionCopy}>{spaceAction.icon === 'magnet-outline' ? tr("id.putThisCardOnASpaceAsA") : tr("id.takeThisCardSStickyNoteOffIts")}</AppText></View>
             </Pressable>
             <View style={styles.actionDivider} />
           </> : null}
           <Pressable accessibilityRole="button" onPress={() => void setContentHidden(!contentHidden)} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
             <Icon name={contentHidden ? 'eye-outline' : 'eye-off-outline'} size={18} color={theme.textSecondary} />
-            <View style={styles.flexCopy}><AppText style={styles.actionTitle}>{contentHidden ? 'Show content' : 'Hide content'}</AppText><AppText style={styles.actionCopy}>{contentHidden ? 'Make this card and its Chits visible again.' : 'Cover this card on the board and its Chits in Chat.'}</AppText></View>
+            <View style={styles.flexCopy}><AppText style={styles.actionTitle}>{contentHidden ? tr("id.showContent") : tr("id.hideContent")}</AppText><AppText style={styles.actionCopy}>{contentHidden ? tr("id.makeThisCardAndItsChitsVisibleAgain") : tr("id.coverThisCardOnTheBoardAndIts")}</AppText></View>
           </Pressable>
           <View style={styles.actionDivider} />
-          <Pressable accessibilityRole="button" accessibilityLabel="Move back to Unorganized" accessibilityHint="Remove this card from its board and return its linked Chit to Unorganized." onPress={moveBackToUnorganized} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr("index.moveBackToUnorganized")} accessibilityHint={tr("id.removeThisCardFromItsBoardAndReturn")} onPress={moveBackToUnorganized} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
             <Icon name="arrow-undo-outline" size={18} color={theme.textSecondary} />
-            <View style={styles.flexCopy}><AppText style={styles.actionTitle}>Move back to Unorganized</AppText><AppText style={styles.actionCopy}>Keeps your original Chits — just removes this card.</AppText></View>
+            <View style={styles.flexCopy}><AppText style={styles.actionTitle}>{tr("index.moveBackToUnorganized")}</AppText><AppText style={styles.actionCopy}>{tr("id.keepsYourOriginalChitsJustRemovesThisCard")}</AppText></View>
           </Pressable>
           <View style={styles.actionDivider} />
           <Pressable accessibilityRole="button" onPress={archive} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
             <Icon name="archive-outline" size={18} color={theme.textSecondary} />
-            <View style={styles.flexCopy}><AppText style={styles.actionTitle}>Archive card</AppText><AppText style={styles.actionCopy}>Hide it while keeping it recoverable.</AppText></View>
+            <View style={styles.flexCopy}><AppText style={styles.actionTitle}>{tr("index.archiveCard")}</AppText><AppText style={styles.actionCopy}>{tr("id.hideItWhileKeepingItRecoverable")}</AppText></View>
           </Pressable>
           <View style={styles.actionDivider} />
           <Pressable accessibilityRole="button" onPress={destroy} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
             <Icon name="trash-outline" size={18} color={theme.danger} />
-            <View style={styles.flexCopy}><AppText style={styles.deleteTitle}>Delete card</AppText><AppText style={styles.actionCopy}>Original thoughts remain available in Chat.</AppText></View>
+            <View style={styles.flexCopy}><AppText style={styles.deleteTitle}>{tr("index.deleteCard")}</AppText><AppText style={styles.actionCopy}>{tr("id.originalThoughtsRemainAvailableInChat")}</AppText></View>
           </Pressable>
         </View>
       </ScrollView>
 
       <View style={[styles.stickyComposer, { paddingBottom: insets.bottom + spacing.xs, backgroundColor: theme.background, borderTopColor: theme.borderSubtle }]}>
         {editingCommentId ? <View style={styles.composerEditBar}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Cancel edit" hitSlop={8} onPress={cancelCommentEdit} style={styles.composerEditCancel}><Icon name="close" size={16} color={theme.textMuted} /><AppText style={styles.composerEditCancelText}>Cancel</AppText></Pressable>
-          <AppText style={[styles.composerEditLabel, { color: contentAccentStrong }]}>Editing comment</AppText>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr("id.cancelEdit")} hitSlop={8} onPress={cancelCommentEdit} style={styles.composerEditCancel}><Icon name="close" size={16} color={theme.textMuted} /><AppText style={styles.composerEditCancelText}>{tr("chat.cancel")}</AppText></Pressable>
+          <AppText style={[styles.composerEditLabel, { color: contentAccentStrong }]}>{tr("id.editingComment")}</AppText>
         </View> : null}
         <View style={styles.stickyComposerRow}>
           <TextInput
             ref={commentInputRef}
-            accessibilityLabel={editingCommentId ? 'Edit comment' : 'Add a comment'}
+            accessibilityLabel={editingCommentId ? tr("id.editComment") : tr("id.addAComment2")}
             value={editingCommentId ? commentEditDraft : commentDraft}
             onChangeText={editingCommentId ? setCommentEditDraft : setCommentDraft}
-            placeholder="Add a comment..."
+            placeholder={tr("id.addAComment")}
             placeholderTextColor={theme.textMuted}
             multiline
             style={styles.commentInput}
           />
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={editingCommentId ? 'Save comment' : 'Send comment'}
+            accessibilityLabel={editingCommentId ? tr("id.saveComment") : tr("id.sendComment")}
             accessibilityState={{ disabled: !(editingCommentId ? commentEditDraft : commentDraft).trim() || savingComment }}
             disabled={!(editingCommentId ? commentEditDraft : commentDraft).trim() || savingComment}
             onPress={() => void (editingCommentId ? saveCommentEdit() : sendComment())}

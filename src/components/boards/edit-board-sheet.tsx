@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
@@ -25,6 +27,9 @@ const MAX_BOARD_NAME_LENGTH = 80;
 // EDIT BOARD APPEARANCE. Reuses BoardAppearanceFields verbatim so the picker is
 // never a second, drifted design.
 export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const controls = useStickyControls();
   const inputRef = useRef<TextInput>(null);
@@ -57,7 +62,7 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
   }, [board, visible]);
 
   const trimmedName = name.trim();
-  const validation = touched && !trimmedName ? 'Board name can’t be empty.' : null;
+  const validation = touched && !trimmedName ? tr("editboardsheet.boardNameCanTBeEmpty") : null;
   const hasChanges = trimmedName !== original.name || icon !== original.icon || accent !== original.accent;
   const canSave = Boolean(trimmedName && hasChanges && !saving);
 
@@ -74,7 +79,7 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
       await onSave({ name: trimmedName, icon, accent });
       onClose();
     } catch {
-      setError('Couldn’t save these changes. Try again.');
+      setError(tr("editboardsheet.couldnTSaveTheseChangesTryAgain"));
     } finally {
       setSaving(false);
     }
@@ -85,25 +90,25 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
       ref={scrollRef}
       visible={visible}
       onRequestClose={close}
-      closeAccessibilityLabel="Cancel editing board"
+      closeAccessibilityLabel={tr("editboardsheet.cancelEditingBoard")}
       onModalShow={() => requestAnimationFrame(() => inputRef.current?.focus())}
       contentContainerStyle={styles.content}
     >
       <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
-      <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Edit board</AppText>
-      <AppText style={[styles.supportingCopy, { color: theme.textSecondary }]}>Update this board’s name and appearance.</AppText>
+      <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{tr("id.editBoard")}</AppText>
+      <AppText style={[styles.supportingCopy, { color: theme.textSecondary }]}>{tr("editboardsheet.updateThisBoardSNameAndAppearance")}</AppText>
 
-      <View accessible accessibilityLabel={`Preview: ${trimmedName || 'Untitled board'}`} style={[styles.preview, controls.panel, { backgroundColor: theme.background, borderColor: theme.borderSubtle }]}>
+      <View accessible accessibilityLabel={tr("editboardsheet.previewValue", { value1: trimmedName || tr("editboardsheet.untitledBoard") })} style={[styles.preview, controls.panel, { backgroundColor: theme.background, borderColor: theme.borderSubtle }]}>
         <View style={[styles.previewMark, { backgroundColor: accent ?? theme.accentSoft }]}>
           <Icon name={resolveBoardIcon(icon)} size={19} color={accent ? '#FFFFFF' : theme.accentStrong} />
         </View>
-        <AppText numberOfLines={1} style={[styles.previewName, { color: theme.textPrimary }]}>{trimmedName || 'Untitled board'}</AppText>
+        <AppText numberOfLines={1} style={[styles.previewName, { color: theme.textPrimary }]}>{trimmedName || tr("editboardsheet.untitledBoard")}</AppText>
       </View>
 
-      <AppText nativeID="board-name-label" style={[styles.label, { color: theme.textSecondary }]}>Board name</AppText>
+      <AppText nativeID="board-name-label" style={[styles.label, { color: theme.textSecondary }]}>{tr("index.boardName")}</AppText>
       <TextInput
         ref={inputRef}
-        accessibilityLabel="Board name"
+        accessibilityLabel={tr("index.boardName")}
         accessibilityLabelledBy="board-name-label"
         value={name}
         onChangeText={(value) => {
@@ -134,11 +139,11 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
 
       <View style={styles.actions}>
         <Pressable accessibilityRole="button" disabled={saving} onPress={close} style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
-          <AppText style={[styles.cancelText, { color: theme.textSecondary }]}>Cancel</AppText>
+          <AppText style={[styles.cancelText, { color: theme.textSecondary }]}>{tr("chat.cancel")}</AppText>
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Save changes"
+          accessibilityLabel={tr("columnmanagementsheet.saveChanges")}
           accessibilityState={{ disabled: !canSave }}
           disabled={!canSave}
           onPress={() => void save()}
@@ -149,7 +154,7 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
             pressed && canSave && styles.pressed,
           ]}
         >
-          {saving ? <ActivityIndicator accessibilityLabel="Saving changes" size="small" color={theme.accentText} /> : <AppText style={[styles.saveText, { color: theme.accentText }]}>Save changes</AppText>}
+          {saving ? <ActivityIndicator accessibilityLabel={tr("editboardsheet.savingChanges")} size="small" color={theme.accentText} /> : <AppText style={[styles.saveText, { color: theme.accentText }]}>{tr("columnmanagementsheet.saveChanges")}</AppText>}
         </Pressable>
       </View>
     </FormSheet>

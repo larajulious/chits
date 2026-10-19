@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { SPACES, type SpaceId } from '@/constants/spaces';
@@ -120,9 +121,9 @@ function rowToItem(row: Row, kind: CalendarNoteKind): CalendarItem | null {
     endMinute: scheduled ? row.endMinute : null,
     reminderAt: row.reminderAt,
     reminderOffset: row.reminderAt !== null ? row.reminderOffset : null,
-    title: row.hidden ? 'Hidden note' : row.title?.trim() || row.preview?.trim().split(/\r?\n/)[0] || (row.attachmentCount ? 'Attachment note' : 'Untitled note'),
+    get title() { return row.hidden ? tr("entrydetailsheet.hiddenNote") : row.title?.trim() || row.preview?.trim().split(/\r?\n/)[0] || (row.attachmentCount ? tr("calendardata.attachmentNote") : tr("calendardata.untitledNote")); },
     hasTitle: !row.hidden && Boolean(row.title?.trim()),
-    source: space ? `Space · ${space}` : kind === 'card' ? `Board · ${row.boardName ?? 'Board'}` : 'Chat',
+    get source() { return space ? `${tr("spaces.space")} · ${spaceName(row.spaceId)}` : kind === 'card' ? `${tr("id.board")} · ${row.boardName ?? tr("id.board")}` : tr("calendarnotepicker.chat"); },
     spaceId: space ? row.spaceId as SpaceId : null,
     boardName: row.boardName,
     boardAccent: row.boardAccent,
@@ -201,7 +202,7 @@ export function sortCalendarItems(items: CalendarItem[]): CalendarItem[] {
 function rangeBounds(range: CalendarRange): [number, number] {
   const from = parseDayKey(range.from);
   const to = parseDayKey(range.to);
-  if (!from || !to) throw new Error('Invalid calendar range.');
+  if (!from || !to) throw new Error(tr("calendardata.invalidCalendarRange"));
   return [from.getTime(), addLocalDays(to, 1).getTime()];
 }
 
@@ -260,7 +261,7 @@ export async function getCalendarEntry(database: SQLiteDatabase, note: CalendarN
 /** Plans a note on a day (or moves it); one entry per note, so repeating this never duplicates. */
 export async function saveCalendarEntry(database: SQLiteDatabase, note: CalendarNoteRef, schedule: CalendarSchedule, reminderOffset: number | null): Promise<void> {
   const value = normalizeSchedule(schedule);
-  if (reminderOffset !== null && (!Number.isInteger(reminderOffset) || reminderOffset < 0)) throw new Error('Invalid reminder offset.');
+  if (reminderOffset !== null && (!Number.isInteger(reminderOffset) || reminderOffset < 0)) throw new Error(tr("calendardata.invalidReminderOffset"));
   const now = Date.now();
   const column = noteColumn(note.kind);
   await database.runAsync(

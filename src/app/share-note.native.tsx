@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,7 +24,7 @@ import { captureShareNote, discardShareNoteImage, saveShareNoteImage, shareNoteE
 import { loadShareNoteSource } from '@/services/share-note-source';
 
 type Busy = 'generating' | 'saving' | 'sharing' | null;
-const BUSY_LABEL: Record<Exclude<Busy, null>, string> = { generating: 'Generating image…', saving: 'Saving image…', sharing: 'Opening share sheet…' };
+const BUSY_LABEL: Record<Exclude<Busy, null>, string> = { get generating() { return tr("sharenote.generatingImage"); }, get saving() { return tr("sharenote.savingImage"); }, get sharing() { return tr("sharenote.openingShareSheet"); } };
 const FORMAT_DETAIL: Record<ShareNoteFormat, string> = { portrait: '4:5', square: '1:1', story: '9:16' };
 const IMAGE_WAIT_MS = 5000;
 
@@ -36,6 +38,9 @@ const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() 
  * drawn at exactly 1080px wide, so it's crisp and never a screenshot of the app.
  */
 export default function ShareNoteScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const { messageId, cardId } = useLocalSearchParams<{ messageId?: string; cardId?: string }>();
   const { tokens: theme, identity } = useTheme();
@@ -154,7 +159,7 @@ export default function ShareNoteScreen() {
     try {
       for (let index = 0; index < pages.length; index++) {
         const view = exportRefs.current[index];
-        if (!view) throw new Error('Share Note canvas is not ready.');
+        if (!view) throw new Error(tr("sharenote.shareNoteCanvasIsNotReady"));
         const name = pages.length > 1 ? `Chits Note Page ${index + 1} of ${pages.length}` : undefined;
         const height = flowing ? Math.round(pageHeights[index] * SHARE_NOTE_FORMATS[format].width / 360) : undefined;
         files.push(await captureShareNote(view, format, pages[index].content.images.length > 0, name, height));
@@ -180,18 +185,18 @@ export default function ShareNoteScreen() {
           const outcome = await saveShareNoteImage(file);
           if (outcome.status === 'saved') { saved++; destination = outcome.savedTo; continue; }
           if (outcome.status === 'failed' && outcome.code === 'permission') showPermissionSettingsPrompt('photos');
-          else if (outcome.status === 'failed') setToast(saved ? `${saved} of ${files.length} pages saved. The rest could not be saved.` : outcome.code === 'no_space' ? 'Not enough storage space to save this image.' : 'Couldn’t save the image. Please try again.');
-          else if (saved) setToast(`${saved} of ${files.length} pages saved.`);
+          else if (outcome.status === 'failed') setToast(saved ? tr("messages.ofPagesSavedTheRestCouldNotBe", { value1: saved, value2: files.length }) : outcome.code === 'no_space' ? tr("sharenote.notEnoughStorageSpaceToSaveThisImage") : tr("sharenote.couldnTSaveTheImagePleaseTryAgain"));
+          else if (saved) setToast(tr("sharenote.valueOfValuePagesSaved", { value1: saved, value2: files.length }));
           break;
         }
-        if (saved === files.length) { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); setToast(files.length === 1 ? destination : `${files.length} images saved in checklist order.`); }
+        if (saved === files.length) { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); setToast(files.length === 1 ? destination : tr("messages.imagesSavedInChecklistOrder", { value1: files.length })); }
       } else {
         setBusy('sharing');
-        if (!await shareShareNoteImages(files)) setToast('Sharing isn’t available right now.');
+        if (!await shareShareNoteImages(files)) setToast(tr("sharenote.sharingIsnTAvailableRightNow"));
       }
     } catch (error) {
       console.warn('[share-note] export failed', error);
-      setToast('Couldn’t create the image. Please try again.');
+      setToast(tr("sharenote.couldnTCreateTheImagePleaseTryAgain"));
     } finally {
       busyRef.current = false;
       setBusy(null);
@@ -199,25 +204,25 @@ export default function ShareNoteScreen() {
   };
 
   const close = () => { if (router.canGoBack()) router.back(); else router.replace('/chat'); };
-  const header = <AppHeader title="Create Share Note" leading={<IconButton label="Close" onPress={close}><HeaderIcon name="close" size={24} /></IconButton>} />;
+  const header = <AppHeader title={tr("sharenote.createShareNote")} leading={<IconButton label={tr("attachments.close")} onPress={close}><HeaderIcon name="close" size={24} /></IconButton>} />;
 
-  if (source === undefined) return <Screen>{header}<View style={styles.center}>{showLoader ? <ChitsLoader label="Preparing preview…" /> : null}</View></Screen>;
+  if (source === undefined) return <Screen>{header}<View style={styles.center}>{showLoader ? <ChitsLoader label={tr("sharenote.preparingPreview")} /> : null}</View></Screen>;
 
   const availability = source ? shareNoteAvailability(source) : null;
   if (!source || !availability?.ok) {
     return <Screen>{header}
       <View style={styles.center}>
         <View style={[styles.emptyIcon, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name="image-outline" size={26} color={theme.textMuted} /></View>
-        <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>{source ? 'Nothing to share yet' : 'Note unavailable'}</Text>
-        <Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>{availability && !availability.ok ? availability.message : 'It may have been archived or deleted.'}</Text>
-        <Pressable accessibilityRole="button" onPress={close} style={({ pressed }) => [styles.emptyButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}><Text style={[styles.emptyButtonText, { color: theme.textPrimary }]}>Close</Text></Pressable>
+        <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>{source ? tr("sharenote.nothingToShareYet") : tr("revisit.noteUnavailable")}</Text>
+        <Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>{availability && !availability.ok ? availability.message : tr("id.itMayHaveBeenArchivedOrDeleted")}</Text>
+        <Pressable accessibilityRole="button" onPress={close} style={({ pressed }) => [styles.emptyButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}><Text style={[styles.emptyButtonText, { color: theme.textPrimary }]}>{tr("attachments.close")}</Text></Pressable>
       </View>
     </Screen>;
   }
 
   const modes = availableShareNoteModes(source);
-  const modeHint = !modes.image ? 'Add a photo to this note to use image layouts.' : !modes.text ? 'This note has no text, so it’s shared as an image.' : null;
-  const imageHint = mode === 'image' && !selectedIds.length ? 'Choose an image to include.' : SHARE_NOTE_COPY.imageLimit;
+  const modeHint = !modes.image ? tr("sharenote.addAPhotoToThisNoteToUse") : !modes.text ? tr("sharenote.thisNoteHasNoTextSoItS") : null;
+  const imageHint = mode === 'image' && !selectedIds.length ? tr("sharenote.chooseAnImageToInclude") : SHARE_NOTE_COPY.imageLimit;
 
   // The preview is the same template at a smaller width; keep it within the upper part of the screen.
   const ratio = standardMeasurement?.layout.canvas.height ? standardMeasurement.layout.canvas.height / standardMeasurement.layout.canvas.width : SHARE_NOTE_FORMATS[format].height / SHARE_NOTE_FORMATS[format].width;
@@ -245,33 +250,33 @@ export default function ShareNoteScreen() {
     <View style={[styles.flex, { backgroundColor: theme.background }]}>
       {header}
       <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
-        <Text style={[styles.helper, { color: theme.textMuted }]}>Turn this note into a beautiful image you can share or save.</Text>
-        {hasChecklist && !rowsReady ? <Text style={[styles.helper, { color: theme.textMuted }]}>Preparing checklist preview…</Text> : pages.map((page, index) => <View key={`preview:${renderKey}:${index}`} accessible accessibilityRole="image" accessibilityLabel={`Preview page ${index + 1} of ${pages.length}, ${shareTheme.name} theme`} style={[styles.preview, { width: previewWidth, backgroundColor: theme.surface }, !hasChecklist && !content.blocks?.length && { height: previewWidth * ratio }, index > 0 && { marginTop: spacing.md }]}>
+        <Text style={[styles.helper, { color: theme.textMuted }]}>{tr("sharenote.turnThisNoteIntoABeautifulImageYou")}</Text>
+        {hasChecklist && !rowsReady ? <Text style={[styles.helper, { color: theme.textMuted }]}>{tr("sharenote.preparingChecklistPreview")}</Text> : pages.map((page, index) => <View key={`preview:${renderKey}:${index}`} accessible accessibilityRole="image" accessibilityLabel={tr("sharenote.previewPageValueOfValueValueTheme", { value1: index + 1, value2: pages.length, value3: shareTheme.name })} style={[styles.preview, { width: previewWidth, backgroundColor: theme.surface }, !hasChecklist && !content.blocks?.length && { height: previewWidth * ratio }, index > 0 && { marginTop: spacing.md }]}>
           <ShareNoteTemplate content={page.content} theme={shareTheme} format={format} mode={page.mode} showBranding={showBranding} width={previewWidth} page={{ index, total: pages.length }} />
         </View>)}
-        {oversizedPage ? <InfoLine icon="alert-circle-outline" tone="warning" message="A checklist item is too long for one image. Shorten it before saving or sharing." /> : null}
+        {oversizedPage ? <InfoLine icon="alert-circle-outline" tone="warning" message={tr("sharenote.aChecklistItemIsTooLongForOne")} /> : null}
         {standardMeasurement?.fit?.truncated ? <InfoLine icon="alert-circle-outline" tone="warning" message={SHARE_NOTE_COPY.tooLong} /> : null}
-        {source.unsupportedCount ? <InfoLine icon="information-circle-outline" message={`${SHARE_NOTE_COPY.unsupported} Videos, audio and files on this note aren’t included.`} /> : null}
+        {source.unsupportedCount ? <InfoLine icon="information-circle-outline" message={tr("sharenote.valueVideosAudioAndFilesOnThisNote", { value1: SHARE_NOTE_COPY.unsupported })} /> : null}
 
-        <ControlSection title="THEME">
+        <ControlSection title={tr("sharenote.theme")}>
           <ThemePicker value={themeId} onChange={(id) => { void Haptics.selectionAsync(); setThemeId(id); }} />
         </ControlSection>
 
-        <ControlSection title="CONTENT" hint={modeHint}>
-          <SegmentedControl label="Content" value={mode} onChange={setMode} options={SHARE_NOTE_MODES.map((option) => ({ ...option, disabled: !modes[option.key] }))} />
-          {source.subtasks.length ? <InfoLine icon="checkbox-outline" message={`${source.subtasks.length} checklist items are included automatically.`} /> : null}
+        <ControlSection title={tr("id.content")} hint={modeHint}>
+          <SegmentedControl label={tr("sharenote.content")} value={mode} onChange={setMode} options={SHARE_NOTE_MODES.map((option) => ({ ...option, disabled: !modes[option.key] }))} />
+          {source.subtasks.length ? <InfoLine icon="checkbox-outline" message={tr("sharenote.valueChecklistItemsAreIncludedAutomatically", { value1: source.subtasks.length })} /> : null}
         </ControlSection>
 
-        {mode !== 'text' && source.images.length ? <ControlSection title="IMAGES" hint={limitReached ? SHARE_NOTE_COPY.imageLimit : imageHint} hintEmphasis={limitReached}>
+        {mode !== 'text' && source.images.length ? <ControlSection title={tr("sharenote.images")} hint={limitReached ? SHARE_NOTE_COPY.imageLimit : imageHint} hintEmphasis={limitReached}>
           <ImageSelector images={source.images} selected={selectedIds} onToggle={toggleImage} />
         </ControlSection> : null}
 
-        <ControlSection title="SIZE">
-          <SegmentedControl label="Size" value={format} onChange={setFormat} options={(Object.keys(SHARE_NOTE_FORMATS) as ShareNoteFormat[]).map((key) => ({ key, label: SHARE_NOTE_FORMATS[key].label, detail: FORMAT_DETAIL[key] }))} />
+        <ControlSection title={tr("sharenote.size")}>
+          <SegmentedControl label={tr("sharenote.size2")} value={format} onChange={setFormat} options={(Object.keys(SHARE_NOTE_FORMATS) as ShareNoteFormat[]).map((key) => ({ key, label: SHARE_NOTE_FORMATS[key].label, detail: FORMAT_DETAIL[key] }))} />
         </ControlSection>
 
-        <ControlSection title="BRANDING">
-          <ToggleRow label="Show “Shared from Chits”" value={showBranding} onChange={setShowBranding} />
+        <ControlSection title={tr("sharenote.branding")}>
+          <ToggleRow label={tr("sharenote.showSharedFromChits")} value={showBranding} onChange={setShowBranding} />
         </ControlSection>
       </ScrollView>
 
@@ -280,11 +285,11 @@ export default function ShareNoteScreen() {
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canExport || Boolean(busy) }} disabled={!canExport || Boolean(busy)} onPress={() => void run('save')} style={({ pressed }) => [styles.action, { backgroundColor: theme.surfaceElevated }, (!canExport || busy) && styles.disabled, pressed && styles.pressed]}>
             <Ionicons accessible={false} name="download-outline" size={19} color={theme.textPrimary} />
-            <Text style={[styles.actionText, { color: theme.textPrimary }]}>{pages.length > 1 ? 'Save Images' : 'Save Image'}</Text>
+            <Text style={[styles.actionText, { color: theme.textPrimary }]}>{pages.length > 1 ? tr("sharenote.saveImages") : tr("sharenote.saveImage")}</Text>
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canExport || Boolean(busy) }} disabled={!canExport || Boolean(busy)} onPress={() => void run('share')} style={({ pressed }) => [styles.action, { backgroundColor: theme.accent }, (!canExport || busy) && styles.disabled, pressed && styles.pressed]}>
             <Ionicons accessible={false} name={Platform.OS === 'ios' ? 'share-outline' : 'share-social-outline'} size={19} color={theme.accentText} />
-            <Text style={[styles.actionText, { color: theme.accentText }]}>{pages.length > 1 ? 'Share Images' : 'Share Image'}</Text>
+            <Text style={[styles.actionText, { color: theme.accentText }]}>{pages.length > 1 ? tr("sharenote.shareImages") : tr("sharenote.shareImage")}</Text>
           </Pressable>
         </View>
       </View>

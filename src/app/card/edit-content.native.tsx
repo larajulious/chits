@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ConnectedNotes } from '@/components/notes/connected-notes.native';
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
@@ -29,6 +31,9 @@ const signature = (blocks: NoteDraftBlock[]) => JSON.stringify(blocks.map((block
 // Details' own useFocusEffect reload picks up the saved change automatically
 // without this screen needing to reach back into its caller's state.
 export default function EditContentScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const { messageId, autoFocus } = useLocalSearchParams<{ messageId: string; autoFocus?: string }>();
   const messageRepository = useMemo(() => createMessageRepository(database), [database]);
@@ -83,10 +88,10 @@ export default function EditContentScreen() {
       event.preventDefault();
       confirm({
         type: 'destructive',
-        title: 'Discard changes?',
-        message: 'Your edits haven’t been saved.',
-        confirmText: 'Discard',
-        cancelText: 'Keep Editing',
+        title: tr("editcontent.discardChanges"),
+        message: tr("editcontent.yourEditsHavenTBeenSaved"),
+        confirmText: tr("editcontent.discard"),
+        cancelText: tr("editcontent.keepEditing"),
         onConfirm: () => { discardPastedImages(blocksRef.current); navigation.dispatch(event.data.action); },
       });
     });
@@ -105,7 +110,7 @@ export default function EditContentScreen() {
       justSavedRef.current = true;
       router.back();
     } catch {
-      setError('Chits could not save your changes. Try again.');
+      setError(tr("editcontent.chitsCouldNotSaveYourChangesTryAgain"));
       setSaving(false);
     }
   }, [blocks, canSave, messageId, messageRepository]);
@@ -113,9 +118,9 @@ export default function EditContentScreen() {
   return (
     <Screen edges={['top', 'left', 'right']}>
       <AppHeader
-        title="Edit Note"
-        leading={<IconButton label="Cancel" disabled={saving || pasteImage.pasting} onPress={() => router.back()}><HeaderIcon name="close" size={24} /></IconButton>}
-        trailing={<IconButton label="Save" disabled={!canSave} onPress={() => void save()}><Icon name={saving ? 'ellipsis-horizontal' : 'checkmark'} size={24} color={canSave ? (headerInk.banded ? headerInk.ink : theme.accent) : headerInk.inkMuted} /></IconButton>}
+        title={tr("editcontent.editNote")}
+        leading={<IconButton label={tr("chat.cancel")} disabled={saving || pasteImage.pasting} onPress={() => router.back()}><HeaderIcon name="close" size={24} /></IconButton>}
+        trailing={<IconButton label={tr("editcontent.save")} disabled={!canSave} onPress={() => void save()}><Icon name={saving ? 'ellipsis-horizontal' : 'checkmark'} size={24} color={canSave ? (headerInk.banded ? headerInk.ink : theme.accent) : headerInk.inkMuted} /></IconButton>}
       />
       <ConnectedNotes noteKey={`thought:${messageId}`} compact />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -127,11 +132,11 @@ export default function EditContentScreen() {
             words and images stack in one scrolling column instead. */}
         <NoteBlocksEditor
           ref={inputRef}
-          accessibilityLabel="Note content"
+          accessibilityLabel={tr("editcontent.noteContent")}
           blocks={blocks}
           onChangeBlocks={changeBlocks}
           onReplaceImage={(key) => void pasteImage.pick(key)}
-          placeholder="Start writing…"
+          placeholder={tr("editcontent.startWriting")}
           maxLength={10000}
           editable={!saving && !pasteImage.pasting}
           maxImageHeight={360}

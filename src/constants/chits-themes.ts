@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import type { ShareNoteFontMetrics } from '../services/share-note';
 
 // Chits themes: one identity ("Calm", "Boss"…) powers both the app's look and
@@ -22,9 +23,9 @@ export const DEFAULT_THEME_IDENTITY: ChitsThemeIdentity = 'default';
  * type, palette, texture and spacing, never by jokes or stereotypes.
  */
 export const THEME_COLLECTIONS = [
-  { id: 'personalities', name: 'Personalities' },
-  { id: 'generations', name: 'Generations' },
-  { id: 'limited-edition', name: 'Limited Edition' },
+  { id: 'personalities', get name() { return tr("chitsthemes.personalities"); } },
+  { id: 'generations', get name() { return tr("chitsthemes.generations"); } },
+  { id: 'limited-edition', get name() { return tr("chitsthemes.limitedEdition"); } },
 ] as const;
 export type ThemeCollectionId = typeof THEME_COLLECTIONS[number]['id'];
 
@@ -160,15 +161,15 @@ const BASE_LOOK: ChitsLook = { headingWeight: '600', cardShadowOpacity: 0.07, ch
 
 export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
   default: {
-    id: 'default', category: 'personalities', name: 'Default', description: 'Off-white paper and Chits yellow', palette: null, look: BASE_LOOK,
+    id: 'default', category: 'personalities', get name() { return tr("chatappearancesettings.default"); }, get description() { return tr("chitsthemes.offWhitePaperAndChitsYellow"); }, palette: null, look: BASE_LOOK,
     shareNote: {
-      id: 'default', name: 'Chits', mood: 'Classic sticky note', backgroundType: 'solid',
+      id: 'default', name: 'Chits', get mood() { return tr("chitsthemes.classicStickyNote"); }, backgroundType: 'solid',
       colors: { background: '#F7F8F6', backgroundEnd: '#F7F8F6', surface: '#FFFDF6', textPrimary: '#24231F', textSecondary: '#5F5C52', accent: '#7A5C00', decoration: '#FBE47E' },
       fontStyle: 'casual', decorationStyle: 'none', mark: 'tape', align: 'left',
     },
   },
   casual: {
-    id: 'casual', category: 'personalities', name: 'Casual', description: 'Relaxed, warm and paper-like',
+    id: 'casual', category: 'personalities', get name() { return tr("chitsthemes.casual"); }, get description() { return tr("chitsthemes.relaxedWarmAndPaperLike"); },
     palette: {
       light: {
         background: '#FAF7F0', surface: '#F3EEE3', surfaceElevated: '#EAE3D5', textPrimary: '#2A241C', textSecondary: '#5A5144', textMuted: '#6A6152', borderSubtle: '#E2DACB',
@@ -183,13 +184,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '600', cardShadowOpacity: 0.05, chatPattern: 'none' },
     shareNote: {
-      id: 'casual', name: 'Casual', mood: 'Relaxed and everyday', backgroundType: 'gradient',
+      id: 'casual', get name() { return tr("chitsthemes.casual"); }, get mood() { return tr("chitsthemes.relaxedAndEveryday"); }, backgroundType: 'gradient',
       colors: { background: '#FFF1DE', backgroundEnd: '#FFD9B8', surface: '#FFFCF7', textPrimary: '#2E2219', textSecondary: '#72604F', accent: '#D0701F', decoration: '#FFC999' },
       fontStyle: 'casual', decorationStyle: 'soft-shapes', mark: 'quote', align: 'left',
     },
   },
   corporate: {
-    id: 'corporate', category: 'personalities', name: 'Corporate', description: 'Clean, structured and professional',
+    id: 'corporate', category: 'personalities', get name() { return tr("chitsthemes.corporate"); }, get description() { return tr("chitsthemes.cleanStructuredAndProfessional"); },
     palette: {
       light: {
         background: '#F7F8FA', surface: '#FFFFFF', surfaceElevated: '#EEF1F5', textPrimary: '#111827', textSecondary: '#4B5563', textMuted: '#636B78', borderSubtle: '#E1E5EB',
@@ -204,13 +205,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '700', cardShadowOpacity: 0.03, chatPattern: 'none' },
     shareNote: {
-      id: 'corporate', name: 'Corporate', mood: 'Clean, formal, minimal', backgroundType: 'pattern',
+      id: 'corporate', get name() { return tr("chitsthemes.corporate"); }, mood: 'Clean, formal, minimal', backgroundType: 'pattern',
       colors: { background: '#EDF0F4', backgroundEnd: '#EDF0F4', surface: '#FFFFFF', textPrimary: '#111827', textSecondary: '#566070', accent: '#2F5BEA', decoration: '#DCE1E9' },
       fontStyle: 'formal', decorationStyle: 'lines', mark: 'bar', align: 'left',
     },
   },
   love: {
-    id: 'love', category: 'personalities', name: 'Love', description: 'Warm, personal and gentle',
+    id: 'love', category: 'personalities', get name() { return tr("chitsthemes.love"); }, get description() { return tr("chitsthemes.warmPersonalAndGentle"); },
     palette: {
       light: {
         background: '#FCF7F6', surface: '#F9EEEE', surfaceElevated: '#F3E2E3', textPrimary: '#2E1A20', textSecondary: '#62454D', textMuted: '#74565E', borderSubtle: '#EDDCDE',
@@ -225,13 +226,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '600', cardShadowOpacity: 0.06, chatPattern: 'soft-shapes' },
     shareNote: {
-      id: 'love', name: 'Love', mood: 'Warm and heartfelt', backgroundType: 'gradient',
+      id: 'love', get name() { return tr("chitsthemes.love"); }, get mood() { return tr("chitsthemes.warmAndHeartfelt"); }, backgroundType: 'gradient',
       colors: { background: '#FFD7E1', backgroundEnd: '#FFA9C0', surface: '#FFF6F8', textPrimary: '#5A1D33', textSecondary: '#8E4E63', accent: '#D93F76', decoration: '#FFFFFF' },
       fontStyle: 'elegant', decorationStyle: 'stickers', mark: 'quote', align: 'center', stickers: ['heart', 'heart-outline', 'heart', 'sparkles'],
     },
   },
   friends: {
-    id: 'friends', category: 'personalities', name: 'Friends', description: 'Social, bright and relaxed',
+    id: 'friends', category: 'personalities', get name() { return tr("chitsthemes.friends"); }, get description() { return tr("chitsthemes.socialBrightAndRelaxed"); },
     palette: {
       light: {
         background: '#F7FAF9', surface: '#EEF6F3', surfaceElevated: '#E2EEEA', textPrimary: '#16211F', textSecondary: '#445652', textMuted: '#566864', borderSubtle: '#DAE7E3',
@@ -246,13 +247,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '700', cardShadowOpacity: 0.07, chatPattern: 'dots' },
     shareNote: {
-      id: 'friends', name: 'Friends', mood: 'Playful and cheerful', backgroundType: 'gradient',
+      id: 'friends', get name() { return tr("chitsthemes.friends"); }, get mood() { return tr("chitsthemes.playfulAndCheerful"); }, backgroundType: 'gradient',
       colors: { background: '#C4F1E4', backgroundEnd: '#FFE89E', surface: '#FFFFFF', textPrimary: '#1D292D', textSecondary: '#4F6166', accent: '#F2545B', decoration: '#FFFFFF' },
       fontStyle: 'playful', decorationStyle: 'stickers', mark: 'tape', align: 'left', stickers: ['happy', 'sparkles', 'star', 'musical-notes'],
     },
   },
   boss: {
-    id: 'boss', category: 'personalities', name: 'Boss', description: 'Confident, premium and focused',
+    id: 'boss', category: 'personalities', get name() { return tr("chitsthemes.boss"); }, get description() { return tr("chitsthemes.confidentPremiumAndFocused"); },
     palette: {
       light: {
         background: '#F5F4F1', surface: '#FFFFFF', surfaceElevated: '#ECEAE5', textPrimary: '#16171A', textSecondary: '#46464B', textMuted: '#5E5E63', borderSubtle: '#DFDCD5',
@@ -267,13 +268,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '700', cardShadowOpacity: 0.09, chatPattern: 'none' },
     shareNote: {
-      id: 'boss', name: 'Boss', mood: 'Confident and polished', backgroundType: 'pattern',
+      id: 'boss', get name() { return tr("chitsthemes.boss"); }, get mood() { return tr("chitsthemes.confidentAndPolished"); }, backgroundType: 'pattern',
       colors: { background: '#15171B', backgroundEnd: '#15171B', surface: '#1F2228', textPrimary: '#F6F1E7', textSecondary: '#B5AC99', accent: '#C9A55C', decoration: '#2A2D33' },
       fontStyle: 'formal', decorationStyle: 'lines', mark: 'bar', align: 'left',
     },
   },
   stranger: {
-    id: 'stranger', category: 'personalities', name: 'Stranger', description: 'Neutral and universally calm',
+    id: 'stranger', category: 'personalities', get name() { return tr("chitsthemes.stranger"); }, get description() { return tr("chitsthemes.neutralAndUniversallyCalm"); },
     palette: {
       light: {
         background: '#FAFAF8', surface: '#F3F3F0', surfaceElevated: '#EAEAE6', textPrimary: '#1A1A1A', textSecondary: '#525252', textMuted: '#666666', borderSubtle: '#E2E2DE',
@@ -288,13 +289,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '600', cardShadowOpacity: 0.04, chatPattern: 'none' },
     shareNote: {
-      id: 'stranger', name: 'Stranger', mood: 'Neutral and respectful', backgroundType: 'solid',
+      id: 'stranger', get name() { return tr("chitsthemes.stranger"); }, get mood() { return tr("chitsthemes.neutralAndRespectful"); }, backgroundType: 'solid',
       colors: { background: '#F3F3F1', backgroundEnd: '#F3F3F1', surface: '#FFFFFF', textPrimary: '#1C1C1C', textSecondary: '#666666', accent: '#80868F', decoration: '#E6E6E3' },
       fontStyle: 'formal', decorationStyle: 'none', mark: 'none', align: 'left',
     },
   },
   motivation: {
-    id: 'motivation', category: 'personalities', name: 'Motivation', description: 'Energetic, bold and purposeful',
+    id: 'motivation', category: 'personalities', get name() { return tr("chitsthemes.motivation"); }, get description() { return tr("chitsthemes.energeticBoldAndPurposeful"); },
     palette: {
       light: {
         background: '#FFFFFF', surface: '#FAF7F5', surfaceElevated: '#F2EDE9', textPrimary: '#141416', textSecondary: '#4E4E55', textMuted: '#63636A', borderSubtle: '#ECE6E1',
@@ -309,13 +310,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '800', cardShadowOpacity: 0.08, chatPattern: 'none' },
     shareNote: {
-      id: 'motivation', name: 'Motivation', mood: 'Bold and uplifting', backgroundType: 'gradient',
+      id: 'motivation', get name() { return tr("chitsthemes.motivation"); }, get mood() { return tr("chitsthemes.boldAndUplifting"); }, backgroundType: 'gradient',
       colors: { background: '#FF5A3D', backgroundEnd: '#FFB337', surface: '#131316', textPrimary: '#FFFFFF', textSecondary: '#C4C4CC', accent: '#FFB337', decoration: '#FFD27A' },
       fontStyle: 'bold', decorationStyle: 'soft-shapes', mark: 'bar', align: 'center',
     },
   },
   calm: {
-    id: 'calm', category: 'personalities', name: 'Calm', description: 'Peaceful, soft and spacious',
+    id: 'calm', category: 'personalities', get name() { return tr("chitsthemes.calm"); }, get description() { return tr("chitsthemes.peacefulSoftAndSpacious"); },
     palette: {
       light: {
         background: '#F6F8F7', surface: '#EEF3F2', surfaceElevated: '#E3EBEA', textPrimary: '#22302F', textSecondary: '#4A5C5A', textMuted: '#5B6C6A', borderSubtle: '#DCE5E3',
@@ -330,13 +331,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '600', cardShadowOpacity: 0.04, chatPattern: 'none' },
     shareNote: {
-      id: 'calm', name: 'Calm', mood: 'Soft and peaceful', backgroundType: 'gradient',
+      id: 'calm', get name() { return tr("chitsthemes.calm"); }, get mood() { return tr("chitsthemes.softAndPeaceful"); }, backgroundType: 'gradient',
       colors: { background: '#E6F0F1', backgroundEnd: '#CADDE0', surface: '#F8FBFB', textPrimary: '#233F3E', textSecondary: '#557472', accent: '#5A8983', decoration: '#DCEAEA' },
       fontStyle: 'elegant', decorationStyle: 'soft-shapes', mark: 'none', align: 'center',
     },
   },
   creative: {
-    id: 'creative', category: 'personalities', name: 'Creative', description: 'Expressive and editorial',
+    id: 'creative', category: 'personalities', get name() { return tr("chitsthemes.creative"); }, get description() { return tr("chitsthemes.expressiveAndEditorial"); },
     palette: {
       light: {
         background: '#FBF9F4', surface: '#F4F0E7', surfaceElevated: '#EAE4D8', textPrimary: '#1E1A2B', textSecondary: '#4F4860', textMuted: '#625A74', borderSubtle: '#E3DCCF',
@@ -351,13 +352,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '700', cardShadowOpacity: 0.08, chatPattern: 'confetti' },
     shareNote: {
-      id: 'creative', name: 'Creative', mood: 'Artsy and expressive', backgroundType: 'pattern',
+      id: 'creative', get name() { return tr("chitsthemes.creative"); }, get mood() { return tr("chitsthemes.artsyAndExpressive"); }, backgroundType: 'pattern',
       colors: { background: '#2B1B5E', backgroundEnd: '#2B1B5E', surface: '#FFF9EE', textPrimary: '#1F1A33', textSecondary: '#5E5673', accent: '#7C4DFF', decoration: '#FF7AB6' },
       fontStyle: 'expressive', decorationStyle: 'confetti', mark: 'quote', align: 'left', confetti: ['#FF7AB6', '#FFD166', '#06D6A0', '#7C9BFF'],
     },
   },
   cute: {
-    id: 'cute', category: 'personalities', name: 'Cute', description: 'Soft, friendly and charming',
+    id: 'cute', category: 'personalities', get name() { return tr("chitsthemes.cute"); }, get description() { return tr("chitsthemes.softFriendlyAndCharming"); },
     palette: {
       light: {
         background: '#FFF9FB', surface: '#FCF0F5', surfaceElevated: '#F7E3EC', textPrimary: '#3A2434', textSecondary: '#664A5E', textMuted: '#785A70', borderSubtle: '#F2DCE6',
@@ -372,13 +373,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '700', cardShadowOpacity: 0.06, chatPattern: 'dots' },
     shareNote: {
-      id: 'cute', name: 'Cute', mood: 'Charming and soft', backgroundType: 'pattern',
+      id: 'cute', get name() { return tr("chitsthemes.cute"); }, get mood() { return tr("chitsthemes.charmingAndSoft"); }, backgroundType: 'pattern',
       colors: { background: '#FFE6F0', backgroundEnd: '#FFE6F0', surface: '#FFFFFF', textPrimary: '#5B3754', textSecondary: '#8D6A86', accent: '#EE5A96', decoration: '#FFC4DA' },
       fontStyle: 'playful', decorationStyle: 'dots', mark: 'tape', align: 'center', stickers: ['star', 'heart'],
     },
   },
   christmas: {
-    id: 'christmas', category: 'personalities', name: 'Christmas', description: 'Festive pine, red and snow',
+    id: 'christmas', category: 'personalities', get name() { return tr("chitsthemes.christmas"); }, get description() { return tr("chitsthemes.festivePineRedAndSnow"); },
     palette: {
       light: {
         background: '#FBF8F3', surface: '#F4EEE4', surfaceElevated: '#EAE2D4', textPrimary: '#1F2A24', textSecondary: '#4E5A52', textMuted: '#5A655D', borderSubtle: '#E4DBCC',
@@ -393,13 +394,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '700', cardShadowOpacity: 0.07, chatPattern: 'dots' },
     shareNote: {
-      id: 'christmas', name: 'Christmas', mood: 'Festive and cosy', backgroundType: 'gradient',
+      id: 'christmas', get name() { return tr("chitsthemes.christmas"); }, get mood() { return tr("chitsthemes.festiveAndCosy"); }, backgroundType: 'gradient',
       colors: { background: '#1F5A40', backgroundEnd: '#123A2A', surface: '#FFF9EF', textPrimary: '#1F2A24', textSecondary: '#5E5A4E', accent: '#B3261E', decoration: '#FFFFFF' },
       fontStyle: 'elegant', decorationStyle: 'stickers', mark: 'quote', align: 'center', stickers: ['snow', 'gift', 'snow-outline', 'star'],
     },
   },
   spooky: {
-    id: 'spooky', category: 'personalities', name: 'Spooky', description: 'Moonlit purple and pumpkin',
+    id: 'spooky', category: 'personalities', get name() { return tr("chitsthemes.spooky"); }, get description() { return tr("chitsthemes.moonlitPurpleAndPumpkin"); },
     palette: {
       light: {
         background: '#FBF7F2', surface: '#F3ECE4', surfaceElevated: '#E9E0D5', textPrimary: '#231A2B', textSecondary: '#554A5E', textMuted: '#675C70', borderSubtle: '#E4DACE',
@@ -414,13 +415,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '700', cardShadowOpacity: 0.09, chatPattern: 'dots' },
     shareNote: {
-      id: 'spooky', name: 'Spooky', mood: 'Moonlit and mischievous', backgroundType: 'gradient',
+      id: 'spooky', get name() { return tr("chitsthemes.spooky"); }, get mood() { return tr("chitsthemes.moonlitAndMischievous"); }, backgroundType: 'gradient',
       colors: { background: '#1A1026', backgroundEnd: '#3B1C4A', surface: '#1C1622', textPrimary: '#F6EEE3', textSecondary: '#BDB1C8', accent: '#FF8A3D', decoration: '#6E4D8E' },
       fontStyle: 'expressive', decorationStyle: 'stickers', mark: 'quote', align: 'center', stickers: ['moon', 'skull', 'flame', 'cloudy-night'],
     },
   },
   'new-year': {
-    id: 'new-year', category: 'personalities', name: 'New Year', description: 'Midnight blue and champagne gold',
+    id: 'new-year', category: 'personalities', get name() { return tr("chitsthemes.newYear"); }, get description() { return tr("chitsthemes.midnightBlueAndChampagneGold"); },
     palette: {
       light: {
         background: '#FAF8F3', surface: '#F2EEE4', surfaceElevated: '#E8E2D5', textPrimary: '#161427', textSecondary: '#4A4760', textMuted: '#5C5973', borderSubtle: '#E2DCCD',
@@ -435,13 +436,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '800', cardShadowOpacity: 0.08, chatPattern: 'confetti' },
     shareNote: {
-      id: 'new-year', name: 'New Year', mood: 'Sparkling and hopeful', backgroundType: 'gradient',
+      id: 'new-year', get name() { return tr("chitsthemes.newYear"); }, get mood() { return tr("chitsthemes.sparklingAndHopeful"); }, backgroundType: 'gradient',
       colors: { background: '#0B1026', backgroundEnd: '#2A1B4F', surface: '#FFFBF0', textPrimary: '#161427', textSecondary: '#4E4A63', accent: '#8A6A12', decoration: '#F5C542' },
       fontStyle: 'bold', decorationStyle: 'confetti', mark: 'bar', align: 'center', confetti: ['#F5C542', '#E8E8F0', '#D4AF37', '#FF8FB1'],
     },
   },
   faith: {
-    id: 'faith', category: 'personalities', name: 'Faith', description: 'The cross of Jesus Christ, in warm light',
+    id: 'faith', category: 'personalities', get name() { return tr("chitsthemes.faith"); }, get description() { return tr("chitsthemes.theCrossOfJesusChristInWarmLight"); },
     palette: {
       light: {
         background: '#FCFAF5', surface: '#F5F0E6', surfaceElevated: '#ECE5D7', textPrimary: '#2B2418', textSecondary: '#5A4F3D', textMuted: '#6B604D', borderSubtle: '#E6DECF',
@@ -456,13 +457,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '600', cardShadowOpacity: 0.05, chatPattern: 'cross' },
     shareNote: {
-      id: 'faith', name: 'Faith', mood: 'The cross of Jesus Christ, in warm light', backgroundType: 'gradient',
+      id: 'faith', get name() { return tr("chitsthemes.faith"); }, get mood() { return tr("chitsthemes.theCrossOfJesusChristInWarmLight"); }, backgroundType: 'gradient',
       colors: { background: '#FFF4DF', backgroundEnd: '#EFD9AE', surface: '#FFFDF8', textPrimary: '#2B2418', textSecondary: '#6B5D45', accent: '#8C6A22', decoration: '#FFFFFF' },
       fontStyle: 'elegant', decorationStyle: 'cross', mark: 'cross', align: 'center',
     },
   },
   midnight: {
-    id: 'midnight', category: 'personalities', name: 'Midnight', description: 'Quiet, starry and late-night',
+    id: 'midnight', category: 'personalities', get name() { return tr("chitsthemes.midnight"); }, get description() { return tr("chitsthemes.quietStarryAndLateNight"); },
     palette: {
       light: {
         background: '#F6F7FB', surface: '#EEF0F8', surfaceElevated: '#E3E6F2', textPrimary: '#141A33', textSecondary: '#454C6B', textMuted: '#585F7E', borderSubtle: '#DDE1EE',
@@ -477,7 +478,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '600', cardShadowOpacity: 0.06, chatPattern: 'dots' },
     shareNote: {
-      id: 'midnight', name: 'Midnight', mood: 'Quiet and late-night', backgroundType: 'gradient',
+      id: 'midnight', get name() { return tr("chitsthemes.midnight"); }, get mood() { return tr("chitsthemes.quietAndLateNight"); }, backgroundType: 'gradient',
       colors: { background: '#0E1530', backgroundEnd: '#322B7A', surface: '#161C38', textPrimary: '#ECEEFA', textSecondary: '#A5ACD0', accent: '#93A2FF', decoration: '#5D63B8' },
       fontStyle: 'elegant', decorationStyle: 'dots', mark: 'quote', align: 'center',
     },
@@ -488,7 +489,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
   // didn't (a button fill under white text, say), the hue stays and only the
   // shade moves.
   boomers: {
-    id: 'boomers', category: 'generations', name: 'Boomers', description: 'Warm, classic and trustworthy',
+    id: 'boomers', category: 'generations', get name() { return tr("chitsthemes.boomers"); }, get description() { return tr("chitsthemes.warmClassicAndTrustworthy"); },
     palette: {
       light: {
         background: '#F6F0E4', surface: '#FFFDF8', surfaceElevated: '#EFE7D8', textPrimary: '#292521', textSecondary: '#554D44', textMuted: '#645C52', borderSubtle: '#D8CEBF',
@@ -503,13 +504,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '700', headingFont: 'serif', cardShadowOpacity: 0.06, chatPattern: 'none' },
     shareNote: {
-      id: 'boomers', name: 'Boomers', mood: 'Classic stationery, like a written letter', backgroundType: 'pattern',
+      id: 'boomers', get name() { return tr("chitsthemes.boomers"); }, get mood() { return tr("chitsthemes.classicStationeryLikeAWrittenLetter"); }, backgroundType: 'pattern',
       colors: { background: '#F1E8D6', backgroundEnd: '#F1E8D6', surface: '#FFFDF8', textPrimary: '#292521', textSecondary: '#645C52', accent: '#7B2D3E', decoration: '#DDD0BA' },
       fontStyle: 'classic', decorationStyle: 'ruled', mark: 'quote', align: 'left',
     },
   },
   'gen-x': {
-    id: 'gen-x', category: 'generations', name: 'Gen X', description: 'Dark, understated and retro-modern',
+    id: 'gen-x', category: 'generations', get name() { return tr("chitsthemes.genX"); }, get description() { return tr("chitsthemes.darkUnderstatedAndRetroModern"); },
     palette: {
       light: {
         background: '#F2F0EB', surface: '#FAF9F6', surfaceElevated: '#E6E3DC', textPrimary: '#1B1B1B', textSecondary: '#46443F', textMuted: '#5A5751', borderSubtle: '#D3CFC6',
@@ -524,13 +525,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '700', headingFont: 'mono', cardShadowOpacity: 0.03, chatPattern: 'grain' },
     shareNote: {
-      id: 'gen-x', name: 'Gen X', mood: 'A cassette label on a dark shell', backgroundType: 'pattern',
+      id: 'gen-x', get name() { return tr("chitsthemes.genX"); }, get mood() { return tr("chitsthemes.aCassetteLabelOnADarkShell"); }, backgroundType: 'pattern',
       colors: { background: '#171717', backgroundEnd: '#171717', surface: '#F2EFE9', textPrimary: '#1B1B1B', textSecondary: '#57534C', accent: '#8A6212', decoration: '#2A2A2A' },
       fontStyle: 'mono', decorationStyle: 'cassette', mark: 'bar', align: 'left', confetti: ['#D8A84E', '#C2693E', '#6F7F78'],
     },
   },
   millennials: {
-    id: 'millennials', category: 'generations', name: 'Millennials', description: 'Clean, soft and polished',
+    id: 'millennials', category: 'generations', get name() { return tr("chitsthemes.millennials"); }, get description() { return tr("chitsthemes.cleanSoftAndPolished"); },
     palette: {
       light: {
         background: '#F7F4F0', surface: '#FFFFFF', surfaceElevated: '#EFEAE4', textPrimary: '#30343B', textSecondary: '#52575F', textMuted: '#61666E', borderSubtle: '#E7E0DA',
@@ -545,13 +546,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '600', cardShadowOpacity: 0.08, chatPattern: 'soft-shapes' },
     shareNote: {
-      id: 'millennials', name: 'Millennials', mood: 'A tidy planner page in soft pastels', backgroundType: 'gradient',
+      id: 'millennials', get name() { return tr("chitsthemes.millennials"); }, get mood() { return tr("chitsthemes.aTidyPlannerPageInSoftPastels"); }, backgroundType: 'gradient',
       colors: { background: '#F6E9E4', backgroundEnd: '#E4EAF2', surface: '#FFFFFF', textPrimary: '#30343B', textSecondary: '#61666E', accent: '#9C6F68', decoration: '#D5C9C2' },
       fontStyle: 'casual', decorationStyle: 'dot-grid', mark: 'tape', align: 'left',
     },
   },
   'gen-z': {
-    id: 'gen-z', category: 'generations', name: 'Gen Z', description: 'Bold, expressive and social',
+    id: 'gen-z', category: 'generations', get name() { return tr("chitsthemes.genZ"); }, get description() { return tr("chitsthemes.boldExpressiveAndSocial"); },
     palette: {
       light: {
         background: '#FAFAFA', surface: '#FFFFFF', surfaceElevated: '#F0F0F2', textPrimary: '#121212', textSecondary: '#48484D', textMuted: '#5E5E65', borderSubtle: '#E2E2E6',
@@ -567,13 +568,13 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '800', cardShadowOpacity: 0.08, chatPattern: 'confetti', patternColors: ['#B7FF3C', '#9B7BFF', '#FF6EC7'] },
     shareNote: {
-      id: 'gen-z', name: 'Gen Z', mood: 'A bold social card with stickers', backgroundType: 'gradient',
+      id: 'gen-z', get name() { return tr("chitsthemes.genZ"); }, get mood() { return tr("chitsthemes.aBoldSocialCardWithStickers"); }, backgroundType: 'gradient',
       colors: { background: '#9B7BFF', backgroundEnd: '#FF6EC7', surface: '#1C1C1E', textPrimary: '#FFFFFF', textSecondary: '#B5B5B5', accent: '#B7FF3C', decoration: '#FFFFFF' },
       fontStyle: 'bold', decorationStyle: 'stickers', mark: 'tape', align: 'left', stickers: ['flash', 'star', 'sparkles', 'heart'],
     },
   },
   'gen-alpha': {
-    id: 'gen-alpha', category: 'generations', name: 'Gen Alpha', description: 'Bright, futuristic and playful',
+    id: 'gen-alpha', category: 'generations', get name() { return tr("chitsthemes.genAlpha"); }, get description() { return tr("chitsthemes.brightFuturisticAndPlayful"); },
     palette: {
       light: {
         background: '#EEF7FF', surface: '#FFFFFF', surfaceElevated: '#E3EDFA', textPrimary: '#1C2440', textSecondary: '#434C69', textMuted: '#555D7B', borderSubtle: '#DCE6F5',
@@ -588,7 +589,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '700', headingFont: 'rounded', cardShadowOpacity: 0.07, chatPattern: 'geometric', patternColors: ['#536DFE', '#00C8C8', '#FFB84D', '#FF70A6'] },
     shareNote: {
-      id: 'gen-alpha', name: 'Gen Alpha', mood: 'A futuristic card with floating shapes', backgroundType: 'gradient',
+      id: 'gen-alpha', get name() { return tr("chitsthemes.genAlpha"); }, get mood() { return tr("chitsthemes.aFuturisticCardWithFloatingShapes"); }, backgroundType: 'gradient',
       colors: { background: '#DDEFFF', backgroundEnd: '#EADFFF', surface: '#FFFFFF', textPrimary: '#1C2440', textSecondary: '#555D7B', accent: '#3F57E8', decoration: '#FFFFFF' },
       fontStyle: 'playful', decorationStyle: 'geometric', mark: 'bar', align: 'left', confetti: ['#536DFE', '#00C8C8', '#FFB84D', '#FF70A6'],
     },
@@ -597,7 +598,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
   // ── Limited Edition ──
   // Themes with their own artwork, worn in the header band.
   'game-changer': {
-    id: 'game-changer', category: 'limited-edition', name: 'Game Changer', description: 'Sunlit arches, navy and garden gold',
+    id: 'game-changer', category: 'limited-edition', get name() { return tr("chitsthemes.gameChanger"); }, get description() { return tr("chitsthemes.sunlitArchesNavyAndGardenGold"); },
     palette: {
       light: {
         background: '#F8F4EC', surface: '#FFFCF6', surfaceElevated: '#EFE8DA', textPrimary: '#18203A', textSecondary: '#454C60', textMuted: '#5A6072', borderSubtle: '#E3DACA',
@@ -612,7 +613,7 @@ export const CHITS_THEMES: Record<ChitsThemeIdentity, ChitsTheme> = {
     },
     look: { headingWeight: '800', cardShadowOpacity: 0.07, chatPattern: 'none', bandImage: 'game-changer' },
     shareNote: {
-      id: 'game-changer', name: 'Game Changer', mood: 'Bold, sunny and self-made', backgroundType: 'gradient',
+      id: 'game-changer', get name() { return tr("chitsthemes.gameChanger"); }, get mood() { return tr("chitsthemes.boldSunnyAndSelfMade"); }, backgroundType: 'gradient',
       colors: { background: '#1E2A47', backgroundEnd: '#2F5A3A', surface: '#FFFCF6', textPrimary: '#18203A', textSecondary: '#5A6072', accent: '#B8861A', decoration: '#E0B43A' },
       fontStyle: 'bold', decorationStyle: 'soft-shapes', mark: 'bar', align: 'left',
     },

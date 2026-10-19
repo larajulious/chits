@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -19,8 +20,8 @@ export async function stageAttachment(sourceUri: string, type: MessageType, meta
   try {
     return await persistAttachment(sourceUri, { type, ...metadata });
   } catch (error) {
-    console.warn('[attachment-import]', { type, operation: 'stage', error: error instanceof Error ? error.message : 'Unknown error', scheme: sourceUri.split(':', 1)[0] });
-    throw error instanceof Error ? error : new Error('The attachment could not be prepared.');
+    console.warn('[attachment-import]', { type, operation: 'stage', error: error instanceof Error ? error.message : tr("attachmentimport.unknownError"), scheme: sourceUri.split(':', 1)[0] });
+    throw error instanceof Error ? error : new Error(tr("attachmentimport.theAttachmentCouldNotBePrepared"));
   }
 }
 
@@ -48,7 +49,7 @@ export async function pickAndStageMedia(type: 'photo' | 'video'): Promise<Attach
   });
   if (result.canceled) return null;
   const asset = result.assets?.[0];
-  if (!asset?.uri) throw new Error('That media item could not be read. Please try another one.');
+  if (!asset?.uri) throw new Error(tr("id.thatMediaItemCouldNotBeReadPlease"));
   return stageAttachment(asset.uri, type, { originalName: asset.fileName ?? null, mimeType: asset.mimeType ?? null, size: asset.fileSize ?? null, duration: asset.duration ?? null, width: asset.width || null, height: asset.height || null });
 }
 
@@ -57,6 +58,6 @@ export async function pickAndStageFile(): Promise<AttachmentDraft | null> {
   const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
   if (result.canceled) return null;
   const asset = result.assets?.[0];
-  if (!asset?.uri) throw new Error('That file could not be read. Please try another one.');
+  if (!asset?.uri) throw new Error(tr("id.thatFileCouldNotBeReadPleaseTry"));
   return stageAttachment(asset.uri, 'file', { originalName: asset.name, mimeType: asset.mimeType ?? null, size: asset.size ?? null, duration: null, width: null, height: null });
 }

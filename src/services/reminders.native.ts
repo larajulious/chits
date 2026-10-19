@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import { Platform } from 'react-native';
 import * as Notifications from './local-notifications.native';
 import type { SQLiteDatabase } from 'expo-sqlite';
@@ -6,7 +7,7 @@ import { createReminderRepository } from '@/db/repositories';
 import { listScheduledReminders, moveReminderTimes } from '@/features/calendar/calendar-data';
 import { planScheduleReminderUpdates } from '@/features/calendar/calendar-schedule';
 import { resolvePermission, type PermissionState } from '@/services/permissions';
-import { planReminderSync, reminderBody, REMINDER_NOTIFICATION_TYPE, REMINDER_TITLE, type ScheduledReminder } from '@/services/reminder-content';
+import { planReminderSync, reminderBody, reminderBodyAlternatives, REMINDER_NOTIFICATION_TYPE, reminderTitle, type ScheduledReminder } from '@/services/reminder-content';
 import { isBackupOperationActive } from '@/services/backup-operation';
 
 import { hasExactReminderAccess, restorePendingReminderAlarms } from './reminder-alarm-access';
@@ -50,8 +51,8 @@ let channelReady: Promise<void> | null = null;
 export function ensureReminderChannel(): Promise<void> {
   if (Platform.OS !== 'android') return Promise.resolve();
   channelReady ??= Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-    name: 'Reminders',
-    description: 'Reminders you set on your Chits cards',
+    name: tr("reminders.reminders"),
+    description: tr("reminders.remindersYouSetOnYourChitsCards"),
     importance: Notifications.AndroidImportance.HIGH,
     // No `sound`: on a channel it names a bundled custom file; leaving it out
     // uses the device's default notification sound.
@@ -91,7 +92,7 @@ async function scheduleNotification(cardId: string, scheduledAt: number, body: s
   await ensureReminderChannel();
   return Notifications.scheduleNotificationAsync({
     content: {
-      title: REMINDER_TITLE,
+      title: reminderTitle(),
       body,
       sound: 'default',
       data: { type: REMINDER_NOTIFICATION_TYPE, cardId, url: `/card/${cardId}` },
@@ -175,7 +176,7 @@ async function messageNotifications() {
 async function scheduleMessageNotification(messageId: string, scheduledAt: number, body: string) {
   await ensureReminderChannel();
   return Notifications.scheduleNotificationAsync({
-    content: { title: REMINDER_TITLE, body, sound: 'default', data: { type: MESSAGE_REMINDER_TYPE, messageId, url: `/chat?messageId=${messageId}` } },
+    content: { title: reminderTitle(), body, sound: 'default', data: { type: MESSAGE_REMINDER_TYPE, messageId, url: `/chat?messageId=${messageId}` } },
     trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(scheduledAt), channelId: CHANNEL_ID },
   });
 }
@@ -283,6 +284,7 @@ async function runSync(database: SQLiteDatabase) {
     notificationId: row.notificationId,
     cardActive: row.cardActive === 1,
     body: reminderBody({ hidden: row.hidden === 1, text: row.text, title: row.title, attachmentType: row.attachmentType }),
+    bodyAlternatives: reminderBodyAlternatives({ hidden: row.hidden === 1, text: row.text, title: row.title, attachmentType: row.attachmentType }),
   })), scheduled, Date.now());
   const changed = plan.deleteRows.length > 0 || plan.cancel.length > 0 || plan.schedule.length > 0;
   for (const identifier of plan.cancel) await cancelNotification(identifier);
@@ -314,7 +316,7 @@ async function runSync(database: SQLiteDatabase) {
     if (row.scheduledAt <= Date.now()) continue;
     const body = reminderBody({ text: row.text, title: null, hidden: row.hidden === 1, attachmentType: row.attachmentType });
     const current = deviceMessages.find((item) => item.identifier === row.notificationId);
-    if (current?.content.data?.messageId === row.messageId && current.content.body === body) { keepMessages.add(current.identifier); continue; }
+    if (current?.content.data?.messageId === row.messageId && (current.content.body === body || reminderBodyAlternatives({ text: row.text, title: null, hidden: row.hidden === 1, attachmentType: row.attachmentType }).includes(current.content.body ?? ''))) { keepMessages.add(current.identifier); continue; }
     if (!await hasNotificationPermission()) continue;
     try {
       const notificationId = await scheduleMessageNotification(row.messageId, row.scheduledAt, body);

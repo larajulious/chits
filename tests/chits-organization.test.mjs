@@ -3,10 +3,11 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import ts from 'typescript';
 
+const english = JSON.parse(readFileSync(new URL('../src/localization/locales/en.json', import.meta.url), 'utf8'));
 const source = readFileSync(new URL('../src/services/chits-organization.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const module = { exports: {} };
-new Function('module', 'exports', compiled)(module, module.exports);
+new Function('module', 'exports', 'require', compiled)(module, module.exports, () => ({ tr: (key) => english[key] }));
 const guidance = module.exports;
 const message = (text, types = []) => ({ text, attachments: types.map((type) => ({ type })) });
 

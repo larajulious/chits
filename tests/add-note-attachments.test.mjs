@@ -6,9 +6,9 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf
 
 test('Add note sheet can attach a photo, video or file and cleans up a discarded one', () => {
   const sheet = read('src/components/boards/add-note-sheet.tsx');
-  assert.match(sheet, /\{ key: 'photo', label: 'Photo'/);
-  assert.match(sheet, /\{ key: 'video', label: 'Video'/);
-  assert.match(sheet, /\{ key: 'file', label: 'File'/);
+  assert.match(sheet, /\{ key: 'photo', get label\(\) \{ return tr\("id\.photo"\)/);
+  assert.match(sheet, /\{ key: 'video', get label\(\) \{ return tr\("addcardattachmentsheet\.video"\)/);
+  assert.match(sheet, /\{ key: 'file', get label\(\) \{ return tr\("addcardattachmentsheet\.file"\)/);
   assert.doesNotMatch(sheet, /key: 'audio'/);
   assert.match(sheet, /const canAdd = \(Boolean\(trimmed\) \|\| noteHasChecklist\(blocks\) \|\| Boolean\(draft\) \|\| imageCount > 0\) && canSubmit && !busy;/);
   // Dismissing deletes the staged copy; a successful save keeps it.
@@ -67,7 +67,7 @@ test('the system prompt is shown at most once per attempt and a fresh refusal is
 
 test('every permission flow stops quietly on a fresh refusal and offers Settings only on a repeat attempt', () => {
   const prompt = read('src/components/permissions/permission-settings-prompt.ts');
-  assert.match(prompt, /\{ text: 'Cancel', style: 'cancel' \},\s*\{ text: 'Open Settings', onPress: \(\) => void Linking\.openSettings\(\) \}/);
+  assert.match(prompt, /\{ text: tr\("chat\.cancel"\), style: 'cancel' \},\s*\{ text: tr\("calendar\.openSettings"\), onPress: \(\) => void Linking\.openSettings\(\) \}/);
 
   const microphone = read('src/components/chat/attachment-picker.native.tsx');
   assert.match(microphone, /if \(access === 'denied'\) return;/);

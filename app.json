@@ -11,7 +11,7 @@
       "icon": "./assets/images/app_icon.png",
       "bundleIdentifier": "com.larajulious.chitsapp",
       "version": "1.0.6",
-      "buildNumber": "17",
+      "buildNumber": "18",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryAddUsageDescription": "Chits saves a copy of a photo, video or Share Note image to your photo library only when you choose to save it.",
@@ -31,7 +31,8 @@
               ]
             }
           }
-        ]
+        ],
+        "CFBundleDevelopmentRegion": "en"
       },
       "appleTeamId": "9JQLWTZ683"
     },
@@ -103,7 +104,47 @@
           "color": "#6E63D9"
         }
       ],
-      "expo-localization"
+      [
+        "expo-localization",
+        {
+          "supportedLocales": {
+            "ios": [
+              "en",
+              "fil",
+              "pt-BR",
+              "es",
+              "id",
+              "fr",
+              "de",
+              "ja",
+              "ko",
+              "it",
+              "vi",
+              "hi",
+              "tr",
+              "ar"
+            ],
+            "android": [
+              "en",
+              "fil",
+              "pt-BR",
+              "es",
+              "id",
+              "fr",
+              "de",
+              "ja",
+              "ko",
+              "it",
+              "vi",
+              "hi",
+              "tr",
+              "ar"
+            ]
+          },
+          "allowDynamicLocaleChangesAndroid": true,
+          "supportsRTL": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
@@ -114,6 +155,22 @@
       "eas": {
         "projectId": "304ddcfb-f959-4355-a163-5d6315e68c13"
       }
+    },
+    "locales": {
+      "en": "./src/localization/native/en.json",
+      "fil": "./src/localization/native/fil.json",
+      "pt-BR": "./src/localization/native/pt-BR.json",
+      "es": "./src/localization/native/es.json",
+      "id": "./src/localization/native/id.json",
+      "fr": "./src/localization/native/fr.json",
+      "de": "./src/localization/native/de.json",
+      "ja": "./src/localization/native/ja.json",
+      "ko": "./src/localization/native/ko.json",
+      "it": "./src/localization/native/it.json",
+      "vi": "./src/localization/native/vi.json",
+      "hi": "./src/localization/native/hi.json",
+      "tr": "./src/localization/native/tr.json",
+      "ar": "./src/localization/native/ar.json"
     }
   }
 }

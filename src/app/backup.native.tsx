@@ -1,3 +1,5 @@
+import { countLabel, getFormattingLocale, tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { usePreventRemove } from 'expo-router/react-navigation';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FS from 'expo-file-system/legacy';
@@ -18,8 +20,11 @@ import type { BackupProgress } from '@/services/backup-operation';
 import { backupErrorMessage, createBackup, discardCreatedBackup, discardValidatedBackup, RestoreError, restoreBackup, saveBackupFile, validateBackup, type CreatedBackup, type ValidatedBackup } from '@/services/backup-service';
 
 function sizeLabel(bytes: number) { return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`; }
-function quantity(count: number, noun: string) { return `${count} ${noun}${count === 1 ? '' : 's'}`; }
+function quantity(count: number, noun: string) { return countLabel(noun, count); }
 export default function BackupScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const { tokens, look } = useTheme();
   const headerInk = useHeaderInk();
@@ -52,34 +57,34 @@ export default function BackupScreen() {
   const finish = () => { locked.current = false; if (mounted.current) setProgress(null); };
   const save = async (backup: CreatedBackup) => {
     const saved = await saveBackupFile(backup.uri);
-    if (!saved) { setNotice('Backup created. Choose Save Backup File to keep a copy.'); return; }
+    if (!saved) { setNotice(tr("backup.backupCreatedChooseSaveBackupFileToKeep")); return; }
     // Export success is independent of the optional local "last backup" display.
     const now = Date.now();
     await database.runAsync("INSERT INTO app_settings (key, value, updated_at) VALUES ('last_backup_at', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at", String(now), now).catch(() => undefined);
-    setNotice('Backup saved');
+    setNotice(tr("backup.backupSaved"));
     await discardCreatedBackup(backup.uri);
     createdRef.current = null;
     setNeedsSave(false);
   };
   const create = async () => {
-    if (!start('Preparing backup…')) return;
+    if (!start(tr("backup.preparingBackup"))) return;
     try {
       if (createdRef.current) await discardCreatedBackup(createdRef.current.uri);
       setCreated(null); setNeedsSave(false); createdRef.current = null;
       const backup = await createBackup(database, updateProgress);
       createdRef.current = backup; setCreated(backup);
       setNeedsSave(true);
-      updateProgress({ label: 'Saving backup…' });
+      updateProgress({ label: tr("backup.savingBackup") });
       await save(backup);
     } catch (cause) {
       console.warn('[backup] create/save failed', cause);
-      setError(backupErrorMessage(cause, 'The backup could not be saved. Choose another location and try again.'));
+      setError(backupErrorMessage(cause, tr("backup.theBackupCouldNotBeSavedChooseAnother")));
     } finally { finish(); }
   };
   const saveAgain = async () => {
-    if (!createdRef.current || !start('Saving backup…')) return;
+    if (!createdRef.current || !start(tr("backup.savingBackup"))) return;
     try { await save(createdRef.current); }
-    catch (cause) { setError(backupErrorMessage(cause, 'The backup could not be saved. Choose another location and try again.')); }
+    catch (cause) { setError(backupErrorMessage(cause, tr("backup.theBackupCouldNotBeSavedChooseAnother"))); }
     finally { finish(); }
   };
   const cancelRestore = async (backup: ValidatedBackup) => {
@@ -87,38 +92,38 @@ export default function BackupScreen() {
     await discardValidatedBackup(backup);
   };
   const restore = async (backup: ValidatedBackup) => {
-    if (!start('Preparing restore…')) return;
+    if (!start(tr("backup.preparingRestore"))) return;
     // The confirmation dialog closes as soon as its synchronous callback returns.
     try {
       await restoreBackup(backup, database, updateProgress);
       pendingRef.current = null;
       const missing = backup.manifest.missingAttachments.length;
-      triggerAppReset({ type: missing ? 'warning' : 'success', title: 'Restore complete', message: missing ? `Your Chits data and available attachments have been restored. ${missing} attachment${missing === 1 ? ' was' : 's were'} already missing when this backup was created.` : 'Your Chits data and attachments have been restored.' });
+      triggerAppReset({ type: missing ? 'warning' : 'success', title: tr("backup.restoreComplete"), message: missing ? tr('backup.restoredMissing', { count: missing }) : tr("backup.yourChitsDataAndAttachmentsHaveBeenRestored") });
     } catch (cause) {
-      const message = backupErrorMessage(cause, 'The backup could not be restored. Your previous Chits data has been kept.');
+      const message = backupErrorMessage(cause, tr("backup.theBackupCouldNotBeRestoredYourPrevious"));
       pendingRef.current = null;
       await discardValidatedBackup(backup);
       if (cause instanceof RestoreError && cause.liveClosed) {
-        triggerAppReset({ type: 'warning', title: 'Restore failed', message });
+        triggerAppReset({ type: 'warning', title: tr("backup.restoreFailed"), message });
         return;
       }
       setPending(null); setError(message);
     } finally { finish(); }
   };
   const choose = async () => {
-    if (!start('Choose a backup file…')) return;
+    if (!start(tr("backup.chooseABackupFile"))) return;
     let pickedUri: string | null = null;
     let selected: ValidatedBackup | null = null;
     try {
       const picked = await DocumentPicker.getDocumentAsync({ type: '*/*', multiple: false, copyToCacheDirectory: true });
       if (picked.canceled) return;
       pickedUri = picked.assets[0]?.uri ?? null;
-      if (!pickedUri) throw new Error('No file selected');
+      if (!pickedUri) throw new Error(tr("backup.noFileSelected"));
       const validation = await validateBackup(pickedUri, updateProgress);
       if (!validation.valid) { setError(validation.reason); return; }
       selected = validation;
     } catch (cause) {
-      setError(backupErrorMessage(cause, 'Chits could not open the backup file. Choose another file and try again.'));
+      setError(backupErrorMessage(cause, tr("backup.chitsCouldNotOpenTheBackupFileChoose")));
     } finally {
       // DocumentPicker explicitly copies into cache; never delete a provider's original.
       if (pickedUri && FS.cacheDirectory && pickedUri.startsWith(FS.cacheDirectory)) await FS.deleteAsync(pickedUri, { idempotent: true }).catch(() => undefined);
@@ -128,37 +133,37 @@ export default function BackupScreen() {
     const validation = selected;
     pendingRef.current = validation; setPending(validation);
     const manifest = validation.manifest;
-    const warning = manifest.missingAttachments.length ? `\n\n${quantity(manifest.missingAttachments.length, 'attachment')} ${manifest.missingAttachments.length === 1 ? 'is' : 'are'} missing from this backup and cannot be recovered from this file.` : '';
-    confirm({ type: 'destructive', icon: 'refresh-outline', title: 'Restore this backup?', confirmText: 'Restore Backup', cancelText: 'Cancel', dismissOnBackdrop: false,
-      message: `Your current Chits data will be replaced with the data stored in this backup.\n\nCreated ${new Date(manifest.createdAt).toLocaleString()}\n${quantity(manifest.chatItemCount, 'chat item')} · ${quantity(manifest.boardCount, 'board')} · ${quantity(manifest.cardCount, 'card')}\n${quantity(manifest.attachmentCount, 'attachment')} · ${sizeLabel(validation.size)}${warning}`,
+    const warning = manifest.missingAttachments.length ? '\n\n' + tr('backup.missingWarning', { count: manifest.missingAttachments.length }) : '';
+    confirm({ type: 'destructive', icon: 'refresh-outline', title: tr("backup.restoreThisBackup"), confirmText: tr("backup.restoreBackup"), cancelText: tr("chat.cancel"), dismissOnBackdrop: false,
+      message: tr("backup.yourCurrentChitsDataWillBeReplacedWith", { value1: new Date(manifest.createdAt).toLocaleString(getFormattingLocale()), value2: quantity(manifest.chatItemCount, 'chat item'), value3: quantity(manifest.boardCount, 'board'), value4: quantity(manifest.cardCount, 'card'), value5: quantity(manifest.attachmentCount, 'attachment'), value6: sizeLabel(validation.size), value7: warning }),
       onConfirm: () => { void restore(validation); }, onCancel: () => cancelRestore(validation),
     });
   };
   const disabled = progress !== null || pending !== null;
   return <SafeAreaView style={[styles.screen, { backgroundColor: tokens.background }]}>
-    <View style={styles.header}><TopBarBackground /><IconButton label="Back to settings" disabled={disabled} onPress={() => router.back()}><HeaderIcon name="arrow-back-outline" size={23} /></IconButton><Text accessibilityRole="header" style={[styles.title, { color: headerInk.ink, fontFamily: headingFontFamily(look.headingFont) }]}>Backup & Restore</Text><View style={{ width: 44 }} /></View>
+    <View style={styles.header}><TopBarBackground /><IconButton label={tr("backup.backToSettings")} disabled={disabled} onPress={() => router.back()}><HeaderIcon name="arrow-back-outline" size={23} /></IconButton><Text accessibilityRole="header" style={[styles.title, { color: headerInk.ink, fontFamily: headingFontFamily(look.headingFont) }]}>{tr("backup.backupRestore")}</Text><View style={{ width: 44 }} /></View>
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.section}>
-        <Text accessibilityRole="header" style={[styles.heading, { color: tokens.textPrimary }]}>Backup your Chits</Text>
-        <Text style={[styles.body, { color: tokens.textSecondary }]}>Create a copy of your chats, boards, settings, and attachments.</Text>
-        <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => void create()} style={[styles.button, { backgroundColor: tokens.accent }, disabled && styles.disabled]}><Text style={[styles.buttonText, { color: tokens.accentText }]}>Create Backup</Text></Pressable>
+        <Text accessibilityRole="header" style={[styles.heading, { color: tokens.textPrimary }]}>{tr("backup.backupYourChits")}</Text>
+        <Text style={[styles.body, { color: tokens.textSecondary }]}>{tr("backup.createACopyOfYourChatsBoardsSettings")}</Text>
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => void create()} style={[styles.button, { backgroundColor: tokens.accent }, disabled && styles.disabled]}><Text style={[styles.buttonText, { color: tokens.accentText }]}>{tr("backup.createBackup")}</Text></Pressable>
         {created ? <View accessibilityLiveRegion="polite" style={[styles.result, { backgroundColor: tokens.surface }]}>
-          <Text style={[styles.resultTitle, { color: tokens.textPrimary }]}>{created.manifest.missingAttachments.length ? `Backup completed with ${created.manifest.missingAttachments.length} missing attachment${created.manifest.missingAttachments.length === 1 ? '' : 's'}.` : 'Backup created'}</Text>
-          <Text style={[styles.body, { color: tokens.textSecondary }]}>{created.manifest.missingAttachments.length ? 'All available files are included. Files already missing from Chits could not be included.' : 'Your Chits data and attachments are safely included in this backup.'}</Text>
-          <Text style={[styles.detail, { color: tokens.textSecondary }]}>{sizeLabel(created.size)} · {quantity(created.manifest.attachmentCount, 'attachment')} · {new Date(created.manifest.createdAt).toLocaleString()}</Text>
-          {needsSave ? <Pressable accessibilityRole="button" disabled={disabled} onPress={() => void saveAgain()} style={styles.save}><Text style={{ color: tokens.accent, fontWeight: '600' }}>Save Backup File</Text></Pressable> : null}
+          <Text style={[styles.resultTitle, { color: tokens.textPrimary }]}>{created.manifest.missingAttachments.length ? tr('backup.missing', { count: created.manifest.missingAttachments.length }) : tr("backup.backupCreated")}</Text>
+          <Text style={[styles.body, { color: tokens.textSecondary }]}>{created.manifest.missingAttachments.length ? tr("backup.allAvailableFilesAreIncludedFilesAlreadyMissing") : tr("backup.yourChitsDataAndAttachmentsAreSafelyIncluded")}</Text>
+          <Text style={[styles.detail, { color: tokens.textSecondary }]}>{sizeLabel(created.size)} · {quantity(created.manifest.attachmentCount, 'attachment')} · {new Date(created.manifest.createdAt).toLocaleString(getFormattingLocale())}</Text>
+          {needsSave ? <Pressable accessibilityRole="button" disabled={disabled} onPress={() => void saveAgain()} style={styles.save}><Text style={{ color: tokens.accent, fontWeight: '600' }}>{tr("backup.saveBackupFile")}</Text></Pressable> : null}
         </View> : null}
       </View>
       <View style={[styles.section, styles.restoreSection, { borderTopColor: tokens.borderSubtle }]}>
-        <Text accessibilityRole="header" style={[styles.heading, { color: tokens.textPrimary }]}>Restore from Backup</Text>
-        <Text style={[styles.body, { color: tokens.textSecondary }]}>Restore Chits from a previously created backup file.</Text>
-        <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => void choose()} style={[styles.button, { backgroundColor: tokens.surface, borderWidth: 1, borderColor: tokens.borderSubtle }, disabled && styles.disabled]}><Text style={[styles.buttonText, { color: tokens.textPrimary }]}>Choose Backup File</Text></Pressable>
-        <Text style={[styles.detail, { color: tokens.textSecondary }]}>Restoring a backup replaces the data currently stored in Chits.</Text>
+        <Text accessibilityRole="header" style={[styles.heading, { color: tokens.textPrimary }]}>{tr("backup.restoreFromBackup")}</Text>
+        <Text style={[styles.body, { color: tokens.textSecondary }]}>{tr("backup.restoreChitsFromAPreviouslyCreatedBackupFile")}</Text>
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => void choose()} style={[styles.button, { backgroundColor: tokens.surface, borderWidth: 1, borderColor: tokens.borderSubtle }, disabled && styles.disabled]}><Text style={[styles.buttonText, { color: tokens.textPrimary }]}>{tr("backup.chooseBackupFile")}</Text></Pressable>
+        <Text style={[styles.detail, { color: tokens.textSecondary }]}>{tr("backup.restoringABackupReplacesTheDataCurrentlyStored")}</Text>
       </View>
       {notice ? <Text accessibilityLiveRegion="polite" style={[styles.body, { color: tokens.textPrimary }]}>{notice}</Text> : null}
       {error ? <Text accessibilityRole="alert" style={[styles.body, { color: tokens.danger }]}>{error}</Text> : null}
     </ScrollView>
-    {progress ? <ChitsLoaderOverlay label={progress.total ? `${progress.label}\n${progress.completed ?? 0} of ${progress.total}` : progress.label} /> : null}
+    {progress ? <ChitsLoaderOverlay label={progress.total ? tr("backup.valueValueOfValue", { value1: progress.label, value2: progress.completed ?? 0, value3: progress.total }) : progress.label} /> : null}
   </SafeAreaView>;
 }
 const styles = StyleSheet.create({

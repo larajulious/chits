@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -11,6 +13,9 @@ import type { NoteKey, RevisitNote } from '@/services/revisit-engine';
 // Deliberately one quiet row on established editor/detail surfaces. The review
 // detail holds the complete, manageable list and dismissible suggestions.
 export function ConnectedNotes({ noteKey, compact = false }: { noteKey: NoteKey; compact?: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const repository = useMemo(() => createRevisitRepository(database), [database]);
   const { tokens } = useTheme();
@@ -39,10 +44,10 @@ export function ConnectedNotes({ noteKey, compact = false }: { noteKey: NoteKey;
     return () => { active = false; };
   }, [compact, database, noteKey, repository]));
   if (!CHITS_REVISIT_ENABLED) return null;
-  return <View style={{ paddingHorizontal: 16 }}><Pressable accessibilityRole="button" accessibilityLabel={`Connected notes, ${count}. View or link notes.`}
+  return <View style={{ paddingHorizontal: 16 }}><Pressable accessibilityRole="button" accessibilityLabel={tr("connectednotes.connectedNotesValueViewOrLinkNotes", { value1: count })}
     onPress={() => router.push({ pathname: '/revisit', params: { note: resolvedKey } })}
-    style={{ minHeight: 48, justifyContent: 'center' }}><AppText style={{ color: tokens.accentStrong }}>Connected notes{count ? ` · ${count}` : ''}</AppText></Pressable>
-    {notes.map((note) => <Pressable key={note.key} accessibilityRole="button" accessibilityLabel={`Open connected note, ${note.title}`}
+    style={{ minHeight: 48, justifyContent: 'center' }}><AppText style={{ color: tokens.accentStrong }}>{tr("connectednotes.connectedNotes")}{count ? ` · ${count}` : ''}</AppText></Pressable>
+    {notes.map((note) => <Pressable key={note.key} accessibilityRole="button" accessibilityLabel={tr("connectednotes.openConnectedNoteValue", { value1: note.title })}
       onPress={() => router.push({ pathname: '/revisit', params: { note: note.key } })}
       style={{ minHeight: 48, justifyContent: 'center' }}><AppText>{note.title}</AppText></Pressable>)}
   </View>;

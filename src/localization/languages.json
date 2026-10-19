@@ -1,0 +1,16 @@
+[
+  { "id": "en", "name": "English", "englishName": "English", "direction": "ltr" },
+  { "id": "fil", "name": "Filipino", "englishName": "Filipino", "direction": "ltr" },
+  { "id": "pt-BR", "name": "Português (Brasil)", "englishName": "Portuguese Brazil", "direction": "ltr" },
+  { "id": "es", "name": "Español", "englishName": "Spanish", "direction": "ltr" },
+  { "id": "id", "name": "Bahasa Indonesia", "englishName": "Indonesian", "direction": "ltr" },
+  { "id": "fr", "name": "Français", "englishName": "French", "direction": "ltr" },
+  { "id": "de", "name": "Deutsch", "englishName": "German", "direction": "ltr" },
+  { "id": "ja", "name": "日本語", "englishName": "Japanese", "direction": "ltr" },
+  { "id": "ko", "name": "한국어", "englishName": "Korean", "direction": "ltr" },
+  { "id": "it", "name": "Italiano", "englishName": "Italian", "direction": "ltr" },
+  { "id": "vi", "name": "Tiếng Việt", "englishName": "Vietnamese", "direction": "ltr" },
+  { "id": "hi", "name": "हिन्दी", "englishName": "Hindi", "direction": "ltr" },
+  { "id": "tr", "name": "Türkçe", "englishName": "Turkish", "direction": "ltr" },
+  { "id": "ar", "name": "العربية", "englishName": "Arabic", "direction": "rtl" }
+]

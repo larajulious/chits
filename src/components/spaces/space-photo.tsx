@@ -1,3 +1,4 @@
+import { useLocale } from '@/localization/provider';
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -30,6 +31,9 @@ const SHADOW = (u: number, lifted: boolean) => (lifted ? `0px ${22 * u}px ${18 *
  * sticky so it drags, stacks and pins exactly like one.
  */
 export const SpacePhoto = memo(function SpacePhoto({ media, caption, width, height, rotation, lifted = false, obscured = false, unit = 1 }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const fonts = useSpaceFonts();
   const u = unit;
   const { attachment } = media;
@@ -37,7 +41,7 @@ export const SpacePhoto = memo(function SpacePhoto({ media, caption, width, heig
     <View style={styles.picture}>
       {obscured
         ? <View style={[StyleSheet.absoluteFill, styles.blank]}><Ionicons accessible={false} name={attachment.type === 'video' ? 'videocam-outline' : 'image-outline'} size={22 * u} color={PAPER_INK} style={styles.blankIcon} /></View>
-        : attachment.type === 'video'
+        : attachment.type === "video"
           ? <VideoFrame storagePath={attachment.storagePath} unit={u} />
           : <Image source={resolveAttachmentUri(attachment.storagePath)} contentFit="cover" allowDownscaling style={StyleSheet.absoluteFill} />}
     </View>
@@ -49,6 +53,9 @@ export const SpacePhoto = memo(function SpacePhoto({ media, caption, width, heig
 
 /** A video's first frame, with a play mark so it never passes for a still. */
 function VideoFrame({ storagePath, unit }: { storagePath: string; unit: number }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const thumbnail = useVideoThumbnail(storagePath);
   const badge = 26 * unit;
   return <>

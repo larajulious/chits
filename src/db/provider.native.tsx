@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import { Component, useCallback, useEffect, useState, type PropsWithChildren } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { SQLiteProvider, type SQLiteDatabase } from 'expo-sqlite';
@@ -16,9 +17,9 @@ class DatabaseBoundary extends Component<PropsWithChildren<{ onRetry: () => void
   render() {
     if (!this.state.error) return this.props.children;
     return <View style={{ flex: 1, justifyContent: 'center', padding: 28, gap: 16, backgroundColor: '#FCFCFA' }}>
-      <Text accessibilityRole="header" style={{ fontSize: 20, color: '#191919' }}>Chits could not open your data</Text>
-      <Text accessibilityRole="alert" style={{ fontSize: 15, lineHeight: 22, color: '#444444' }}>{this.state.error instanceof BackupError ? this.state.error.message : 'Your saved data could not be opened. Reopen Chits to try again. Your data has not been removed.'}</Text>
-      <Pressable accessibilityRole="button" onPress={this.props.onRetry} style={{ minHeight: 48, justifyContent: 'center' }}><Text style={{ color: '#5149A8', fontSize: 16 }}>Try again</Text></Pressable>
+      <Text accessibilityRole="header" style={{ fontSize: 20, color: '#191919' }}>{tr('database.openFailed')}</Text>
+      <Text accessibilityRole="alert" style={{ fontSize: 15, lineHeight: 22, color: '#444444' }}>{this.state.error instanceof BackupError ? this.state.error.message : tr('database.reopen')}</Text>
+      <Pressable accessibilityRole="button" onPress={this.props.onRetry} style={{ minHeight: 48, justifyContent: 'center' }}><Text style={{ color: '#5149A8', fontSize: 16 }}>{tr('id.tryAgain')}</Text></Pressable>
     </View>;
   }
 }
@@ -31,7 +32,7 @@ function ReadyDatabase({ children }: PropsWithChildren) {
     void recoverInterruptedRestore().then(async () => {
       await discardAbandonedBackupExports().catch(() => undefined);
       if (mounted) setChecked(true);
-    }).catch((cause) => { if (mounted) setError(cause instanceof Error ? cause : new Error('Your data could not be opened. Your safety copy has been kept.')); });
+    }).catch((cause) => { if (mounted) setError(cause instanceof Error ? cause : new Error(tr('database.safetyKept'))); });
     return () => { mounted = false; };
   }, []);
   const initialize = useCallback(async (database: SQLiteDatabase) => {
@@ -40,7 +41,7 @@ function ReadyDatabase({ children }: PropsWithChildren) {
     setInitialized(true);
   }, []);
   if (error) throw error;
-  if (!checked) return <ChitsLoader fullscreen label="Checking your Chits data…" />;
+  if (!checked) return <ChitsLoader fullscreen label={tr('database.checking')} />;
   // The non-Suspense provider opens a new connection on EVERY mount. SDK 57's
   // Suspense provider caches its promise globally, even after that connection is closed.
   return <View style={{ flex: 1 }}>

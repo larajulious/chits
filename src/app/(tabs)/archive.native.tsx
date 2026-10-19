@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -15,6 +17,9 @@ import { createBoardRepository, createMessageRepository } from '@/db/repositorie
 type Archived = { id: string; title: string; kind: 'message' | 'card' | 'board'; archivedAt: number };
 
 export default function ArchiveScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const router = useRouter();
   const { openDrawer } = useAppDrawer();
@@ -40,9 +45,9 @@ export default function ArchiveScreen() {
     confirm({
       type: 'default',
       icon: 'arrow-undo-outline',
-      title: `Restore this ${item.kind}?`,
-      message: `“${item.title}” will return to its previous location.`,
-      confirmText: 'Restore',
+      title: tr("archive.restoreThisValue", { value1: item.kind }),
+      message: tr("archive.valueWillReturnToItsPreviousLocation", { value1: item.title }),
+      confirmText: tr("archive.restore"),
       onConfirm: async () => {
         try {
           if (item.kind === 'message') await messages.restore(item.id);
@@ -50,7 +55,7 @@ export default function ArchiveScreen() {
           else await repo.restoreBoard(item.id);
           await load();
         } catch {
-          setRestoreError('This item could not be restored. Please try again.');
+          setRestoreError(tr("archive.thisItemCouldNotBeRestoredPleaseTry"));
         }
       },
     });
@@ -58,24 +63,24 @@ export default function ArchiveScreen() {
 
   return <Screen edges={['top', 'left', 'right']}>
     <AppHeader
-      title="Archive"
-      leading={<IconButton label="Open navigation" onPress={openDrawer}><MenuIcon /></IconButton>}
-      trailing={<IconButton label="Close archive" onPress={() => router.canGoBack() ? router.back() : router.navigate('/')}><HeaderIcon name="close" size={24} /></IconButton>}
+      title={tr("archive.archive")}
+      leading={<IconButton label={tr("archive.openNavigation")} onPress={openDrawer}><MenuIcon /></IconButton>}
+      trailing={<IconButton label={tr("archive.closeArchive")} onPress={() => router.canGoBack() ? router.back() : router.navigate('/')}><HeaderIcon name="close" size={24} /></IconButton>}
     />
     {restoreError ? <Text accessibilityRole="alert" style={[styles.errorBanner, { color: theme.danger }]}>{restoreError}</Text> : null}
     {!ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : items.length ? <ScrollView contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + spacing.md }]}>
       {items.map((item) => <Pressable
         key={`${item.kind}-${item.id}`}
         accessibilityRole="button"
-        accessibilityLabel={`Restore ${item.kind}, ${item.title}`}
+        accessibilityLabel={tr("archive.restoreValueValue", { value1: item.kind, value2: item.title })}
         onPress={() => requestRestore(item)}
         style={({ pressed }) => [styles.item, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.itemPressed]}
       >
         <Text style={[styles.kind, { color: theme.textMuted }]}>{item.kind}</Text>
         <Text style={[styles.title, { color: theme.textPrimary }]}>{item.title}</Text>
-        <Text style={[styles.restore, { color: theme.accent }]}>Restore</Text>
+        <Text style={[styles.restore, { color: theme.accent }]}>{tr("archive.restore")}</Text>
       </Pressable>)}
-    </ScrollView> : <EmptyState title="Nothing archived" description="Archived messages, cards, and boards remain recoverable here." />}
+    </ScrollView> : <EmptyState title={tr("archive.nothingArchived")} description={tr("archive.archivedMessagesCardsAndBoardsRemainRecoverableHere")} />}
   </Screen>;
 }
 

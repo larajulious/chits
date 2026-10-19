@@ -90,8 +90,8 @@ test('timeline migration and native list retain pagination safeguards', () => {
   assert.match(migrations, /idx_timeline_events_cursor[\s\S]+created_at DESC, id DESC/);
   assert.match(screen, /maintainVisibleContentPosition=\{\{ minIndexForVisible: 0 \}\}/);
   assert.match(screen, /if \(!hasMoreRef\.current \|\| loadingMore\.current/);
-  assert.match(screen, /Loading older messages/);
-  assert.match(screen, /Jump to latest message/);
+  assert.match(screen, /tr\("chat\.loadingOlderMessages"\)/);
+  assert.match(screen, /tr\("chat\.jumpToLatestMessage"\)/);
   assert.doesNotMatch(screen, />\s*(Load more|Show older messages|Previous page)\s*</i);
 });
 

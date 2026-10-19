@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useRef, useState } from 'react';
 import { Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { getCalendars } from 'expo-localization';
@@ -17,6 +19,9 @@ type Props = {
 
 /** A draft time: only confirming commits it to the selected reminder date. */
 export function AndroidReminderTimePicker({ value, accent, accentOn, onConfirm, onDismiss }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const controls = useStickyControls();
   const font = useFontStyle('body', '600');
@@ -31,31 +36,31 @@ export function AndroidReminderTimePicker({ value, accent, accentOn, onConfirm, 
   const confirm = () => { if (time) { Keyboard.dismiss(); onConfirm(time.hours, time.minutes); } };
   return <Modal visible transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onShow={() => hourRef.current?.focus()} onRequestClose={close}>
     <KeyboardAvoidingView behavior="height" style={styles.backdrop}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Cancel time selection" onPress={close} style={StyleSheet.absoluteFill} />
+      <Pressable accessibilityRole="button" accessibilityLabel={tr("androidremindertimepicker.cancelTimeSelection")} onPress={close} style={StyleSheet.absoluteFill} />
       <View accessibilityViewIsModal style={[styles.dialog, controls.panel, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
         <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
-          <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Set time</AppText>
-          <AppText style={[styles.hint, { color: theme.textSecondary }]}>Enter the hour and minute.</AppText>
+          <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{tr("androidremindertimepicker.setTime")}</AppText>
+          <AppText style={[styles.hint, { color: theme.textSecondary }]}>{tr("androidremindertimepicker.enterTheHourAndMinute")}</AppText>
           <View style={styles.fields}>
             <View style={styles.field}>
-              <AppText style={[styles.label, { color: theme.textSecondary }]}>Hour</AppText>
-              <TextInput ref={hourRef} selectTextOnFocus accessibilityLabel={is24Hour ? 'Hour, 0 to 23' : 'Hour, 1 to 12'} keyboardType="number-pad" returnKeyType="next" maxLength={2} value={hour} onChangeText={(text) => setHour(text.replace(/\D/g, ''))} onSubmitEditing={() => minuteRef.current?.focus()} selectionColor={accent} style={[styles.input, controls.input, font, { color: theme.textPrimary, backgroundColor: theme.surfaceElevated, borderColor: accent }]} />
+              <AppText style={[styles.label, { color: theme.textSecondary }]}>{tr("androidremindertimepicker.hour")}</AppText>
+              <TextInput ref={hourRef} selectTextOnFocus accessibilityLabel={is24Hour ? tr('clock.hour24') : tr('clock.hour12')} keyboardType="number-pad" returnKeyType="next" maxLength={2} value={hour} onChangeText={(text) => setHour(text.replace(/\D/g, ''))} onSubmitEditing={() => minuteRef.current?.focus()} selectionColor={accent} style={[styles.input, controls.input, font, { color: theme.textPrimary, backgroundColor: theme.surfaceElevated, borderColor: accent }]} />
             </View>
             <AppText style={[styles.colon, { color: theme.textPrimary }]}>:</AppText>
             <View style={styles.field}>
-              <AppText style={[styles.label, { color: theme.textSecondary }]}>Minute</AppText>
-              <TextInput ref={minuteRef} selectTextOnFocus accessibilityLabel="Minute, 0 to 59" keyboardType="number-pad" returnKeyType="done" maxLength={2} value={minute} onChangeText={(text) => setMinute(text.replace(/\D/g, ''))} onSubmitEditing={confirm} selectionColor={accent} style={[styles.input, controls.input, font, { color: theme.textPrimary, backgroundColor: theme.surfaceElevated, borderColor: accent }]} />
+              <AppText style={[styles.label, { color: theme.textSecondary }]}>{tr("androidremindertimepicker.minute")}</AppText>
+              <TextInput ref={minuteRef} selectTextOnFocus accessibilityLabel={tr("androidremindertimepicker.minute0To59")} keyboardType="number-pad" returnKeyType="done" maxLength={2} value={minute} onChangeText={(text) => setMinute(text.replace(/\D/g, ''))} onSubmitEditing={confirm} selectionColor={accent} style={[styles.input, controls.input, font, { color: theme.textPrimary, backgroundColor: theme.surfaceElevated, borderColor: accent }]} />
             </View>
           </View>
-          {!is24Hour ? <View accessibilityRole="radiogroup" accessibilityLabel="AM or PM" style={styles.periods}>
+          {!is24Hour ? <View accessibilityRole="radiogroup" accessibilityLabel={tr('clock.period')} style={styles.periods}>
             {(['AM', 'PM'] as const).map((item) => <Pressable key={item} accessibilityRole="radio" accessibilityState={{ selected: item === period }} onPress={() => setPeriod(item)} style={[styles.period, controls.button, { backgroundColor: item === period ? accent : theme.surfaceElevated, borderColor: item === period ? accent : theme.borderSubtle }]}>
               <AppText weight="600" style={{ color: item === period ? accentOn : theme.textPrimary }}>{item}</AppText>
             </Pressable>)}
           </View> : null}
-          {!time ? <AppText accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>Use {is24Hour ? '0–23' : '1–12'} for the hour and 0–59 for minutes.</AppText> : null}
+          {!time ? <AppText accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>{tr("androidremindertimepicker.use")}{' '}{is24Hour ? '0–23' : '1–12'} {' '}{tr("androidremindertimepicker.forTheHourAnd059ForMinutes")}</AppText> : null}
           <View style={styles.actions}>
-            <Pressable accessibilityRole="button" onPress={close} style={styles.action}><AppText weight="600" style={{ color: theme.textSecondary }}>Cancel</AppText></Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel="Confirm reminder time" disabled={!time} accessibilityState={{ disabled: !time }} onPress={confirm} style={[styles.action, controls.button, { backgroundColor: accent }, !time && styles.disabled]}><AppText weight="600" style={{ color: accentOn }}>Done</AppText></Pressable>
+            <Pressable accessibilityRole="button" onPress={close} style={styles.action}><AppText weight="600" style={{ color: theme.textSecondary }}>{tr("chat.cancel")}</AppText></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={tr("androidremindertimepicker.confirmReminderTime")} disabled={!time} accessibilityState={{ disabled: !time }} onPress={confirm} style={[styles.action, controls.button, { backgroundColor: accent }, !time && styles.disabled]}><AppText weight="600" style={{ color: accentOn }}>{tr("androidremindertimepicker.done")}</AppText></Pressable>
           </View>
         </ScrollView>
       </View>

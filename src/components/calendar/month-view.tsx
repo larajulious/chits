@@ -1,3 +1,5 @@
+import { countLabel, tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, useWindowDimensions, View, type LayoutChangeEvent, type ListRenderItemInfo, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 
@@ -20,8 +22,8 @@ const DAY_NUMBER = 24;
 const CELL_TOP = 3 + DAY_NUMBER + 3;
 const STRIP_GAP = 2;
 // Built once: a month page draws up to 42 cells, and Intl formatters are costly to create.
-const DAY_LABEL = dateFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-const WEEKDAY_LABEL = dateFormat(undefined, { weekday: 'short' });
+const DAY_LABEL = { format: (date: Date) => dateFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(date) };
+const WEEKDAY_LABEL = { format: (date: Date) => dateFormat(undefined, { weekday: 'short' }).format(date) };
 
 type Props = {
   /** The month shown, as a month index (year * 12 + month). */
@@ -44,6 +46,9 @@ type Props = {
  * when the day panel shrinks it.
  */
 export function MonthView({ month, onMonthChange, itemsByDay, selectedKey, todayKey, weekStart, reduceMotion, onPressDay, onLongPressDay }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const list = useRef<FlatList<number>>(null);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const shown = useRef(month);
@@ -108,6 +113,9 @@ type PageProps = {
 };
 
 const MonthPage = memo(function MonthPage({ month, width, height, itemsByDay, selectedKey, todayKey, weekStart, onPressDay, onLongPressDay }: PageProps) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const { fontScale } = useWindowDimensions();
   const { year, month: monthOfYear } = monthFromIndex(month);
@@ -147,18 +155,21 @@ type CellProps = {
 };
 
 const DayCell = memo(function DayCell({ date, dateKey, width, items = EMPTY, inMonth, today, selected, slots, stripHeight, last, onPress, onLongPress }: CellProps) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const { shown, more } = cellCapacity(items.length, slots);
   const dateLabel = DAY_LABEL.format(date);
   const titles = items.slice(0, 3).map((item) => item.title).join(', ');
-  const label = `${today ? 'Today, ' : ''}${dateLabel}, ${items.length ? `${items.length} ${items.length === 1 ? 'entry' : 'entries'}: ${titles}${items.length > 3 ? ', and more' : ''}` : 'no entries'}`;
+  const label = tr('calendar.daySummary', { date: today ? tr('dates.today') + ', ' + dateLabel : dateLabel, entries: items.length ? countLabel('entry', items.length) + ': ' + titles + (items.length > 3 ? tr('monthview.andMore') : '') : tr('monthview.noEntries') });
   const numberColor = today ? theme.background : selected ? theme.accentStrong : inMonth ? theme.textPrimary : theme.textMuted;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ selected }}
-      accessibilityHint="Shows this day. Long press to add a note."
+      accessibilityHint={tr("monthview.showsThisDayLongPressToAddA")}
       onPress={() => onPress(dateKey)}
       onLongPress={() => onLongPress(dateKey)}
       style={({ pressed }) => [styles.cell, { width }, !last && { borderRightColor: theme.borderSubtle, borderRightWidth: StyleSheet.hairlineWidth }, selected && { backgroundColor: theme.accentSoft }, pressed && { backgroundColor: theme.surfaceElevated }]}

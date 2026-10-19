@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 // One process-wide lock also blocks reminder writes and navigation during a file swap.
 export type BackupProgress = { label: string; completed?: number; total?: number };
 let active = false;
@@ -8,7 +9,7 @@ export function subscribeToBackupOperation(listener: () => void) {
   return () => { listeners.delete(listener); };
 }
 export function beginBackupOperation() {
-  if (active) throw new Error('A backup or restore is already in progress.');
+  if (active) throw new Error(tr("backupoperation.aBackupOrRestoreIsAlreadyInProgress"));
   active = true;
   for (const listener of listeners) listener();
   return () => {

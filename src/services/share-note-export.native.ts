@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import { PixelRatio, Platform, type View } from 'react-native';
 import { cacheDirectory, copyAsync, deleteAsync, getContentUriAsync, makeDirectoryAsync } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -38,7 +39,7 @@ export async function captureShareNote(view: View, format: ShareNoteFormat, hasP
     ...(Platform.OS === 'ios' ? { width: width / scale, height: height / scale } : { width, height }),
   });
   const fileName = shareNoteFileName(new Date(), extension, name);
-  if (!cacheDirectory) { releaseCapture(raw); throw new Error('Share Note cache is unavailable.'); }
+  if (!cacheDirectory) { releaseCapture(raw); throw new Error(tr("sharenoteexport.shareNoteCacheIsUnavailable")); }
   // Each page gets a separate directory. A later capture must not remove an
   // earlier page before Save or the native multi-image share sheet reads it.
   const temporaryDirectory = `${cacheDirectory}chits-share-note-${Date.now()}-${Math.random().toString(36).slice(2)}/`;
@@ -69,14 +70,14 @@ export async function saveShareNoteImage(file: ShareNoteImageFile): Promise<Shar
       if (access === 'denied') return { status: 'cancelled' };
       if (access === 'blocked') return { status: 'failed', code: 'permission' };
       const result = await ChitsFiles.saveToPhotosAsync(file.uri, file.fileName, 'photo');
-      return result.status === 'saved' ? { status: 'saved', savedTo: 'Image saved to Photos' } : { status: 'cancelled' };
+      return result.status === 'saved' ? { status: 'saved', savedTo: tr("sharenoteexport.imageSavedToPhotos") } : { status: 'cancelled' };
     }
     if (Number(Platform.Version) >= 29) {
       const result = await ChitsFiles.saveToPicturesAsync(file.uri, file.fileName, file.mimeType);
-      return result.status === 'saved' ? { status: 'saved', savedTo: 'Image saved to Pictures/Chits' } : { status: 'cancelled' };
+      return result.status === 'saved' ? { status: 'saved', savedTo: tr("sharenoteexport.imageSavedToPicturesChits") } : { status: 'cancelled' };
     }
     const result = await ChitsFiles.exportAsync(file.uri, file.fileName, file.mimeType);
-    return result.status === 'saved' ? { status: 'saved', savedTo: 'Image saved' } : { status: 'cancelled' };
+    return result.status === 'saved' ? { status: 'saved', savedTo: tr("sharenoteexport.imageSaved") } : { status: 'cancelled' };
   } catch (error) {
     const code = failureCodeFromNative((error as { code?: unknown } | null)?.code);
     console.warn('[share-note] save failed', { code, error });
@@ -88,7 +89,7 @@ export async function saveShareNoteImage(file: ShareNoteImageFile): Promise<Shar
 export async function shareShareNoteImage(file: ShareNoteImageFile): Promise<boolean> {
   try {
     if (!await Sharing.isAvailableAsync()) return false;
-    await Sharing.shareAsync(file.uri, { mimeType: file.mimeType, UTI: file.mimeType === 'image/png' ? 'public.png' : 'public.jpeg', dialogTitle: 'Share Note' });
+    await Sharing.shareAsync(file.uri, { mimeType: file.mimeType, UTI: file.mimeType === 'image/png' ? 'public.png' : 'public.jpeg', dialogTitle: tr("index.shareNote") });
     return true;
   } catch (error) {
     console.warn('[share-note] share failed', { error });

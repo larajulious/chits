@@ -1,3 +1,4 @@
+import { useLocale } from '@/localization/provider';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -13,6 +14,9 @@ import { ot } from '../strings';
 import { ONBOARDING_KEYS, readOnboardingValue, subscribeToOnboardingChanges, writeOnboardingValue } from '../storage';
 
 export function GettingStartedCard({ onHome = false }: { onHome?: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const router = useRouter();
   const { tokens: theme, look } = useTheme();

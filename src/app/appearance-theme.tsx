@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { memo, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -20,13 +22,16 @@ const COLUMNS = 2;
  * your thought, an accent chip and a button — same layout for every theme.
  */
 const ThemePreviewCard = memo(function ThemePreviewCard({ theme, selected, width, onPress }: { theme: ChitsTheme; selected: boolean; width: number; onPress: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: current, themeKey, scheme } = useTheme();
   const t = getThemeTokens(theme.id, themeKey, scheme);
   const bar = topBarForIdentity(theme.id);
   const markColor = bar ? bar.share.colors.accent : t.accent;
   return <Pressable
     accessibilityRole="radio"
-    accessibilityLabel={`${theme.name} theme. ${theme.description}`}
+    accessibilityLabel={tr("appearancetheme.valueThemeValue", { value1: theme.name, value2: theme.description })}
     accessibilityState={{ selected }}
     onPress={onPress}
     style={({ pressed }) => [styles.card, { width, borderColor: selected ? current.accent : current.borderSubtle, borderWidth: selected ? 2 : StyleSheet.hairlineWidth, backgroundColor: current.surface }, pressed && styles.pressed]}
@@ -72,6 +77,9 @@ const ThemePreviewCard = memo(function ThemePreviewCard({ theme, selected, width
  * the live preview.
  */
 export default function AppearanceThemeScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens, identity, setIdentity } = useTheme();
   const { width } = useWindowDimensions();
   const [toast, setToast] = useState<string | null>(null);
@@ -80,22 +88,22 @@ export default function AppearanceThemeScreen() {
   const choose = (theme: ChitsTheme) => {
     if (theme.id === identity) return;
     void Haptics.selectionAsync();
-    void setIdentity(theme.id).catch(() => setToast('That theme couldn’t be saved. Please try again.'));
+    void setIdentity(theme.id).catch(() => setToast(tr("appearancetheme.thatThemeCouldnTBeSavedPleaseTry")));
   };
   return <Screen edges={['top', 'left', 'right']}>
-    <AppHeader title="Theme" leading={<IconButton label="Go back" onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
+    <AppHeader title={tr("appearancetheme.theme")} leading={<IconButton label={tr("search.goBack")} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
     <ScrollView contentContainerStyle={styles.content}>
-      <Text style={[styles.intro, { color: tokens.textSecondary }]}>Choose the personality Chits wears. Your notes, boards and layout stay exactly the same.</Text>
+      <Text style={[styles.intro, { color: tokens.textSecondary }]}>{tr("appearancetheme.chooseThePersonalityChitsWearsYourNotesBoards")}</Text>
       <CustomHeaderSettings />
       {CHITS_THEME_COLLECTIONS.filter((collection) => collection.shown).map((collection) => <View key={collection.id} style={styles.collection}>
         <Text accessibilityRole="header" style={[styles.collectionTitle, { color: tokens.textPrimary }]}>{collection.name}</Text>
-        {collection.id === 'generations' ? <Text style={[styles.collectionDetail, { color: tokens.textMuted }]}>Five design eras, told through type, color and texture.</Text> : null}
-        {collection.id === 'limited-edition' ? <Text style={[styles.collectionDetail, { color: tokens.textMuted }]}>Special themes with their own artwork across the top of every screen.</Text> : null}
-        <View accessibilityRole="radiogroup" accessibilityLabel={`${collection.name} themes`} style={styles.grid}>
+        {collection.id === 'generations' ? <Text style={[styles.collectionDetail, { color: tokens.textMuted }]}>{tr("appearancetheme.fiveDesignErasToldThroughTypeColorAnd")}</Text> : null}
+        {collection.id === 'limited-edition' ? <Text style={[styles.collectionDetail, { color: tokens.textMuted }]}>{tr("appearancetheme.specialThemesWithTheirOwnArtworkAcrossThe")}</Text> : null}
+        <View accessibilityRole="radiogroup" accessibilityLabel={tr("appearancetheme.valueThemes", { value1: collection.name })} style={styles.grid}>
           {collection.themes.map((theme) => <ThemePreviewCard key={theme.id} theme={theme} selected={theme.id === identity} width={cardWidth} onPress={() => choose(theme)} />)}
         </View>
       </View>)}
-      <Text style={[styles.footnote, { color: tokens.textMuted }]}>Light and dark follow App appearance. Your custom header and Chat background stay in place whichever theme you choose.</Text>
+      <Text style={[styles.footnote, { color: tokens.textMuted }]}>{tr("appearancetheme.lightAndDarkFollowAppAppearanceYourCustom")}</Text>
     </ScrollView>
     <Toast message={toast} />
   </Screen>;

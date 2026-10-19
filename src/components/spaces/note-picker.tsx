@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useEffect, useState } from 'react';
 import { FlatList, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Icon } from '@/components/ui/icon';
@@ -17,6 +19,9 @@ import { useSpaceStyles, useSpaceUI, type SpaceUI } from '@/components/spaces/in
  * never found by their words.
  */
 export function NotePicker({ visible, spaceName, onClose, onPick }: { visible: boolean; spaceName: string; onClose: () => void; onPick: (candidate: SpaceCandidate) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const ui = useSpaceUI();
   const styles = useSpaceStyles(createStyles);
   const database = useSQLiteContext();
@@ -37,30 +42,30 @@ export function NotePicker({ visible, spaceName, onClose, onPick }: { visible: b
   return <Modal visible={visible} animationType="slide" presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : undefined} onRequestClose={close}>
     <SafeAreaView edges={Platform.OS === 'ios' ? ['bottom'] : ['top', 'bottom']} style={styles.screen}>
       <View style={styles.header}>
-        <Text accessibilityRole="header" style={[fonts.uiHeavy, styles.title]}>Stick on your {spaceName}</Text>
-        <IconButton label="Close" onPress={close}><Icon name="close" size={24} color={ui.paper} /></IconButton>
+        <Text accessibilityRole="header" style={[fonts.uiHeavy, styles.title]}>{tr("notepicker.stickOnYour")}{' '}{spaceName}</Text>
+        <IconButton label={tr("attachments.close")} onPress={close}><Icon name="close" size={24} color={ui.paper} /></IconButton>
       </View>
       <View style={styles.search}>
         <Icon name="search-outline" size={17} color={ui.textMuted} />
-        <TextInput accessibilityLabel="Search notes" value={query} onChangeText={setQuery} placeholder="Search notes…" placeholderTextColor={ui.textMuted} selectionColor={ui.accent} cursorColor={ui.accent} returnKeyType="search" autoCorrect={false} style={[fonts.ui, styles.input]} />
-        {query ? <Pressable accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={12} onPress={() => setQuery('')}><Icon name="close-circle" size={16} color={ui.textMuted} /></Pressable> : null}
+        <TextInput accessibilityLabel={tr("calendarnotepicker.searchNotes")} value={query} onChangeText={setQuery} placeholder={tr("notepicker.searchNotes")} placeholderTextColor={ui.textMuted} selectionColor={ui.accent} cursorColor={ui.accent} returnKeyType="search" autoCorrect={false} style={[fonts.ui, styles.input]} />
+        {query ? <Pressable accessibilityRole="button" accessibilityLabel={tr("unorganized.clearSearch")} hitSlop={12} onPress={() => setQuery('')}><Icon name="close-circle" size={16} color={ui.textMuted} /></Pressable> : null}
       </View>
       <FlatList
         data={items ?? []}
         keyExtractor={(item) => `${item.kind}:${item.id}`}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.list}
-        ListEmptyComponent={items ? <Text style={[fonts.ui, styles.empty]}>{query ? 'No notes match that search.' : 'Every note is already on a space.'}</Text> : null}
+        ListEmptyComponent={items ? <Text style={[fonts.ui, styles.empty]}>{query ? tr("calendarnotepicker.noNotesMatchThatSearch") : tr("notepicker.everyNoteIsAlreadyOnASpace")}</Text> : null}
         renderItem={({ item }) => <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${item.title}${item.context ? `, ${item.context}` : ''}. Stick on your ${spaceName}.`}
+          accessibilityLabel={tr("notepicker.valueValueStickOnYourValue", { value1: item.title, value2: item.context ? `, ${item.context}` : '', value3: spaceName })}
           onPress={() => pick(item)}
           style={({ pressed }) => [styles.row, pressed && styles.pressed]}
         >
           <View style={styles.icon}><Icon name={item.hidden ? 'eye-off-outline' : item.kind === 'card' ? 'albums-outline' : 'chatbubble-outline'} size={17} color={ui.paper} /></View>
           <View style={styles.copy}>
             <Text numberOfLines={1} style={[fonts.uiSemi, styles.rowTitle]}>{item.title}</Text>
-            <Text numberOfLines={1} style={[fonts.ui, styles.rowContext]}>{item.context ?? 'Thought in Chat'}</Text>
+            <Text numberOfLines={1} style={[fonts.ui, styles.rowContext]}>{item.context ?? tr("notepicker.thoughtInChat")}</Text>
           </View>
           <Icon name="add-circle" size={24} color={ui.magnetRed} />
         </Pressable>}

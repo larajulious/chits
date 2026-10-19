@@ -1,3 +1,5 @@
+import { countLabel, tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -27,13 +29,13 @@ export function photoCaption(note: Pick<PinnedNote, 'title' | 'media'>): string 
 
 /** "Pinned note: <first line>" for screen readers; a hidden note never reads out its words. */
 export function stickyAccessibilityLabel(note: Pick<PinnedNote, 'title' | 'text' | 'hidden'> & Partial<Pick<PinnedNote, 'media'>>): string {
-  if (note.hidden) return 'Pinned note: Hidden Chit';
+  if (note.hidden) return tr("stickynote.pinnedNoteHiddenChit");
   if (note.media) {
-    const kind = { photo: 'photo', video: 'video', audio: 'voice note' }[note.media.attachment.type];
+    const kind = { photo: 'photo', video: 'video', audio: tr("stickynote.voiceNote") }[note.media.attachment.type];
     const caption = photoCaption({ title: note.title, media: note.media });
     return caption ? `Pinned ${kind}: ${caption}` : `Pinned ${kind}`;
   }
-  return `Pinned note: ${stickyText(note).split('\n')[0]?.trim() || 'Empty note'}`;
+  return tr("messages.pinnedNote", { value1: stickyText(note).split('\n')[0]?.trim() || tr("stickynote.emptyNote") });
 }
 
 /**
@@ -59,10 +61,13 @@ export type StickyPaperProps = {
 
 /** A note on a space: its paper and writing (or its photo, as a print), and the space's pin over the top edge. */
 export const StickyPaper = memo(function StickyPaper({ note, space, seed = 0, unit = 1, obscured = false, lifted = false }: StickyPaperProps) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const width = STICKY_SIZE.width * unit;
   const height = STICKY_SIZE.height * unit;
   return <View style={{ width, height }}>
-    {note.media && !note.hidden && note.media.attachment.type === 'audio'
+    {note.media && !note.hidden && note.media.attachment.type === "audio"
       ? <SpaceCassette color={note.color} caption={photoCaption({ title: note.title, media: note.media })} duration={note.media.attachment.duration} width={width} height={height} rotation={note.rotation} obscured={obscured} lifted={lifted} />
       : note.media && !note.hidden
       ? <SpacePhoto media={note.media} caption={photoCaption({ title: note.title, media: note.media })} width={width} height={height} rotation={note.rotation} obscured={obscured} lifted={lifted} unit={unit} />
@@ -70,7 +75,7 @@ export const StickyPaper = memo(function StickyPaper({ note, space, seed = 0, un
     <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height, transform: [{ rotate: `${note.rotation}deg` }] }}>
       <PinDecoration space={space} color={magnetColor(seed)} noteWidth={width} unit={unit} seed={seed} />
       {/* A note with pasted images says how many, in the paper's own ink. */}
-      {note.imageCount && !note.hidden && !note.media ? <View accessibilityLabel={`${note.imageCount} image${note.imageCount === 1 ? '' : 's'}`} style={[styles.images, { right: 8 * unit, bottom: 7 * unit, gap: 3 * unit, paddingHorizontal: 5 * unit, borderRadius: 8 * unit }]}>
+      {note.imageCount && !note.hidden && !note.media ? <View accessibilityLabel={countLabel('image', note.imageCount)} style={[styles.images, { right: 8 * unit, bottom: 7 * unit, gap: 3 * unit, paddingHorizontal: 5 * unit, borderRadius: 8 * unit }]}>
         <Ionicons name="image-outline" size={11 * unit} color={IMAGE_COUNT_INK} />
         <Text style={[styles.imagesText, { fontSize: 11 * unit, lineHeight: 15 * unit }]}>{note.imageCount}</Text>
       </View> : null}

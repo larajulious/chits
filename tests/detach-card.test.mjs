@@ -26,9 +26,9 @@ test('both entry points always ask before moving a card back to Unorganized', ()
 
 test('Card details edit controls follow the board accent', () => {
   const detail = read('src/app/card/[id].native.tsx');
-  assert.match(detail, /openContentEditor\(messages\[0\]\)\}><(?:App)?Text style=\{\[styles\.inlineEditText, \{ color: contentAccentStrong \}\]\}>Edit<\/(?:App)?Text>/);
-  assert.match(detail, /name="create-outline" size=\{16\} color=\{contentAccentStrong\} \/><(?:App)?Text style=\{\[styles\.inlineEditText, \{ color: contentAccentStrong \}\]\}>Edit</);
-  assert.match(detail, /color=\{contentAccentStrong\} \/><(?:App)?Text style=\{\[styles\.inlineEditText, \{ color: contentAccentStrong \}\]\}>Add description</);
+  assert.match(detail, /onPressText=\{message\.text \? \(\) => openContentEditor\(message\) : undefined\}/);
+  assert.match(detail, /textAccessibilityLabel=\{messages\.length > 1 \? tr\("id\.editThoughtValue"/);
+  assert.match(detail, /color=\{contentAccentStrong\} \/><(?:App)?Text style=\{\[styles\.inlineEditText, \{ color: contentAccentStrong \}\]\}>\{tr\("id\.addDescription"\)\}</);
   assert.match(detail, /styles\.commentSend, \{ backgroundColor: [^}]*contentAccentSolid/);
   // No edit control is left on the generic theme accent.
   assert.doesNotMatch(detail, /<(?:App)?Text style=\{styles\.inlineEditText\}>/);

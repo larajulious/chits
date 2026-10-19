@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useState, type ComponentProps } from 'react';
@@ -45,6 +47,9 @@ type Props = {
 };
 
 function ActionRow({ icon, label, onPress, destructive = false }: { icon: ComponentProps<typeof Ionicons>['name']; label: string; onPress: () => void; destructive?: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const color = destructive ? theme.danger : theme.textPrimary;
   return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
@@ -54,6 +59,9 @@ function ActionRow({ icon, label, onPress, destructive = false }: { icon: Compon
 }
 
 export function MessageActions({ message: current, temporarilyRevealed, onDismiss, onClosed, onCopy, onEdit, onPin, spaceAction, onSpaceAction, onAddToBoard, onReminder, onDownload, onShareNote, onReveal, onHideAgain, onHideContent, onShowContent, onArchive, onDelete }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   // Stays mounted (showing the last message) until the native modal has really
   // closed, like AppDialog: iOS can't present another modal (e.g. the delete
@@ -72,38 +80,38 @@ export function MessageActions({ message: current, temporarilyRevealed, onDismis
   if (!message) return null;
   const hasAttachment = message.attachments.length > 0;
   const covered = message.isHiddenContent && !temporarilyRevealed;
-  const preview = covered ? 'Hidden Chit' : message.text || (hasAttachment ? `${message.attachments[0].type === 'audio' ? 'Audio note' : message.attachments[0].type[0].toUpperCase() + message.attachments[0].type.slice(1)} attachment` : 'Thought');
+  const preview = covered ? tr("index.hiddenChit") : message.text || (hasAttachment ? `${message.attachments[0].type === 'audio' ? tr("messagerow.audioNote") : message.attachments[0].type[0].toUpperCase() + message.attachments[0].type.slice(1)} attachment` : tr("chat.thought"));
   const copyable = getCopyableMessageText(message);
   return <Modal transparent animationType="slide" visible={Boolean(current)} onRequestClose={onDismiss} onDismiss={Platform.OS === 'ios' ? finishClosing : undefined}>
     <View style={styles.backdrop}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Close thought actions" onPress={onDismiss} style={StyleSheet.absoluteFill} />
+      <Pressable accessibilityRole="button" accessibilityLabel={tr("messageactions.closeThoughtActions")} onPress={onDismiss} style={StyleSheet.absoluteFill} />
       <SafeAreaView edges={['bottom']} style={styles.sheet}>
         <BottomSheetSurface>
           <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
           <AppText numberOfLines={2} ellipsizeMode="tail" style={[styles.preview, { color: theme.textSecondary }]}>{preview}</AppText>
 
           <View style={styles.group}>
-            {covered ? <ActionRow icon="eye-outline" label="Reveal" onPress={() => onReveal(message)} /> : null}
-            {!covered && copyable ? <ActionRow icon="copy-outline" label="Copy chat" onPress={() => onCopy(message)} /> : null}
-            {!covered ? <ActionRow icon="pencil-outline" label={hasAttachment ? 'Edit description' : 'Edit'} onPress={onEdit} /> : null}
+            {covered ? <ActionRow icon="eye-outline" label={tr("messageactions.reveal")} onPress={() => onReveal(message)} /> : null}
+            {!covered && copyable ? <ActionRow icon="copy-outline" label={tr("messageactions.copyChat")} onPress={() => onCopy(message)} /> : null}
+            {!covered ? <ActionRow icon="pencil-outline" label={hasAttachment ? tr("messageactions.editDescription") : tr("id.edit")} onPress={onEdit} /> : null}
             {!covered && hasAttachment ? <ActionRow icon="download-outline" label={exportActionLabel(message.attachments[0])} onPress={() => onDownload(message)} /> : null}
-            {!covered ? <ActionRow icon="images-outline" label="Share Note" onPress={() => onShareNote(message)} /> : null}
-            <ActionRow icon={message.organization ? 'grid' : 'grid-outline'} label={message.organization ? `Go to ${message.organization.boardName}` : 'Add to Board'} onPress={onAddToBoard} />
-            {onReminder ? <ActionRow icon="notifications-outline" label="Reminder" onPress={() => onReminder(message)} /> : null}
+            {!covered ? <ActionRow icon="images-outline" label={tr("index.shareNote")} onPress={() => onShareNote(message)} /> : null}
+            <ActionRow icon={message.organization ? 'grid' : 'grid-outline'} label={message.organization ? tr("messageactions.goToValue", { value1: message.organization.boardName }) : tr("chat.addToBoard")} onPress={onAddToBoard} />
+            {onReminder ? <ActionRow icon="notifications-outline" label={tr("id.reminder")} onPress={() => onReminder(message)} /> : null}
           </View>
 
           <View style={[styles.group, styles.groupDivider, { borderTopColor: theme.borderSubtle }]}>
-            {!covered ? <ActionRow icon={message.pinned ? 'pin' : 'pin-outline'} label={message.pinned ? 'Unpin' : 'Pin'} onPress={() => onPin(message)} /> : null}
+            {!covered ? <ActionRow icon={message.pinned ? 'pin' : 'pin-outline'} label={message.pinned ? tr("index.unpin") : tr("index.pin")} onPress={() => onPin(message)} /> : null}
             {spaceAction?.noteId === message.id && onSpaceAction ? <ActionRow icon={spaceAction.icon} label={spaceAction.label} onPress={() => onSpaceAction(spaceAction)} /> : null}
-            {message.isHiddenContent && temporarilyRevealed ? <ActionRow icon="eye-off-outline" label="Hide again" onPress={() => onHideAgain(message)} /> : null}
+            {message.isHiddenContent && temporarilyRevealed ? <ActionRow icon="eye-off-outline" label={tr("id.hideAgain")} onPress={() => onHideAgain(message)} /> : null}
             {message.isHiddenContent
-              ? <ActionRow icon="eye-outline" label="Show content" onPress={() => onShowContent(message)} />
-              : <ActionRow icon="eye-off-outline" label="Hide content" onPress={() => onHideContent(message)} />}
-            <ActionRow icon="archive-outline" label="Archive" onPress={onArchive} />
+              ? <ActionRow icon="eye-outline" label={tr("id.showContent")} onPress={() => onShowContent(message)} />
+              : <ActionRow icon="eye-off-outline" label={tr("id.hideContent")} onPress={() => onHideContent(message)} />}
+            <ActionRow icon="archive-outline" label={tr("archive.archive")} onPress={onArchive} />
           </View>
 
           <View style={[styles.deleteGroup, { borderTopColor: theme.borderSubtle }]}>
-            <ActionRow icon="trash-outline" label="Delete" onPress={onDelete} destructive />
+            <ActionRow icon="trash-outline" label={tr("id.delete")} onPress={onDelete} destructive />
           </View>
         </BottomSheetSurface>
       </SafeAreaView>

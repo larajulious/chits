@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import { normalizeStoredAttachmentPath } from './attachment-path';
 
 export const CHAT_BACKGROUND_KEY = 'chat_background';
@@ -34,7 +35,7 @@ export function deviceBackgroundMatches(background: ChatBackground | null, asset
 
 export function attachmentBackgroundImage(attachment: { id: string; type: string; storagePath: string }): ChatBackgroundImage {
   const storagePath = normalizeStoredAttachmentPath(attachment.storagePath);
-  if (attachment.type !== 'photo' || !storagePath?.startsWith('chits-attachments/')) throw new Error('Choose a photo saved in Chits.');
+  if (attachment.type !== 'photo' || !storagePath?.startsWith('chits-attachments/')) throw new Error(tr("chatbackground.chooseAPhotoSavedInChits"));
   return { storagePath, source: 'attachment', attachmentId: attachment.id };
 }
 

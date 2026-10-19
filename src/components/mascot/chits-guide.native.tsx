@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, Animated, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useTheme } from '@/components/theme-provider';
@@ -10,6 +12,9 @@ type Action = { label: string; onPress: () => void };
 
 /** Uses the same mascot art and quiet entrance as the Notes greeting. */
 export function ChitsGuide({ text, actions, onClose, onShown, bottom = 0, hint }: { text: string; actions?: Action[]; onClose?: () => void; onShown?: () => void; bottom?: number; hint?: string }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens, styleTokens, styleColors } = useTheme();
   const tip = styleTokens.tip;
   const sticky = tip.tail > 0;
@@ -32,7 +37,7 @@ export function ChitsGuide({ text, actions, onClose, onShown, bottom = 0, hint }
   return <View pointerEvents="box-none" onLayout={({ nativeEvent }) => { if (nativeEvent.layout.width > 0 && nativeEvent.layout.height > 0) onShown?.(); }} style={[styles.anchor, { bottom, width: Math.min(width - 24, 330) }]}>
     <Animated.View style={[styles.animated, { opacity, transform: [{ translateY: lift }, { scale }] }]}>
       <View style={[styles.bubble, surfaceStyle(styleTokens, styleColors, { fill: sticky ? styleColors.controlFill : tokens.surface, radius: tip.guideRadius, border: tokens.borderSubtle, shadow: 'guide', edge: tip.edge || false })]}>
-        <View style={styles.heading}><AppText weight="800" style={[styles.name, { color: sticky ? tokens.textPrimary : tokens.accentStrong }]}>Chits</AppText>{onClose ? <Pressable accessibilityRole="button" accessibilityLabel="Dismiss Chits suggestion" hitSlop={8} onPress={onClose} style={styles.close}><Icon name="close" size={17} color={sticky ? styleColors.textSecondary : tokens.textSecondary} /></Pressable> : null}</View>
+        <View style={styles.heading}><AppText weight="800" style={[styles.name, { color: sticky ? tokens.textPrimary : tokens.accentStrong }]}>Chits</AppText>{onClose ? <Pressable accessibilityRole="button" accessibilityLabel={tr("chitsguide.dismissChitsSuggestion")} hitSlop={8} onPress={onClose} style={styles.close}><Icon name="close" size={17} color={sticky ? styleColors.textSecondary : tokens.textSecondary} /></Pressable> : null}</View>
         <AppText variant={sticky ? 'display' : 'body'} weight={sticky ? '500' : '600'} style={[styles.copy, { color: tokens.textPrimary }]}>{text}</AppText>
         {hint ? <AppText style={[styles.hint, { color: sticky ? styleColors.textSecondary : tokens.textSecondary }]}>{hint}</AppText> : null}
         {actions?.length ? <View style={styles.actions}>{actions.map((action, index) => <PressableSurface key={action.label} accessibilityRole="button" onPress={action.onPress} fill={index === 0 ? (sticky ? styleColors.accentFill : tokens.accent) : sticky ? styleColors.controlFill : tokens.surfaceElevated} radius={tip.actionRadius} edge={styleTokens.chip.activeEdge || false} pressedStyle={styles.pressed} style={styles.action}><AppText weight={sticky ? '800' : '700'} style={[styles.actionText, { color: index === 0 ? (sticky ? styleColors.onAccent : tokens.accentText) : tokens.textPrimary }]}>{action.label}</AppText></PressableSurface>)}</View> : null}

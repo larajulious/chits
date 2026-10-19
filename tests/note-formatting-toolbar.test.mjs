@@ -1,3 +1,4 @@
+import { tr } from '../src/localization/runtime.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -12,7 +13,7 @@ function toolbar() {
   const compiled = ts.transpileModule(component, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const jsx = (type, props) => ({ type, props });
   const context = {
-    exports: {},
+    exports: {}, useLocale: () => 'en', tr,
     require(name) { assert.equal(name, 'react/jsx-runtime'); return { jsx, jsxs: jsx }; },
     useTheme: () => ({ tokens: { textSecondary: '#555' } }),
     useState: value => [value, () => {}],

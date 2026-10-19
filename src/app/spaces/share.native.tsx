@@ -1,3 +1,5 @@
+import { countLabel, tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from 'react-native';
 import { Icon } from '@/components/ui/icon';
@@ -19,7 +21,7 @@ import type { PinnedNote } from '@/db/types';
 import { captureShareNote, discardShareNoteImage, saveShareNoteImage, shareNoteExportWidth, shareShareNoteImage, type ShareNoteImageFile } from '@/services/share-note-export';
 
 type Busy = 'generating' | 'saving' | 'sharing' | null;
-const BUSY_LABEL: Record<Exclude<Busy, null>, string> = { generating: 'Generating image…', saving: 'Saving image…', sharing: 'Opening share sheet…' };
+const BUSY_LABEL: Record<Exclude<Busy, null>, string> = { get generating() { return tr("sharenote.generatingImage"); }, get saving() { return tr("sharenote.savingImage"); }, get sharing() { return tr("sharenote.openingShareSheet"); } };
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 /**
@@ -29,6 +31,9 @@ const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() 
  * so it's crisp and never a screenshot of the app.
  */
 export default function ShareSpaceScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const ui = useSpaceUI();
   const styles = useSpaceStyles(createStyles);
   const database = useSQLiteContext();
@@ -64,7 +69,7 @@ export default function ShareSpaceScreen() {
     // Let the off-screen canvas commit its latest props before it's drawn.
     await nextFrame();
     await nextFrame();
-    if (!exportRef.current) throw new Error('Space canvas is not ready.');
+    if (!exportRef.current) throw new Error(tr("share.spaceCanvasIsNotReady"));
     const file = await captureShareNote(exportRef.current, 'square', false, 'Chits Space');
     discardShareNoteImage(generated.current?.file ?? null);
     generated.current = { key: designKey, file };
@@ -82,14 +87,14 @@ export default function ShareSpaceScreen() {
         const outcome = await saveShareNoteImage(file);
         if (outcome.status === 'saved') { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); setToast(outcome.savedTo); }
         else if (outcome.status === 'failed' && outcome.code === 'permission') showPermissionSettingsPrompt('photos');
-        else if (outcome.status === 'failed') setToast(outcome.code === 'no_space' ? 'Not enough storage space to save this image.' : 'Couldn’t save the image. Please try again.');
+        else if (outcome.status === 'failed') setToast(outcome.code === 'no_space' ? tr("sharenote.notEnoughStorageSpaceToSaveThisImage") : tr("sharenote.couldnTSaveTheImagePleaseTryAgain"));
       } else {
         setBusy('sharing');
-        if (!await shareShareNoteImage(file)) setToast('Sharing isn’t available right now.');
+        if (!await shareShareNoteImage(file)) setToast(tr("sharenote.sharingIsnTAvailableRightNow"));
       }
     } catch (error) {
       console.warn('[spaces] export failed', error);
-      setToast('Couldn’t create the image. Please try again.');
+      setToast(tr("sharenote.couldnTCreateTheImagePleaseTryAgain"));
     } finally {
       busyRef.current = false;
       setBusy(null);
@@ -110,22 +115,22 @@ export default function ShareSpaceScreen() {
 
     <View style={[styles.cover, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={({ pressed }) => [styles.round, shapes.round, pressed && styles.pressed]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={tr("attachments.close")} onPress={close} style={({ pressed }) => [styles.round, shapes.round, pressed && styles.pressed]}>
           <Icon name="close" size={22} color={ui.paper} />
         </Pressable>
-        <Text accessibilityRole="header" numberOfLines={1} style={[fonts.uiHeavy, styles.title]}>Share your {space.name}</Text>
+        <Text accessibilityRole="header" numberOfLines={1} style={[fonts.uiHeavy, styles.title]}>{tr("share.shareYour")}{' '}{space.name}</Text>
         <View style={styles.headerSpacer} />
       </View>
-      {notes === null ? <View style={styles.center}><ChitsLoader label="Preparing preview…" /></View> : <ScrollView contentContainerStyle={styles.content}>
-        <View accessible accessibilityRole="image" accessibilityLabel={`Preview: a photo of your ${space.name} with ${notes.length} ${notes.length === 1 ? 'note' : 'notes'}${hideText ? ', note text hidden' : ''}`}>
+      {notes === null ? <View style={styles.center}><ChitsLoader label={tr("sharenote.preparingPreview")} /></View> : <ScrollView contentContainerStyle={styles.content}>
+        <View accessible accessibilityRole="image" accessibilityLabel={tr("share.previewAPhotoOfYourValueWithValue", { value1: space.name, value2: countLabel('note', notes.length), value3: '', value4: hideText ? tr("share.noteTextHidden") : '' })}>
           <SpaceShareCanvas spaceId={spaceId} notes={notes} size={previewSize} hideText={hideText} />
         </View>
         <View style={styles.option}>
           <View style={styles.optionCopy}>
-            <Text style={[fonts.uiSemi, styles.optionTitle]}>Hide note text</Text>
-            <Text style={[fonts.ui, styles.optionDetail]}>Your notes’ words are left out of the image; the board and notes stay.</Text>
+            <Text style={[fonts.uiSemi, styles.optionTitle]}>{tr("share.hideNoteText")}</Text>
+            <Text style={[fonts.ui, styles.optionDetail]}>{tr("share.yourNotesWordsAreLeftOutOfThe")}</Text>
           </View>
-          <Switch accessibilityLabel="Hide note text" value={hideText} onValueChange={(value) => { void Haptics.selectionAsync(); setHideText(value); }} trackColor={{ true: ui.accent, false: ui.switchOff }} thumbColor={Platform.OS === 'android' ? ui.paperWhite : undefined} ios_backgroundColor={ui.switchOff} />
+          <Switch accessibilityLabel={tr("share.hideNoteText")} value={hideText} onValueChange={(value) => { void Haptics.selectionAsync(); setHideText(value); }} trackColor={{ true: ui.accent, false: ui.switchOff }} thumbColor={Platform.OS === 'android' ? ui.paperWhite : undefined} ios_backgroundColor={ui.switchOff} />
         </View>
       </ScrollView>}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
@@ -133,11 +138,11 @@ export default function ShareSpaceScreen() {
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => void run('save')} style={({ pressed }) => [styles.action, styles.save, shapes.button, disabled && styles.disabled, pressed && styles.pressed]}>
             <Icon name="download-outline" size={19} color={ui.paper} />
-            <Text style={[fonts.uiSemi, styles.actionText, { color: ui.paper }]}>Save image</Text>
+            <Text style={[fonts.uiSemi, styles.actionText, { color: ui.paper }]}>{tr("share.saveImage")}</Text>
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => void run('share')} style={({ pressed }) => [styles.action, styles.share, shapes.button, disabled && styles.disabled, pressed && styles.pressed]}>
             <Icon name={Platform.OS === 'ios' ? 'share-outline' : 'share-social-outline'} size={19} color={ui.accentText} />
-            <Text style={[fonts.uiSemi, styles.actionText, { color: ui.accentText }]}>Share</Text>
+            <Text style={[fonts.uiSemi, styles.actionText, { color: ui.accentText }]}>{tr("attachments.share")}</Text>
           </Pressable>
         </View>
       </View>

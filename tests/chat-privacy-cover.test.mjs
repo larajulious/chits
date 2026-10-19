@@ -30,15 +30,15 @@ test('covered Chat rows do not mount the original attachment renderer', () => {
   assert.match(row, /covered\s*\? <HiddenMessageCover[\s\S]*?: <View style=\{styles\.revealedWrap\}>/);
   assert.match(row, /<BlurTargetView[\s\S]*?<BlurView[\s\S]*?intensity=\{95\}/);
   assert.match(row, /blurMethod="dimezisBlurViewSdk31Plus"/);
-  assert.match(row, /Hidden photo\. Double tap to reveal\./);
-  assert.match(row, /Hidden video\. Double tap to reveal\./);
-  assert.match(row, /Hidden Chit\. Double tap to reveal\./);
+  assert.match(row, /tr\("messagerow\.hiddenPhotoDoubleTapToReveal"\)/);
+  assert.match(row, /tr\("messagerow\.hiddenVideoDoubleTapToReveal"\)/);
+  assert.match(row, /tr\("messagerow\.hiddenChitDoubleTapToReveal"\)/);
 });
 
 test('temporary hide control lives with message metadata instead of floating over content', () => {
   const row = read('src/components/chat/message-row.native.tsx');
   const cards = read('src/components/chat/message-note-cards.native.tsx');
-  assert.match(cards, /accessibilityLabel="Hide again"[\s\S]*?styles\.privacyAction/);
+  assert.match(cards, /accessibilityLabel=\{tr\("id\.hideAgain"\)\}[\s\S]*?styles\.privacyAction/);
   assert.match(row, /onHideAgain=\{message\.isHiddenContent/);
   assert.match(row, /styles\.mediaPrivacy/);
   assert.doesNotMatch(row, /left: '18%'/);
@@ -62,18 +62,18 @@ test('covered actions and secondary surfaces do not expose content', () => {
   const unorganized = read('src/app/unorganized.native.tsx');
 
   assert.match(actions, /const covered = message\.isHiddenContent && !temporarilyRevealed/);
-  assert.match(actions, /covered \? 'Hidden Chit'/);
-  assert.match(actions, /label="Reveal"/);
-  assert.match(actions, /label="Show content"/);
-  assert.match(actions, /label="Hide again"/);
+  assert.match(actions, /covered \? tr\("index\.hiddenChit"\)/);
+  assert.match(actions, /label=\{tr\("messageactions\.reveal"\)\}/);
+  assert.match(actions, /label=\{tr\("id\.showContent"\)\}/);
+  assert.match(actions, /label=\{tr\("id\.hideAgain"\)\}/);
   assert.match(actions, /!covered && copyable/);
-  assert.match(chat, /if \(message\.isHiddenContent\) return 'Hidden Chit'/);
+  assert.match(chat, /if \(message\.isHiddenContent\) return tr\("index\.hiddenChit"\)/);
   assert.match(chat, /if \(message\.isHiddenContent\) return 'eye-off-outline'/);
   assert.match(repositories, /CASE WHEN is_hidden_content = 1 THEN 'Hidden Chit' ELSE text END AS title/);
   assert.match(repositories, /CASE WHEN is_hidden_content = 1 THEN 'Hidden Chit' ELSE COALESCE\(text, 'Attachment'\) END AS title/);
-  assert.match(boards, /if \(row\.isHiddenContent === 1\) return 'Hidden Chit'/);
-  assert.match(unorganized, /if \(message\.isHiddenContent\) return 'Hidden Chit'/);
-  assert.match(unorganized, /if \(message\.isHiddenContent\) return <View accessibilityLabel="Hidden content"/);
+  assert.match(boards, /if \(row\.isHiddenContent === 1\) return tr\("index\.hiddenChit"\)/);
+  assert.match(unorganized, /if \(message\.isHiddenContent\) return tr\("index\.hiddenChit"\)/);
+  assert.match(unorganized, /if \(message\.isHiddenContent\) return <View accessibilityLabel=\{tr\("unorganized\.hiddenContent"\)\}/);
 });
 
 test('board cards linked to a hidden Chat thought are covered in their column', () => {
@@ -95,7 +95,7 @@ test('board cards linked to a hidden Chat thought are covered in their column', 
   const board = read('src/app/board/[id].native.tsx');
   assert.match(repository, /CARD_SUMMARY_SELECT_SQL[\s\S]*?m\.is_hidden_content = 1\) AS isHidden/);
   assert.match(board, /const media: Attachment \| null = !hidden &&/);
-  assert.match(board, /hidden \? <View style=\{styles\.hiddenTitle\}>[\s\S]*?Hidden Chit/);
+  assert.match(board, /hidden \? <View style=\{styles\.hiddenTitle\}>[\s\S]*?index\.hiddenChit/);
   assert.match(board, /\{!hidden && card\.preview/);
 });
 
@@ -104,6 +104,6 @@ test('card details can hide or show content and covers it while hidden', () => {
   const detail = read('src/app/card/[id].native.tsx');
   assert.match(repository, /setCardHiddenContent\(cardId: string, hidden: boolean\)[\s\S]*?UPDATE messages SET is_hidden_content = \? WHERE id IN \(SELECT message_id FROM card_messages WHERE card_id = \?\)/);
   assert.match(detail, /const contentHidden = messages\.some\(\(message\) => message\.isHiddenContent\)/);
-  assert.match(detail, /covered \? <Pressable[\s\S]*?Content hidden[\s\S]*?: messages\.map\(/);
-  assert.match(detail, /contentHidden \? 'Show content' : 'Hide content'/);
+  assert.match(detail, /covered \? <Pressable[\s\S]*?id\.contentHidden[\s\S]*?: messages\.map\(/);
+  assert.match(detail, /contentHidden \? tr\("id\.showContent"\) : tr\("id\.hideContent"\)/);
 });

@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import Constants from 'expo-constants';
 import * as FS from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
@@ -7,7 +8,7 @@ import { listContents, NO_COMPRESSION, unzip, zip } from 'react-native-zip-archi
 import { LATEST_SCHEMA_VERSION, migrateDatabase } from '@/db/migrations';
 import { REVISIT_COLUMNS } from '@/db/revisit-schema';
 import { ChitsFiles } from '../../modules/chits-attachments';
-import { archivePathForMedia, BACKUP_VERSION, BackupError, backupErrorMessage, INVALID_BACKUP, parseBackupMetadata, portableMediaPath, validateArchiveEntries, type BackupFile, type BackupManifest, type MissingAttachment } from './backup-format';
+import { archivePathForMedia, BACKUP_VERSION, BackupError, backupErrorMessage, invalidBackupMessage, parseBackupMetadata, portableMediaPath, validateArchiveEntries, type BackupFile, type BackupManifest, type MissingAttachment } from './backup-format';
 import { beginBackupOperation, type BackupProgress } from './backup-operation';
 import { recoverInterruptedRestore, removeDatabaseFiles, restorePaths, writeRestoreJournal, type RestoreJournal } from './backup-recovery.native';
 import { pauseReminderSync, resumeReminderSync } from './reminders';
@@ -23,7 +24,7 @@ const requiredTables = ['messages', 'attachments', 'boards', 'board_columns', 'c
 const currentTables = [...requiredTables, 'timeline_events', 'app_settings', 'card_comments', 'card_attachments', 'card_reminders', 'space_placements', 'message_reminders', 'card_subtasks', 'calendar_entries', ...Object.keys(REVISIT_COLUMNS)];
 const MARGIN = 16 * 1024 * 1024;
 function directory(value: string | null) {
-  if (!value) throw new BackupError('Chits could not access private device storage.');
+  if (!value) throw new BackupError(tr("attachmentstorage.chitsCouldNotAccessPrivateDeviceStorage"));
   return value;
 }
 function temporaryDirectory(prefix: string) {
@@ -31,16 +32,16 @@ function temporaryDirectory(prefix: string) {
 }
 function report(progress: Progress | undefined, label: string, completed?: number, total?: number) { progress?.({ label, completed, total }); }
 async function requireSpace(bytes: number) {
-  if (await FS.getFreeDiskStorageAsync() < bytes + MARGIN) throw new BackupError('There is not enough free storage. Free some space, then try again.');
+  if (await FS.getFreeDiskStorageAsync() < bytes + MARGIN) throw new BackupError(tr("backupservice.thereIsNotEnoughFreeStorageFreeSome"));
 }
 async function fileDetails(uri: string) {
   const info = await FS.getInfoAsync(uri);
-  if (!info.exists || info.isDirectory) throw new BackupError('A required backup file is missing or unreadable.');
+  if (!info.exists || info.isDirectory) throw new BackupError(tr("backupservice.aRequiredBackupFileIsMissingOrUnreadable"));
   return { size: info.size, sha256: await ChitsFiles.hashFileAsync(uri) };
 }
 async function verifyFile(uri: string, expected: { size: number; sha256: string }) {
   const details = await fileDetails(uri);
-  if (details.size !== expected.size || details.sha256 !== expected.sha256) throw new BackupError('This backup is damaged. One or more files failed verification.');
+  if (details.size !== expected.size || details.sha256 !== expected.sha256) throw new BackupError(tr("backupservice.thisBackupIsDamagedOneOrMoreFiles"));
 }
 async function copyFile(from: string, to: string) {
   await FS.makeDirectoryAsync(to.slice(0, to.lastIndexOf('/') + 1), { intermediates: true });
@@ -51,12 +52,12 @@ async function tableExists(db: SQLiteDatabase, table: string) {
 }
 async function validateDatabase(db: SQLiteDatabase, expectedSchema?: number, current = false, checkRelationships = true) {
   const integrity = await db.getAllAsync<Record<string, string>>('PRAGMA integrity_check');
-  if (integrity.length !== 1 || Object.values(integrity[0])[0] !== 'ok') throw new BackupError('The backup database is damaged and cannot be restored.');
+  if (integrity.length !== 1 || Object.values(integrity[0])[0] !== 'ok') throw new BackupError(tr("backupservice.theBackupDatabaseIsDamagedAndCannotBe"));
   const schema = (await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version'))?.user_version ?? 0;
-  if (schema < 1 || schema > LATEST_SCHEMA_VERSION || (expectedSchema !== undefined && schema !== expectedSchema)) throw new BackupError('The backup database version does not match its backup information.');
+  if (schema < 1 || schema > LATEST_SCHEMA_VERSION || (expectedSchema !== undefined && schema !== expectedSchema)) throw new BackupError(tr("backupservice.theBackupDatabaseVersionDoesNotMatchIts"));
   const tables = current ? currentTables : [...requiredTables, ...(schema >= 4 ? ['timeline_events'] : []), ...(schema >= 8 ? ['app_settings'] : []), ...(schema >= 16 ? ['card_comments'] : []), ...(schema >= 17 ? ['card_attachments'] : []), ...(schema >= 20 ? ['card_reminders'] : []), ...(schema >= 21 ? ['space_placements'] : []), ...(schema >= 22 ? ['message_reminders'] : []), ...(schema >= 23 ? ['card_subtasks'] : []), ...(schema >= 26 ? ['calendar_entries'] : [])];
   if (!current && schema >= 27) tables.push(...Object.keys(REVISIT_COLUMNS));
-  for (const table of tables) if (!await tableExists(db, table)) throw new BackupError('The backup database is incomplete. A required part of your Chits data is missing.');
+  for (const table of tables) if (!await tableExists(db, table)) throw new BackupError(tr("backupservice.theBackupDatabaseIsIncompleteARequiredPart"));
   const columns: Record<string, string[]> = {
     ...REVISIT_COLUMNS,
     messages: ['id', 'text', 'type', 'created_at', 'updated_at', 'archived_at', 'pinned', 'deleted_at', ...(schema >= 18 ? ['is_hidden_content'] : []), ...(schema >= 24 ? ['content_json'] : [])],
@@ -77,22 +78,22 @@ async function validateDatabase(db: SQLiteDatabase, expectedSchema?: number, cur
   };
   for (const table of tables) {
     const actual = new Set((await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`)).map((row) => row.name));
-    if (columns[table].some((column) => !actual.has(column))) throw new BackupError('The backup database is incomplete or has an incompatible layout.');
+    if (columns[table].some((column) => !actual.has(column))) throw new BackupError(tr("backupservice.theBackupDatabaseIsIncompleteOrHasAn"));
   }
   if (checkRelationships) {
-    if ((await db.getAllAsync('PRAGMA foreign_key_check')).length) throw new BackupError('The backup contains broken data relationships and cannot be restored.');
+    if ((await db.getAllAsync('PRAGMA foreign_key_check')).length) throw new BackupError(tr("backupservice.theBackupContainsBrokenDataRelationshipsAndCannot"));
     const wrongColumns = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM cards c JOIN board_columns bc ON bc.id = c.column_id WHERE c.board_id != bc.board_id');
-    if (wrongColumns?.count) throw new BackupError('The backup contains cards assigned to the wrong board.');
+    if (wrongColumns?.count) throw new BackupError(tr("backupservice.theBackupContainsCardsAssignedToTheWrong"));
     const relations = [['attachments', 'message_id', 'messages'], ['board_columns', 'board_id', 'boards'], ['cards', 'board_id', 'boards'], ['cards', 'column_id', 'board_columns'], ['card_messages', 'card_id', 'cards'], ['card_messages', 'message_id', 'messages'], ...(schema >= 16 ? [['card_comments', 'card_id', 'cards']] : []), ...(schema >= 17 ? [['card_attachments', 'card_id', 'cards']] : []), ...(schema >= 20 ? [['card_reminders', 'card_id', 'cards']] : []), ...(schema >= 21 ? [['space_placements', 'message_id', 'messages'], ['space_placements', 'card_id', 'cards']] : []), ...(schema >= 22 ? [['message_reminders', 'message_id', 'messages']] : []), ...(schema >= 23 ? [['card_subtasks', 'card_id', 'cards']] : []), ...(schema >= 26 ? [['calendar_entries', 'message_id', 'messages'], ['calendar_entries', 'card_id', 'cards']] : [])];
     if (schema >= 27) relations.push(['revisit_notes','message_id','messages'], ['revisit_notes','card_id','cards']);
     for (const [child, key, parent] of relations) {
-      if (await db.getFirstAsync(`SELECT 1 FROM ${child} c LEFT JOIN ${parent} p ON p.id = c.${key} WHERE c.${key} IS NOT NULL AND p.id IS NULL LIMIT 1`)) throw new BackupError('The backup contains broken data relationships and cannot be restored.');
+      if (await db.getFirstAsync(`SELECT 1 FROM ${child} c LEFT JOIN ${parent} p ON p.id = c.${key} WHERE c.${key} IS NOT NULL AND p.id IS NULL LIMIT 1`)) throw new BackupError(tr("backupservice.theBackupContainsBrokenDataRelationshipsAndCannot"));
     }
     if (schema >= 27) {
       for (const table of ['note_relationships','revisit_rejections']) {
-        if (await db.getFirstAsync(`SELECT 1 FROM ${table} r LEFT JOIN revisit_notes a ON a.note_key = r.note_a LEFT JOIN revisit_notes b ON b.note_key = r.note_b WHERE a.note_key IS NULL OR b.note_key IS NULL OR r.note_a >= r.note_b LIMIT 1`)) throw new BackupError('The backup contains broken note connections.');
+        if (await db.getFirstAsync(`SELECT 1 FROM ${table} r LEFT JOIN revisit_notes a ON a.note_key = r.note_a LEFT JOIN revisit_notes b ON b.note_key = r.note_b WHERE a.note_key IS NULL OR b.note_key IS NULL OR r.note_a >= r.note_b LIMIT 1`)) throw new BackupError(tr("backupservice.theBackupContainsBrokenNoteConnections"));
       }
-      if (await db.getFirstAsync('SELECT 1 FROM revisit_events e LEFT JOIN revisit_notes n ON n.note_key = e.note_key WHERE n.note_key IS NULL LIMIT 1')) throw new BackupError('The backup contains broken review history.');
+      if (await db.getFirstAsync('SELECT 1 FROM revisit_events e LEFT JOIN revisit_notes n ON n.note_key = e.note_key WHERE n.note_key IS NULL LIMIT 1')) throw new BackupError(tr("backupservice.theBackupContainsBrokenReviewHistory"));
     }
   }
   // Compile required reads: a database with same-named, empty placeholder tables is invalid.
@@ -117,7 +118,7 @@ async function normalizeSnapshot(db: SQLiteDatabase) {
       const source = portableMediaPath(row.storage_path);
       const storagePath = canonicalPath(row.storage_path) ?? '';
       if (source && storagePath) {
-        if (sources.has(storagePath) && sources.get(storagePath) !== source) throw new BackupError('Two attachments refer to conflicting file locations. Your current data has not been changed.');
+        if (sources.has(storagePath) && sources.get(storagePath) !== source) throw new BackupError(tr("backupservice.twoAttachmentsReferToConflictingFileLocationsYour"));
         sources.set(storagePath, source);
       }
       if (storagePath !== row.storage_path) await db.runAsync(`UPDATE ${table} SET storage_path = ? WHERE id = ?`, storagePath, row.id);
@@ -132,14 +133,14 @@ async function normalizeSnapshot(db: SQLiteDatabase) {
           const source = portableMediaPath(data.storagePath);
           const storagePath = canonicalPath(data.storagePath) ?? '';
           if (source && storagePath) {
-            if (sources.has(storagePath) && sources.get(storagePath) !== source) throw new BackupError('A saved photo refers to a conflicting file location. Your current data has not been changed.');
+            if (sources.has(storagePath) && sources.get(storagePath) !== source) throw new BackupError(tr("backupservice.aSavedPhotoRefersToAConflictingFile"));
             sources.set(storagePath, source);
           }
           data.storagePath = storagePath;
           delete data.deviceAssetId; // A photo-library identifier belongs to the old installation.
           await db.runAsync('UPDATE app_settings SET value = ? WHERE key = ?', JSON.stringify(data), key);
         }
-      } catch { throw new BackupError('The saved photo information could not be read.'); }
+      } catch { throw new BackupError(tr("backupservice.theSavedPhotoInformationCouldNotBeRead")); }
     }
   }
   await db.execAsync('UPDATE card_reminders SET notification_id = NULL;');
@@ -204,22 +205,22 @@ async function snapshot(source: SQLiteDatabase, dir: string, name = 'database.sq
 }
 async function checkManifestReferences(db: SQLiteDatabase, manifest: BackupManifest) {
   const actualCounts = await counts(db);
-  for (const key of Object.keys(actualCounts) as (keyof typeof actualCounts)[]) if (manifest[key] !== actualCounts[key]) throw new BackupError('The backup contents do not match its backup information.');
+  for (const key of Object.keys(actualCounts) as (keyof typeof actualCounts)[]) if (manifest[key] !== actualCounts[key]) throw new BackupError(tr("backupservice.theBackupContentsDoNotMatchItsBackup"));
   const files = new Set(manifest.files.map((file) => file.storagePath));
   const missing = new Map(manifest.missingAttachments.map((item) => [`${item.table}:${item.attachmentId}`, item]));
   const usedFiles = new Set<string>();
   for (const ref of await references(db)) {
     const key = `${ref.table}:${ref.attachmentId}`;
     if (files.has(ref.storagePath)) {
-      if (missing.has(key)) throw new BackupError('The missing attachment report conflicts with the backup files.');
+      if (missing.has(key)) throw new BackupError(tr("backupservice.theMissingAttachmentReportConflictsWithTheBackup"));
       usedFiles.add(ref.storagePath);
     } else {
       const item = missing.get(key);
-      if (!item || item.expectedPath !== (ref.storagePath || '(unavailable)')) throw new BackupError('The backup is incomplete. A referenced attachment was not included.');
+      if (!item || item.expectedPath !== (ref.storagePath || '(unavailable)')) throw new BackupError(tr("backupservice.theBackupIsIncompleteAReferencedAttachmentWas"));
       missing.delete(key);
     }
   }
-  if (missing.size || usedFiles.size !== files.size) throw new BackupError('The backup file list does not match its data.');
+  if (missing.size || usedFiles.size !== files.size) throw new BackupError(tr("backupservice.theBackupFileListDoesNotMatchIts"));
 }
 async function legacyManifest(db: SQLiteDatabase, dir: string, createdAt: string) {
   const files: BackupFile[] = [];
@@ -236,7 +237,7 @@ async function legacyManifest(db: SQLiteDatabase, dir: string, createdAt: string
     }
     if (!available) missingAttachments.push({ attachmentId: ref.attachmentId, table: ref.table, expectedPath: ref.storagePath || '(unavailable)' });
   }
-  return { app: 'Chits' as const, backupVersion: 1, databaseSchemaVersion: LATEST_SCHEMA_VERSION, createdAt, appVersion: 'Unknown', ...await counts(db), database: { size: 0, sha256: '' }, files, missingAttachments };
+  return { app: 'Chits' as const, backupVersion: 1, databaseSchemaVersion: LATEST_SCHEMA_VERSION, createdAt, appVersion: tr("backupservice.unknown"), ...await counts(db), database: { size: 0, sha256: '' }, files, missingAttachments };
 }
 
 /** A native SQLite snapshot + referenced files, never a JS/base64 media payload. */
@@ -245,14 +246,14 @@ export async function createBackup(database: SQLiteDatabase, progress?: Progress
   const staging = temporaryDirectory('chits-backup');
   let uri: string | null = null;
   try {
-    report(progress, 'Preparing backup…');
+    report(progress, tr("backup.preparingBackup"));
     await pauseReminderSync();
     // Barrier behind pending SQLite writes, then a WAL-aware online snapshot.
     await database.getFirstAsync('SELECT 1');
     await database.withExclusiveTransactionAsync(async (tx) => { await tx.execAsync('UPDATE app_settings SET value = value WHERE 0;'); });
     await validateDatabase(database, LATEST_SCHEMA_VERSION, true, false);
     await FS.makeDirectoryAsync(staging, { intermediates: true });
-    report(progress, 'Collecting data…');
+    report(progress, tr("backupservice.collectingData"));
     await snapshot(database, staging);
     const db = await openDatabaseAsync('database.sqlite', { useNewConnection: true }, staging);
     let manifest: BackupManifest;
@@ -265,7 +266,7 @@ export async function createBackup(database: SQLiteDatabase, progress?: Progress
       const available = new Map<string, boolean>();
       let copied = 0;
       for (const ref of refs) {
-        report(progress, 'Copying attachments…', copied++, refs.length);
+        report(progress, tr("backupservice.copyingAttachments"), copied++, refs.length);
         if (!available.has(ref.storagePath)) {
           const sourcePath = sources.get(ref.storagePath);
           const from = sourcePath ? `${directory(FS.documentDirectory)}${sourcePath}` : null;
@@ -297,19 +298,19 @@ export async function createBackup(database: SQLiteDatabase, progress?: Progress
     await FS.makeDirectoryAsync(output, { intermediates: true });
     uri = `${output}${name}`;
     await requireSpace(manifest.database.size + manifest.files.reduce((sum, file) => sum + file.size, 0));
-    report(progress, 'Creating backup file…');
+    report(progress, tr("backupservice.creatingBackupFile"));
     await zip(staging, uri, { compressionLevel: NO_COMPRESSION });
-    report(progress, 'Verifying backup…');
+    report(progress, tr("backupservice.verifyingBackup"));
     const validated = await validateBackup(uri);
     if (!validated.valid) throw new BackupError(validated.reason);
     await discardValidatedBackup(validated);
     const archiveInfo = await FS.getInfoAsync(uri);
-    if (!archiveInfo.exists) throw new BackupError('The finished backup file could not be found.');
+    if (!archiveInfo.exists) throw new BackupError(tr("backupservice.theFinishedBackupFileCouldNotBeFound"));
     return { uri, manifest, size: archiveInfo.size };
   } catch (cause) {
     if (uri) await discardCreatedBackup(uri);
     console.warn('[backup] create failed', cause);
-    throw new BackupError(backupErrorMessage(cause, 'Chits could not create a complete backup. Your current data has not been changed.'));
+    throw new BackupError(backupErrorMessage(cause, tr("backupservice.chitsCouldNotCreateACompleteBackupYour")));
   } finally {
     await FS.deleteAsync(staging, { idempotent: true }).catch(() => undefined);
     resumeReminderSync(); end();
@@ -329,18 +330,18 @@ export async function discardCreatedBackup(uri: string) {
 export async function validateBackup(fileUri: string, progress?: Progress): Promise<BackupValidation> {
   const workDir = temporaryDirectory('chits-restore-check');
   try {
-    report(progress, 'Checking backup…');
+    report(progress, tr("backupservice.checkingBackup"));
     await FS.makeDirectoryAsync(workDir, { intermediates: true });
     const selected = `${workDir}selected.chitsbackup`;
     await FS.copyAsync({ from: fileUri, to: selected }); // Own a stable file:// copy, including provider content:// sources.
     const selectedInfo = await FS.getInfoAsync(selected);
-    if (!selectedInfo.exists || selectedInfo.isDirectory) throw new BackupError(INVALID_BACKUP);
+    if (!selectedInfo.exists || selectedInfo.isDirectory) throw new BackupError(invalidBackupMessage());
     const entries = await listContents(selected);
     validateArchiveEntries(entries, await FS.getFreeDiskStorageAsync());
     const metadataEntry = entries.find((entry) => !entry.isDirectory && entry.path === 'manifest.json') ?? entries.find((entry) => !entry.isDirectory && /^(?:[^/]+\/)?metadata\.json$/.test(entry.path));
-    if (!metadataEntry || metadataEntry.size > 8 * 1024 * 1024) throw new BackupError('The backup information is missing or invalid.');
+    if (!metadataEntry || metadataEntry.size > 8 * 1024 * 1024) throw new BackupError(tr("backupservice.theBackupInformationIsMissingOrInvalid"));
     const prefix = metadataEntry.path.slice(0, -metadataEntry.path.split('/').pop()!.length);
-    if (!entries.some((entry) => entry.path === `${prefix}database.sqlite` && !entry.isDirectory && entry.size > 0)) throw new BackupError('The backup is missing its Chits database.');
+    if (!entries.some((entry) => entry.path === `${prefix}database.sqlite` && !entry.isDirectory && entry.size > 0)) throw new BackupError(tr("backupservice.theBackupIsMissingItsChitsDatabase"));
     const extracted = `${workDir}extracted/`;
     await FS.makeDirectoryAsync(extracted, { intermediates: true });
     // Read small metadata first so future versions are rejected before copying media.
@@ -352,13 +353,13 @@ export async function validateBackup(fileUri: string, progress?: Progress): Prom
     const wanted = modern ? [`${prefix}database.sqlite`, ...originalManifest!.files.map((file) => `${prefix}${file.archivePath}`)] : [`${prefix}database.sqlite`, `${prefix}attachments/`];
     if (modern) {
       const entryMap = new Map(entries.map((entry) => [entry.path, entry]));
-      for (const file of originalManifest!.files) if (entryMap.get(`${prefix}${file.archivePath}`)?.size !== file.size) throw new BackupError('The backup is incomplete or damaged. An attachment is missing.');
+      for (const file of originalManifest!.files) if (entryMap.get(`${prefix}${file.archivePath}`)?.size !== file.size) throw new BackupError(tr("backupservice.theBackupIsIncompleteOrDamagedAnAttachment"));
     }
     await unzip(selected, extracted, { entries: wanted });
     if (originalManifest) {
       await verifyFile(`${root}database.sqlite`, originalManifest.database);
       for (let index = 0; index < originalManifest.files.length; index++) {
-        report(progress, 'Checking backup…', index + 1, originalManifest.files.length);
+        report(progress, tr("backupservice.checkingBackup"), index + 1, originalManifest.files.length);
         const file = originalManifest.files[index];
         await verifyFile(`${root}${file.archivePath}`, file);
       }
@@ -372,7 +373,7 @@ export async function validateBackup(fileUri: string, progress?: Progress): Prom
     let manifest: BackupManifest;
     try {
       try { await migrateDatabase(db); }
-      catch (cause) { console.warn('[backup] migration failed', cause); throw new BackupError('This backup could not be upgraded to the current version of Chits. Your current data has not been changed.'); }
+      catch (cause) { console.warn('[backup] migration failed', cause); throw new BackupError(tr("backupservice.thisBackupCouldNotBeUpgradedToThe")); }
       // Check declared references before normalizing so omissions cannot be hidden by a migration.
       if (originalManifest) await checkManifestReferences(db, originalManifest);
       await normalizeSnapshot(db);
@@ -387,7 +388,7 @@ export async function validateBackup(fileUri: string, progress?: Progress): Prom
   } catch (cause) {
     console.warn('[backup] validation failed', cause);
     await FS.deleteAsync(workDir, { idempotent: true }).catch(() => undefined);
-    return { valid: false, reason: backupErrorMessage(cause, 'This backup could not be opened. It may be damaged or is not a Chits backup.') };
+    return { valid: false, reason: backupErrorMessage(cause, tr("backupservice.thisBackupCouldNotBeOpenedItMay")) };
   }
 }
 
@@ -401,28 +402,28 @@ export async function restoreBackup(backup: ValidatedBackup, live: SQLiteDatabas
   let commitStarted = false;
   let ownsStaging = false;
   try {
-    report(progress, 'Preparing restore…');
+    report(progress, tr("backup.preparingRestore"));
     await pauseReminderSync();
-    if ((await FS.getInfoAsync(paths.journal)).exists) throw new BackupError('Chits needs to recover an earlier restore first. Close and reopen Chits, then try again.');
+    if ((await FS.getInfoAsync(paths.journal)).exists) throw new BackupError(tr("backupservice.chitsNeedsToRecoverAnEarlierRestoreFirst"));
     await FS.deleteAsync(paths.root, { idempotent: true });
     await FS.makeDirectoryAsync(paths.root, { intermediates: true });
     ownsStaging = true;
-    if (await ChitsFiles.hashFileAsync(`${backup.preparedDir}database.sqlite`) !== backup.preparedDatabaseHash) throw new BackupError('The checked backup has changed. Choose the backup file again.');
+    if (await ChitsFiles.hashFileAsync(`${backup.preparedDir}database.sqlite`) !== backup.preparedDatabaseHash) throw new BackupError(tr("backupservice.theCheckedBackupHasChangedChooseTheBackup"));
     await copyFile(`${backup.preparedDir}database.sqlite`, paths.stagedDatabase);
     await FS.makeDirectoryAsync(paths.stagedAttachments, { intermediates: true });
-    report(progress, 'Restoring attachments…');
+    report(progress, tr("backupservice.restoringAttachments"));
     for (let index = 0; index < backup.manifest.files.length; index++) {
       const file = backup.manifest.files[index];
-      if (!file.storagePath.startsWith('chits-attachments/')) throw new BackupError('The backup contains an unsupported attachment path.');
+      if (!file.storagePath.startsWith('chits-attachments/')) throw new BackupError(tr("backupservice.theBackupContainsAnUnsupportedAttachmentPath"));
       const target = `${paths.stagedAttachments}${file.storagePath.slice('chits-attachments/'.length)}`;
       await copyFile(`${backup.extractedDir}${file.archivePath}`, target);
       await verifyFile(target, file);
-      report(progress, 'Restoring attachments…', index + 1, backup.manifest.files.length);
+      report(progress, tr("backupservice.restoringAttachments"), index + 1, backup.manifest.files.length);
     }
     const staged = await openDatabaseAsync('database.sqlite', { useNewConnection: true }, paths.root);
     try { await validateDatabase(staged, LATEST_SCHEMA_VERSION, true); await checkManifestReferences(staged, backup.manifest); await finalizeDatabase(staged); }
     finally { await staged.closeAsync(); }
-    report(progress, 'Preparing restore…');
+    report(progress, tr("backup.preparingRestore"));
     await live.getFirstAsync('SELECT 1');
     await live.withExclusiveTransactionAsync(async (tx) => { await tx.execAsync('UPDATE app_settings SET value = value WHERE 0;'); });
     // A complete safety snapshot exists BEFORE the first live file is touched.
@@ -434,12 +435,12 @@ export async function restoreBackup(backup: ValidatedBackup, live: SQLiteDatabas
     liveClosed = true;
     await live.closeAsync();
     commitStarted = true;
-    report(progress, 'Restoring data…');
+    report(progress, tr("backupservice.restoringData"));
     await removeDatabaseFiles(paths.database);
     await FS.moveAsync({ from: paths.stagedDatabase, to: paths.database });
     await FS.deleteAsync(paths.attachments, { idempotent: true });
     await FS.moveAsync({ from: paths.stagedAttachments, to: paths.attachments });
-    report(progress, 'Finishing restore…');
+    report(progress, tr("backupservice.finishingRestore"));
     const reopened = await openDatabaseAsync('chits.db', { useNewConnection: true });
     try {
       await validateDatabase(reopened, LATEST_SCHEMA_VERSION, true);
@@ -456,11 +457,11 @@ export async function restoreBackup(backup: ValidatedBackup, live: SQLiteDatabas
     console.warn('[backup] restore failed', cause);
     if (commitStarted) {
       try { await recoverInterruptedRestore(); }
-      catch (recoveryCause) { throw new RestoreError(backupErrorMessage(recoveryCause, 'Your safety copy has been kept. Reopen Chits to recover your previous data.'), true, liveClosed, cause); }
+      catch (recoveryCause) { throw new RestoreError(backupErrorMessage(recoveryCause, tr("backupservice.yourSafetyCopyHasBeenKeptReopenChits")), true, liveClosed, cause); }
     } else if (ownsStaging) {
       await FS.deleteAsync(paths.root, { idempotent: true }).catch(() => undefined);
     }
-    throw new RestoreError(backupErrorMessage(cause, 'The backup could not be restored. Your previous Chits data has been kept.'), false, liveClosed, cause);
+    throw new RestoreError(backupErrorMessage(cause, tr("backup.theBackupCouldNotBeRestoredYourPrevious")), false, liveClosed, cause);
   } finally {
     if (!liveClosed) resumeReminderSync();
     end();

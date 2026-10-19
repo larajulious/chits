@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import type { AttachmentLike } from '@/db/types';
 
 // A note's content in reading order: paragraphs, structured list items and images.
@@ -284,7 +285,7 @@ export function noteChecklistSummary(blocks: (NoteBlock | NoteDraftBlock | NoteR
   const completed = items.filter((block) => block.list?.kind === 'checklist' && block.list.checked).length;
   return {
     total: items.length, completed, percent: Math.round(completed / items.length * 100),
-    remaining: items.filter((block) => block.list?.kind === 'checklist' && !block.list.checked).slice(0, 3).map((block) => block.text.trim() || 'Empty item'),
+    remaining: items.filter((block) => block.list?.kind === 'checklist' && !block.list.checked).slice(0, 3).map((block) => block.text.trim() || tr("notecontent.emptyItem")),
     text: blocks.flatMap((block) => block.type === 'text' && block.list?.kind !== 'checklist' && block.text.trim() ? [block.text.trim()] : []).join('\n\n'),
   };
 }

@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
 import { AppState, Modal } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -11,6 +13,9 @@ import { ChatBackgroundContext } from './chat-background-context';
 import { ChatBackgroundPreview } from './chat-background-preview';
 
 export function ChatBackgroundProvider({ children }: PropsWithChildren) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const [background, setBackground] = useState<ChatBackground | null>(null);
   const [preview, setPreview] = useState<{ image: ChatBackgroundImage; onApplied?: () => void } | null>(null);
@@ -32,7 +37,7 @@ export function ChatBackgroundProvider({ children }: PropsWithChildren) {
     return () => { revision.current++; unsubscribe(); subscription.remove(); };
   }, [refresh]);
   const applyBackground = useCallback(async (next: ChatBackground) => {
-    if (!await attachmentExists(next.storagePath)) throw new Error('This photo is no longer available.');
+    if (!await attachmentExists(next.storagePath)) throw new Error(tr("chatbackgroundprovider.thisPhotoIsNoLongerAvailable"));
     const previous = await writeChatBackground(database, next);
     revision.current++;
     setBackground(next);

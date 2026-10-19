@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { createContext, useCallback, useContext, useMemo, useState, type ComponentProps, type PropsWithChildren } from 'react';
 import { Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -10,18 +12,21 @@ import { CHITS_REVISIT_ENABLED } from '@/constants/revisit';
 
 type DrawerContextValue = { openDrawer: () => void; closeDrawer: () => void };
 type IconName = ComponentProps<typeof Ionicons>['name'];
-type Destination = { label: string; path: '/' | '/calendar' | '/archive' | '/settings' | '/onboarding' | '/revisit'; icon: IconName };
+type Destination = { label: string; path: '/' | '/attachments' | '/calendar' | '/archive' | '/settings' | '/onboarding' | '/revisit'; icon: IconName };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
-// Notes, Spaces, Chat, Attachments, and Calendar are in the bottom navigation; Archive
-// moved here into the side drawer alongside Settings (see PHASE: GLOBAL
-// ATTACHMENTS SCREEN). Notes stays in the bottom navigation only.
-const calendarDestination: Destination = { label: 'Calendar', path: '/calendar', icon: 'calendar-outline' };
-const archiveDestination: Destination = { label: 'Archive', path: '/archive', icon: 'archive-outline' };
-const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
-const gettingStartedDestination: Destination = { label: 'Getting started', path: '/onboarding', icon: 'compass-outline' };
+// Main destinations live in the side panel; Chat remains a floating button.
+const notesDestination: Destination = { get label() { return tr('index.notes'); }, path: '/', icon: 'reader-outline' };
+const calendarDestination: Destination = { get label() { return tr("appdrawer.calendar"); }, path: '/calendar', icon: 'calendar-outline' };
+const attachmentsDestination: Destination = { get label() { return tr('attachments.attachments'); }, path: '/attachments', icon: 'attach-outline' };
+const archiveDestination: Destination = { get label() { return tr("archive.archive"); }, path: '/archive', icon: 'archive-outline' };
+const settingsDestination: Destination = { get label() { return tr("settings.settings"); }, path: '/settings', icon: 'settings-outline' };
+const gettingStartedDestination: Destination = { get label() { return tr("appdrawer.gettingStarted"); }, path: '/onboarding', icon: 'compass-outline' };
 
 export function useAppDrawer() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const context = useContext(DrawerContext);
   if (!context) throw new Error('useAppDrawer must be used within AppDrawerProvider.');
   return context;
@@ -32,13 +37,16 @@ function isDestinationActive(pathname: string, destination: Destination) {
 }
 
 function NavigationRow({ destination, pathname, close }: { destination: Destination; pathname: string; close: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const router = useRouter();
   const { tokens } = useTheme();
   const active = isDestinationActive(pathname, destination);
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${destination.label}${active ? '. Current screen.' : ''}`}
+      accessibilityLabel={`${destination.label}${active ? tr("appdrawer.currentScreen") : ''}`}
       accessibilityState={{ selected: active }}
       onPress={() => {
         close();
@@ -54,6 +62,9 @@ function NavigationRow({ destination, pathname, close }: { destination: Destinat
 }
 
 function DrawerContent({ close }: { close: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const pathname = usePathname();
   const { tokens } = useTheme();
   return (
@@ -62,9 +73,11 @@ function DrawerContent({ close }: { close: () => void }) {
         <Text accessibilityRole="header" style={[styles.title, { color: tokens.textPrimary }]}>Chits</Text>
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
+        <NavigationRow destination={notesDestination} pathname={pathname} close={close} />
         <NavigationRow destination={calendarDestination} pathname={pathname} close={close} />
+        <NavigationRow destination={attachmentsDestination} pathname={pathname} close={close} />
         <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
-        {CHITS_REVISIT_ENABLED ? <NavigationRow destination={{ label: 'Revisit', path: '/revisit', icon: 'refresh-outline' }} pathname={pathname} close={close} /> : null}
+        {CHITS_REVISIT_ENABLED ? <NavigationRow destination={{ label: tr("revisit.revisit"), path: '/revisit', icon: 'refresh-outline' }} pathname={pathname} close={close} /> : null}
       </ScrollView>
       <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }]}>
         <NavigationRow destination={gettingStartedDestination} pathname={pathname} close={close} />
@@ -75,6 +88,9 @@ function DrawerContent({ close }: { close: () => void }) {
 }
 
 export function AppDrawerProvider({ children }: PropsWithChildren) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const openDrawer = useCallback(() => setIsOpen(true), []);
   const closeDrawer = useCallback(() => setIsOpen(false), []);
@@ -89,7 +105,7 @@ export function AppDrawerProvider({ children }: PropsWithChildren) {
       <Modal transparent visible={isOpen} animationType="fade" onRequestClose={closeDrawer}>
         <View style={styles.modal}>
           <DrawerContent close={closeDrawer} />
-          <Pressable accessibilityRole="button" accessibilityLabel="Dismiss navigation" style={styles.backdrop} onPress={closeDrawer} />
+          <Pressable accessibilityRole="button" accessibilityLabel={tr("appdrawer.dismissNavigation")} style={styles.backdrop} onPress={closeDrawer} />
         </View>
       </Modal>
     </DrawerContext.Provider>

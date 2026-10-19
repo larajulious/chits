@@ -1,0 +1,7 @@
+{
+  "ios": {
+    "NSMicrophoneUsageDescription": "Chits menggunakan mikrofon hanya saat Anda memilih untuk merekam catatan suara.",
+    "NSPhotoLibraryUsageDescription": "Chits hanya menggunakan foto dan video yang Anda pilih untuk dilampirkan ke catatan atau ditetapkan sebagai latar belakang obrolan Anda.",
+    "NSPhotoLibraryAddUsageDescription": "Chits menyimpan salinan foto, video, atau gambar Bagikan Catatan ke perpustakaan foto Anda hanya jika Anda memilih untuk menyimpannya."
+  }
+}

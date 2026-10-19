@@ -1,3 +1,6 @@
+import { contentTextStyle, firstStrongDirection, languageDirection } from '@/localization/text-layout';
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ComponentType, type Ref, type RefObject } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 
@@ -38,6 +41,9 @@ export function discardPastedImages(blocks: NoteDraftBlock[]) {
  * splits the text where the cursor is, so the image lands exactly there.
  */
 export function useNoteImagePaste({ active, blocks, setBlocks, editor, onError }: { active: boolean; blocks: NoteDraftBlock[]; setBlocks: (update: (current: NoteDraftBlock[]) => NoteDraftBlock[]) => void; editor: RefObject<NoteBlocksEditorControl | null>; onError: (message: string | null) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const clipboardHasImage = useClipboardHasImage(active);
   const [pasting, setPasting] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -50,7 +56,7 @@ export function useNoteImagePaste({ active, blocks, setBlocks, editor, onError }
   const insertAttachment = useCallback((staged: AttachmentDraft, cursor = editor.current?.cursor() ?? null) => {
     if (!available.current || draftImageCount(blocksRef.current) >= MAX_NOTE_IMAGES || (cursor && !blocksRef.current.some((block) => block.key === cursor.key))) {
       void staged.remove().catch(() => undefined);
-      onError(`This content can hold up to ${MAX_NOTE_IMAGES} images. Try inserting again.`);
+      onError(tr("messages.thisContentCanHoldUpToImagesTry", { value1: MAX_NOTE_IMAGES }));
       return;
     }
     const image: Extract<NoteDraftBlock, { type: 'image' }> = { key: newBlockKey(), type: 'image', attachmentId: null, image: staged.attachment, remove: staged.remove };
@@ -61,7 +67,7 @@ export function useNoteImagePaste({ active, blocks, setBlocks, editor, onError }
   }, [editor, onError, setBlocks]);
   const paste = useCallback(async (nativeCursor?: NonNullable<NoteCursor> & { kind?: 'paste' | 'pick' }) => {
     if (busy.current || !available.current) return;
-    if (draftImageCount(blocksRef.current) >= MAX_NOTE_IMAGES) { onError(`This content can hold up to ${MAX_NOTE_IMAGES} images.`); return; }
+    if (draftImageCount(blocksRef.current) >= MAX_NOTE_IMAGES) { onError(tr("messages.thisContentCanHoldUpToImages", { value1: MAX_NOTE_IMAGES })); return; }
     // Capture selection before asynchronous clipboard reads or image processing.
     const cursor = nativeCursor ?? editor.current?.cursor() ?? null;
     busy.current = true;
@@ -72,7 +78,7 @@ export function useNoteImagePaste({ active, blocks, setBlocks, editor, onError }
       if (!available.current) { await pasted.remove().catch(() => undefined); return; }
       insertAttachment({ attachment: { ...pasted.image, type: 'photo', duration: null }, remove: pasted.remove }, cursor);
     } catch (cause) {
-      if (available.current) onError(cause instanceof Error ? cause.message : 'That image couldn’t be pasted.');
+      if (available.current) onError(cause instanceof Error ? cause.message : tr("noteblockseditor.thatImageCouldnTBePasted"));
     } finally {
       busy.current = false;
       setPasting(false);
@@ -81,7 +87,7 @@ export function useNoteImagePaste({ active, blocks, setBlocks, editor, onError }
   const pick = useCallback(async (replaceKey?: string, savedCursor?: NoteCursor) => {
     if (busy.current || !available.current) return;
     if (!replaceKey && draftImageCount(blocksRef.current) >= MAX_NOTE_IMAGES) {
-      onError(`This content can hold up to ${MAX_NOTE_IMAGES} images.`);
+      onError(tr("messages.thisContentCanHoldUpToImages", { value1: MAX_NOTE_IMAGES }));
       return;
     }
     const cursor = savedCursor === undefined ? editor.current?.cursor() ?? null : savedCursor;
@@ -105,7 +111,7 @@ export function useNoteImagePaste({ active, blocks, setBlocks, editor, onError }
         editor.current?.focusAt(cursor);
       } else insertAttachment(staged, cursor);
     } catch (cause) {
-      if (available.current) { onError(cause instanceof Error ? cause.message : 'That image couldn’t be inserted.'); editor.current?.focusAt(cursor); }
+      if (available.current) { onError(cause instanceof Error ? cause.message : tr("noteblockseditor.thatImageCouldnTBeInserted")); editor.current?.focusAt(cursor); }
     } finally {
       busy.current = false;
       setPasting(false);
@@ -122,8 +128,11 @@ export function useNoteImagePaste({ active, blocks, setBlocks, editor, onError }
 }
 
 export function InsertImageButton({ disabled, busy, onPress }: { disabled?: boolean; busy: boolean; onPress: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
-  return <Pressable accessibilityRole="button" accessibilityLabel="Insert image" accessibilityHint="Insert a photo at the current cursor position" accessibilityState={{ disabled: Boolean(disabled) || busy, busy }} disabled={disabled || busy} onPress={onPress} style={({ pressed }) => [styles.insert, pressed && styles.pressed, (disabled || busy) && styles.disabled]}>
+  return <Pressable accessibilityRole="button" accessibilityLabel={tr("noteblockseditor.insertImage")} accessibilityHint={tr("noteblockseditor.insertAPhotoAtTheCurrentCursorPosition")} accessibilityState={{ disabled: Boolean(disabled) || busy, busy }} disabled={disabled || busy} onPress={onPress} style={({ pressed }) => [styles.insert, pressed && styles.pressed, (disabled || busy) && styles.disabled]}>
     {busy ? <ActivityIndicator size="small" color={theme.textSecondary} /> : <ImagePlus size={22} color={theme.textSecondary} strokeWidth={1.8} />}
   </Pressable>;
 }
@@ -132,20 +141,23 @@ export type NoteBlocksEditorControl = NoteBlocksEditorHandle & { cursor: () => N
 
 /** The context-aware "Paste image" chip: only shown while the clipboard holds an image. */
 export function PasteImageButton({ visible, pasting, disabled, onPress, style }: { visible: boolean; pasting: boolean; disabled?: boolean; onPress: () => void; style?: StyleProp<ViewStyle> }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const controls = useStickyControls();
   if (!visible && !pasting) return null;
   const off = Boolean(disabled) || pasting;
   return <Pressable
     accessibilityRole="button"
-    accessibilityLabel="Paste image from clipboard"
+    accessibilityLabel={tr("noteblockseditor.pasteImageFromClipboard")}
     accessibilityState={{ disabled: off, busy: pasting }}
     disabled={off}
     onPress={onPress}
     style={({ pressed }) => [styles.chip, controls.panel, { backgroundColor: theme.accentSoft, borderColor: theme.accentBorder }, style, disabled && styles.disabled, pressed && styles.pressed]}
   >
-    {pasting ? <ActivityIndicator accessibilityLabel="Pasting image" size="small" color={theme.accentStrong} /> : <Icon name="clipboard-outline" size={16} color={theme.accentStrong} />}
-    <AppText style={[styles.chipLabel, { color: theme.accentStrong }]}>{pasting ? 'Pasting…' : 'Paste image'}</AppText>
+    {pasting ? <ActivityIndicator accessibilityLabel={tr("noteblockseditor.pastingImage")} size="small" color={theme.accentStrong} /> : <Icon name="clipboard-outline" size={16} color={theme.accentStrong} />}
+    <AppText style={[styles.chipLabel, { color: theme.accentStrong }]}>{pasting ? tr("noteblockseditor.pasting") : tr("noteblockseditor.pasteImage")}</AppText>
   </Pressable>;
 }
 
@@ -181,6 +193,9 @@ type Props = {
  * boundaries; native inputs retain character editing and composition.
  */
 export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeholder, maxLength, singleInputStyle, blockContainerStyle, blockInputStyle, maxImageHeight, accessibilityLabel, onRemovePastedImage, onReplaceImage, onFocus, onBlur, singleInputProps }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  const locale = useLocale();
   const { tokens: theme } = useTheme();
   const inputs = useRef(new Map<string, TextInput>());
   const liveBlocks = useRef(blocks);
@@ -375,14 +390,14 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
       if (block.type === 'text') {
         const previous = blocks[blockIndex - 1];
         const consecutiveTasks = block.list?.kind === 'checklist' && previous?.type === 'text' && previous.list?.kind === 'checklist';
-        return <View key={block.key} style={[block.list && styles.listRow, block.key === lastTextKey && styles.trailingText, { marginTop: richLayout && blockIndex ? (consecutiveTasks ? spacing.xxs : spacing.xs) : 0 }]} onLayout={({ nativeEvent }) => positions.current.set(block.key, nativeEvent.layout.y)}>
+        return <View key={block.key} style={[block.list && styles.listRow, block.list && { flexDirection: firstStrongDirection(block.text, languageDirection(locale)) === 'rtl' ? 'row-reverse' : 'row' }, block.key === lastTextKey && styles.trailingText, { marginTop: richLayout && blockIndex ? (consecutiveTasks ? spacing.xxs : spacing.xs) : 0 }]} onLayout={({ nativeEvent }) => positions.current.set(block.key, nativeEvent.layout.y)}>
           {block.list?.kind === 'checklist'
             ? <NoteCheckbox checked={block.list.checked} label={block.text} disabled={!editable} onPress={() => commit(toggleNoteChecklist(liveBlocks.current, block.key))} />
             : block.list ? <AppText accessible={false} style={[blockInputStyle, styles.listMarker]}>{markers[blockIndex]}</AppText> : null}
           <View style={styles.listBody}>{textInput(block, !richLayout)}</View>
         </View>;
       }
-      const label = imageCount > 1 ? `Image ${imageNumbers.get(block.key)} of ${imageCount}` : 'Image';
+      const label = imageCount > 1 ? tr('noteblockseditor.imagePosition', { position: imageNumbers.get(block.key), total: imageCount }) : tr("sharenote.image");
       const available = width;
       const ratio = block.image.width && block.image.height ? block.image.width / block.image.height : 4 / 3;
       const height = Math.round(Math.min(maxImageHeight, block.image.height || Infinity, available / ratio));
@@ -394,8 +409,8 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
           height={height}
           accessibilityLabel={label}
           overlay={<>
-            {onReplaceImage ? <Pressable accessibilityRole="button" accessibilityLabel={`Replace ${label.toLowerCase()}`} hitSlop={4} disabled={!editable} onPress={() => onReplaceImage(block.key)} style={({ pressed }) => [styles.remove, styles.replace, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.pressed]}><Icon name="image-outline" size={16} color={theme.textPrimary} /></Pressable> : null}
-            <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${label.toLowerCase()}`} accessibilityHint={block.attachmentId ? 'Removed when you save the note' : undefined} hitSlop={4} disabled={!editable} onPress={() => remove(block)} style={({ pressed }) => [styles.remove, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.pressed]}><Icon name="close" size={16} color={theme.textPrimary} /></Pressable>
+            {onReplaceImage ? <Pressable accessibilityRole="button" accessibilityLabel={tr("noteblockseditor.replaceValue", { value1: label.toLowerCase() })} hitSlop={4} disabled={!editable} onPress={() => onReplaceImage(block.key)} style={({ pressed }) => [styles.remove, styles.replace, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.pressed]}><Icon name="image-outline" size={16} color={theme.textPrimary} /></Pressable> : null}
+            <Pressable accessibilityRole="button" accessibilityLabel={tr("noteblockseditor.removeValue", { value1: label.toLowerCase() })} accessibilityHint={block.attachmentId ? tr("noteblockseditor.removedWhenYouSaveTheNote") : undefined} hitSlop={4} disabled={!editable} onPress={() => remove(block)} style={({ pressed }) => [styles.remove, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.pressed]}><Icon name="close" size={16} color={theme.textPrimary} /></Pressable>
           </>}
         /> : <View style={{ height: Math.min(maxImageHeight, 120) }} />}
       </View>;
@@ -424,6 +439,9 @@ type BlockInputProps = {
 // One run of the note's words. Alone (no images) it scrolls itself like any
 // note field; between images it grows with its text inside the editor's column.
 function BlockInput({ block, register, onFocusBlock, onSelectBlock, onChangeBlock, onBoundaryBackspace, onBlurBlock, extra, accessibilityLabel, placeholder, single, maxLength, editable, style }: BlockInputProps) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  const locale = useLocale();
   const { tokens: theme } = useTheme();
   // Keep alignment in the style only. Supplying it both as a prop and in a
   // rich-input style makes RN clear native gravity when that style is removed,
@@ -481,7 +499,7 @@ function BlockInput({ block, register, onFocusBlock, onSelectBlock, onChangeBloc
     scrollEnabled={single}
     maxLength={maxLength}
     editable={editable}
-    style={[style, { textAlignVertical }]}
+    style={[style, contentTextStyle(block.text, languageDirection(locale)), { textAlignVertical }]}
     {...inputProps}
   />;
 }
@@ -511,6 +529,9 @@ const styles = StyleSheet.create({
 
 /** List controls share the native selection retained by the block editor. */
 export function NoteListButtons({ editor, disabled }: { editor: RefObject<NoteBlocksEditorControl | null>; disabled?: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const [active, setActive] = useState<NoteList['kind'] | null>(null);
   const [historyState, setHistoryState] = useState({ undo: false, redo: false });
@@ -522,7 +543,7 @@ export function NoteListButtons({ editor, disabled }: { editor: RefObject<NoteBl
   return <View style={styles.toolbar}>
     {(['bullet', 'numbered', 'checklist'] as const).map((kind) => {
       const Glyph = kind === 'bullet' ? List : kind === 'numbered' ? ListOrdered : SquareCheck;
-      return <Pressable key={kind} accessibilityRole="button" accessibilityLabel={kind === 'bullet' ? 'Bullet list' : kind === 'numbered' ? 'Numbered list' : 'Checkbox list'} accessibilityState={{ selected: active === kind, disabled: Boolean(disabled) }} disabled={disabled}
+      return <Pressable key={kind} accessibilityRole="button" accessibilityLabel={kind === 'bullet' ? tr("noteblockseditor.bulletList") : kind === 'numbered' ? tr("noteblockseditor.numberedList") : tr("noteblockseditor.checkboxList")} accessibilityState={{ selected: active === kind, disabled: Boolean(disabled) }} disabled={disabled}
         onPressIn={() => { pressedSelection.current = { kind, cursor: editor.current?.cursor() ?? null }; }}
         onPress={() => {
           const saved = pressedSelection.current;
@@ -532,6 +553,6 @@ export function NoteListButtons({ editor, disabled }: { editor: RefObject<NoteBl
         <Glyph size={22} color={active === kind ? theme.accentStrong : theme.textSecondary} strokeWidth={1.8} />
       </Pressable>;
     })}
-    {(['undo', 'redo'] as const).map((action) => <Pressable key={action} accessibilityRole="button" accessibilityLabel={action === 'undo' ? 'Undo note change' : 'Redo note change'} disabled={disabled || !historyState[action]} accessibilityState={{ disabled: Boolean(disabled) || !historyState[action] }} onPress={() => editor.current?.[action]()} style={[styles.formattingAction, (disabled || !historyState[action]) && styles.disabled]}><Icon name={action === 'undo' ? 'arrow-undo-outline' : 'arrow-redo-outline'} size={20} color={theme.textSecondary} /></Pressable>)}
+    {(['undo', 'redo'] as const).map((action) => <Pressable key={action} accessibilityRole="button" accessibilityLabel={action === 'undo' ? tr("noteblockseditor.undoNoteChange") : tr("noteblockseditor.redoNoteChange")} disabled={disabled || !historyState[action]} accessibilityState={{ disabled: Boolean(disabled) || !historyState[action] }} onPress={() => editor.current?.[action]()} style={[styles.formattingAction, (disabled || !historyState[action]) && styles.disabled]}><Icon name={action === 'undo' ? 'arrow-undo-outline' : 'arrow-redo-outline'} size={20} color={theme.textSecondary} /></Pressable>)}
   </View>;
 }

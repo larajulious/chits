@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useEffect, useState } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Asset } from 'expo-asset';
@@ -18,6 +20,9 @@ function loadMascotHtml(): Promise<string> {
 
 /** The supplied SVG's own CSS animation plays locally, with a still SVG fallback. */
 export function OnboardingMascot({ size, style, accessible = true }: { size: number; style?: StyleProp<ViewStyle>; accessible?: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const [html, setHtml] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -26,7 +31,7 @@ export function OnboardingMascot({ size, style, accessible = true }: { size: num
     return () => { mounted = false; };
   }, []);
 
-  return <View accessible={accessible} accessibilityRole="image" accessibilityLabel="Chits mascot" pointerEvents="none" style={[{ width: size, height: size }, style]}>
+  return <View accessible={accessible} accessibilityRole="image" accessibilityLabel={tr("onboarding.chitsMascot")} pointerEvents="none" style={[{ width: size, height: size }, style]}>
     {!ready ? <Image source={MASCOT} contentFit="contain" style={StyleSheet.absoluteFill} /> : null}
     {html ? <WebView
       source={{ html }}

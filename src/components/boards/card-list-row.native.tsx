@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { memo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -47,16 +49,16 @@ function mediaAccessibilityPhrase(item: CardListItem): string | null {
   if (!item.previewMediaType) return null;
   const seconds = item.mediaDuration ? Math.round(item.mediaDuration / 1000) : null;
   const titleLower = item.title.toLowerCase();
-  if (item.previewMediaType === 'photo') return titleLower.includes('photo') ? null : 'Photo attachment.';
+  if (item.previewMediaType === 'photo') return titleLower.includes('photo') ? null : tr("cardlistrow.photoAttachment");
   // The exact generic-fallback title ("Video"/"Audio note") already has its
   // duration folded straight into the title clause by accessibleTitle below,
   // so this returns null for that exact case to avoid saying it twice. A
   // title that merely MENTIONS the word (e.g. "Demo video") still gets the
   // duration announced, just without repeating the redundant type word.
-  const genericTitle = item.previewMediaType === 'video' ? 'Video' : 'Audio note';
+  const genericTitle = item.previewMediaType === 'video' ? tr("addcardattachmentsheet.video") : tr("messagerow.audioNote");
   if (item.title === genericTitle) return null;
-  if (titleLower.includes(item.previewMediaType)) return seconds ? `${seconds} seconds.` : null;
-  return item.previewMediaType === 'video' ? `Video${seconds ? `, ${seconds} seconds` : ''}.` : `Audio note${seconds ? `, ${seconds} seconds` : ''}.`;
+  if (titleLower.includes(item.previewMediaType)) return seconds ? tr('common.seconds', { count: seconds }) + '.' : null;
+  return (item.previewMediaType === 'video' ? tr('addcardattachmentsheet.video') : tr('messagerow.audioNote')) + (seconds ? ', ' + tr('common.seconds', { count: seconds }) : '') + '.';
 }
 
 // When the title IS the generic fallback, fold the duration into the title
@@ -65,12 +67,12 @@ function mediaAccessibilityPhrase(item: CardListItem): string | null {
 function accessibleTitle(item: CardListItem): string {
   const seconds = item.mediaDuration ? Math.round(item.mediaDuration / 1000) : null;
   if (!seconds) return item.title;
-  if (item.previewMediaType === 'video' && item.title === 'Video') return `${item.title}, ${seconds} seconds`;
-  if (item.previewMediaType === 'audio' && item.title === 'Audio note') return `${item.title}, ${seconds} seconds`;
+  if (item.previewMediaType === 'video' && item.title === tr("addcardattachmentsheet.video")) return tr('common.withDuration', { title: item.title, duration: tr('common.seconds', { count: seconds }) });
+  if (item.previewMediaType === 'audio' && item.title === tr("messagerow.audioNote")) return tr('common.withDuration', { title: item.title, duration: tr('common.seconds', { count: seconds }) });
   return item.title;
 }
 
-const GENERIC_MEDIA_TITLES = new Set(['Photo', 'Video', 'Audio note', 'Attachment']);
+const genericMediaTitles = () => new Set([tr("id.photo"), tr("addcardattachmentsheet.video"), tr("messagerow.audioNote"), tr("attachmentexportnaming.attachment")]);
 
 type NoteContent =
   | { kind: 'hidden' }
@@ -98,7 +100,7 @@ function noteContent(item: CardListItem, hasMedia: boolean): NoteContent {
       : { kind: 'text', title, body: preview };
   }
   if (item.fileCount > 0 && !hasMedia) return { kind: 'file', name: title };
-  if (GENERIC_MEDIA_TITLES.has(title)) return { kind: 'text', title: null, body: null };
+  if (genericMediaTitles().has(title)) return { kind: 'text', title: null, body: null };
   // A card keeps its explicit title as a title; an unorganized thought's
   // "title" is just its own text, so it reads as the note body.
   return item.kind === 'card' ? { kind: 'text', title, body: null } : { kind: 'text', title: null, body: title };
@@ -107,7 +109,7 @@ function noteContent(item: CardListItem, hasMedia: boolean): NoteContent {
 function fileKindLabel(name: string, count: number) {
   if (count > 1) return `${count} files`;
   const extension = name.match(/\.([a-z0-9]{1,6})$/i)?.[1];
-  return extension ? `${extension.toUpperCase()} document` : 'Document';
+  return extension ? `${extension.toUpperCase()} document` : tr("attachments.document");
 }
 
 // Unorganized notes sit on the theme's neutral paper; board notes take a soft
@@ -121,6 +123,9 @@ function paperColors(accent: string | null, dark: boolean, theme: Pick<ThemeToke
 // A content-first note tile: a quiet paper surface, optional cover, a bounded
 // preview and small metadata. The entire tile keeps its existing open action.
 export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: { item: CardListItem; onPress: () => void; onMore: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { scheme, tokens, styleTokens } = useTheme();
   const dark = scheme === 'dark';
   const accent = item.hidden ? null : item.boardAccent;
@@ -147,11 +152,11 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
   const progressColor = tinted ? note.cardInk : dark ? '#E6A5B6' : '#802743';
   const hasCopy = content.kind !== 'text' || Boolean(content.title || content.body || checklist || item.subtaskPreview?.length || audio || item.reminderAt);
   // Half-width notes: the board name alone reads cleanly; the column is in the label for screen readers.
-  const location = item.boardName ?? 'Unorganized';
+  const location = item.boardName ?? tr("index.unorganized");
   const mediaPhrase = mediaAccessibilityPhrase(item);
-  const overflowPhrase = overflowCount > 0 ? `${overflowCount} more attachment${overflowCount === 1 ? '' : 's'}.` : '';
+  const overflowPhrase = overflowCount > 0 ? tr('common.moreAttachments', { count: overflowCount }) : '';
   const reminderLabel = item.reminderAt ? formatReminder(new Date(item.reminderAt), new Date()) : null;
-  const accessibleLabel = `${item.hidden ? 'Hidden note' : `Note. ${accessibleTitle(item)}`}. ${checklist ? `${checklist.completed} of ${checklist.total} checklist items completed. ` : ''}${mediaPhrase ? `${mediaPhrase} ` : ''}${overflowPhrase ? `${overflowPhrase} ` : ''}${item.pinned ? 'Pinned. ' : ''}${!item.hidden && item.subtaskCount ? `${item.completedSubtaskCount} of ${item.subtaskCount} subtasks completed. ` : ''}${reminderLabel ? `Reminder ${reminderLabel}. ` : ''}${item.boardName ?? 'Unorganized'}${item.columnName ? `, ${item.columnName}` : ''}.`;
+  const accessibleLabel = `${item.hidden ? tr("entrydetailsheet.hiddenNote") : `Note. ${accessibleTitle(item)}`}. ${checklist ? tr("messages.ofChecklistItemsCompleted", { value1: checklist.completed, value2: checklist.total }) : ''}${mediaPhrase ? `${mediaPhrase} ` : ''}${overflowPhrase ? `${overflowPhrase} ` : ''}${item.pinned ? 'Pinned. ' : ''}${!item.hidden && item.subtaskCount ? tr("messages.ofSubtasksCompleted2", { value1: item.completedSubtaskCount, value2: item.subtaskCount }) : ''}${reminderLabel ? `Reminder ${reminderLabel}. ` : ''}${item.boardName ?? tr("index.unorganized")}${item.columnName ? `, ${item.columnName}` : ''}.`;
 
   return (
     <NoteCard
@@ -162,15 +167,15 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
       variant="collection"
       accessibilityRole="button"
       accessibilityLabel={accessibleLabel}
-      accessibilityHint="Opens note"
+      accessibilityHint={tr("cardlistrow.opensNote")}
       onPress={onPress}
       style={styles.card}
     >
       {picture ? (
         <View pointerEvents="none" style={[styles.picture, { borderTopLeftRadius: styleTokens.noteCard.radius.topLeft, borderTopRightRadius: styleTokens.noteCard.radius.topRight, backgroundColor: theme.surfaceElevated }]}>
           <AttachmentContent attachment={picture} variant="grid" />
-          {picture.type === 'video' ? <View style={styles.videoPlay}><Icon name="play" size={18} color="#FFFFFF" /></View> : null}
-          {picture.type === 'video' && picture.duration ? <View style={styles.durationBadge}><AppText weight="600" style={styles.durationBadgeText}>{formatDurationSeconds(picture.duration)}</AppText></View> : null}
+          {picture.type === "video" ? <View style={styles.videoPlay}><Icon name="play" size={18} color="#FFFFFF" /></View> : null}
+          {picture.type === "video" && picture.duration ? <View style={styles.durationBadge}><AppText weight="600" style={styles.durationBadgeText}>{formatDurationSeconds(picture.duration)}</AppText></View> : null}
           {overflowCount > 0 ? <View style={styles.overflowBadge}><AppText weight="700" style={styles.overflowBadgeText}>+{overflowCount}</AppText></View> : null}
         </View>
       ) : null}
@@ -179,10 +184,10 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
         {content.kind === 'hidden' ? (
           <View style={styles.hiddenRow}>
             <Icon name="lock-closed-outline" size={18} color={theme.textMuted} />
-            <AppText weight="600" style={[styles.hiddenTitle, { color: theme.textSecondary }]}>Hidden Chit</AppText>
-            <AppText style={[styles.hiddenCopy, { color: theme.textMuted }]}>Open to reveal</AppText>
+            <AppText weight="600" style={[styles.hiddenTitle, { color: theme.textSecondary }]}>{tr("index.hiddenChit")}</AppText>
+            <AppText style={[styles.hiddenCopy, { color: theme.textMuted }]}>{tr("cardlistrow.openToReveal")}</AppText>
           </View>
-        ) : content.kind === 'file' ? (
+        ) : content.kind === "file" ? (
           <View style={styles.fileRow}>
             <View style={[styles.fileIcon, { borderRadius: r.tile, backgroundColor: theme.surfaceElevated }]}><Icon name={/\.pdf$/i.test(content.name) ? 'document-text-outline' : 'document-outline'} size={22} color={theme.textSecondary} /></View>
             <AppText weight="600" numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{content.name}</AppText>
@@ -191,12 +196,12 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
         ) : <>
           {content.title ? <AppText variant="display" weight="600" numberOfLines={2} style={[styles.title, { color: theme.textPrimary }]}>{content.title}</AppText> : null}
           {content.body ? <AppText variant="paragraph" numberOfLines={checklist || item.subtaskPreview?.length ? 3 : content.title ? 4 : 6} style={[content.title ? styles.bodyUnderTitle : styles.body, { color: content.title ? theme.textSecondary : theme.textPrimary }]}>{content.body}</AppText> : null}
-          {checklist && !content.title && !content.body ? <AppText variant="display" weight="600" style={[styles.title, { color: theme.textPrimary }]}>Checklist</AppText> : null}
+          {checklist && !content.title && !content.body ? <AppText variant="display" weight="600" style={[styles.title, { color: theme.textPrimary }]}>{tr("cardlistrow.checklist")}</AppText> : null}
         </>}
 
         {checklist ? <View style={styles.checklist}>
           <View style={styles.progressLabels}>
-            <AppText weight="600" style={[styles.progressCount, { color: theme.textSecondary }]}>{checklist.completed} of {checklist.total} done</AppText>
+            <AppText weight="600" style={[styles.progressCount, { color: theme.textSecondary }]}>{checklist.completed} {' '}{tr("id.of")}{' '}{checklist.total} {' '}{tr("cardlistrow.done")}</AppText>
             <AppText style={[styles.progressPercent, { color: theme.textMuted }]}>{checklist.percent}%</AppText>
           </View>
           <View style={[styles.progressTrack, { backgroundColor: mix(cardFill, progressColor, 0.12) }]}>
@@ -206,21 +211,21 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
             <View style={[styles.previewCheckbox, { borderColor: theme.textMuted }]} />
             <AppText variant="paragraph" numberOfLines={2} style={[styles.checklistText, { color: theme.textSecondary }]}>{text}</AppText>
           </View>)}
-          {checklist.total - checklist.completed > 3 ? <AppText style={[styles.checklistMore, { color: theme.textMuted }]}>+{checklist.total - checklist.completed - 3} more</AppText> : null}
+          {checklist.total - checklist.completed > 3 ? <AppText style={[styles.checklistMore, { color: theme.textMuted }]}>+{checklist.total - checklist.completed - 3} {' '}{tr("cardlistrow.more")}</AppText> : null}
         </View> : null}
 
         {!item.hidden && item.subtaskPreview?.length ? <View style={styles.checklist}>
-          <AppText weight="600" style={[styles.progressCount, { color: theme.textSecondary }]}>{checklist ? 'Card tasks · ' : ''}{item.completedSubtaskCount} of {item.subtaskCount} done</AppText>
+          <AppText weight="600" style={[styles.progressCount, { color: theme.textSecondary }]}>{checklist ? tr("cardlistrow.cardTasks") : ''}{item.completedSubtaskCount} {' '}{tr("id.of")}{' '}{item.subtaskCount} {' '}{tr("cardlistrow.done")}</AppText>
           {item.subtaskPreview.slice(0, 3).map((subtask) => <View key={subtask.id} style={styles.checklistRow}>
             <View style={[styles.previewCheckbox, { borderColor: theme.textMuted, backgroundColor: subtask.isCompleted ? theme.textMuted : 'transparent' }]}>{subtask.isCompleted ? <Icon name="checkmark" size={10} color={cardFill} /> : null}</View>
             <AppText variant="paragraph" numberOfLines={2} style={[styles.checklistText, { color: subtask.isCompleted ? theme.textMuted : theme.textSecondary }, subtask.isCompleted && styles.completedText]}>{subtask.title}</AppText>
           </View>)}
-          {item.subtaskCount > 3 ? <AppText style={[styles.checklistMore, { color: theme.textMuted }]}>+{item.subtaskCount - 3} more</AppText> : null}
+          {item.subtaskCount > 3 ? <AppText style={[styles.checklistMore, { color: theme.textMuted }]}>+{item.subtaskCount - 3} {' '}{tr("cardlistrow.more")}</AppText> : null}
         </View> : null}
 
         {audio ? <View style={[styles.audioPill, { borderRadius: r.strip, backgroundColor: theme.accentSoft }]}>
           <View style={styles.waveform}>{[7, 14, 10, 18, 9, 14, 6].map((height, index) => <View key={index} style={[styles.waveformBar, { height, backgroundColor: theme.accentStrong }]} />)}</View>
-          <AppText weight="600" style={[styles.audioText, { color: theme.accentStrong }]}>{audio.duration ? formatDurationSeconds(audio.duration) : 'Voice note'}</AppText>
+          <AppText weight="600" style={[styles.audioText, { color: theme.accentStrong }]}>{audio.duration ? formatDurationSeconds(audio.duration) : tr("cardlistrow.voiceNote")}</AppText>
         </View> : null}
         {reminderLabel ? <View style={styles.reminderLine}>
           <Icon name="notifications-outline" size={11} color={theme.textMuted} />
@@ -240,7 +245,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
             {showFileBadge ? <View style={styles.fileBadge}><Icon name="attach" size={11} color={theme.textMuted} /><AppText style={[styles.fileBadgeText, { color: theme.textMuted }]}>{item.fileCount}</AppText></View> : null}
           </View>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Card actions" onPress={(event) => { event.stopPropagation(); onMore(); }} style={({ pressed }) => [styles.more, pressed && { opacity: 0.5 }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={tr("cardlistrow.cardActions")} onPress={(event) => { event.stopPropagation(); onMore(); }} style={({ pressed }) => [styles.more, pressed && { opacity: 0.5 }]}>
           <Icon name="ellipsis-horizontal" size={17} color={theme.textMuted} />
         </Pressable>
       </View>

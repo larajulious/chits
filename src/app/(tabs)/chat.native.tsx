@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { BlurTargetView } from 'expo-blur';
@@ -7,10 +9,10 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { updateMessageReminder, updateTimelineReminders } from '@/services/chat-reminder-state';
+import { loadChatFeed } from '@/services/chat-feed-load';
 import { canMergeTimelineRefresh } from '@/services/timeline-refresh';
 import { removeMessageReminder, requestReminderSync, setMessageReminder, subscribeToReminderChanges } from '@/services/reminders';
 import { AccessibilityInfo, ActivityIndicator, AppState, BackHandler, FlatList, Keyboard, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 
 import { AttachmentDraftPreview } from '@/components/chat/attachment-draft-preview';
 import { AttachmentPicker, type AttachmentDraft, type AttachmentPickerHandle } from '@/components/chat/attachment-picker';
@@ -26,7 +28,7 @@ import { useTheme } from '@/components/theme-provider';
 import { useStickySurface } from '@/components/ui/surface';
 import { AppText, useFontStyle } from '@/components/ui/app-text';
 import { Icon, type IconName } from '@/components/ui/icon';
-import { CONTENT_RANGE, useChatTransition } from '@/components/navigation/chat-transition';
+import { useChatTransition } from '@/components/navigation/chat-transition';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { ChatComposerSurface } from '@/components/chat/chat-composer-surface';
 import { FullscreenComposer } from '@/components/chat/fullscreen-composer';
@@ -122,16 +124,19 @@ function eventCopy(event: TimelineEvent) {
   const metadata = event.metadata ?? {};
   const boardName = typeof metadata.boardName === 'string' ? metadata.boardName : null;
   const columnName = typeof metadata.columnName === 'string' ? metadata.columnName : null;
-  if (event.type === 'column_created') return { icon: 'list-outline' as const, title: 'Column created', detail: columnName ? `${columnName}${boardName ? ` in ${boardName}` : ''}` : null };
-  return { icon: 'folder-outline' as const, title: 'Board created', detail: boardName };
+  if (event.type === 'column_created') return { icon: 'list-outline' as const, title: tr("chat.columnCreated"), detail: columnName ? boardName ? tr('chat.columnInBoard', { column: columnName, board: boardName }) : columnName : null };
+  return { icon: 'folder-outline' as const, title: tr("chat.boardCreated"), detail: boardName };
 }
 
 function ChitsRow({ event, onPress }: { event: TimelineEvent; onPress: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const copy = eventCopy(event);
   const time = dateFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(event.createdAt);
   return <View style={styles.chitsWrap}>
-    <Pressable accessibilityRole="button" accessibilityLabel={`Chits: ${copy.title}${copy.detail ? `. ${copy.detail}` : ''}. ${time}`} onPress={onPress} style={({ pressed }) => [styles.chitsBubble, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.chitsPressed]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={tr("chat.chitsValueValueValue", { value1: copy.title, value2: copy.detail ? `. ${copy.detail}` : '', value3: time })} onPress={onPress} style={({ pressed }) => [styles.chitsBubble, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.chitsPressed]}>
       <View style={[styles.chitsIcon, { backgroundColor: theme.accentSoft }]}><Icon name={copy.icon} size={15} color={theme.accentStrong} /></View>
       <View style={styles.chitsCopy}>
         <AppText style={[styles.chitsTitle, { color: theme.textPrimary }]}>{copy.title}</AppText>
@@ -152,6 +157,9 @@ const ChatTimelineRow = memo(function ChatTimelineRow({ item, showDate, focused,
   onActions: (message: Message) => void;
   onEvent: (event: TimelineEvent) => void;
 }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   return <View>
     {showDate ? <DateSeparator label={dateLabel(item.createdAt)} /> : null}
     {item.kind === 'message'
@@ -161,24 +169,24 @@ const ChatTimelineRow = memo(function ChatTimelineRow({ item, showDate, focused,
 });
 
 function searchResultPreview(message: Message) {
-  if (message.isHiddenContent) return 'Hidden Chit';
+  if (message.isHiddenContent) return tr("index.hiddenChit");
   if (message.text?.trim()) return message.text.trim();
   const attachment = message.attachments[0];
-  if (!attachment) return 'Thought';
-  if (attachment.type === 'photo') return 'Photo';
-  if (attachment.type === 'video') return 'Video';
-  if (attachment.type === 'audio') return 'Audio note';
-  return attachment.originalName?.trim() || 'File';
+  if (!attachment) return tr("chat.thought");
+  if (attachment.type === 'photo') return tr("id.photo");
+  if (attachment.type === 'video') return tr("addcardattachmentsheet.video");
+  if (attachment.type === 'audio') return tr("messagerow.audioNote");
+  return attachment.originalName?.trim() || tr("addcardattachmentsheet.file");
 }
 
 function searchResultKind(message: Message): string | null {
   if (message.isHiddenContent) return null;
   const attachment = message.attachments[0];
   if (!attachment || !message.text?.trim()) return null;
-  if (attachment.type === 'photo') return 'Photo';
-  if (attachment.type === 'video') return 'Video';
-  if (attachment.type === 'audio') return 'Audio note';
-  return 'File';
+  if (attachment.type === 'photo') return tr("id.photo");
+  if (attachment.type === 'video') return tr("addcardattachmentsheet.video");
+  if (attachment.type === 'audio') return tr("messagerow.audioNote");
+  return tr("addcardattachmentsheet.file");
 }
 
 function searchResultDateLabel(timestamp: number) {
@@ -186,11 +194,14 @@ function searchResultDateLabel(timestamp: number) {
 }
 
 function SearchResultRow({ item, onPress }: { item: TimelineItem; onPress: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   if (item.kind === 'event') {
     const copy = eventCopy(item.event);
     const flatText = copy.detail ? `${copy.title} · ${copy.detail}` : copy.title;
-    return <Pressable accessibilityRole="button" accessibilityLabel={`Chits: ${flatText}. ${searchResultDateLabel(item.event.createdAt)}`} onPress={onPress} style={({ pressed }) => [styles.searchResultRow, pressed && styles.searchResultPressed]}>
+    return <Pressable accessibilityRole="button" accessibilityLabel={tr("chat.chitsValueValue", { value1: flatText, value2: searchResultDateLabel(item.event.createdAt) })} onPress={onPress} style={({ pressed }) => [styles.searchResultRow, pressed && styles.searchResultPressed]}>
       <Icon name={copy.icon} size={15} color={theme.textMuted} style={styles.searchResultIcon} />
       <View style={styles.searchResultCopy}>
         <AppText numberOfLines={2} style={[styles.searchResultText, { color: theme.textMuted }]}>{flatText}</AppText>
@@ -218,12 +229,15 @@ function dayStart(timestamp: number) {
 
 function dateLabel(timestamp: number) {
   const difference = (dayStart(Date.now()) - dayStart(timestamp)) / 86_400_000;
-  if (difference === 0) return 'Today';
-  if (difference === 1) return 'Yesterday';
+  if (difference === 0) return tr('dates.today');
+  if (difference === 1) return tr('dates.yesterday');
   return dateFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(timestamp);
 }
 
 function DateSeparator({ label }: { label: string }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return <View style={styles.dateSeparator}>
     <View style={[styles.dateSeparatorLine, { backgroundColor: theme.borderSubtle }]} />
@@ -241,19 +255,22 @@ function quickFilterIcon(message: Message): IconName {
 }
 
 function quickFilterPreview(message: Message) {
-  if (message.isHiddenContent) return 'Hidden Chit';
+  if (message.isHiddenContent) return tr("index.hiddenChit");
   if (message.text?.trim()) return message.text.trim();
   const attachment = message.attachments[0];
-  return attachment ? `${attachment.type[0].toUpperCase()}${attachment.type.slice(1)} attachment` : 'Untitled thought';
+  return attachment ? `${attachment.type[0].toUpperCase()}${attachment.type.slice(1)} attachment` : tr("id.untitledThought");
 }
 
 // Pinned thoughts double as Chat's "quick access" chip row — Chits has no
 // separate saved-filter feature, so this reuses the existing pin/onOpenPinned
 // mechanism rather than inventing a new one.
 function QuickFilterRow({ pinned, onSelect }: { pinned: Message[]; onSelect: (message: Message) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickFilterScroller} contentContainerStyle={styles.quickFilterList}>
-    {pinned.map((message) => <Pressable key={message.id} accessibilityRole="button" accessibilityLabel={`Pinned: ${quickFilterPreview(message)}`} onPress={() => onSelect(message)} style={({ pressed }) => [styles.quickFilterChip, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.chitsPressed]}>
+    {pinned.map((message) => <Pressable key={message.id} accessibilityRole="button" accessibilityLabel={tr("chat.pinnedValue", { value1: quickFilterPreview(message) })} onPress={() => onSelect(message)} style={({ pressed }) => [styles.quickFilterChip, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.chitsPressed]}>
       <Icon name={quickFilterIcon(message)} size={14} color={theme.accentStrong} />
       <AppText numberOfLines={1} ellipsizeMode="tail" style={[styles.quickFilterText, { color: theme.textPrimary }]}>{quickFilterPreview(message)}</AppText>
     </Pressable>)}
@@ -261,6 +278,9 @@ function QuickFilterRow({ pinned, onSelect }: { pinned: Message[]; onSelect: (me
 }
 
 export default function ChatScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const repository = useMemo(() => createMessageRepository(database), [database]);
   const { messageId, prefill, focusInput, chitsOrganized, chitsRelationship } = useLocalSearchParams<{ messageId?: string; prefill?: string; focusInput?: string; chitsOrganized?: string; chitsRelationship?: string }>();
@@ -270,13 +290,9 @@ export default function ChatScreen() {
   const inputFont = useFontStyle('body');
   const { confirm } = useAppDialog();
   const { background, isCurrentBackground } = useChatBackground();
-  // Background, timeline, header and composer form one visual unit. After the
-  // entrance, native navigation owns the whole scene's exit without a pre-fade.
-  const { progress, openingToken, closeChat, onChatFocus, onChatBlur } = useChatTransition();
-  const screenRevealStyle = useAnimatedStyle(() => {
-    const t = openingToken.get() > 0 ? interpolate(progress.get(), CONTENT_RANGE, [0, 1], Extrapolation.CLAMP) : 1;
-    return { opacity: t, transform: [{ translateY: (1 - t) * 8 }] };
-  });
+  // Keep the complete scene opaque. Tabs handles the entrance over the previous
+  // screen, so a canceled button animation cannot leave Chat transparent.
+  const { closeChat, onChatFocus, onChatBlur } = useChatTransition();
   const listRef = useRef<FlatList<FeedItem>>(null);
   const inputRef = useRef<NoteBlocksEditorControl>(null);
   const fullscreenInputRef = useRef<NoteBlocksEditorControl>(null);
@@ -296,12 +312,14 @@ export default function ChatScreen() {
   const composerMeasuredRef = useRef(false);
   const pendingScrollToLatest = useRef(false);
   const nearBottom = useRef(true);
+  const userScrollingHistory = useRef(false);
   const loadingMore = useRef(false);
   const hasMoreRef = useRef(true);
   const oldestCursorRef = useRef<TimelineCursor | null>(null);
   const loadingIndicatorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reduceMotion = useRef(false);
   const loadedOnce = useRef(false);
+  const feedLoadGeneration = useRef(0);
   const feedRef = useRef<FeedItem[]>([]);
   const focusedScrollRetry = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusedScrollAttempts = useRef(0);
@@ -402,7 +420,7 @@ export default function ChatScreen() {
     if (!chitsOrganized) return;
     hideSuggestion();
     const frame = requestAnimationFrame(() => {
-      setOrganizationSuccess(chitsRelationship === '1' ? 'Done ✨ You can still find it here in Chat.' : 'Done! It’s on your board ✨');
+      setOrganizationSuccess(chitsRelationship === '1' ? tr("chat.doneYouCanStillFindItHereIn") : tr("chat.doneItSOnYourBoard"));
       router.setParams({ chitsOrganized: undefined, chitsRelationship: undefined });
     });
     return () => cancelAnimationFrame(frame);
@@ -434,26 +452,28 @@ export default function ChatScreen() {
     setPinnedMessages(pinned);
   }, [repository]);
 
-  const loadInitial = useCallback(async () => {
-    try {
-      const [page, pinned] = await Promise.all([repository.listTimeline({ limit: PAGE_SIZE }), repository.listPinned()]);
-      setFeed([...page.items].reverse());
-      setPinnedMessages(pinned);
-      oldestCursorRef.current = page.nextCursor;
-      hasMoreRef.current = page.hasMore;
-      setOlderError(false);
-    } catch {
-      setError('Your thoughts could not be loaded. Please reopen Chits.');
-    } finally {
-      loadedOnce.current = true;
-      setIsInitialLoading(false);
-    }
-  }, [repository]);
-
   useEffect(() => {
-    const frame = requestAnimationFrame(() => void loadInitial());
-    return () => cancelAnimationFrame(frame);
-  }, [loadInitial]);
+    let active = true;
+    const request = ++feedLoadGeneration.current;
+    void loadChatFeed({
+      isCurrent: () => active && request === feedLoadGeneration.current,
+      loadTimeline: () => repository.listTimeline({ limit: PAGE_SIZE }),
+      publishTimeline: (page) => {
+        setFeed([...page.items].reverse());
+        oldestCursorRef.current = page.nextCursor;
+        hasMoreRef.current = page.hasMore;
+        setOlderError(false);
+      },
+      onTimelineError: () => setError(tr("chat.yourThoughtsCouldNotBeLoadedPleaseReopen")),
+      onTimelineSettled: () => {
+        loadedOnce.current = true;
+        setIsInitialLoading(false);
+      },
+      loadPinned: () => repository.listPinned(),
+      publishPinned: setPinnedMessages,
+    });
+    return () => { active = false; };
+  }, [repository]);
 
   useEffect(() => { feedRef.current = feed; }, [feed]);
   useFocusEffect(useCallback(() => {
@@ -512,8 +532,9 @@ export default function ChatScreen() {
 
   // Stable callbacks: changing transition state must not run focus cleanup.
   useFocusEffect(useCallback(() => {
+    if (__DEV__) console.debug('[Chat navigation]', 'Chat focus effect entered');
     onChatFocus();
-    return () => { onChatBlur(); setTemporarilyRevealedIds(new Set()); };
+    return () => { userScrollingHistory.current = false; onChatBlur(); setTemporarilyRevealedIds(new Set()); };
   }, [onChatFocus, onChatBlur]));
 
   useEffect(() => {
@@ -526,27 +547,35 @@ export default function ChatScreen() {
   useFocusEffect(useCallback(() => {
     if (!loadedOnce.current) return;
     let active = true;
-    void Promise.all([repository.listTimeline({ limit: PAGE_SIZE }), repository.listPinned()]).then(([page, pinned]) => {
-      if (!active) return;
-      setPinnedMessages(pinned);
-      const latest = [...page.items].reverse();
-      if (!canMergeTimelineRefresh(feedRef.current, latest, page.hasMore, timelineKey, compareTimeline)) {
-        // History changed below the newest loaded item (e.g. sample data or a
-        // restore added older notes): reload from the newest page exactly like
-        // the first load, so pagination state is right and scrolling up loads
-        // everything back to the oldest note.
-        setFeed(latest);
-        oldestCursorRef.current = page.nextCursor;
-        hasMoreRef.current = page.hasMore;
-        setOlderError(false);
-        pendingScrollToLatest.current = true;
-        setShowJumpToLatest(false);
-        return;
-      }
-      const { items, changed, hasNewItem } = refreshTimeline(feedRef.current, latest, page.hasMore);
-      if (hasNewItem) { if (nearBottom.current) pendingScrollToLatest.current = true; else setShowJumpToLatest(true); }
-      if (changed) setFeed(items);
-    }).catch(() => undefined);
+    const request = ++feedLoadGeneration.current;
+    void loadChatFeed({
+      isCurrent: () => active && request === feedLoadGeneration.current,
+      loadTimeline: () => repository.listTimeline({ limit: PAGE_SIZE }),
+      publishTimeline: (page) => {
+        setError((current) => current === tr("chat.yourThoughtsCouldNotBeLoadedPleaseReopen") ? null : current);
+        const latest = [...page.items].reverse();
+        if (!canMergeTimelineRefresh(feedRef.current, latest, page.hasMore, timelineKey, compareTimeline)) {
+          // History changed below the newest loaded item (e.g. sample data or a
+          // restore added older notes): reload from the newest page exactly like
+          // the first load, so pagination state is right and scrolling up loads
+          // everything back to the oldest note.
+          setFeed(latest);
+          oldestCursorRef.current = page.nextCursor;
+          hasMoreRef.current = page.hasMore;
+          setOlderError(false);
+          pendingScrollToLatest.current = true;
+          setShowJumpToLatest(false);
+          return;
+        }
+        const { items, changed, hasNewItem } = refreshTimeline(feedRef.current, latest, page.hasMore);
+        if (hasNewItem) { if (nearBottom.current) pendingScrollToLatest.current = true; else setShowJumpToLatest(true); }
+        if (changed) setFeed(items);
+      },
+      onTimelineError: () => undefined,
+      onTimelineSettled: () => undefined,
+      loadPinned: () => repository.listPinned(),
+      publishPinned: setPinnedMessages,
+    });
     return () => { active = false; };
   }, [repository]));
 
@@ -632,10 +661,10 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!messageId) return;
     void repository.getActiveById(messageId).then((message) => {
-      if (!message) { setError('That thought is no longer available in Chat.'); return; }
+      if (!message) { setError(tr("chat.thatThoughtIsNoLongerAvailableInChat")); return; }
       setFocusedId(message.id);
       setFeed((current) => mergeTimeline(current, [{ kind: 'message' as const, message, createdAt: message.createdAt }]));
-    }).catch(() => setError('That thought could not be opened.'));
+    }).catch(() => setError(tr("chat.thatThoughtCouldNotBeOpened")));
   }, [messageId, repository]);
 
   useEffect(() => {
@@ -714,6 +743,7 @@ export default function ChatScreen() {
   // down-arrow button, sending a message, and a new item arriving while already near
   // the bottom all route through this, so there's exactly one target calculation.
   const scrollToLatest = useCallback((animated: boolean) => {
+    userScrollingHistory.current = false;
     listRef.current?.scrollToEnd({ animated });
     chaseScrollToEnd();
   }, [chaseScrollToEnd]);
@@ -776,9 +806,7 @@ export default function ChatScreen() {
 
   // Android hardware back / gesture-nav back always closes search first if it's
   // open, otherwise closes Chat itself via the same handler the header's Back
-  // button uses — bottom-tabs' default `backBehavior` would otherwise silently
-  // switch the active tab on its own, bypassing closeChat() entirely and leaving
-  // its shared `progress` value stuck at "open" (see chat-transition.tsx).
+  // button uses, preserving the originating tab and transition cleanup.
   // useFocusEffect, not a plain effect: Chat is a persistent tab that stays
   // mounted even while it isn't the visible one, so a plain effect's listener
   // would keep firing (and wrongly closing/navigating) while the user is on
@@ -852,7 +880,7 @@ export default function ChatScreen() {
       try { await persistDraft(keepEditing ? draft : '', keepEditing ? message.id : null, keepEditing ? draftContentForStorage(keptBlocks) : null); }
       catch {
         setEditing(message); setSavedDraftMessageId(message.id); setBlocks(keptBlocks);
-        setError('The message was saved, but the draft could not be stored. Please try again.');
+        setError(tr("chat.theMessageWasSavedButTheDraftCould"));
         return;
       }
       if (!keepEditing && fullscreenEditing) {
@@ -864,7 +892,7 @@ export default function ChatScreen() {
       }
       if (nearBottom.current) pendingScrollToLatest.current = true;
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch { setError(editing ? 'Your edit was not saved. Please try again.' : 'Your thought was not saved. Please try again.'); }
+    } catch { setError(editing ? tr("chat.yourEditWasNotSavedPleaseTryAgain") : tr("chat.yourThoughtWasNotSavedPleaseTryAgain")); }
     finally { savingComposer.current = false; setIsSaving(false); }
   }, [animateComposerTransition, attachmentDraft, blocks, draftRichContent, draft, editing, repository, onOrganizationSent, hideSuggestion, persistDraft, fullscreenEditing, scrollToLatest]);
 
@@ -884,7 +912,7 @@ export default function ChatScreen() {
     Keyboard.dismiss();
     setComposerFocused(false);
     setFullscreenEditing(false);
-    void persistDraft(draft, savedDraftMessageId, draftContent).catch(() => setError('Your draft could not be stored. Please try again.'));
+    void persistDraft(draft, savedDraftMessageId, draftContent).catch(() => setError(tr("chat.yourDraftCouldNotBeStoredPleaseTry")));
   }, [draft, draftContent, savedDraftMessageId, persistDraft]);
 
   const attachmentSelected = useCallback((next: AttachmentDraft) => {
@@ -901,12 +929,12 @@ export default function ChatScreen() {
     attachmentDraftRef.current = null;
     animateComposerTransition();
     setAttachmentDraft(null);
-    if (pending) void pending.remove().catch(() => setError('The temporary attachment could not be removed.'));
+    if (pending) void pending.remove().catch(() => setError(tr("chat.theTemporaryAttachmentCouldNotBeRemoved")));
   }, [animateComposerTransition]);
 
   const runAction = useCallback(async (action: (message: Message) => Promise<void>, message: Message) => {
     setSelected(null); setError(null);
-    try { await action(message); } catch { setError('That change could not be saved. Please try again.'); }
+    try { await action(message); } catch { setError(tr("chat.thatChangeCouldNotBeSavedPleaseTry")); }
   }, []);
 
   const updateMessagePrivacy = useCallback((id: string, isHiddenContent: boolean) => {
@@ -955,14 +983,14 @@ export default function ChatScreen() {
     }, message);
   }, [animatePrivacyTransition, repository, runAction, updateMessagePrivacy]);
 
-  const beginEdit = () => { if (!selected || (selected.isHiddenContent && !temporarilyRevealedIds.has(selected.id))) return; if (selected.content) { const id = selected.id; setSelected(null); router.push(`/card/edit-content?messageId=${id}`); return; } if (attachmentDraft || draftHasUnsavedImages(blocks)) { setSelected(null); setError('Send or remove the attachment draft before editing another thought.'); return; } draftTouched.current = true; animateComposerTransition(); setSavedDraftMessageId(null); setBlocks(textDraft(selected.text ?? '')); setEditing(selected); setSelected(null); setComposerFocused(true); requestAnimationFrame(() => inputRef.current?.focus()); };
+  const beginEdit = () => { if (!selected || (selected.isHiddenContent && !temporarilyRevealedIds.has(selected.id))) return; if (selected.content) { const id = selected.id; setSelected(null); router.push(`/card/edit-content?messageId=${id}`); return; } if (attachmentDraft || draftHasUnsavedImages(blocks)) { setSelected(null); setError(tr("chat.sendOrRemoveTheAttachmentDraftBeforeEditing")); return; } draftTouched.current = true; animateComposerTransition(); setSavedDraftMessageId(null); setBlocks(textDraft(selected.text ?? '')); setEditing(selected); setSelected(null); setComposerFocused(true); requestAnimationFrame(() => inputRef.current?.focus()); };
   const cancelEditing = useCallback(() => { draftTouched.current = true; animateComposerTransition(); setEditing(null); setSavedDraftMessageId(null); discardPastedImages(blocksRef.current); setBlocks(textDraft()); void persistDraft('', null).catch(() => undefined); }, [animateComposerTransition, persistDraft]);
   const copyChat = (message: Message) => {
     if (message.isHiddenContent && !temporarilyRevealedIds.has(message.id)) return;
     const text = getCopyableMessageText(message);
     setSelected(null);
     if (!text) return;
-    void Clipboard.setStringAsync(text).then(() => { void Haptics.selectionAsync(); setToast('Copied to clipboard'); }).catch(() => setError('Couldn’t copy. Try again.'));
+    void Clipboard.setStringAsync(text).then(() => { void Haptics.selectionAsync(); setToast(tr("chat.copiedToClipboard")); }).catch(() => setError(tr("chat.couldnTCopyTryAgain")));
   };
   const togglePin = (message: Message) => { const pinned = !message.pinned; void runAction(async () => { await repository.setPinned(message.id, pinned); setFeed((current) => current.map((item) => item.kind === 'message' && item.message.id === message.id ? { ...item, message: { ...item.message, pinned } } : item)); await refreshPinned(); void Haptics.selectionAsync(); }, message); };
   const archive = () => { if (!selected) return; const message = selected; void runAction(async () => { await repository.archive(message.id); void requestReminderSync(); setFeed((current) => current.filter((item) => item.kind !== 'message' || item.message.id !== message.id)); await refreshPinned(); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }, message); };
@@ -977,7 +1005,7 @@ export default function ChatScreen() {
   const runSpaceAction = (action: SpaceNoteAction) => {
     afterActionsClosed.current = null;
     setSelected(null);
-    void action.run().then(setToast, () => setToast('That couldn’t be saved. Please try again.'));
+    void action.run().then(setToast, () => setToast(tr("chat.thatCouldnTBeSavedPleaseTryAgain")));
   };
   const runAfterActionsClosed = useCallback(() => {
     const action = afterActionsClosed.current;
@@ -988,7 +1016,7 @@ export default function ChatScreen() {
     afterActionsClosed.current = () => {
       void database.getFirstAsync<{ scheduledAt: number }>('SELECT scheduled_at AS scheduledAt FROM message_reminders WHERE message_id = ? AND completed_at IS NULL', message.id)
         .then((row) => { setReminderExisting(row?.scheduledAt ?? null); setReminderMessageId(message.id); setReminderSheetKey((key) => key + 1); })
-        .catch(() => setToast('Could not open reminder. Try again.'));
+        .catch(() => setToast(tr("chat.couldNotOpenReminderTryAgain")));
     };
     setSelected(null);
   };
@@ -998,9 +1026,9 @@ export default function ChatScreen() {
     afterActionsClosed.current = () => confirm({
       type: 'destructive',
       icon: 'trash-outline',
-      title: 'Delete thought?',
-      message: message.attachments.some(isCurrentBackground) ? 'This photo is currently your chat background. Deleting this thought also restores the default background.' : 'This removes it from Chits and from any cards. This can’t be undone.',
-      confirmText: message.attachments.some(isCurrentBackground) ? 'Remove Background & Delete' : 'Delete thought',
+      title: tr("chat.deleteThought"),
+      message: message.attachments.some(isCurrentBackground) ? tr("chat.thisPhotoIsCurrentlyYourChatBackgroundDeleting") : tr("chat.thisRemovesItFromChitsAndFromAny"),
+      confirmText: message.attachments.some(isCurrentBackground) ? tr("chat.removeBackgroundDelete") : tr("index.deleteThought"),
       onConfirm: () => runAction(async () => {
         const removableUris = await repository.deletePermanently(message.id);
         void requestReminderSync();
@@ -1012,6 +1040,10 @@ export default function ChatScreen() {
     setSelected(null);
   };
   const openEvent = useCallback((event: TimelineEvent) => { if (event.relatedBoardId) router.push(`/board/${event.relatedBoardId}`); }, [router]);
+  const openMessageActions = useCallback((message: Message) => {
+    hideSuggestion();
+    setSelected(message);
+  }, [hideSuggestion]);
   const renderFeedItem = useCallback(({ item, index }: { item: FeedItem; index: number }) => <ChatTimelineRow
     item={item}
     showDate={index === 0 || dayStart(feed[index - 1].createdAt) !== dayStart(item.createdAt)}
@@ -1019,9 +1051,9 @@ export default function ChatScreen() {
     temporarilyRevealed={item.kind === 'message' && temporarilyRevealedIds.has(item.message.id)}
     onReveal={revealContent}
     onHideAgain={hideAgain}
-    onActions={(message) => { hideSuggestion(); setSelected(message); }}
+    onActions={openMessageActions}
     onEvent={openEvent}
-  />, [feed, focusedId, hideAgain, hideSuggestion, openEvent, revealContent, temporarilyRevealedIds]);
+  />, [feed, focusedId, hideAgain, openMessageActions, openEvent, revealContent, temporarilyRevealedIds]);
   const hasDraft = Boolean(draft.trim());
   const canSend = hasDraft || noteHasChecklist(blocks) || Boolean(attachmentDraft) || draftImages || Boolean(editing?.attachments.length);
   // ONE source of truth for compact vs. expanded (see PHASE: FIX INCONSISTENT
@@ -1083,7 +1115,9 @@ export default function ChatScreen() {
   }, [animateComposerTransition]);
 
   return (
-    <Animated.View testID="chat-transition-container" style={[styles.flex, { backgroundColor: theme.chatBackground }, screenRevealStyle]}>
+    <View testID="chat-transition-container" onLayout={({ nativeEvent: { layout } }) => {
+      if (__DEV__) console.debug('[Chat navigation]', 'Chat root laid out', { width: layout.width, height: layout.height });
+    }} style={[styles.flex, { backgroundColor: theme.chatBackground }]}>
       <BackgroundReadabilityProvider active={background !== null}><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       {/* The timeline reaches the top edge; only the floating controls reserve
           the top inset, so scrolling content can pass under the system icons. */}
@@ -1091,7 +1125,7 @@ export default function ChatScreen() {
         <BlurTargetView ref={headerBlurTarget} style={styles.timelineLayer} onLayout={() => { maybePerformInitialScroll(); if (hasPositionedRef.current && nearBottom.current) scrollToLatest(false); }}>
         {/* Wallpaper stays window-sized while the keyboard resizes the feed. */}
         {background ? <ChatWallpaper background={background} /> : <ChatThemeBackdrop />}
-        <View style={styles.flex}>{isInitialLoading ? (showInitialLoader ? <View style={styles.initialLoader}><ChitsLoader /></View> : null) : feed.length === 0 ? <View style={styles.initialLoader}><EmptyState title="What’s on your mind?" description="Send yourself anything. You can organize it later." style={background ? { flex: 0, alignSelf: 'stretch', marginHorizontal: spacing.md, paddingVertical: spacing.lg, borderRadius: radii.contentCard, backgroundColor: theme.surface } : undefined} /></View> : <FlatList
+        <View style={styles.flex}>{isInitialLoading ? (showInitialLoader ? <View style={styles.initialLoader}><ChitsLoader /></View> : null) : feed.length === 0 ? <View style={styles.initialLoader}><EmptyState title={tr("chat.whatSOnYourMind")} description={tr("chat.sendYourselfAnythingYouCanOrganizeItLater")} style={background ? { flex: 0, alignSelf: 'stretch', marginHorizontal: spacing.md, paddingVertical: spacing.lg, borderRadius: radii.contentCard, backgroundColor: theme.surface } : undefined} /></View> : <FlatList
           ref={listRef} data={feed} keyExtractor={timelineKey}
           renderItem={renderFeedItem}
           // The feed is oldest-first, so a small default render window mounts the
@@ -1100,7 +1134,7 @@ export default function ChatScreen() {
           initialNumToRender={PAGE_SIZE}
           showsVerticalScrollIndicator={false}
           maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-          ListHeaderComponent={showOlderLoading ? <View accessibilityLabel="Loading older messages" style={styles.olderStatus}><ActivityIndicator size="small" color={theme.textMuted} /></View> : olderError ? <Pressable accessibilityRole="button" accessibilityLabel="Couldn’t load older messages. Retry" onPress={() => void loadOlder()} style={styles.olderStatus}><AppText style={[styles.olderError, { color: theme.textSecondary }]}>Couldn’t load older messages. Tap to retry.</AppText></Pressable> : null}
+          ListHeaderComponent={showOlderLoading ? <View accessibilityLabel={tr("chat.loadingOlderMessages")} style={styles.olderStatus}><ActivityIndicator size="small" color={theme.textMuted} /></View> : olderError ? <Pressable accessibilityRole="button" accessibilityLabel={tr("chat.couldnTLoadOlderMessagesRetry")} onPress={() => void loadOlder()} style={styles.olderStatus}><AppText style={[styles.olderError, { color: theme.textSecondary }]}>{tr("chat.couldnTLoadOlderMessagesTapToRetry")}</AppText></Pressable> : null}
           // The floating composer overlays the list rather than reserving space in
           // the normal layout flow, so the list's own scrollable content must reserve
           // that space itself — as a real footer cell, not contentContainerStyle
@@ -1111,12 +1145,15 @@ export default function ChatScreen() {
           // small breathing-room gap on top of it.
           ListFooterComponent={<View style={{ height: composerHeight + spacing.md + (suggestion ? 170 : 0) }} />}
           onScrollToIndexFailed={handleScrollToIndexFailed}
+          // Initial layout and scroll-to-latest also emit scroll events. Only a
+          // user drag may request history above the current page.
+          onScrollBeginDrag={() => { userScrollingHistory.current = true; }}
           onScroll={({ nativeEvent }) => {
             const distance = nativeEvent.contentSize.height - nativeEvent.layoutMeasurement.height - nativeEvent.contentOffset.y;
             nearBottom.current = distance < 120;
             const shouldShowJump = distance > 320;
             setShowJumpToLatest((current) => current === shouldShowJump ? current : shouldShowJump);
-            if (nativeEvent.contentOffset.y < 240) void loadOlder();
+            if (userScrollingHistory.current && (hasPositionedRef.current || Boolean(messageId)) && nativeEvent.contentOffset.y < 240) void loadOlder();
           }} scrollEventThrottle={50} contentContainerStyle={[styles.list, { paddingTop: insets.top + headerHeight }]}
           onContentSizeChange={() => {
             maybePerformInitialScroll();
@@ -1132,16 +1169,16 @@ export default function ChatScreen() {
         />}</View>
         {searchOpen && searchQuery.trim() ? <View style={[styles.searchOverlay, { backgroundColor: theme.chatBackground }]}>
           {showSearchLoader ? <View style={styles.initialLoader}><ChitsLoader size="small" /></View>
-          : searchResults.length === 0 ? <View style={[styles.noResults, { paddingTop: insets.top + headerHeight }]}><AppText style={[styles.noResultsText, { color: theme.textSecondary }]}>No matching Chits.</AppText></View>
+          : searchResults.length === 0 ? <View style={[styles.noResults, { paddingTop: insets.top + headerHeight }]}><AppText style={[styles.noResultsText, { color: theme.textSecondary }]}>{tr("chat.noMatchingChits")}</AppText></View>
           : <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.searchResultsList, { paddingTop: insets.top + headerHeight, paddingBottom: spacing.lg + (keyboardVisible ? 0 : insets.bottom) }]}>
               {searchResults.map((item) => <SearchResultRow key={timelineKey(item)} item={item} onPress={() => openSearchResult(item)} />)}
             </ScrollView>}
         </View> : null}
         </BlurTargetView>
         {!searchOpen ? <LinearGradient pointerEvents="none" accessible={false} colors={[`${theme.chatBackground}00`, `${theme.chatBackground}10`, `${theme.chatBackground}80`, `${theme.chatBackground}EF`, theme.chatBackground]} locations={[0, 0.2, 0.5, 0.8, 1]} style={[styles.bottomFade, { height: Math.min(composerHeight, MIN_COMPOSER_INPUT_HEIGHT + spacing.sm + composerBottomPadding) }]} /> : null}
-        {!searchOpen && showJumpToLatest && !suggestion ? <Pressable accessibilityRole="button" accessibilityLabel="Jump to latest message" onPress={jumpToLatest} style={({ pressed }) => [styles.jumpToLatest, { bottom: composerHeight + (editing ? 52 : spacing.md), backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.control }, pressed), pressed && styles.sendPressed]}><Icon name="arrow-down" size={20} color={theme.textPrimary} /></Pressable> : null}
-        {!searchOpen && editing && <View style={[styles.editing, { bottom: composerHeight + spacing.xs, backgroundColor: theme.surfaceElevated }]}><AppText style={[styles.editingText, { color: theme.textSecondary }]}>{editing.attachments.length ? 'Editing description' : 'Editing thought'}</AppText><Pressable accessibilityRole="button" onPress={cancelEditing}><AppText style={[styles.cancel, { color: theme.accent }]}>Cancel</AppText></Pressable></View>}
-        {!searchOpen && suggestion ? <ChitsGuide text={suggestion.copy} bottom={composerHeight + spacing.xs} onShown={() => confirmShown(suggestion.message.id)} onClose={dismissSuggestion} hint={suggestion.message.attachments.some((attachment) => attachment.type === 'file') || suggestion.message.attachments.length > 1 ? 'Spaces show a preview; every attachment stays with your Chat note.' : undefined} actions={[{ label: 'Add to Board', onPress: () => { const id = suggestion?.message.id; if (!id) return; hideSuggestion(); router.push({ pathname: '/unorganized', params: { messageId: id, openBoardPicker: '1', chitsGuided: '1' } }); } }, { label: 'Put in Space', onPress: () => { const id = suggestion?.message.id; if (!id) return; hideSuggestion(); router.push({ pathname: '/spaces/pick', params: { messageId: id, chitsGuided: '1' } }); } }, { label: suggestion.intro ? 'Keep in Chat' : 'Not now', onPress: dismissSuggestion }]} /> : null}
+        {!searchOpen && showJumpToLatest && !suggestion ? <Pressable accessibilityRole="button" accessibilityLabel={tr("chat.jumpToLatestMessage")} onPress={jumpToLatest} style={({ pressed }) => [styles.jumpToLatest, { bottom: composerHeight + (editing ? 52 : spacing.md), backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.control }, pressed), pressed && styles.sendPressed]}><Icon name="arrow-down" size={20} color={theme.textPrimary} /></Pressable> : null}
+        {!searchOpen && editing && <View style={[styles.editing, { bottom: composerHeight + spacing.xs, backgroundColor: theme.surfaceElevated }]}><AppText style={[styles.editingText, { color: theme.textSecondary }]}>{editing.attachments.length ? tr("chat.editingDescription") : tr("chat.editingThought")}</AppText><Pressable accessibilityRole="button" onPress={cancelEditing}><AppText style={[styles.cancel, { color: theme.accent }]}>{tr("chat.cancel")}</AppText></Pressable></View>}
+        {!searchOpen && suggestion ? <ChitsGuide text={suggestion.copy} bottom={composerHeight + spacing.xs} onShown={() => confirmShown(suggestion.message.id)} onClose={dismissSuggestion} hint={suggestion.message.attachments.some((attachment) => attachment.type === 'file') || suggestion.message.attachments.length > 1 ? tr("chat.spacesShowAPreviewEveryAttachmentStaysWith") : undefined} actions={[{ label: tr("chat.addToBoard"), onPress: () => { const id = suggestion?.message.id; if (!id) return; hideSuggestion(); router.push({ pathname: '/unorganized', params: { messageId: id, openBoardPicker: '1', chitsGuided: '1' } }); } }, { label: tr("chat.putInSpace"), onPress: () => { const id = suggestion?.message.id; if (!id) return; hideSuggestion(); router.push({ pathname: '/spaces/pick', params: { messageId: id, chitsGuided: '1' } }); } }, { label: suggestion.intro ? tr("chat.keepInChat") : tr("chat.notNow"), onPress: dismissSuggestion }]} /> : null}
         {organizationSuccess ? <ChitsGuide text={organizationSuccess} bottom={composerHeight + spacing.xs} /> : null}
         {!searchOpen ? <View onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setComposerHeight((current) => (current === next ? current : next)); composerMeasuredRef.current = true; maybePerformInitialScroll(); }} style={[styles.composerDock, { paddingBottom: composerBottomPadding }]}>
           {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { backgroundColor: theme.surfaceElevated, borderColor: theme.danger }]}><Icon name="alert-circle-outline" size={18} color={theme.danger} /><AppText style={[styles.errorText, { color: theme.danger }]}>{error}</AppText></View> : null}
@@ -1150,13 +1187,13 @@ export default function ChatScreen() {
             {!isRecordingAudio && pasteButton && !fullscreenEditing ? <View style={styles.pasteRow}>{pasteButton}</View> : null}
             {!isRecordingAudio ? <NoteBlocksEditor
               ref={inputRef}
-              accessibilityLabel={attachmentDraft || editing?.attachments.length ? 'Attachment description' : 'Message note'}
+              accessibilityLabel={attachmentDraft || editing?.attachments.length ? tr("chat.attachmentDescription") : tr("chat.messageNote")}
               blocks={blocks}
               onChangeBlocks={changeBlocks}
               editable={!isSaving && !paste.pasting}
               onFocus={focusComposer}
               onBlur={blurComposer}
-              placeholder={attachmentDraft || editing?.attachments.length ? 'Add a description...' : editing ? 'Edit thought...' : 'Message note...'}
+              placeholder={attachmentDraft || editing?.attachments.length ? tr('chat.attachmentDescription') : editing ? tr('fullscreencomposer.editThought') : tr('chatbackgroundpreview.messageNote')}
               maxLength={10000}
               maxImageHeight={180}
               singleInputProps={{ onContentSizeChange: ({ nativeEvent }) => handleContentSizeChange(nativeEvent.contentSize.height), scrollEnabled: !composerFocused || inputMaxed, textAlignVertical: composerExpanded ? 'top' : 'center' }}
@@ -1164,7 +1201,7 @@ export default function ChatScreen() {
               blockContainerStyle={styles.composerBlocks}
               blockInputStyle={[styles.composerBlockInput, inputFont, { color: theme.textPrimary }]}
             /> : null}
-            <View pointerEvents={composerExpanded ? 'auto' : 'box-none'} style={[styles.composerActions, isRecordingAudio ? styles.composerActionsRecording : composerExpanded ? styles.composerActionsExpanded : styles.composerActionsCompact]}><AttachmentPicker ref={attachmentPickerRef} disabled={Boolean(attachmentDraft) || Boolean(editing) || isSaving || paste.pasting} onSelected={attachmentSelected} onInlineSelected={paste.insertAttachment} onError={setError} onRecordingChange={recordingChanged} onOpenChange={(open) => { if (open) hideSuggestion(); setAttachmentPickerOpen(open); }} />{composerExpanded && !isRecordingAudio ? <IconButton label="Edit in fullscreen" disabled={isSaving || !draftHydrated} onPress={openFullscreenComposer}><Icon name="expand-outline" size={20} color={theme.textSecondary} /></IconButton> : null}{!isRecordingAudio ? <Pressable accessibilityRole="button" accessibilityLabel={canSend ? 'Send message' : 'Record audio'} accessibilityState={{ disabled: isSaving }} disabled={isSaving} onPress={() => { if (paste.pasting) return; if (canSend) void send(); else attachmentPickerRef.current?.startAudio(); }} style={({ pressed }) => [styles.sendButton, { backgroundColor: isSaving ? theme.surfaceElevated : theme.accent }, sticky({ fill: isSaving ? theme.surfaceElevated : styleColors.accentFill, radius: styleTokens.radius.control }, pressed), pressed && styles.sendPressed]}><Icon name={canSend ? 'arrow-up' : 'mic-outline'} size={20} color={styleTokens.outline.width ? styleColors.onAccent : theme.accentText} /></Pressable> : null}</View>
+            <View pointerEvents={composerExpanded ? 'auto' : 'box-none'} style={[styles.composerActions, isRecordingAudio ? styles.composerActionsRecording : composerExpanded ? styles.composerActionsExpanded : styles.composerActionsCompact]}><AttachmentPicker ref={attachmentPickerRef} disabled={Boolean(attachmentDraft) || Boolean(editing) || isSaving || paste.pasting} onSelected={attachmentSelected} onInlineSelected={paste.insertAttachment} onError={setError} onRecordingChange={recordingChanged} onOpenChange={(open) => { if (open) hideSuggestion(); setAttachmentPickerOpen(open); }} />{composerExpanded && !isRecordingAudio ? <IconButton label={tr("chat.editInFullscreen")} disabled={isSaving || !draftHydrated} onPress={openFullscreenComposer}><Icon name="expand-outline" size={20} color={theme.textSecondary} /></IconButton> : null}{!isRecordingAudio ? <Pressable accessibilityRole="button" accessibilityLabel={canSend ? tr("chat.sendMessage") : tr("chat.recordAudio")} accessibilityState={{ disabled: isSaving }} disabled={isSaving} onPress={() => { if (paste.pasting) return; if (canSend) void send(); else attachmentPickerRef.current?.startAudio(); }} style={({ pressed }) => [styles.sendButton, { backgroundColor: isSaving ? theme.surfaceElevated : theme.accent }, sticky({ fill: isSaving ? theme.surfaceElevated : styleColors.accentFill, radius: styleTokens.radius.control }, pressed), pressed && styles.sendPressed]}><Icon name={canSend ? 'arrow-up' : 'mic-outline'} size={20} color={styleTokens.outline.width ? styleColors.onAccent : theme.accentText} /></Pressable> : null}</View>
           </ChatComposerSurface>
         </View> : null}
         <View style={[styles.headerWrap, { paddingTop: insets.top, paddingBottom: CHAT_HEADER_BACKDROP_OVERHANG }]} pointerEvents="box-none">
@@ -1183,17 +1220,17 @@ export default function ChatScreen() {
             {!searchOpen && pinnedMessages.length > 0 ? <QuickFilterRow pinned={pinnedMessages} onSelect={openPinned} /> : null}
           </View>
         </View>
-      {fullscreenEditing ? <FullscreenComposer blocks={blocks} onChangeBlocks={changeBlocks} editorRef={fullscreenInputRef} onClose={closeFullscreenComposer} onSaveDraft={() => send(true)} onSend={() => { void send(); }} canSave={canSend && !paste.pasting} saving={isSaving || paste.pasting} error={error} savedText={editing ? editing.text ?? '' : null} savedContent={serializeNoteContent(editing?.content ?? [])} attachmentLabel={attachmentDraft ? `${attachmentDraft.attachment.type} attachment ready to send` : editing?.attachments.length ? `${editing.attachments.length} attachment${editing.attachments.length === 1 ? '' : 's'} saved in chat` : null} pasteButton={pasteButton} insertImageButton={<InsertImageButton disabled={isSaving} busy={paste.pasting} onPress={() => void paste.pick()} />} listButtons={<NoteListButtons editor={fullscreenInputRef} disabled={isSaving || paste.pasting} />} onReplaceImage={(key) => void paste.pick(key)} /> : null}
+      {fullscreenEditing ? <FullscreenComposer blocks={blocks} onChangeBlocks={changeBlocks} editorRef={fullscreenInputRef} onClose={closeFullscreenComposer} onSaveDraft={() => send(true)} onSend={() => { void send(); }} canSave={canSend && !paste.pasting} saving={isSaving || paste.pasting} error={error} savedText={editing ? editing.text ?? '' : null} savedContent={serializeNoteContent(editing?.content ?? [])} attachmentLabel={attachmentDraft ? tr("chat.valueAttachmentReadyToSend", { value1: attachmentDraft.attachment.type }) : editing?.attachments.length ? tr('chat.savedAttachments', { count: editing.attachments.length }) : null} pasteButton={pasteButton} insertImageButton={<InsertImageButton disabled={isSaving} busy={paste.pasting} onPress={() => void paste.pick()} />} listButtons={<NoteListButtons editor={fullscreenInputRef} disabled={isSaving || paste.pasting} />} onReplaceImage={(key) => void paste.pick(key)} /> : null}
       <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => { afterActionsClosed.current = null; setSelected(null); }} onClosed={runAfterActionsClosed} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} spaceAction={spaceAction} onSpaceAction={runSpaceAction} onAddToBoard={addToBoard} onReminder={openMessageReminder} onDownload={(message) => { setSelected(null); if (message.attachments[0]) void download.exportAttachment(message.attachments[0]); }} onShareNote={(message) => { afterActionsClosed.current = () => router.push(shareNoteHref({ messageId: message.id })); setSelected(null); }} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
       <ReminderSheet key={reminderSheetKey} visible={reminderMessageId !== null} existing={reminderExisting} accent={theme.accent} accentOn={theme.accentText} onClose={() => setReminderMessageId(null)} onSave={async (date) => {
         if (!reminderMessageId) return { ok: false, reason: 'failed' };
         const result = await setMessageReminder(database, reminderMessageId, date.getTime());
-        if (result.ok) setToast('Reminder set');
+        if (result.ok) setToast(tr("chat.reminderSet"));
         return result;
-      }} onRemove={async () => { if (reminderMessageId) { await removeMessageReminder(database, reminderMessageId); setToast('Reminder removed'); } }} />
+      }} onRemove={async () => { if (reminderMessageId) { await removeMessageReminder(database, reminderMessageId); setToast(tr("chat.reminderRemoved")); } }} />
       <Toast message={toast ?? download.status} />
       </Screen>
-    </KeyboardAvoidingView></BackgroundReadabilityProvider></Animated.View>
+    </KeyboardAvoidingView></BackgroundReadabilityProvider></View>
   );
 }
 

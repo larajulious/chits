@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
@@ -44,23 +45,23 @@ export async function pasteClipboardImage(): Promise<PastedImage> {
   try {
     clip = await Clipboard.getImageAsync({ format: 'png' });
   } catch {
-    throw new Error('Chits couldn’t read the image on your clipboard. Try copying it again.');
+    throw new Error(tr("clipboardimage.chitsCouldnTReadTheImageOnYour"));
   }
   const match = clip?.data.match(DATA_URI);
-  if (!clip || !match) throw new Error('There’s no image on your clipboard to paste. Copy an image, then try again.');
-  if (!cacheDirectory) throw new Error('Chits could not access private device storage.');
+  if (!clip || !match) throw new Error(tr("clipboardimage.thereSNoImageOnYourClipboardTo"));
+  if (!cacheDirectory) throw new Error(tr("attachmentstorage.chitsCouldNotAccessPrivateDeviceStorage"));
   const base64 = clip.data.slice(match[0].length);
   const temporary = `${cacheDirectory}chits-paste-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${match[1] === 'png' ? 'png' : 'jpg'}`;
   try {
     await writeAsStringAsync(temporary, base64, { encoding: EncodingType.Base64 });
     const width = Math.round(clip.size.width) || null;
     const height = Math.round(clip.size.height) || null;
-    const staged = await copyIntoAttachmentStorage(temporary, 'chat', { type: 'photo', originalName: 'Pasted image.jpg', mimeType: `image/${match[1]}`, size: null, duration: null, width, height });
+    const staged = await copyIntoAttachmentStorage(temporary, 'chat', { type: 'photo', originalName: "Pasted image.jpg", mimeType: `image/${match[1]}`, size: null, duration: null, width, height });
     const { storagePath, originalName, mimeType, size } = staged.attachment;
     return { image: { storagePath, originalName, mimeType, size, width: staged.attachment.width ?? width, height: staged.attachment.height ?? height }, fingerprint: imageFingerprint(base64), remove: staged.remove };
   } catch (error) {
-    console.warn('[clipboard-image]', { operation: 'paste', error: error instanceof Error ? error.message : 'Unknown error' });
-    throw new Error('That image couldn’t be pasted. Try copying it again, or attach it as a photo.');
+    console.warn('[clipboard-image]', { operation: 'paste', error: error instanceof Error ? error.message : tr("attachmentimport.unknownError") });
+    throw new Error(tr("clipboardimage.thatImageCouldnTBePastedTryCopying"));
   } finally {
     await deleteAsync(temporary, { idempotent: true }).catch(() => undefined);
   }

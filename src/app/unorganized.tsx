@@ -1,5 +1,10 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { EmptyState, Screen } from '@/components/ui/primitives';
 
 export default function UnorganizedWebScreen() {
-  return <Screen><EmptyState title="Unorganized lives in the app" description="Open Chits on a device to organize locally stored thoughts." /></Screen>;
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
+  return <Screen><EmptyState title={tr("unorganized.unorganizedLivesInTheApp")} description={tr("index.openChitsOnADeviceToOrganizeLocally")} /></Screen>;
 }

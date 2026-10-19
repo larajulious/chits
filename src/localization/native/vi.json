@@ -1,0 +1,7 @@
+{
+  "ios": {
+    "NSMicrophoneUsageDescription": "Chits chỉ sử dụng micrô của bạn khi bạn chọn ghi âm ghi chú thoại.",
+    "NSPhotoLibraryUsageDescription": "Chits chỉ sử dụng ảnh và video bạn chọn để đính kèm vào ghi chú hoặc đặt làm nền trò chuyện của mình.",
+    "NSPhotoLibraryAddUsageDescription": "Chits chỉ lưu bản sao của ảnh, video hoặc hình ảnh Ghi chú chia sẻ vào thư viện ảnh của bạn khi bạn chọn lưu nó."
+  }
+}

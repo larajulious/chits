@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -37,6 +39,9 @@ type Props = {
  * replaced by soft lines, not blurred.
  */
 export const SpaceShareCanvas = memo(function SpaceShareCanvas({ spaceId, notes, size, hideText }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const fonts = useSpaceFonts();
   const k = size / DESIGN;
   const photo = PHOTO * k;
@@ -59,8 +64,8 @@ export const SpaceShareCanvas = memo(function SpaceShareCanvas({ spaceId, notes,
         })}
       </View>
       <View style={[styles.strip, { height: FRAME.bottom * k, paddingHorizontal: 4 * k }]}>
-        <Text numberOfLines={1} style={[fonts.note, { flex: 1, fontSize: 19 * k, lineHeight: 24 * k, color: PAPER_INK }]}>my {space.name.toLowerCase()}</Text>
-        <LabelTape text="Made with Chits" variant="dark" size="sm" rotation={-2} unit={k} decorative />
+        <Text numberOfLines={1} style={[fonts.note, { flex: 1, fontSize: 19 * k, lineHeight: 24 * k, color: PAPER_INK }]}>{tr('spacesharecanvas.mySpace', { name: space.name.toLowerCase() })}</Text>
+        <LabelTape text={tr("spacesharecanvas.madeWithChits")} variant="dark" size="sm" rotation={-2} unit={k} decorative />
       </View>
     </View>
   </View>;

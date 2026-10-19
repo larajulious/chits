@@ -1,0 +1,7 @@
+{
+  "ios": {
+    "NSMicrophoneUsageDescription": "O Chits usa seu microfone somente quando você escolhe gravar uma nota de voz.",
+    "NSPhotoLibraryUsageDescription": "O Chits usa apenas as fotos e vídeos que você escolhe anexar a uma nota ou usar como fundo do chat.",
+    "NSPhotoLibraryAddUsageDescription": "O Chits salva uma cópia de uma foto, vídeo ou imagem de nota na sua fototeca somente quando você escolhe salvar."
+  }
+}

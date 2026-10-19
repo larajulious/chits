@@ -1,0 +1,35 @@
+{
+  "method": "40 fresh i18next instances, synchronous JSON parse and init in Node; separate per-catalog gzip totals; actual Hermes exports. Not device startup, APK/IPA download size or keyboard latency.",
+  "baseline": {
+    "node": "v24.15.0",
+    "languages": 4,
+    "catalogBytes": 427901,
+    "gzipCatalogBytes": 114468,
+    "initializationMedianMs": 1.0473329999999983,
+    "initializationP95Ms": 3.5762499999999946
+  },
+  "current": {
+    "node": "v24.15.0",
+    "languages": 14,
+    "catalogBytes": 1665994,
+    "gzipCatalogBytes": 428305,
+    "initializationMedianMs": 3.707082999999983,
+    "initializationP95Ms": 10.812416999999996
+  },
+  "hermesBundles": {
+    "ios": {
+      "baselineBytes": 7177525,
+      "currentBytes": 7763816,
+      "increaseBytes": 586291,
+      "increasePercent": 8.17,
+      "currentArtifact": "/tmp/chits14-final-export/_expo/static/js/ios/entry-54a2db667cf87777fc96a2041e914b51.hbc"
+    },
+    "android": {
+      "baselineBytes": 7309111,
+      "currentBytes": 7892765,
+      "increaseBytes": 583654,
+      "increasePercent": 7.99,
+      "currentArtifact": "/tmp/chits14-final-export/_expo/static/js/android/entry-5f3bf1981d29449d28983d8c1c0e4e70.hbc"
+    }
+  }
+}

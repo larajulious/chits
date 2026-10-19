@@ -1,11 +1,12 @@
+import { countLabel, tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
-import { BlurTargetView } from 'expo-blur';
+import { BlurTargetView, BlurView } from 'expo-blur';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 
 import { useTheme } from '@/components/theme-provider';
 import { AppText, Chip, ChipRow, EmptyState, Icon } from '@/components/ui/primitives';
-import { FadedHeaderBackdrop, HEADER_BACKDROP_OVERHANG } from '@/components/ui/faded-header-backdrop.native';
 import { spacing } from '@/constants/theme';
 import type { CardListItem } from '@/db/types';
 import { CardListRow } from './card-list-row.native';
@@ -25,8 +26,11 @@ type Props = {
 };
 
 function SectionHeading({ section }: { section: CardSection }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
-  return <View accessibilityRole="header" accessibilityLabel={`${section.title}, ${section.count} ${section.count === 1 ? 'note' : 'notes'}`} style={styles.section}>
+  return <View accessibilityRole="header" accessibilityLabel={`${section.title}, ${countLabel('note', section.count)}`} style={styles.section}>
     <View style={styles.sectionTitle}>
       {section.pinned ? <Icon name="pin" size={14} color={tokens.textSecondary} /> : null}
       <AppText variant="display" weight="700" numberOfLines={1} style={[styles.month, { color: tokens.textPrimary }]}>{section.title}</AppText>
@@ -37,8 +41,11 @@ function SectionHeading({ section }: { section: CardSection }) {
 
 /** Real cards remain recycled; only the active date label changes while scrolling. */
 export function CardsCollection({ sections, chips, filter, onFilter, onOpen, onMore, onSectionChange, bottomInset }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { width, fontScale } = useWindowDimensions();
-  const { styleTokens } = useTheme();
+  const { scheme, tokens, styleTokens } = useTheme();
   const columns = width < 350 || fontScale >= 1.3 ? 1 : 2;
   const balanced = styleTokens.card.tinted;
   const columnGap = 12;
@@ -46,7 +53,7 @@ export function CardsCollection({ sections, chips, filter, onFilter, onOpen, onM
   const listInset = spacing.md - columnGap / 2;
   const target = useRef<View | null>(null);
   const list = useRef<FlashListRef<Cell>>(null);
-  const [filterHeight, setFilterHeight] = useState(styleTokens.chip.height + styleTokens.chip.activeEdge + 10);
+  const [filterHeight, setFilterHeight] = useState(styleTokens.chip.height + styleTokens.chip.activeEdge + 16);
   const collection = useMemo(() => {
     const cells: Cell[] = [];
     const headers: number[] = [];
@@ -89,14 +96,18 @@ export function CardsCollection({ sections, chips, filter, onFilter, onOpen, onM
           </View>
         )}
         contentContainerStyle={{ paddingTop: filterHeight, paddingHorizontal: balanced && columns > 1 ? listInset : 0, paddingBottom: bottomInset + spacing.md }}
-        ListEmptyComponent={<EmptyState pose="search" title="No cards in this filter" description="Choose another board or All cards." />}
+        ListEmptyComponent={<EmptyState pose="search" title={tr("cardscollection.noCardsInThisFilter")} description={tr("cardscollection.chooseAnotherBoardOrAllCards")} />}
       />
     </BlurTargetView>
-    <View pointerEvents="box-none" style={[styles.overlay, { paddingBottom: HEADER_BACKDROP_OVERHANG }]}>
-      <FadedHeaderBackdrop target={target} height={filterHeight} />
+    <View pointerEvents="box-none" style={styles.overlay}>
+      <BlurView pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
+        blurTarget={target} blurMethod="dimezisBlurViewSdk31Plus" intensity={45}
+        tint={scheme === 'dark' ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'} style={StyleSheet.absoluteFill} />
+      {/* Keep transparent chips readable even when bright photos scroll behind the blur. */}
+      {scheme === 'dark' ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: tokens.background, opacity: 0.9 }]} /> : null}
       <View onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setFilterHeight((previous) => previous === next ? previous : next); }}>
         <ChipRow style={styles.chips}>
-          {chips.map((chip) => <Chip key={chip.key} label={chip.label} count={chip.count} selected={chip.key === filter} accessibilityLabel={`Filter by ${chip.label}, ${chip.count} ${chip.count === 1 ? 'card' : 'cards'}`} onPress={() => onFilter(chip.key)} />)}
+          {chips.map((chip) => <Chip key={chip.key} label={chip.label} count={chip.count} selected={chip.key === filter} accessibilityLabel={tr("cardscollection.filterByValueValueValue", { value1: chip.label, value2: chip.count, value3: chip.count === 1 ? 'card' : 'cards' })} onPress={() => onFilter(chip.key)} />)}
         </ChipRow>
       </View>
     </View>
@@ -106,7 +117,7 @@ export function CardsCollection({ sections, chips, filter, onFilter, onOpen, onM
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0 },
-  chips: { marginTop: 8, marginBottom: 2 },
+  chips: { marginVertical: 8 },
   section: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, minHeight: 40, paddingHorizontal: spacing.md, paddingVertical: 6 },
   sectionTitle: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
   month: { flexShrink: 1, fontSize: 17, lineHeight: 22, letterSpacing: -0.2 },

@@ -1,2 +1,7 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { EmptyState, Screen } from '@/components/ui/primitives';
-export default function CalendarWebScreen() { return <Screen><EmptyState title="Calendar lives in the app" description="Open Chits on a device to view local reminders." /></Screen>; }
+export default function CalendarWebScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale(); return <Screen><EmptyState title={tr("calendar.calendarLivesInTheApp")} description={tr("calendar.openChitsOnADeviceToViewLocal")} /></Screen>; }

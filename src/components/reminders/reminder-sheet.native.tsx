@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, AppState, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -44,6 +46,9 @@ const QUICK_ICONS: Record<ReminderQuickKey, React.ComponentProps<typeof Ionicons
  * uses the Material date dialog and a numeric time-entry dialog.
  */
 export function ReminderSheet({ visible, existing, accent, accentOn, onClose, onSave, onRemove }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { scheme, tokens: theme } = useTheme();
   const controls = useStickyControls();
   // Initial state comes from props at mount; the parent remounts the sheet
@@ -120,14 +125,14 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
     try { await onRemove(); onClose(); } finally { setBusy(null); }
   };
 
-  const title = existing ? 'Reminder' : 'Remind me';
-  const primaryLabel = existing ? 'Change Reminder' : 'Set Reminder';
+  const title = existing ? tr("id.reminder") : tr("id.remindMe");
+  const primaryLabel = existing ? tr("remindersheet.changeReminder") : tr("remindersheet.setReminder");
   const primaryDisabled = !valid || unchanged || busy !== null;
 
   return (
     <Modal visible={visible} transparent animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={close}>
       <View style={styles.backdrop}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close reminder" style={StyleSheet.absoluteFill} onPress={close} />
+        <Pressable accessibilityRole="button" accessibilityLabel={tr("remindersheet.closeReminder")} style={StyleSheet.absoluteFill} onPress={close} />
         <SafeAreaView edges={['bottom', 'left', 'right']} style={[styles.sheet, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
           <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
           <ScrollView bounces={false} style={styles.scroll} contentContainerStyle={styles.content}>
@@ -135,7 +140,7 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
               <View style={[styles.headerIcon, { backgroundColor: theme.surfaceElevated }]}><Icon name={existing ? 'notifications' : 'notifications-outline'} size={18} color={accent} /></View>
               <View style={styles.flex}>
                 <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{title}</AppText>
-                <AppText style={[styles.subtitle, { color: theme.textSecondary }]}>{existing ? `Set for ${formatReminder(new Date(existing), now)}` : 'Get notified about this card'}</AppText>
+                <AppText style={[styles.subtitle, { color: theme.textSecondary }]}>{existing ? tr("remindersheet.setForValue", { value1: formatReminder(new Date(existing), now) }) : tr("id.getNotifiedAboutThisCard")}</AppText>
               </View>
             </View>
 
@@ -152,46 +157,46 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
                   onPress={() => pick(option.date, option.key)}
                 />
               ))}
-              <OptionRow icon="calendar-outline" label="Pick date & time" detail={choice === 'custom' ? formatReminder(value, now) : null} selected={choice === 'custom'} first={false} accent={accent} onPress={chooseCustom} />
+              <OptionRow icon="calendar-outline" label={tr("remindersheet.pickDateTime")} detail={choice === 'custom' ? formatReminder(value, now) : null} selected={choice === 'custom'} first={false} accent={accent} onPress={chooseCustom} />
             </View>
 
-            <AppText style={[styles.sectionLabel, { color: theme.textMuted }]}>DATE & TIME</AppText>
+            <AppText style={[styles.sectionLabel, { color: theme.textMuted }]}>{tr("remindersheet.dateTime")}</AppText>
             <View style={[styles.group, controls.panel, { borderColor: theme.borderSubtle }]}>
-              <FieldRow label="Date" first>
+              <FieldRow label={tr("schedulefields.date")} first>
                 {Platform.OS === 'ios'
                   ? <DateTimePicker style={styles.iosDate} value={value} mode="date" display="compact" minimumDate={startOfDay(now)} accentColor={accent} themeVariant={scheme === 'dark' ? 'dark' : 'light'} onValueChange={(_, date) => pick(withDate(value, date.getFullYear(), date.getMonth(), date.getDate()), 'custom')} />
-                  : <FieldButton text={formatReminderDay(value, now)} label={`Date, ${formatReminderDay(value, now)}. Change date`} onPress={() => setAndroidPicker('date')} />}
+                  : <FieldButton text={formatReminderDay(value, now)} label={tr("schedulefields.dateValueChangeDate", { value1: formatReminderDay(value, now) })} onPress={() => setAndroidPicker('date')} />}
               </FieldRow>
-              <FieldRow label="Time" first={false}>
+              <FieldRow label={tr("remindersheet.time")} first={false}>
                 {Platform.OS === 'ios'
                   ? <DateTimePicker style={styles.iosTime} value={value} mode="time" display="compact" accentColor={accent} themeVariant={scheme === 'dark' ? 'dark' : 'light'} onValueChange={(_, date) => pick(withTime(value, date.getHours(), date.getMinutes()), 'custom')} />
-                  : <FieldButton text={formatReminderClock(value)} label={`Time, ${formatReminderClock(value)}. Change time`} onPress={() => setAndroidPicker('time')} />}
+                  : <FieldButton text={formatReminderClock(value)} label={tr("remindersheet.timeValueChangeTime", { value1: formatReminderClock(value) })} onPress={() => setAndroidPicker('time')} />}
               </FieldRow>
             </View>
 
             {problem === 'past' || (!valid && !busy) ? (
-              <View accessibilityRole="alert" style={styles.inline}><Icon name="alert-circle-outline" size={16} color={theme.danger} /><AppText style={[styles.inlineText, { color: theme.danger }]}>Choose a future time.</AppText></View>
+              <View accessibilityRole="alert" style={styles.inline}><Icon name="alert-circle-outline" size={16} color={theme.danger} /><AppText style={[styles.inlineText, { color: theme.danger }]}>{tr("remindersheet.chooseAFutureTime")}</AppText></View>
             ) : null}
             {problem === 'declined' ? (
               // Just declined at the system prompt: a plain status line only — no
               // prompt and no Settings shortcut (App Review Guideline 5.1.1(iv)).
-              <View accessibilityRole="alert" style={styles.inline}><Icon name="notifications-off-outline" size={16} color={theme.textSecondary} /><AppText style={[styles.inlineText, { color: theme.textSecondary }]}>Reminder not set. Notifications aren’t allowed for Chits.</AppText></View>
+              <View accessibilityRole="alert" style={styles.inline}><Icon name="notifications-off-outline" size={16} color={theme.textSecondary} /><AppText style={[styles.inlineText, { color: theme.textSecondary }]}>{tr("remindersheet.reminderNotSetNotificationsArenTAllowedFor")}</AppText></View>
             ) : null}
             {problem === 'exact-alarm' ? <ExactAlarmNotice /> : null}
             {problem === 'failed' ? (
-              <View accessibilityRole="alert" style={styles.inline}><Icon name="alert-circle-outline" size={16} color={theme.danger} /><AppText style={[styles.inlineText, { color: theme.danger }]}>The reminder couldn’t be set. Please try again.</AppText></View>
+              <View accessibilityRole="alert" style={styles.inline}><Icon name="alert-circle-outline" size={16} color={theme.danger} /><AppText style={[styles.inlineText, { color: theme.danger }]}>{tr("remindersheet.theReminderCouldnTBeSetPleaseTry")}</AppText></View>
             ) : null}
 
           </ScrollView>
           <View style={[styles.footer, { borderTopColor: theme.borderSubtle }]}>
             {existing ? (
               <Pressable accessibilityRole="button" disabled={busy !== null} onPress={() => void remove()} style={({ pressed }) => [styles.removeButton, pressed && styles.pressed]}>
-                {busy === 'remove' ? <ActivityIndicator size="small" color={theme.danger} /> : <AppText style={[styles.textButtonLabel, { color: theme.danger }]}>Remove Reminder</AppText>}
+                {busy === 'remove' ? <ActivityIndicator size="small" color={theme.danger} /> : <AppText style={[styles.textButtonLabel, { color: theme.danger }]}>{tr("remindersheet.removeReminder")}</AppText>}
               </Pressable>
             ) : null}
             <View style={styles.actions}>
               <Pressable accessibilityRole="button" disabled={busy !== null} onPress={close} style={({ pressed }) => [styles.textButton, pressed && styles.pressed]}>
-                <AppText style={[styles.textButtonLabel, { color: theme.textSecondary }]}>Cancel</AppText>
+                <AppText style={[styles.textButtonLabel, { color: theme.textSecondary }]}>{tr("chat.cancel")}</AppText>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -244,6 +249,9 @@ function startOfDay(date: Date) {
 }
 
 function OptionRow({ icon, label, detail, selected, first, accent, onPress }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; detail: string | null; selected: boolean; first: boolean; accent: string; onPress: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return (
     <Pressable
@@ -262,6 +270,9 @@ function OptionRow({ icon, label, detail, selected, first, accent, onPress }: { 
 }
 
 function FieldRow({ label, first, children }: { label: string; first: boolean; children: React.ReactNode }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return (
     <View style={[styles.row, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.borderSubtle }]}>
@@ -272,6 +283,9 @@ function FieldRow({ label, first, children }: { label: string; first: boolean; c
 }
 
 function FieldButton({ text, label, onPress }: { text: string; label: string; onPress: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} hitSlop={6} style={({ pressed }) => [styles.fieldButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>

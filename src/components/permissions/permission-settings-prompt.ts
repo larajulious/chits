@@ -1,12 +1,13 @@
+import { tr } from '@/localization/runtime';
 import { Alert, Linking, Platform } from 'react-native';
 
 export type SettingsPromptKind = 'microphone' | 'notifications' | 'photos';
 
-const settingsName = Platform.OS === 'ios' ? 'iOS Settings' : 'Settings';
+const settingsName = Platform.OS === 'ios' ? 'iOS' : 'Android';
 const COPY: Record<SettingsPromptKind, { title: string; message: string }> = {
-  microphone: { title: 'Microphone Access Required', message: `To record a voice note, Chits needs access to your microphone. You can enable microphone access in ${settingsName}.` },
-  photos: { title: 'Photos Access Required', message: `To save photos and videos, Chits needs permission to add them to your photo library. You can enable this in ${settingsName}.` },
-  notifications: { title: 'Notifications Required', message: `To remind you about this card, Chits needs permission to send notifications. You can allow notifications in ${settingsName}.` },
+  microphone: { get title() { return tr("permissionsettingsprompt.microphoneAccessRequired"); }, get message() { return tr("permissionsettingsprompt.toRecordAVoiceNoteChitsNeedsAccess", { value1: settingsName }); } },
+  photos: { get title() { return tr("permissionsettingsprompt.photosAccessRequired"); }, get message() { return tr("permissionsettingsprompt.toSavePhotosAndVideosChitsNeedsPermission", { value1: settingsName }); } },
+  notifications: { get title() { return tr("permissionsettingsprompt.notificationsRequired"); }, get message() { return tr("permissionsettingsprompt.toRemindYouAboutThisCardChitsNeeds", { value1: settingsName }); } },
 };
 
 /**
@@ -18,7 +19,7 @@ const COPY: Record<SettingsPromptKind, { title: string; message: string }> = {
 export function showPermissionSettingsPrompt(kind: SettingsPromptKind) {
   const copy = COPY[kind];
   Alert.alert(copy.title, copy.message, [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'Open Settings', onPress: () => void Linking.openSettings() },
+    { text: tr("chat.cancel"), style: 'cancel' },
+    { text: tr("calendar.openSettings"), onPress: () => void Linking.openSettings() },
   ]);
 }

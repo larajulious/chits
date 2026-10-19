@@ -1,3 +1,5 @@
+import { useLocale } from '@/localization/provider';
+import { tr } from '@/localization/runtime';
 import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { Alert } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -10,6 +12,9 @@ import { NoteContentView } from './note-content-view';
 
 /** Saved readers write only the tapped state, guarded against a stale note. */
 export function SavedNoteContentView({ message, ...props }: Omit<ComponentProps<typeof NoteContentView>, 'onToggleChecklist'> & { message: Message }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const repository = useMemo(() => createMessageRepository(database), [database]);
   const [local, setLocal] = useState<{ source: Message; value: Message } | null>(null);
@@ -39,7 +44,7 @@ export function SavedNoteContentView({ message, ...props }: Omit<ComponentProps<
       const result = await repository.setChecklistChecked(current.id, Number(index), !block.list.checked, expected);
       if (mounted.current) setLocal({ source: message, value: { ...current, ...result } });
     } catch (cause) {
-      if (mounted.current) Alert.alert('Checklist could not be updated', cause instanceof Error ? cause.message : 'Try again.');
+      if (mounted.current) Alert.alert(tr("savednotecontentview.checklistCouldNotBeUpdated"), cause instanceof Error ? cause.message : tr("savednotecontentview.tryAgain"));
     } finally { busy.current = false; }
   };
   return <NoteContentView {...props} blocks={noteRenderContent(current)?.blocks ?? props.blocks} onToggleChecklist={(key) => { void toggle(key); }} />;

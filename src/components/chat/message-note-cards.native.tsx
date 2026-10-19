@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import type { ReactNode } from 'react';
 import { useRouter } from 'expo-router';
 import { Linking, Pressable, StyleSheet, View, type StyleProp, type TextStyle } from 'react-native';
@@ -22,10 +24,13 @@ function formatTime(timestamp: number) {
 }
 
 function messageLabel(message: Message) {
-  return `You: ${message.text ?? 'Empty thought'}. ${formatTime(message.createdAt)}${message.updatedAt !== message.createdAt ? '. Edited' : ''}. Long press for actions.`;
+  return tr("messages.youLongPressForActions", { value1: message.text ?? tr("stickyviewsheet.emptyThought"), value2: formatTime(message.createdAt), value3: message.updatedAt !== message.createdAt ? '. ' + tr('id.edited') : '' });
 }
 
 export function MessageMetadata({ message, inside = false, onActions, onHideAgain, splitPills = false }: { message: Message; inside?: boolean; onActions: () => void; onHideAgain?: () => void; splitPills?: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const router = useRouter();
   const { tokens } = useTheme();
   const backgroundActive = useBackgroundReadability();
@@ -35,24 +40,24 @@ export function MessageMetadata({ message, inside = false, onActions, onHideAgai
   };
   return <View style={[styles.metadata, inside && styles.metadataInside, backgroundActive && !inside && { alignSelf: 'flex-end', backgroundColor: tokens.surface, paddingHorizontal: 8, borderRadius: 12 }]}>
     {organization ? (splitPills ? <>
-      <Pressable accessibilityRole="link" accessibilityLabel={`Open board ${organization.boardName} at column ${organization.columnName}`} accessibilityHint={organization.cardId ? "Opens this column and highlights the linked card" : "Opens this column on its board"} hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.pill, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
+      <Pressable accessibilityRole="link" accessibilityLabel={tr("messagenotecards.openBoardValueAtColumnValue", { value1: organization.boardName, value2: organization.columnName })} accessibilityHint={organization.cardId ? tr("messagenotecards.opensThisColumnAndHighlightsTheLinkedCard") : tr("messagenotecards.opensThisColumnOnItsBoard")} hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.pill, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
         <Icon name="folder-outline" size={11} color={tokens.accentStrong} />
         <AppText numberOfLines={1} style={[styles.pillText, { color: tokens.accentStrong }]}>{organization.boardName}</AppText>
       </Pressable>
-      <Pressable accessibilityRole="link" accessibilityLabel={`Open ${organization.columnName} in ${organization.boardName}`} accessibilityHint={organization.cardId ? "Opens this column and highlights the linked card" : "Opens this column on its board"} hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.pill, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
+      <Pressable accessibilityRole="link" accessibilityLabel={tr("messagenotecards.openValueInValue", { value1: organization.columnName, value2: organization.boardName })} accessibilityHint={organization.cardId ? tr("messagenotecards.opensThisColumnAndHighlightsTheLinkedCard") : tr("messagenotecards.opensThisColumnOnItsBoard")} hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.pill, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
         <Icon name="calendar-outline" size={11} color={tokens.accentStrong} />
         <AppText numberOfLines={1} style={[styles.pillText, { color: tokens.accentStrong }]}>{organization.columnName}</AppText>
       </Pressable>
-    </> : <Pressable accessibilityRole="link" accessibilityLabel={`Open ${organization.columnName} in ${organization.boardName}`} accessibilityHint={organization.cardId ? "Opens this column and highlights the linked card" : "Opens this column on its board"} hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.boardChip, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
+    </> : <Pressable accessibilityRole="link" accessibilityLabel={tr("messagenotecards.openValueInValue", { value1: organization.columnName, value2: organization.boardName })} accessibilityHint={organization.cardId ? tr("messagenotecards.opensThisColumnAndHighlightsTheLinkedCard") : tr("messagenotecards.opensThisColumnOnItsBoard")} hitSlop={8} onPress={openOrganization} style={({ pressed }) => [styles.boardChip, { backgroundColor: tokens.accentSoft }, pressed && styles.pressed]}>
       <Icon name="folder-outline" size={10} color={tokens.accentStrong} />
       <AppText numberOfLines={1} style={[styles.boardChipText, { color: tokens.accentStrong }]}>{organization.boardName} · {organization.columnName}</AppText>
     </Pressable>) : null}
-    <AppText style={[styles.time, { color: tokens.textMuted }]}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? ' · edited' : ''}</AppText>
-    {message.pinned ? <Icon accessibilityLabel="Pinned" name="pin-outline" size={13} color={tokens.textMuted} /> : null}
+    <AppText style={[styles.time, { color: tokens.textMuted }]}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? tr("messagenotecards.edited") : ''}</AppText>
+    {message.pinned ? <Icon accessibilityLabel={tr("index.pinned")} name="pin-outline" size={13} color={tokens.textMuted} /> : null}
     {/* A reminder belongs to this thought or its linked card. */}
-    {(message.reminderAt ?? message.organization?.reminderAt) != null ? <Icon accessibilityLabel="Reminder set" name="notifications-outline" size={13} color={tokens.textMuted} /> : null}
-    {onHideAgain ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" hitSlop={8} onPress={onHideAgain} style={({ pressed }) => [styles.privacyAction, pressed && styles.pressed]}><Icon name="eye-off-outline" size={16} color={tokens.textMuted} /></Pressable> : null}
-    <Pressable accessibilityRole="button" accessibilityLabel="Thought actions" hitSlop={8} onPress={onActions} style={styles.more}>
+    {(message.reminderAt ?? message.organization?.reminderAt) != null ? <Icon accessibilityLabel={tr("chat.reminderSet")} name="notifications-outline" size={13} color={tokens.textMuted} /> : null}
+    {onHideAgain ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.hideAgain")} hitSlop={8} onPress={onHideAgain} style={({ pressed }) => [styles.privacyAction, pressed && styles.pressed]}><Icon name="eye-off-outline" size={16} color={tokens.textMuted} /></Pressable> : null}
+    <Pressable accessibilityRole="button" accessibilityLabel={tr("messagenotecards.thoughtActions")} hitSlop={8} onPress={onActions} style={styles.more}>
       <Icon name="ellipsis-horizontal" size={17} color={tokens.textMuted} />
     </Pressable>
   </View>;
@@ -60,6 +65,9 @@ export function MessageMetadata({ message, inside = false, onActions, onHideAgai
 
 /** Sticky's outlined chat surfaces; null under Classic. */
 function useStickyMessage() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens, styleTokens: t, styleColors } = useTheme();
   const sticky = useStickySurface();
   const b = t.radius.bubble;
@@ -71,6 +79,9 @@ function useStickyMessage() {
 }
 
 export function QuickThoughtBubble({ message, focused, onActions, onHideAgain, preview = false }: NoteProps & { preview?: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   const sticky = useStickyMessage();
   const bubbleStyle = [styles.quickThought, { backgroundColor: tokens.bubble, borderColor: focused ? tokens.accentStrong : 'transparent' }, focused && styles.focused, sticky.bubble(Boolean(focused))];
@@ -90,6 +101,9 @@ export function QuickThoughtBubble({ message, focused, onActions, onHideAgain, p
 }
 
 export function NoteCard({ message, focused, onActions, onHideAgain }: NoteProps) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   const sticky = useStickyMessage();
   return <Pressable
@@ -105,6 +119,9 @@ export function NoteCard({ message, focused, onActions, onHideAgain }: NoteProps
 }
 
 export function StructuredNoteCard({ message, focused, onActions, onHideAgain }: NoteProps) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   const sticky = useStickyMessage();
   return <Pressable
@@ -120,6 +137,9 @@ export function StructuredNoteCard({ message, focused, onActions, onHideAgain }:
 }
 
 function PlainTextContent({ text, mode, color }: { text: string; mode: ContentMode; color: string }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const paragraphs = parseParagraphs(text);
   const textStyle = [mode === 'detail' ? styles.detailText : styles.noteText, { color }];
   if (paragraphs.length <= 1) return <TextWithLinks text={text} style={textStyle} />;
@@ -127,6 +147,9 @@ function PlainTextContent({ text, mode, color }: { text: string; mode: ContentMo
 }
 
 function TextWithLinks({ text, style }: { text: string; style: StyleProp<TextStyle> }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   return <AppText style={style}>{parseInlineContent(text).map((segment, index) => segment.kind === 'link'
     ? <AppText key={`${index}-${segment.text}`} accessibilityRole="link" onPress={(event) => { event.stopPropagation(); void Linking.openURL(segment.text); }} style={{ color: tokens.accentStrong, textDecorationLine: 'underline' }}>{segment.text}</AppText>
@@ -134,6 +157,9 @@ function TextWithLinks({ text, style }: { text: string; style: StyleProp<TextSty
 }
 
 function StructuredContent({ text, mode, accentColor }: { text: string; mode: ContentMode; accentColor?: string }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   const bulletColor = accentColor ?? tokens.accent;
   const checkedIconColor = accentColor ? '#FFFFFF' : tokens.accentText;
@@ -154,6 +180,9 @@ function StructuredContent({ text, mode, accentColor }: { text: string; mode: Co
 
 /** One run of a note's words, drawn the way a note's text always is (lists, links, paragraphs). */
 export function NoteText({ text, mode, color, accentColor }: { text: string; mode: ContentMode; color?: string; accentColor?: string }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   return classifyText(text) === 'structured-note'
     ? <StructuredContent text={text} mode={mode} accentColor={accentColor} />
@@ -164,6 +193,9 @@ export function NoteText({ text, mode, color, accentColor }: { text: string; mod
 // message's by default). For a note with inline images that's only the ones
 // that aren't inline — those render in place, between its words.
 export function MessageContentRenderer({ message, mode, focused = false, accentColor, onActions, onHideAgain, onPressText, textAccessibilityLabel, renderAttachments, onImageLongPress }: { message: Message; mode: ContentMode; focused?: boolean; accentColor?: string; onActions?: () => void; onHideAgain?: () => void; onPressText?: () => void; textAccessibilityLabel?: string; renderAttachments?: (attachments?: Attachment[]) => ReactNode; onImageLongPress?: (attachment: Attachment) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   const presentation = classifyMessage(message);
   const actions = onActions ?? (() => undefined);
@@ -182,7 +214,7 @@ export function MessageContentRenderer({ message, mode, focused = false, accentC
         blocks={inline.blocks}
         maxImageHeight={480}
         onImageLongPress={onImageLongPress ? (attachment) => onImageLongPress(attachment as Attachment) : undefined}
-        renderText={(value) => onPressText ? <Pressable accessibilityRole="button" accessibilityLabel={textAccessibilityLabel ?? 'Edit content'} hitSlop={8} onPress={onPressText} style={({ pressed }) => pressed && styles.pressed}>{text(value)}</Pressable> : text(value)}
+        renderText={(value) => onPressText ? <Pressable accessibilityRole="button" accessibilityLabel={textAccessibilityLabel ?? tr("id.editContent")} hitSlop={8} onPress={onPressText} style={({ pressed }) => pressed && styles.pressed}>{text(value)}</Pressable> : text(value)}
       />
     </View>;
   }
@@ -192,7 +224,7 @@ export function MessageContentRenderer({ message, mode, focused = false, accentC
     : <PlainTextContent text={message.text} mode="detail" color={tokens.textPrimary} /> : null;
   return <View style={styles.detailContent}>
     {message.attachments.length ? renderAttachments?.() : null}
-    {content && onPressText ? <Pressable accessibilityRole="button" accessibilityLabel={textAccessibilityLabel ?? 'Edit content'} hitSlop={8} onPress={onPressText} style={({ pressed }) => pressed && styles.pressed}>{content}</Pressable> : content}
+    {content && onPressText ? <Pressable accessibilityRole="button" accessibilityLabel={textAccessibilityLabel ?? tr("id.editContent")} hitSlop={8} onPress={onPressText} style={({ pressed }) => pressed && styles.pressed}>{content}</Pressable> : content}
   </View>;
 }
 

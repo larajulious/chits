@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
@@ -20,30 +22,39 @@ import { DEFAULT_BACKGROUND_DIM, deviceBackgroundMatches, parseChatBackground, t
 import { dismissKeyboardAsync } from '@/services/keyboard';
 import type { Message } from '@/db/types';
 
-const sampleMessage: Message = { id: 'appearance-preview', text: 'Your chat will look like this', createdAt: 0, updatedAt: 0, type: 'text', archivedAt: null, pinned: false, isHiddenContent: false, deletedAt: null, attachments: [] };
+const sampleMessage: Message = { id: 'appearance-preview', get text() { return tr("chatappearancesettings.yourChatWillLookLikeThis"); }, createdAt: 0, updatedAt: 0, type: 'text', archivedAt: null, pinned: false, isHiddenContent: false, deletedAt: null, attachments: [] };
 const noAction = () => undefined;
 
 function ChatAppearancePreview({ background, onError }: { background: ChatBackground | null; onError: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   return <View testID="chat-appearance-preview" style={[styles.preview, { backgroundColor: tokens.chatBackground, borderColor: tokens.borderSubtle }]}>
     <ChatBackgroundLayer background={background} onError={onError} />
     {!background ? <View style={styles.default}>
       <Icon name="image-outline" size={28} color={tokens.textMuted} />
-      <AppText style={[styles.defaultTitle, { color: tokens.textPrimary }]}>Default</AppText>
-      <AppText style={[styles.copy, { color: tokens.textSecondary }]}>Choose a photo to personalize your chat.</AppText>
+      <AppText style={[styles.defaultTitle, { color: tokens.textPrimary }]}>{tr("chatappearancesettings.default")}</AppText>
+      <AppText style={[styles.copy, { color: tokens.textSecondary }]}>{tr("chatappearancesettings.chooseAPhotoToPersonalizeYourChat")}</AppText>
     </View> : null}
-    <View pointerEvents="none" accessible accessibilityRole="text" accessibilityLabel="Your chat will look like this" style={styles.sample}>
+    <View pointerEvents="none" accessible accessibilityRole="text" accessibilityLabel={tr("chatappearancesettings.yourChatWillLookLikeThis")} style={styles.sample}>
       <View collapsable={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><QuickThoughtBubble message={sampleMessage} focused={false} onActions={noAction} preview /></View>
     </View>
   </View>;
 }
 
 function AppearanceOption({ label, icon, onPress, destructive = false, disabled }: { label: string; icon: React.ComponentProps<typeof Ionicons>['name']; onPress: () => void; destructive?: boolean; disabled: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   return <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.option, { borderColor: tokens.borderSubtle }, pressed && { opacity: 0.7 }]}><Icon name={icon} size={21} color={destructive ? tokens.danger : tokens.textSecondary} /><AppText style={[styles.optionText, { color: destructive ? tokens.danger : tokens.textPrimary }]}>{label}</AppText><Icon name="chevron-forward" size={16} color={tokens.textMuted} /></Pressable>;
 }
 
 function AppearanceContent({ close, initialSelection }: { close: (after?: () => void) => void; initialSelection: ChatBackgroundImage | null }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   const { confirm } = useAppDialog();
   const { background, applyBackground, removeBackground } = useChatBackground();
@@ -81,7 +92,7 @@ function AppearanceContent({ close, initialSelection }: { close: (after?: () => 
     if (selected || !background || busy) return;
     setBusy(true); setError(null);
     try { await applyBackground({ ...background, dim: nextDim, blur: nextBlur }); }
-    catch { setDim(background.dim); setBlur(background.blur); setError('That background style could not be saved. Try again.'); }
+    catch { setDim(background.dim); setBlur(background.blur); setError(tr("chatappearancesettings.thatBackgroundStyleCouldNotBeSavedTry")); }
     finally { setBusy(false); }
   };
   const chooseDevice = async () => {
@@ -99,7 +110,7 @@ function AppearanceContent({ close, initialSelection }: { close: (after?: () => 
       const staged = await copyIntoAttachmentStorage(asset.uri, 'backgrounds', { type: 'photo', originalName: asset.fileName ?? null, mimeType: asset.mimeType ?? 'image/jpeg', size: asset.fileSize ?? null, duration: null, width: asset.width, height: asset.height });
       if (!mounted.current) { await staged.remove(); return; }
       selectImage({ storagePath: staged.attachment.storagePath, source: 'device', attachmentId: null, ...(asset.assetId ? { deviceAssetId: asset.assetId } : {}), ...(imageHash ? { deviceImageHash: imageHash } : {}) }, staged);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Chits could not open that photo.'); }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : tr("chatappearancesettings.chitsCouldNotOpenThatPhoto")); }
     finally { setBusy(false); }
   };
   const applySelection = async () => {
@@ -112,38 +123,41 @@ function AppearanceContent({ close, initialSelection }: { close: (after?: () => 
     try { await applyBackground({ ...selected, dim, blur }); setSelected(null); close(); }
     catch (cause) {
       if (staged) { if (mounted.current) stagedAsset.current = staged; else void staged.remove(); }
-      setError(cause instanceof Error ? cause.message : 'This background could not be saved.');
+      setError(cause instanceof Error ? cause.message : tr("chatbackgroundpreview.thisBackgroundCouldNotBeSaved"));
     }
     finally { setBusy(false); }
   };
-  const remove = () => confirm({ type: 'destructive', title: 'Remove custom chat background?', confirmText: 'Remove', onConfirm: async () => {
+  const remove = () => confirm({ type: 'destructive', title: tr("chatappearancesettings.removeCustomChatBackground"), confirmText: tr("chatappearancesettings.remove"), onConfirm: async () => {
     try { await removeBackground(); discardSelection(); setDim(DEFAULT_BACKGROUND_DIM); setBlur(false); }
-    catch { setError('The background could not be removed. Try again.'); throw new Error('Background removal failed'); }
+    catch { setError(tr("chatappearancesettings.theBackgroundCouldNotBeRemovedTryAgain")); throw new Error(tr("chatappearancesettings.backgroundRemovalFailed")); }
   } });
   const previewImage = selected ?? background;
   return <SafeAreaView style={[styles.screen, { backgroundColor: tokens.background }]}>
-    <AppHeader title="Chat Appearance" leading={<IconButton label="Close chat appearance" disabled={busy} onPress={() => close()}><HeaderIcon name="close" size={24} /></IconButton>} />
+    <AppHeader title={tr("chatappearancesettings.chatAppearance")} leading={<IconButton label={tr("chatappearancesettings.closeChatAppearance")} disabled={busy} onPress={() => close()}><HeaderIcon name="close" size={24} /></IconButton>} />
     <ScrollView contentContainerStyle={styles.content}>
       <ChatAppearancePreview background={previewImage ? { ...previewImage, dim, blur } : null} onError={() => setImageFailed(true)} />
-      <AppearanceOption label="Choose from Attachments" icon="images-outline" disabled={busy} onPress={() => close(() => router.push({ pathname: '/attachments', params: { chooseBackground: '1' } }))} />
-      <AppearanceOption label={busy ? 'Preparing photo…' : 'Choose from Device'} icon="image-outline" disabled={busy} onPress={() => void chooseDevice()} />
+      <AppearanceOption label={tr("chatappearancesettings.chooseFromAttachments")} icon="images-outline" disabled={busy} onPress={() => close(() => router.push({ pathname: '/attachments', params: { chooseBackground: '1' } }))} />
+      <AppearanceOption label={busy ? tr("chatappearancesettings.preparingPhoto") : tr("chatappearancesettings.chooseFromDevice")} icon="image-outline" disabled={busy} onPress={() => void chooseDevice()} />
       {previewImage ? <>
         <View style={styles.styleControls}><BackgroundStyleControls dim={dim} blur={blur} disabled={busy} onDimChange={setDim} onDimCommit={(value) => void changeStyle(value, blur)} onBlurChange={(value) => { setBlur(value); void changeStyle(dim, value); }} /></View>
         {selected ? <View style={styles.selectionActions}>
-          <PrimaryButton label="Use as Background" disabled={busy || imageFailed} onPress={() => void applySelection()} />
-          <SecondaryButton label="Cancel" disabled={busy} onPress={discardSelection} />
+          <PrimaryButton label={tr("chatbackgroundpreview.useAsBackground")} disabled={busy || imageFailed} onPress={() => void applySelection()} />
+          <SecondaryButton label={tr("chat.cancel")} disabled={busy} onPress={discardSelection} />
         </View> : null}
       </> : null}
       {background ? <>
-        <AppearanceOption label="Remove Background" icon="trash-outline" disabled={busy} destructive onPress={remove} />
-        <AppearanceOption label="Reset to Default" icon="refresh-outline" disabled={busy} onPress={remove} />
+        <AppearanceOption label={tr("chatappearancesettings.removeBackground")} icon="trash-outline" disabled={busy} destructive onPress={remove} />
+        <AppearanceOption label={tr("chatappearancesettings.resetToDefault")} icon="refresh-outline" disabled={busy} onPress={remove} />
       </> : null}
-      {error || imageFailed ? <AppText accessibilityRole="alert" style={{ color: tokens.danger }}>{error ?? 'This photo could not be loaded. Choose another photo.'}</AppText> : null}
+      {error || imageFailed ? <AppText accessibilityRole="alert" style={{ color: tokens.danger }}>{error ?? tr("chatbackgroundpreview.thisPhotoCouldNotBeLoadedChooseAnother")}</AppText> : null}
     </ScrollView>
   </SafeAreaView>;
 }
 
 export function ChatAppearanceSettings() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   const { background } = useChatBackground();
   const { chatAppearanceSelection } = useLocalSearchParams<{ chatAppearanceSelection?: string }>();
@@ -164,10 +178,10 @@ export function ChatAppearanceSettings() {
     setOpen(true);
   }, [chatAppearanceSelection]));
   return <View>
-    <AppText accessibilityRole="header" style={[styles.sectionTitle, { color: tokens.textSecondary }]}>CHAT APPEARANCE</AppText>
-    <Pressable accessibilityRole="button" accessibilityLabel={`Background, ${background ? 'Custom photo' : 'Default'}`} onPress={() => { void dismissKeyboardAsync().then(() => { setInitialSelection(null); setMounted(true); setOpen(true); }); }} style={[styles.backgroundRow, { borderColor: tokens.borderSubtle }]}>
+    <AppText accessibilityRole="header" style={[styles.sectionTitle, { color: tokens.textSecondary }]}>{tr("chatappearancesettings.chatAppearance2")}</AppText>
+    <Pressable accessibilityRole="button" accessibilityLabel={tr("chatappearancesettings.backgroundValue", { value1: background ? tr("chatappearancesettings.customPhoto") : tr("chatappearancesettings.default") })} onPress={() => { void dismissKeyboardAsync().then(() => { setInitialSelection(null); setMounted(true); setOpen(true); }); }} style={[styles.backgroundRow, { borderColor: tokens.borderSubtle }]}>
       {background ? <Image source={resolveAttachmentUri(background.storagePath)} blurRadius={background.blur ? 5 : 0} contentFit="cover" style={styles.thumbnail} /> : <View style={[styles.thumbnail, styles.thumbnailDefault, { backgroundColor: tokens.surfaceElevated }]}><Icon name="image-outline" size={22} color={tokens.textMuted} /></View>}
-      <View style={styles.rowCopy}><AppText style={[styles.defaultTitle, { color: tokens.textPrimary }]}>Background</AppText><AppText style={[styles.copy, { color: tokens.textSecondary }]}>{background ? 'Custom photo' : 'Default'}</AppText>{!background ? <AppText style={[styles.copy, { color: tokens.textSecondary }]}>Choose a photo to personalize your chat.</AppText> : null}</View>
+      <View style={styles.rowCopy}><AppText style={[styles.defaultTitle, { color: tokens.textPrimary }]}>{tr("chatappearancesettings.background")}</AppText><AppText style={[styles.copy, { color: tokens.textSecondary }]}>{background ? tr("chatappearancesettings.customPhoto") : tr("chatappearancesettings.default")}</AppText>{!background ? <AppText style={[styles.copy, { color: tokens.textSecondary }]}>{tr("chatappearancesettings.chooseAPhotoToPersonalizeYourChat")}</AppText> : null}</View>
       <Icon name="chevron-forward" size={17} color={tokens.textMuted} />
     </Pressable>
     <Modal visible={open} animationType="none" presentationStyle="fullScreen" onRequestClose={() => close()} onDismiss={finishClose}>

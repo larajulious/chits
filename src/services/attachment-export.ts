@@ -1,10 +1,11 @@
+import { tr } from '@/localization/runtime';
 import type { AttachmentLike } from '@/db/types';
 import type { ExportOutcome } from '@/services/attachment-export-naming';
 
 export type { ExportOutcome } from '@/services/attachment-export-naming';
 
 export function exportActionLabel(_: Pick<AttachmentLike, 'type'>): string {
-  return 'Download';
+  return tr("attachmentexportnaming.download");
 }
 
 // Attachments only exist in the native app's local storage.

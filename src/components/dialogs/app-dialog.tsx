@@ -1,3 +1,4 @@
+import { useDirection } from '@/localization/provider';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { ActivityIndicator, BackHandler, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -62,6 +63,9 @@ export type AppDialogProps = ConfirmProps | AlertProps | ActionSheetProps;
 // via Reanimated so it stays smooth even while the caller's async work (e.g. a
 // delete) runs on the JS thread.
 export function AppDialog(props: AppDialogProps) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  const { rowStyle } = useDirection();
   const { tokens: theme, scheme, styleTokens, styleColors } = useTheme();
   const sticky = useStickySurface();
   // Sticky: an outlined card on a solid edge; rows divided by ink lines.
@@ -112,7 +116,7 @@ export function AppDialog(props: AppDialogProps) {
 
   return (
     <Modal transparent visible={mounted} statusBarTranslucent onRequestClose={onRequestClose} onDismiss={props.onDismissComplete} animationType="none">
-      <View style={styles.wrap}>
+      <View style={[styles.wrap, { direction: 'ltr' }]}>
         <Animated.View style={[styles.backdrop, backdropStyle]}>
           <Pressable
             accessible={false}
@@ -182,7 +186,7 @@ export function AppDialog(props: AppDialogProps) {
                   accessibilityLabel={option.label}
                   disabled={option.disabled}
                   onPress={option.onPress}
-                  style={({ pressed }) => [styles.sheetRow, index > 0 && { borderTopColor: rowDivider, borderTopWidth: StyleSheet.hairlineWidth }, pressed && !option.disabled && styles.pressed, option.disabled && styles.disabled]}
+                  style={({ pressed }) => [styles.sheetRow, rowStyle, index > 0 && { borderTopColor: rowDivider, borderTopWidth: StyleSheet.hairlineWidth }, pressed && !option.disabled && styles.pressed, option.disabled && styles.disabled]}
                 >
                   {option.icon ? <Icon name={option.icon} size={18} color={option.destructive ? theme.danger : theme.textPrimary} /> : null}
                   <AppText style={[styles.sheetRowText, { color: option.destructive ? theme.danger : theme.textPrimary }]}>{option.label}</AppText>

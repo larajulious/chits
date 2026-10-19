@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -22,11 +24,14 @@ const TRUST_LINES: { icon: ComponentProps<typeof Ionicons>['name']; key: Onboard
 const STYLE_OPTIONS = APP_STYLES.map((key: AppStyle) => ({
   key,
   label: APP_STYLE_NAMES[key],
-  accessibilityLabel: `${APP_STYLE_NAMES[key]} style`,
+  accessibilityLabel: tr("settings.valueStyle", { value1: APP_STYLE_NAMES[key] }),
 }));
 
 // Step 1 — one screen, not a carousel.
 export default function OnboardingWelcomeScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const router = useRouter();
   const { tokens: theme, look, style, setStyle } = useTheme();

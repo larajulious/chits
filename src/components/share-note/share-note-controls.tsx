@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { memo, type ComponentProps, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -11,6 +13,9 @@ import { resolveAttachmentUri } from '@/services/attachment-storage';
 import type { ShareNoteImage } from '@/services/share-note';
 
 export function ControlSection({ title, hint, hintEmphasis = false, children }: { title: string; hint?: string | null; hintEmphasis?: boolean; children: ReactNode }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return <View style={styles.section}>
     <Text accessibilityRole="header" style={[styles.sectionTitle, { color: theme.textMuted }]}>{title}</Text>
@@ -22,6 +27,9 @@ export function ControlSection({ title, hint, hintEmphasis = false, children }: 
 export type SegmentOption<Key extends string> = { key: Key; label: string; detail?: string; disabled?: boolean };
 
 export function SegmentedControl<Key extends string>({ options, value, onChange, label }: { options: SegmentOption<Key>[]; value: Key; onChange: (key: Key) => void; label: string }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[styles.segmented, { backgroundColor: theme.surfaceElevated }]}>
     {options.map((option) => {
@@ -47,9 +55,12 @@ const SERIF = Platform.select({ ios: 'ui-serif', default: 'serif' });
 const SWATCH_FACE: Partial<Record<ShareNoteFontStyle, string>> = { elegant: SERIF, expressive: SERIF, classic: SERIF, mono: Platform.select({ ios: 'ui-monospace', default: 'monospace' }) };
 
 const ThemeSwatch = memo(function ThemeSwatch({ item, selected, onPress }: { item: ShareNoteTheme; selected: boolean; onPress: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const { colors } = item;
-  return <Pressable accessibilityRole="radio" accessibilityLabel={`${item.name} theme. ${item.mood}`} accessibilityState={{ selected }} onPress={onPress} style={({ pressed }) => [styles.swatch, pressed && styles.pressed]}>
+  return <Pressable accessibilityRole="radio" accessibilityLabel={tr("appearancetheme.valueThemeValue", { value1: item.name, value2: item.mood })} accessibilityState={{ selected }} onPress={onPress} style={({ pressed }) => [styles.swatch, pressed && styles.pressed]}>
     <View style={[styles.swatchFrame, { borderColor: selected ? theme.accent : 'transparent' }]}>
       <View style={[styles.swatchCanvas, { backgroundColor: colors.background }]}>
         {item.backgroundType === 'gradient' ? <LinearGradient colors={[colors.background, colors.backgroundEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} /> : null}
@@ -65,11 +76,14 @@ const ThemeSwatch = memo(function ThemeSwatch({ item, selected, onPress }: { ite
 
 /** Share Note → Theme: one scrolling row per collection (Personalities, Generations). */
 export function ThemePicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
-  return <View accessibilityRole="radiogroup" accessibilityLabel="Theme" style={styles.collections}>
+  return <View accessibilityRole="radiogroup" accessibilityLabel={tr("appearancetheme.theme")} style={styles.collections}>
     {SHARE_NOTE_COLLECTIONS.filter((collection) => collection.shown).map((collection) => <View key={collection.id}>
       <Text accessibilityRole="header" style={[styles.collectionTitle, { color: theme.textSecondary }]}>{collection.name}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityLabel={`${collection.name} themes`} contentContainerStyle={styles.themeRow} style={styles.bleed}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityLabel={tr("appearancetheme.valueThemes", { value1: collection.name })} contentContainerStyle={styles.themeRow} style={styles.bleed}>
         {collection.themes.map((item) => <ThemeSwatch key={item.id} item={item} selected={item.id === value} onPress={() => onChange(item.id)} />)}
       </ScrollView>
     </View>)}
@@ -77,12 +91,15 @@ export function ThemePicker({ value, onChange }: { value: string; onChange: (id:
 }
 
 export function ImageSelector({ images, selected, onToggle }: { images: ShareNoteImage[]; selected: string[]; onToggle: (id: string) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imageRow} style={styles.bleed}>
     {images.map((image, index) => {
       const order = selected.indexOf(image.id);
       const uri = resolveAttachmentUri(image.storagePath);
-      return <Pressable key={image.id} accessibilityRole="checkbox" accessibilityLabel={`Photo ${index + 1}`} accessibilityState={{ checked: order >= 0 }} onPress={() => onToggle(image.id)} style={({ pressed }) => [styles.thumb, { backgroundColor: theme.surfaceElevated, borderColor: order >= 0 ? theme.accent : theme.borderSubtle }, order >= 0 && styles.thumbSelected, pressed && styles.pressed]}>
+      return <Pressable key={image.id} accessibilityRole="checkbox" accessibilityLabel={tr("sharenotecontrols.photoValue", { value1: index + 1 })} accessibilityState={{ checked: order >= 0 }} onPress={() => onToggle(image.id)} style={({ pressed }) => [styles.thumb, { backgroundColor: theme.surfaceElevated, borderColor: order >= 0 ? theme.accent : theme.borderSubtle }, order >= 0 && styles.thumbSelected, pressed && styles.pressed]}>
         {uri ? <Image source={{ uri }} contentFit="cover" cachePolicy="memory" recyclingKey={image.id} style={StyleSheet.absoluteFill} /> : null}
         {order < 0 ? <View style={styles.thumbDim} /> : null}
         <View style={[styles.thumbBadge, order >= 0 ? { backgroundColor: theme.accent, borderColor: theme.accent } : styles.thumbBadgeEmpty]}>
@@ -94,6 +111,9 @@ export function ImageSelector({ images, selected, onToggle }: { images: ShareNot
 }
 
 export function ToggleRow({ label, detail, value, onChange }: { label: string; detail?: string; value: boolean; onChange: (value: boolean) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return <View style={styles.toggleRow}>
     <View style={styles.toggleCopy}>
@@ -105,6 +125,9 @@ export function ToggleRow({ label, detail, value, onChange }: { label: string; d
 }
 
 export function InfoLine({ icon, message, tone = 'muted' }: { icon: ComponentProps<typeof Ionicons>['name']; message: string; tone?: 'muted' | 'warning' }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return <View accessibilityRole={tone === 'warning' ? 'alert' : undefined} style={[styles.info, { backgroundColor: tone === 'warning' ? theme.accentSoft : theme.surface }]}>
     <Ionicons accessible={false} name={icon} size={16} color={tone === 'warning' ? theme.accentStrong : theme.textMuted} />

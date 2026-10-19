@@ -1,3 +1,7 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { floatingCompanionBottom } from '@/components/navigation/floating-chat-layout';
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, Animated, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -10,10 +14,17 @@ import { spacing } from '@/constants/theme';
 import { OnboardingMascot } from '@/features/onboarding/components/onboarding-mascot';
 import { useMascotGreeting } from '@/hooks/use-mascot-greeting';
 
-/** Transient companion on Notes, clear of the floating navigation. */
-export function StickyGreeting({ bottom }: { bottom: number }) {
+/** Transient companion on Notes, centered vertically with the floating Chat icon. */
+const MASCOT_TOUCH_SIZE = 72;
+
+export function StickyGreeting() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { greeting, visible, dismissGreeting } = useMascotGreeting();
   const { tokens: theme, styleTokens, styleColors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const bottom = floatingCompanionBottom(insets.bottom, styleTokens.chat.height, MASCOT_TOUCH_SIZE);
   const tip = styleTokens.tip;
   const sticky = tip.tail > 0;
   const fill = sticky ? styleColors.controlFill : theme.surface;
@@ -66,18 +77,18 @@ export function StickyGreeting({ bottom }: { bottom: number }) {
       surfaceStyle(styleTokens, styleColors, { fill, radius: tip.radius, border: theme.borderSubtle, shadow: 'bubble', edge: tip.edge || false }),
       { maxWidth: Math.min(width - spacing.md * 2, 272), opacity: bubbleOpacity, transform: [{ translateY: bubbleLift }] },
     ]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Chits says: ${greeting.text}. Open Chat.`} onPress={openChat} style={styles.bubbleMessage}>
+      <Pressable accessibilityRole="button" accessibilityLabel={tr("stickygreeting.chitsSaysValueOpenChat", { value1: greeting.text })} onPress={openChat} style={styles.bubbleMessage}>
         <AppText variant={sticky ? 'display' : 'body'} weight={sticky ? '500' : '600'} style={{ fontSize: tip.textSize, lineHeight: tip.textLineHeight, color: theme.textPrimary }}>{greeting.text}</AppText>
       </Pressable>
       {/* At least 44pt to touch: the box plus its hit slop. */}
-      <Pressable accessibilityRole="button" accessibilityLabel="Dismiss Chits greeting" onPress={dismissGreeting} hitSlop={4 + (44 - tip.dismissSize) / 2} style={[styles.close, { width: tip.dismissSize, height: tip.dismissSize }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={tr("stickygreeting.dismissChitsGreeting")} onPress={dismissGreeting} hitSlop={4 + (44 - tip.dismissSize) / 2} style={[styles.close, { width: tip.dismissSize, height: tip.dismissSize }]}>
         <Icon name="close" size={17} color={sticky ? styleColors.textSecondary : theme.textSecondary} />
       </Pressable>
       {/* Sticky: a speech-bubble tail pointing down at the mascot. */}
       {sticky ? <View pointerEvents="none" style={[styles.tail, { width: tip.tail, height: tip.tail, bottom: -tip.tail / 2, backgroundColor: fill, borderRightWidth: styleTokens.outline.width, borderBottomWidth: styleTokens.outline.width, borderColor: styleColors.outline }]} /> : null}
     </Animated.View>
     <Animated.View style={{ opacity: mascotOpacity, transform: [{ translateY: mascotLift }, { scale: mascotScale }, { rotate: `${tip.mascotTilt}deg` }] }}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Chits mascot. Open Chat to write a thought." onPress={openChat} style={styles.mascotButton}>
+      <Pressable accessibilityRole="button" accessibilityLabel={tr("stickygreeting.chitsMascotOpenChatToWriteAThought")} onPress={openChat} style={styles.mascotButton}>
         <OnboardingMascot size={tip.mascotSize} accessible={false} />
       </Pressable>
     </Animated.View>
@@ -90,5 +101,5 @@ const styles = StyleSheet.create({
   bubbleMessage: { flexShrink: 1, minHeight: 44, justifyContent: 'center', paddingLeft: 14, paddingVertical: 8 },
   close: { alignItems: 'center', justifyContent: 'center' },
   tail: { position: 'absolute', right: 22, transform: [{ rotate: '45deg' }] },
-  mascotButton: { width: 72, height: 72, alignItems: 'center', justifyContent: 'center' },
+  mascotButton: { width: MASCOT_TOUCH_SIZE, height: MASCOT_TOUCH_SIZE, alignItems: 'center', justifyContent: 'center' },
 });

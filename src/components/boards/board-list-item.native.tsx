@@ -1,3 +1,5 @@
+import { countLabel, tr } from '@/localization/runtime';
+import { useDirection } from '@/localization/provider';
 import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -10,6 +12,9 @@ import type { Board } from '@/db/types';
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 
 export const BoardListItem = memo(function BoardListItem({ board, onPress }: { board: BoardSummary; onPress: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  const { rowStyle } = useDirection();
   const { tokens, styleTokens, scheme } = useTheme();
   const dark = scheme === 'dark';
   const accent = board.accent ?? tokens.accentStrong;
@@ -17,13 +22,13 @@ export const BoardListItem = memo(function BoardListItem({ board, onPress }: { b
   const border = tintWithAccent(tokens.borderSubtle, accent, 0.2);
   const iconFill = tintWithAccent(dark ? tokens.surface : tokens.cardBase, accent, dark ? 0.24 : 0.12);
   const iconInk = dark ? tintWithAccent(tokens.textPrimary, accent, 0.25) : accent;
-  const columns = `${board.columnCount} ${board.columnCount === 1 ? 'column' : 'columns'}`;
-  const cards = `${board.cardCount} ${board.cardCount === 1 ? 'card' : 'cards'}`;
+  const columns = countLabel('column', board.columnCount);
+  const cards = countLabel('card', board.cardCount);
 
   return <PressableSurface
     accessibilityRole="button"
     accessibilityLabel={`${board.name}. ${columns}. ${cards}.`}
-    accessibilityHint="Opens board"
+    accessibilityHint={tr("boardlistitem.opensBoard")}
     onPress={onPress}
     fill={fill}
     border={border}
@@ -34,7 +39,7 @@ export const BoardListItem = memo(function BoardListItem({ board, onPress }: { b
     edgeColor={border}
     shadow={dark ? false : 'card'}
     pressedStyle={styles.pressed}
-    style={[styles.card, { borderWidth: 1, borderColor: border }]}
+    style={[styles.card, rowStyle, { borderWidth: 1, borderColor: border }]}
   >
     <View pointerEvents="none" style={[styles.accentRail, { backgroundColor: accent }]} />
     <Surface fill={iconFill} radius={styleTokens.radius.control} outline={false} edge={false} style={styles.mark}>
@@ -42,7 +47,7 @@ export const BoardListItem = memo(function BoardListItem({ board, onPress }: { b
     </Surface>
     <View style={styles.copy}>
       <AppText variant="display" weight="700" numberOfLines={2} style={[styles.name, { color: tokens.textPrimary }]}>{board.name}</AppText>
-      <View style={styles.metadata}>
+      <View style={[styles.metadata, rowStyle]}>
         <View style={styles.stat}><Icon name="reader-outline" size={13} color={tokens.textMuted} /><AppText style={[styles.detail, { color: tokens.textSecondary }]}>{cards}</AppText></View>
         <View style={styles.stat}><Icon name="albums-outline" size={13} color={tokens.textMuted} /><AppText style={[styles.detail, { color: tokens.textSecondary }]}>{columns}</AppText></View>
       </View>

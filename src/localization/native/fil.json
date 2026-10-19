@@ -1,0 +1,7 @@
+{
+  "ios": {
+    "NSMicrophoneUsageDescription": "Ginagamit lang ng Chits ang mikropono kapag pinili mong mag-record ng voice note.",
+    "NSPhotoLibraryUsageDescription": "Ginagamit lang ng Chits ang mga larawan at video na pinili mong i-attach sa tala o gawing background ng chat.",
+    "NSPhotoLibraryAddUsageDescription": "Nagse-save lang ang Chits ng kopya ng larawan, video o larawang tala sa photo library kapag pinili mong i-save ito."
+  }
+}

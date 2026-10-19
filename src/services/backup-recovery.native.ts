@@ -1,10 +1,11 @@
+import { tr } from '@/localization/runtime';
 import * as FS from 'expo-file-system/legacy';
 import { defaultDatabaseDirectory } from 'expo-sqlite';
 import { ChitsFiles } from '../../modules/chits-attachments';
 import { BackupError } from './backup-format';
 
 export function restorePaths() {
-  if (!FS.documentDirectory || !defaultDatabaseDirectory) throw new BackupError('Chits could not access private device storage.');
+  if (!FS.documentDirectory || !defaultDatabaseDirectory) throw new BackupError(tr("attachmentstorage.chitsCouldNotAccessPrivateDeviceStorage"));
   // Expo SQLite exposes a filesystem path, while FileSystem requires a file:// URI.
   const sqliteUri = defaultDatabaseDirectory.startsWith('file://') ? defaultDatabaseDirectory : `file://${defaultDatabaseDirectory}`;
   const sqlite = sqliteUri.endsWith('/') ? sqliteUri : `${sqliteUri}/`;
@@ -39,7 +40,7 @@ export async function recoverInterruptedRestore(): Promise<'recovered' | null> {
     journal = JSON.parse(await FS.readAsStringAsync(paths.journal));
     if (journal.version !== 1 || !['pending', 'committed'].includes(journal.phase) || typeof journal.hadAttachments !== 'boolean' || !/^[a-f0-9]{64}$/.test(journal.safetyDatabaseHash)) throw new Error('Invalid recovery journal');
   } catch {
-    throw new BackupError('Chits needs to recover an interrupted restore, but its recovery information could not be read. Your safety copy has been kept.');
+    throw new BackupError(tr("backuprecovery.chitsNeedsToRecoverAnInterruptedRestoreBut"));
   }
   if (journal.phase === 'committed') {
     await FS.deleteAsync(paths.root, { idempotent: true }).catch(() => undefined);
@@ -62,6 +63,6 @@ export async function recoverInterruptedRestore(): Promise<'recovered' | null> {
     return 'recovered';
   } catch (cause) {
     console.warn('[backup] safety recovery failed', cause);
-    throw new BackupError('Chits could not finish recovering your previous data. Your safety copy has been kept. Free some storage and reopen Chits to try again.');
+    throw new BackupError(tr("backuprecovery.chitsCouldNotFinishRecoveringYourPreviousData"));
   }
 }

@@ -40,10 +40,10 @@ test('PDF tiles open the shared in-app viewer while other files keep the share f
 
 test('PDF viewer shows the required error copy and recovery actions', () => {
   const viewer = read('src/components/pdf/pdf-viewer.native.tsx');
-  assert.match(viewer, /Unable to preview this PDF\./);
-  assert.match(viewer, />Try Again</);
-  assert.match(viewer, />Open in Another App</);
-  assert.match(viewer, />Share</);
+  assert.match(viewer, /tr\("pdfviewer\.unableToPreviewThisPdf"\)/);
+  assert.match(viewer, />\{tr\("pdfviewer\.tryAgain"\)\}</);
+  assert.match(viewer, />\{tr\("pdfviewer\.openInAnotherApp"\)\}</);
+  assert.match(viewer, />\{tr\("attachments\.share"\)\}</);
   assert.match(viewer, /onRequestClose=\{onDismiss\}/);
   assert.match(viewer, /console\.warn\('\[pdf-viewer\] unable to preview'/);
 });

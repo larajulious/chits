@@ -1,3 +1,5 @@
+import { countLabel, tr } from '@/localization/runtime';
+import { useDirection, useLocale } from '@/localization/provider';
 import {
   createContext,
   useCallback,
@@ -43,25 +45,25 @@ type ContextItem = {
   accessibilityContext: string | null;
 };
 type IconName = ComponentProps<typeof Ionicons>['name'];
-type Destination = { label: string; path: '/' | '/spaces/pick' | '/calendar' | '/archive' | '/settings' | '/onboarding' | '/revisit'; icon: IconName };
+type Destination = { label: string; path: '/' | '/spaces/pick' | '/attachments' | '/calendar' | '/archive' | '/settings' | '/onboarding' | '/revisit'; icon: IconName };
 
-const STYLE_OPTIONS = APP_STYLES.map((key: AppStyle) => ({ key, label: APP_STYLE_NAMES[key], accessibilityLabel: `${APP_STYLE_NAMES[key]} style` }));
+const styleOptions = () => APP_STYLES.map((key: AppStyle) => ({ key, label: APP_STYLE_NAMES[key], accessibilityLabel: tr("settings.valueStyle", { value1: APP_STYLE_NAMES[key] }) }));
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
-// Notes, Spaces, Chat, Attachments, and Calendar are in the bottom navigation;
-// Archive moved here into the side drawer alongside Settings (see PHASE: GLOBAL
-// ATTACHMENTS SCREEN). Notes stays in the bottom navigation only.
-// Spaces: notes stuck on a fridge, desk, cork board or wall. Its own word (and a
-// magnet, not a pin) so it's never confused with the PINNED shortcuts below.
-// It opens on Pick a Space every time, so choosing where to go comes first.
-const spacesDestination: Destination = { label: 'Spaces', path: '/spaces/pick', icon: 'magnet-outline' };
-const calendarDestination: Destination = { label: 'Calendar', path: '/calendar', icon: 'calendar-outline' };
-const archiveDestination: Destination = { label: 'Archive', path: '/archive', icon: 'archive-outline' };
-const revisitDestination: Destination = { label: 'Revisit', path: '/revisit', icon: 'refresh-outline' };
-const settingsDestination: Destination = { label: 'Settings', path: '/settings', icon: 'settings-outline' };
-const gettingStartedDestination: Destination = { label: 'Getting started', path: '/onboarding', icon: 'compass-outline' };
+// Main destinations live in the side panel; Chat remains a floating button.
+const spacesDestination: Destination = { get label() { return tr("pick.spaces"); }, path: '/spaces/pick', icon: 'magnet-outline' };
+const notesDestination: Destination = { get label() { return tr('index.notes'); }, path: '/', icon: 'reader-outline' };
+const calendarDestination: Destination = { get label() { return tr("appdrawer.calendar"); }, path: '/calendar', icon: 'calendar-outline' };
+const attachmentsDestination: Destination = { get label() { return tr('attachments.attachments'); }, path: '/attachments', icon: 'attach-outline' };
+const archiveDestination: Destination = { get label() { return tr("archive.archive"); }, path: '/archive', icon: 'archive-outline' };
+const revisitDestination: Destination = { get label() { return tr("revisit.revisit"); }, path: '/revisit', icon: 'refresh-outline' };
+const settingsDestination: Destination = { get label() { return tr("settings.settings"); }, path: '/settings', icon: 'settings-outline' };
+const gettingStartedDestination: Destination = { get label() { return tr("appdrawer.gettingStarted"); }, path: '/onboarding', icon: 'compass-outline' };
 
 export function useAppDrawer() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const context = useContext(DrawerContext);
   if (!context) throw new Error('useAppDrawer must be used within AppDrawerProvider.');
   return context;
@@ -74,6 +76,9 @@ function isDestinationActive(pathname: string, destination: Destination) {
 }
 
 function DrawerIcon({ name, color }: { name: IconName; color: string }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   return (
     <View accessible={false} style={styles.iconSlot}>
       <Icon name={name} size={21} color={color} />
@@ -82,6 +87,9 @@ function DrawerIcon({ name, color }: { name: IconName; color: string }) {
 }
 
 function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'note' }: { destination: Destination; pathname: string; close: () => void; badge?: number; badgeNoun?: 'note' | 'reminder' }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  const { rowStyle } = useDirection();
   const router = useRouter();
   const { tokens, styleTokens, styleColors } = useTheme();
   const sticky = useStickySurface();
@@ -91,14 +99,14 @@ function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'n
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${destination.label}${badge ? `, ${badge} ${badgeNoun}${badge === 1 ? '' : 's'}` : ''}${active ? '. Current screen.' : ''}`}
+      accessibilityLabel={`${destination.label}${badge ? `, ${countLabel(badgeNoun, badge)}` : ''}${active ? tr("appdrawer.currentScreen") : ''}`}
       accessibilityState={{ selected: active }}
       onPress={() => {
         close();
         router.navigate(destination.path);
       }}
       style={({ pressed }) => [
-        styles.item,
+        styles.item, rowStyle,
         active && { backgroundColor: tokens.accentSoft },
         { borderRadius: styleTokens.radius.control - 2 },
         active && sticky({ fill: styleColors.accentFill, radius: styleTokens.radius.control, edge: false }),
@@ -115,13 +123,16 @@ function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'n
 // One row shape for both Pinned and Recent so the two lists read as the same
 // kind of thing; only Pinned rows get the trailing unpin button.
 function ShortcutRow({ item, close, onUnpin }: { item: ContextItem; close: () => void; onUnpin?: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const router = useRouter();
   const { tokens, styleTokens, styleColors } = useTheme();
   const sticky = useStickySurface();
   const isBoard = item.kind === 'board';
   const accessibilityLabel = isBoard
-    ? `${item.title}. Board.`
-    : `${item.title}. Card. ${item.accessibilityContext}.`;
+    ? tr('appdrawer.boardShortcut', { title: item.title })
+    : tr('appdrawer.cardShortcut', { title: item.title, context: item.context });
   return (
     <Pressable
       accessibilityRole="button"
@@ -137,7 +148,7 @@ function ShortcutRow({ item, close, onUnpin }: { item: ContextItem; close: () =>
       </View>
       <View style={styles.contextCopy}>
         <AppText numberOfLines={1} ellipsizeMode="tail" style={[styles.contextTitle, { color: tokens.textPrimary }]}>{item.title}</AppText>
-        <AppText numberOfLines={1} ellipsizeMode="tail" style={[styles.contextMeta, { color: tokens.textSecondary }]}>{item.context}</AppText>
+        <AppText numberOfLines={1} ellipsizeMode="tail" style={[styles.contextMeta, { color: tokens.textSecondary }]}>{isBoard ? tr('id.board') : item.context}</AppText>
       </View>
       {/* Nested Pressable, not the row's own onPress — stopPropagation keeps this
           from also opening the row underneath it. Neutral color throughout: this
@@ -145,7 +156,7 @@ function ShortcutRow({ item, close, onUnpin }: { item: ContextItem; close: () =>
       {onUnpin ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Remove ${item.title} from Pinned`}
+          accessibilityLabel={tr("appdrawer.removeValueFromPinned", { value1: item.title })}
           hitSlop={10}
           onPress={(event) => { event.stopPropagation(); onUnpin(); }}
           style={({ pressed }) => [styles.unpinButton, pressed && styles.unpinPressed]}>
@@ -158,6 +169,9 @@ function ShortcutRow({ item, close, onUnpin }: { item: ContextItem; close: () =>
 
 // Shared header row for every drawer section.
 function SectionHeader({ label }: { label: string }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   return (
     <View style={styles.sectionHeader}>
@@ -167,31 +181,43 @@ function SectionHeader({ label }: { label: string }) {
 }
 
 function DrawerBackdrop({ close, darkMode }: { close: () => void; darkMode: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const tint = darkMode ? 'rgba(0,0,0,0.18)' : 'rgba(0,0,0,0.30)';
-  return <Pressable accessibilityRole="button" accessibilityLabel="Dismiss navigation" onPress={close} style={[styles.backdrop, { backgroundColor: tint }]} />;
+  return <Pressable accessibilityRole="button" accessibilityLabel={tr("appdrawer.dismissNavigation")} onPress={close} style={[styles.backdrop, { backgroundColor: tint }]} />;
 }
 
 function RecentSection({ items, close }: { items: ContextItem[]; close: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   if (!items.length) return null;
   return (
     <View style={styles.section}>
-      <SectionHeader label="RECENT" />
+      <SectionHeader label={tr("unorganized.recent")} />
       {items.map((item) => <ShortcutRow key={`${item.kind}-${item.id}`} item={item} close={close} />)}
     </View>
   );
 }
 
 function PinnedSection({ items, close, onUnpin }: { items: ContextItem[]; close: () => void; onUnpin: (item: ContextItem) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   if (!items.length) return null;
   return (
     <View style={styles.section}>
-      <SectionHeader label="PINNED" />
+      <SectionHeader label={tr("appdrawer.pinned")} />
       {items.map((item) => <ShortcutRow key={`${item.kind}-${item.id}`} item={item} close={close} onUnpin={() => onUnpin(item)} />)}
     </View>
   );
 }
 
 function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const repository = useMemo(() => createBoardRepository(database), [database]);
   const pathname = usePathname();
@@ -247,7 +273,7 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   const changeStyle = useCallback((next: AppStyle) => {
     if (next === style) return;
     void Haptics.selectionAsync();
-    setStyle(next).catch(() => setToast('Style could not be saved'));
+    setStyle(next).catch(() => setToast(tr("appdrawer.styleCouldNotBeSaved")));
   }, [setStyle, style]);
 
   // Immediately reversible (pin it again elsewhere), so no confirmation — just an
@@ -256,7 +282,7 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
     LayoutAnimation.configureNext(PINNED_TRANSITION);
     setPinned((current) => current.filter((entry) => !(entry.kind === item.kind && entry.id === item.id)));
     void repository.setPinned(item.kind, item.id, false)
-      .then(() => { void Haptics.selectionAsync(); setToast('Removed from Pinned'); })
+      .then(() => { void Haptics.selectionAsync(); setToast(tr("appdrawer.removedFromPinned")); })
       .catch(() => { void load(); });
   }, [load, repository]);
 
@@ -272,8 +298,10 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
         <AppText accessibilityRole="header" variant="display" style={[styles.title, { color: tokens.textPrimary }]}>{appTitle}</AppText>
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
+        <NavigationRow destination={notesDestination} pathname={pathname} close={close} />
         <NavigationRow destination={spacesDestination} pathname={pathname} close={close} badge={stuckCount} />
         <NavigationRow destination={calendarDestination} pathname={pathname} close={close} badge={incomingReminderCount} badgeNoun="reminder" />
+        <NavigationRow destination={attachmentsDestination} pathname={pathname} close={close} />
         <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
         {CHITS_REVISIT_ENABLED ? <NavigationRow destination={revisitDestination} pathname={pathname} close={close} /> : null}
         {hasShortcuts ? <View style={[styles.divider, { backgroundColor: tokens.borderSubtle }, styleTokens.outline.width ? { height: styleTokens.outline.width, backgroundColor: styleColors.outline } : null]} /> : null}
@@ -283,8 +311,8 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
       {/* Settings is app chrome, not a place your notes live — it stays pinned
           to the bottom instead of sitting in the list of destinations. */}
       <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }, styleTokens.outline.width ? { borderTopWidth: styleTokens.outline.width, borderTopColor: styleColors.outline } : null]}>
-        <View accessibilityRole="radiogroup" accessibilityLabel="Style" style={styles.styleToggle}>
-          <SegmentedControl options={STYLE_OPTIONS} value={style} onChange={changeStyle} />
+        <View accessibilityRole="radiogroup" accessibilityLabel={tr("settings.style")} style={styles.styleToggle}>
+          <SegmentedControl options={styleOptions()} value={style} onChange={changeStyle} />
         </View>
         <NavigationRow destination={gettingStartedDestination} pathname={pathname} close={close} />
         <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
@@ -295,8 +323,12 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
 }
 
 export function AppDrawerProvider({ children }: PropsWithChildren) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { scheme } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
+  const { isRTL } = useDirection();
   const drawerWidth = Math.min(windowWidth * 0.78, 340);
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -326,9 +358,9 @@ export function AppDrawerProvider({ children }: PropsWithChildren) {
     });
   }, [animate, mounted]);
   const responder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (event, gesture) => event.nativeEvent.pageX < 20 && gesture.dx > 12 && Math.abs(gesture.dy) < 16,
-    onPanResponderRelease: (_, gesture) => { if (gesture.dx > 48) openDrawer(); },
-  }), [openDrawer]);
+    onMoveShouldSetPanResponder: (event, gesture) => (isRTL ? event.nativeEvent.pageX > windowWidth - 20 && gesture.dx < -12 : event.nativeEvent.pageX < 20 && gesture.dx > 12) && Math.abs(gesture.dy) < 16,
+    onPanResponderRelease: (_, gesture) => { if (isRTL ? gesture.dx < -48 : gesture.dx > 48) openDrawer(); },
+  }), [openDrawer, isRTL, windowWidth]);
   const value = useMemo(() => ({ openDrawer, closeDrawer }), [closeDrawer, openDrawer]);
 
   return (
@@ -340,7 +372,7 @@ export function AppDrawerProvider({ children }: PropsWithChildren) {
             <Animated.View style={[styles.backdropShell, { opacity: progress }]}>
               <DrawerBackdrop close={closeDrawer} darkMode={scheme === 'dark'} />
             </Animated.View>
-            <Animated.View style={[styles.drawerShell, { width: drawerWidth, transform: [{ translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [-drawerWidth, 0] }) }] }]}>
+            <Animated.View style={[styles.drawerShell, { width: drawerWidth, left: isRTL ? undefined : 0, right: isRTL ? 0 : undefined, transform: [{ translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [isRTL ? drawerWidth : -drawerWidth, 0] }) }] }]}>
               <DrawerContent close={closeDrawer} isOpen={isOpen} />
             </Animated.View>
           </View>

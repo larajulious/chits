@@ -1,3 +1,4 @@
+import { getClockPreference, getFormattingLocale, getFormattingTimeZone, tr } from '@/localization/runtime';
 // Pure date logic for Chits reminders (no React Native imports, so it is unit-tested directly).
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
@@ -7,6 +8,9 @@ const formatters = new Map<string, Intl.DateTimeFormat>();
  * render, so each distinct format is created once and reused.
  */
 export function dateFormat(locale: string | undefined, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  locale ??= getFormattingLocale();
+  if (!options.timeZone && getFormattingTimeZone()) options = { ...options, timeZone: getFormattingTimeZone() };
+  if (options.hour && options.hour12 === undefined && getClockPreference() !== undefined) options = { ...options, hour12: !getClockPreference() };
   const key = `${locale ?? ''}|${JSON.stringify(options)}`;
   let formatter = formatters.get(key);
   if (!formatter) { formatter = new Intl.DateTimeFormat(locale, options); formatters.set(key, formatter); }
@@ -43,12 +47,12 @@ export function reminderQuickOptions(now: Date): ReminderQuickOption[] {
     laterToday.setMinutes(0, 0, 0);
     if (laterToday.getTime() - now.getTime() < 3 * 60 * MINUTE) laterToday = new Date(laterToday.getTime() + 60 * MINUTE);
   }
-  if (sameDay(laterToday, now) && laterToday.getHours() <= 22) options.push({ key: 'later-today', label: 'Later today', date: laterToday });
-  options.push({ key: 'tomorrow', label: 'Tomorrow', date: at(now, 1, 9) });
+  if (sameDay(laterToday, now) && laterToday.getHours() <= 22) options.push({ key: 'later-today', label: tr("remindertime.laterToday"), date: laterToday });
+  options.push({ key: 'tomorrow', label: tr("remindertime.tomorrow"), date: at(now, 1, 9) });
   const day = now.getDay(); // 0 = Sunday … 6 = Saturday
-  if (day === 0) options.push({ key: 'weekend', label: 'Next weekend', date: at(now, 6, 9) });
-  else if (day === 6) options.push({ key: 'weekend', label: 'This weekend', date: at(now, 1, 9) });
-  else options.push({ key: 'weekend', label: 'This weekend', date: at(now, 6 - day, 9) });
+  if (day === 0) options.push({ key: 'weekend', label: tr("remindertime.nextWeekend"), date: at(now, 6, 9) });
+  else if (day === 6) options.push({ key: 'weekend', label: tr("remindertime.thisWeekend"), date: at(now, 1, 9) });
+  else options.push({ key: 'weekend', label: tr("remindertime.thisWeekend"), date: at(now, 6 - day, 9) });
   return options;
 }
 
@@ -91,16 +95,16 @@ export function withTime(current: Date, hours: number, minutes: number): Date {
  */
 export function formatReminder(date: Date, now: Date, locale?: string): string {
   const time = dateFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(date);
-  if (sameDay(date, now)) return `Today, ${time}`;
-  if (sameDay(date, at(now, 1, 0))) return `Tomorrow, ${time}`;
+  if (sameDay(date, now)) return tr('dates.withTime', { day: tr('dates.today'), time });
+  if (sameDay(date, at(now, 1, 0))) return tr('dates.withTime', { day: tr('remindertime.tomorrow'), time });
   const day = dateFormat(locale, date.getFullYear() === now.getFullYear() ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
   return `${day}, ${time}`;
 }
 
 /** Date row label in the sheet: "Today", "Tomorrow" or "Tue, Sep 30". */
 export function formatReminderDay(date: Date, now: Date, locale?: string): string {
-  if (sameDay(date, now)) return 'Today';
-  if (sameDay(date, at(now, 1, 0))) return 'Tomorrow';
+  if (sameDay(date, now)) return tr('dates.today');
+  if (sameDay(date, at(now, 1, 0))) return tr('remindertime.tomorrow');
   return dateFormat(locale, date.getFullYear() === now.getFullYear() ? { weekday: 'short', month: 'short', day: 'numeric' } : { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).format(date);
 }
 

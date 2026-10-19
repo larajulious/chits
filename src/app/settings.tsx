@@ -1,3 +1,7 @@
+import { navigationIconName } from '@/localization/text-layout';
+import { LanguagePicker } from '@/components/settings/language-picker';
+import { useDirection, useLanguage, useLocale } from '@/localization/provider';
+import { getFormattingLocale, LANGUAGE_NAMES, tr } from '@/localization/runtime';
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { useTheme, type AppAppearance } from '@/components/theme-provider';
 import { AppText, HeaderIcon, Icon, IconButton, SegmentedControl, Surface, TopBarBackground, useHeaderInk, useStickySheet, MenuIcon } from '@/components/ui/primitives';
@@ -10,28 +14,38 @@ import { APP_STYLE_NAMES, APP_STYLES, type AppStyle } from '@/constants/style-to
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ORGANIZATION_ENABLED_KEY } from '@/services/chits-organization';
 
-type Sheet = 'appearance' | null;
-const appearanceNames = { system: 'System', light: 'Light', dark: 'Dark' };
-const STYLE_OPTIONS = APP_STYLES.map((key: AppStyle) => ({ key, label: APP_STYLE_NAMES[key], accessibilityLabel: `${APP_STYLE_NAMES[key]} style` }));
+type Sheet = 'appearance' | 'language' | null;
+const appearanceNames = { get system() { return tr('settings.systemDefault'); }, get light() { return tr('settings.light'); }, get dark() { return tr('settings.dark'); } };
+const styleOptions = () => APP_STYLES.map((key: AppStyle) => ({ key, label: APP_STYLE_NAMES[key], accessibilityLabel: tr("settings.valueStyle", { value1: APP_STYLE_NAMES[key] }) }));
 
 function SettingsRow({ label, value, description, onPress, disabled }: { label: string; value?: string; description?: string; onPress?: () => void; disabled?: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  const { rowStyle, direction } = useDirection();
   const { tokens } = useTheme();
-  return <Pressable accessibilityRole={onPress ? 'button' : undefined} disabled={!onPress || disabled} onPress={onPress} style={({ pressed }) => [styles.row, { borderBottomColor: tokens.borderSubtle }, pressed && styles.pressed]}>
+  return <Pressable accessibilityRole={onPress ? 'button' : undefined} disabled={!onPress || disabled} onPress={onPress} style={({ pressed }) => [styles.row, rowStyle, { borderBottomColor: tokens.borderSubtle }, pressed && styles.pressed]}>
     <View style={styles.rowCopy}><AppText style={[styles.label, { color: tokens.textPrimary }]}>{label}</AppText>{description ? <AppText variant="paragraph" style={[styles.description, { color: tokens.textSecondary }]}>{description}</AppText> : null}</View>
     {value ? <AppText style={[styles.value, { color: tokens.textSecondary }]}>{value}</AppText> : null}
-    {onPress ? <Icon name="chevron-forward" size={17} color={tokens.textMuted} /> : null}
+    {onPress ? <Icon name={navigationIconName("chevron-forward", direction)} size={17} color={tokens.textMuted} /> : null}
   </Pressable>;
 }
 function Section({ title, children }: { title: string; children: ReactNode }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   return <View style={styles.section}><AppText accessibilityRole="header" weight="600" style={[styles.sectionLabel, { color: tokens.textSecondary }]}>{title}</AppText>{children}</View>;
 }
 
 export default function SettingsScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  const { rowStyle, direction } = useDirection();
+  const { preference, setLanguage } = useLanguage();
   const { openDrawer } = useAppDrawer();
   const { appearance, setAppearance, identity, themeKey, setThemeKey, themes, tokens, style, setStyle, styleTokens } = useTheme();
   const leftTitle = styleTokens.header.align === 'left';
@@ -59,20 +73,20 @@ export default function SettingsScreen() {
       setLastBackup(backup?.value ?? null);
       setNoteSpaceName(titleRow?.value.trim() || 'Chits');
       setOrganizationSuggestionsEnabled(suggestionRow?.value !== 'false');
-    } catch { setError('Some settings could not be loaded. Reopen Settings to try again.'); }
+    } catch { setError(tr("settings.someSettingsCouldNotBeLoadedReopenSettings")); }
   }, [database]);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 2200); return () => clearTimeout(timer); }, [toast]);
   const saveNoteSpaceName = async (name: string) => {
     await database.runAsync('INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at', 'chat_title', name, Date.now());
     setNoteSpaceName(name);
-    setToast('NoteSpace name updated');
+    setToast(tr("settings.notespaceNameUpdated"));
   };
   const change = async (action: () => Promise<void>, close = false) => {
     if (busy) return;
     setBusy(true); setError(null);
     try { await action(); if (close) setSheet(null); }
-    catch { setError('That setting could not be saved. Please try again.'); }
+    catch { setError(tr("settings.thatSettingCouldNotBeSavedPleaseTry")); }
     finally { setBusy(false); }
   };
   const closeSheet = () => { if (!busy) setSheet(null); };
@@ -81,39 +95,42 @@ export default function SettingsScreen() {
     setOrganizationSuggestionsEnabled(enabled);
     setBusy(true); setError(null);
     try { await database.runAsync('INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at', ORGANIZATION_ENABLED_KEY, enabled ? 'true' : 'false', Date.now()); }
-    catch { setOrganizationSuggestionsEnabled(!enabled); setError('That setting could not be saved. Please try again.'); }
+    catch { setOrganizationSuggestionsEnabled(!enabled); setError(tr("settings.thatSettingCouldNotBeSavedPleaseTry")); }
     finally { setBusy(false); }
   };
 
   return <SafeAreaView style={[styles.screen, { backgroundColor: tokens.background }]}>
     <HeaderChromeContext.Provider value={leftTitle}>
-      <View style={[styles.header, { minHeight: styleTokens.header.minHeight }, leftTitle && styles.headerLeft]}><TopBarBackground /><IconButton label="Open navigation" onPress={openDrawer}><MenuIcon /></IconButton><AppText accessibilityRole="header" variant="title" numberOfLines={1} style={[styles.headerTitle, { color: headerInk.ink, fontSize: styleTokens.header.titleSize, lineHeight: styleTokens.header.titleLineHeight }, leftTitle && styles.headerTitleLeft]}>Settings</AppText><IconButton label="Close settings" onPress={() => router.canGoBack() ? router.back() : router.navigate('/')}><HeaderIcon name="close" size={24} /></IconButton></View>
+      <View style={[styles.header, rowStyle, { minHeight: styleTokens.header.minHeight }, leftTitle && styles.headerLeft]}><TopBarBackground /><IconButton label={tr("archive.openNavigation")} onPress={openDrawer}><MenuIcon /></IconButton><AppText accessibilityRole="header" variant="title" numberOfLines={1} style={[styles.headerTitle, { color: headerInk.ink, fontSize: styleTokens.header.titleSize, lineHeight: styleTokens.header.titleLineHeight }, leftTitle && styles.headerTitleLeft]}>{tr("settings.settings")}</AppText><IconButton label={tr("settings.closeSettings")} onPress={() => router.canGoBack() ? router.back() : router.navigate('/')}><HeaderIcon name="close" size={24} /></IconButton></View>
     </HeaderChromeContext.Provider>
     <ScrollView contentContainerStyle={styles.content}>
       {error && !sheet ? <AppText accessibilityRole="alert" style={{ color: tokens.danger }}>{error}</AppText> : null}
-      <Section title="NOTESPACE">
-        <SettingsRow label="Edit NoteSpace name" description="Change the name shown across your NoteSpace" onPress={() => setEditNameOpen(true)} />
+      <Section title={tr('settings.language')}>
+        <SettingsRow label={tr('settings.language')} value={preference === 'system' ? tr('settings.systemDefault') : LANGUAGE_NAMES[preference]} onPress={() => setSheet('language')} />
       </Section>
-      <Section title="APPEARANCE">
-        <Pressable accessibilityRole="button" accessibilityLabel={`Theme, ${CHITS_THEMES[identity].name}`} onPress={() => router.push('/appearance-theme')} style={({ pressed }) => [styles.row, { borderBottomColor: tokens.borderSubtle }, pressed && styles.pressed]}>
-          <View style={styles.rowCopy}><AppText style={[styles.label, { color: tokens.textPrimary }]}>Theme</AppText><AppText variant="paragraph" style={[styles.description, { color: tokens.textSecondary }]}>The personality Chits wears</AppText></View>
+      <Section title="NOTESPACE">
+        <SettingsRow label={tr("settings.editNotespaceName")} description={tr("settings.changeTheNameShownAcrossYourNotespace")} onPress={() => setEditNameOpen(true)} />
+      </Section>
+      <Section title={tr("settings.appearance")}>
+        <Pressable accessibilityRole="button" accessibilityLabel={tr("settings.themeValue", { value1: CHITS_THEMES[identity].name })} onPress={() => router.push('/appearance-theme')} style={({ pressed }) => [styles.row, rowStyle, { borderBottomColor: tokens.borderSubtle }, pressed && styles.pressed]}>
+          <View style={styles.rowCopy}><AppText style={[styles.label, { color: tokens.textPrimary }]}>{tr("appearancetheme.theme")}</AppText><AppText variant="paragraph" style={[styles.description, { color: tokens.textSecondary }]}>{tr("settings.thePersonalityChitsWears")}</AppText></View>
           <View accessible={false} style={styles.themeSwatches}>{[tokens.chatBackground, tokens.bubble, tokens.accent].map((color, index) => <View key={index} style={[styles.themeSwatch, { backgroundColor: color, borderColor: tokens.borderSubtle }]} />)}</View>
           <AppText style={[styles.value, { color: tokens.textSecondary }]}>{CHITS_THEMES[identity].name}</AppText>
-          <Icon name="chevron-forward" size={17} color={tokens.textMuted} />
+          <Icon name={navigationIconName("chevron-forward", direction)} size={17} color={tokens.textMuted} />
         </Pressable>
         {/* Style: shape and type, independent of the theme's colors. */}
         <View style={[styles.styleBlock, { borderBottomColor: tokens.borderSubtle }]}>
-          <AppText style={[styles.label, { color: tokens.textPrimary }]}>Style</AppText>
-          <AppText variant="paragraph" style={[styles.description, styles.styleDescription, { color: tokens.textSecondary }]}>Classic, or outlined like a sticky note. Works with every theme.</AppText>
-          <View accessibilityRole="radiogroup" accessibilityLabel="Style">
-            <SegmentedControl options={STYLE_OPTIONS} value={style} onChange={(next) => { if (next !== style) void change(() => setStyle(next)); }} />
+          <AppText style={[styles.label, { color: tokens.textPrimary }]}>{tr("settings.style")}</AppText>
+          <AppText variant="paragraph" style={[styles.description, styles.styleDescription, { color: tokens.textSecondary }]}>{tr("settings.classicOrOutlinedLikeAStickyNoteWorks")}</AppText>
+          <View accessibilityRole="radiogroup" accessibilityLabel={tr("settings.style")}>
+            <SegmentedControl options={styleOptions()} value={style} onChange={(next) => { if (next !== style) void change(() => setStyle(next)); }} />
           </View>
         </View>
-        <SettingsRow label="App appearance" value={appearanceNames[appearance]} onPress={() => setSheet('appearance')} />
+        <SettingsRow label={tr("settings.appAppearance")} value={appearanceNames[appearance]} onPress={() => setSheet('appearance')} />
         {identity === 'default' ? <View style={styles.paletteBlock}>
-          <AppText style={[styles.label, { color: tokens.textPrimary }]}>Accent color</AppText>
-          <AppText variant="paragraph" style={[styles.description, { color: tokens.textSecondary }]}>Used for controls and accents in the Default theme.</AppText>
-          <View style={[styles.preview, { backgroundColor: tokens.bubble, borderRadius: styleTokens.radius.bubble }]}><AppText style={{ color: tokens.bubbleText }}>My thought</AppText></View>
+          <AppText style={[styles.label, { color: tokens.textPrimary }]}>{tr("settings.accentColor")}</AppText>
+          <AppText variant="paragraph" style={[styles.description, { color: tokens.textSecondary }]}>{tr("settings.usedForControlsAndAccentsInTheDefault")}</AppText>
+          <View style={[styles.preview, { backgroundColor: tokens.bubble, borderRadius: styleTokens.radius.bubble }]}><AppText style={{ color: tokens.bubbleText }}>{tr("settings.myThought")}</AppText></View>
           <View style={styles.palette}>{(Object.keys(themes) as ChatThemeKey[]).map((key) => {
             const selected = themeKey === key;
             const color = key === 'light' ? '#E9E9E9' : themes[key].light.accent;
@@ -127,25 +144,27 @@ export default function SettingsScreen() {
       <ChatAppearanceSettings />
       <Section title="CHITS">
         <View style={[styles.row, { borderBottomColor: tokens.borderSubtle }]}>
-          <View style={styles.rowCopy}><AppText style={[styles.label, { color: tokens.textPrimary }]}>Chits Suggestions</AppText><AppText variant="paragraph" style={[styles.description, { color: tokens.textSecondary }]}>Let Chits occasionally suggest Boards or Spaces for your notes.</AppText></View>
-          <Switch accessibilityLabel="Chits Suggestions" accessibilityRole="switch" value={organizationSuggestionsEnabled} disabled={busy} onValueChange={(value) => void toggleOrganizationSuggestions(value)} trackColor={{ true: tokens.accent, false: tokens.borderSubtle }} thumbColor={tokens.surface} />
+          <View style={styles.rowCopy}><AppText style={[styles.label, { color: tokens.textPrimary }]}>{tr("settings.chitsSuggestions")}</AppText><AppText variant="paragraph" style={[styles.description, { color: tokens.textSecondary }]}>{tr("settings.letChitsOccasionallySuggestBoardsOrSpacesFor")}</AppText></View>
+          <Switch accessibilityLabel={tr("settings.chitsSuggestions")} accessibilityRole="switch" value={organizationSuggestionsEnabled} disabled={busy} onValueChange={(value) => void toggleOrganizationSuggestions(value)} trackColor={{ true: tokens.accent, false: tokens.borderSubtle }} thumbColor={tokens.surface} />
         </View>
       </Section>
-      <Section title="DATA"><SettingsRow label="Backup & Restore" description={lastBackup && !Number.isNaN(new Date(Number(lastBackup)).getTime()) ? 'Last backup: ' + new Date(Number(lastBackup)).toLocaleDateString() : 'Last backup: Never'} onPress={() => router.push('/backup')} /></Section>
+      <Section title={tr("settings.data")}><SettingsRow label={tr("backup.backupRestore")} description={lastBackup && !Number.isNaN(new Date(Number(lastBackup)).getTime()) ? tr('settings.lastBackup', { date: new Date(Number(lastBackup)).toLocaleDateString(getFormattingLocale()) }) : tr('settings.noBackup')} onPress={() => router.push('/backup')} /></Section>
 
     </ScrollView>
     <Modal visible={sheet !== null} transparent animationType="slide" onRequestClose={closeSheet}>
-      <View style={styles.backdrop}>
+      <KeyboardAvoidingView behavior="padding" style={styles.backdrop}>
         <Pressable accessible={false} style={StyleSheet.absoluteFill} onPress={closeSheet} />
-        <SafeAreaView edges={['bottom', 'left', 'right']} accessibilityViewIsModal style={[styles.sheet, { backgroundColor: tokens.surface, borderTopLeftRadius: styleTokens.radius.sheet, borderTopRightRadius: styleTokens.radius.sheet }, stickySheet()]}>
-          <View style={styles.sheetHeader}><AppText accessibilityRole="header" variant="display" weight="600" style={[styles.sheetTitle, { color: tokens.textPrimary }]}>App appearance</AppText><IconButton label="Close settings sheet" disabled={busy} onPress={closeSheet}><Icon name="close-outline" size={22} color={tokens.textSecondary} /></IconButton></View>
-          <ScrollView contentContainerStyle={styles.sheetContent}>
+        <SafeAreaView edges={['bottom', 'left', 'right']} accessibilityViewIsModal style={[styles.sheet, sheet === 'language' && { height: '85%' }, { backgroundColor: tokens.surface, borderTopLeftRadius: styleTokens.radius.sheet, borderTopRightRadius: styleTokens.radius.sheet }, stickySheet()]}>
+          <View style={[styles.sheetHeader, rowStyle]}><AppText accessibilityRole="header" variant="display" weight="600" style={[styles.sheetTitle, { color: tokens.textPrimary }]}>{sheet === 'language' ? tr('settings.language') : tr('settings.appAppearance')}</AppText><IconButton label={tr("settings.closeSettingsSheet")} disabled={busy} onPress={closeSheet}><Icon name="close-outline" size={22} color={tokens.textSecondary} /></IconButton></View>
+          {sheet === 'language' ? <LanguagePicker preference={preference} busy={busy} onSelect={language => void change(() => setLanguage(language), true)} /> : <ScrollView contentContainerStyle={styles.sheetContent}>
             {sheet === 'appearance' ? (['system', 'light', 'dark'] as AppAppearance[]).map((mode) => <Pressable key={mode} accessibilityRole="radio" accessibilityState={{ selected: appearance === mode, disabled: busy }} disabled={busy} onPress={() => void change(() => setAppearance(mode), true)} style={styles.choice}><AppText style={[styles.label, { color: tokens.textPrimary }]}>{appearanceNames[mode]}</AppText>{appearance === mode ? <Icon name="checkmark" size={22} color={tokens.accent} /> : null}</Pressable>) : null}
-            {busy ? <ActivityIndicator accessibilityLabel="Saving setting" color={tokens.accent} /> : null}
+            {busy ? <ActivityIndicator accessibilityLabel={tr("settings.savingSetting")} color={tokens.accent} /> : null}
             {error ? <AppText accessibilityRole="alert" style={{ color: tokens.danger }}>{error}</AppText> : null}
-          </ScrollView>
+          </ScrollView>}
+          {sheet === 'language' && busy ? <ActivityIndicator accessibilityLabel={tr("settings.savingSetting")} color={tokens.accent} /> : null}
+          {sheet === 'language' && error ? <AppText accessibilityRole="alert" style={{ color: tokens.danger }}>{error}</AppText> : null}
         </SafeAreaView>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
     <EditNoteSpaceNameSheet visible={editNameOpen} currentName={noteSpaceName} onClose={() => setEditNameOpen(false)} onSave={saveNoteSpaceName} />
     {toast ? <View pointerEvents="none" accessibilityLiveRegion="polite" style={styles.toastWrap}><Surface fill={tokens.textPrimary} radius={styleTokens.radius.toast} shadow="toast" outline={false} edge={false} style={styles.toast}><AppText weight="600" style={[styles.toastText, { color: tokens.background }]}>{toast}</AppText></Surface></View> : null}

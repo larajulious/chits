@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
@@ -28,6 +30,9 @@ type Props = {
 // cropping or stretching. A subtle spinner shows while it decodes, and a file
 // that's gone (deleted, or missing after a restore) becomes a quiet placeholder.
 export function NoteImage({ image, width, height, attachment, previewOnly = false, accessibilityLabel, overlay, onLongPress }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -35,9 +40,9 @@ export function NoteImage({ image, width, height, attachment, previewOnly = fals
   const uri = resolveAttachmentUri(image.storagePath);
   const box = { width, height, backgroundColor: theme.surfaceElevated };
   if (!uri || failed) {
-    return <View accessibilityLabel="Image unavailable" style={[styles.frame, styles.center, box]}>
+    return <View accessibilityLabel={tr("noteimage.imageUnavailable")} style={[styles.frame, styles.center, box]}>
       <Icon name="image-outline" size={22} color={theme.textMuted} />
-      {height >= 72 ? <AppText style={[styles.unavailable, { color: theme.textSecondary }]}>Image unavailable</AppText> : null}
+      {height >= 72 ? <AppText style={[styles.unavailable, { color: theme.textSecondary }]}>{tr("noteimage.imageUnavailable")}</AppText> : null}
       {overlay}
     </View>;
   }
@@ -47,7 +52,7 @@ export function NoteImage({ image, width, height, attachment, previewOnly = fals
   </>;
   const previewAttachment: AttachmentLike = attachment ?? { id: `draft:${image.storagePath}`, type: 'photo', ...image, duration: null, createdAt: 0 };
   return <View style={[styles.frame, box]}>
-    <Pressable accessibilityRole="imagebutton" accessibilityLabel={accessibilityLabel ?? 'Image'} accessibilityHint="Opens the image full screen" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [StyleSheet.absoluteFill, pressed && styles.pressed]}>{picture}</Pressable>
+    <Pressable accessibilityRole="imagebutton" accessibilityLabel={accessibilityLabel ?? tr("sharenote.image")} accessibilityHint={tr("noteimage.opensTheImageFullScreen")} onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [StyleSheet.absoluteFill, pressed && styles.pressed]}>{picture}</Pressable>
     {overlay}
     {viewerOpen ? <PhotoAttachmentViewer attachment={previewAttachment} previewOnly={previewOnly || !attachment} onDismiss={() => setViewerOpen(false)} /> : null}
   </View>;

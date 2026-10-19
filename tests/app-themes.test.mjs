@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 // theme.ts imports react-native (not loadable in Node), so read its values from source.
-const source = readFileSync(new URL('../src/constants/theme.ts', import.meta.url), 'utf8');
+const english = JSON.parse(readFileSync(new URL('../src/localization/locales/en.json', import.meta.url), 'utf8'));
+const source = readFileSync(new URL('../src/constants/theme.ts', import.meta.url), 'utf8').replace(/get name\(\) \{ return tr\("([^"]+)"\); \}/g, (_, key) => `name: '${english[key]}'`);
 const tokensOf = (name) => Object.fromEntries([...source.match(new RegExp(`const ${name} = \\{([\\s\\S]*?)\\}`))[1].matchAll(/(\w+): '(#[0-9A-F]{6})'/gi)].map((m) => [m[1], m[2]]));
 const base = { light: tokensOf('lightTokens'), dark: tokensOf('darkTokens') };
 const themes = Object.fromEntries([...source.matchAll(/^  (\w+): \{ name: '([^']+)', light: \{([^}]+)\}, dark: \{([^}]+)\} \},$/gm)].map(([, key, name, light, dark]) => {

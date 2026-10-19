@@ -1,3 +1,6 @@
+import { contentTextStyle } from '@/localization/text-layout';
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -37,13 +40,16 @@ const TOOTH_DEPTH = 7;
  * the paper and writing — the pin, drag and lift live around it.
  */
 export const PaperNote = memo(function PaperNote({ kind = 'sticky', color, title, body, width, height, rotation, lifted = false, hidden = false, obscured = false, unit = 1 }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const fonts = useSpaceFonts();
   const u = unit;
   const paper = paperColor(color);
   const writing = hidden
     ? <View style={styles.hidden}>
       <Ionicons accessible={false} name="eye-off-outline" size={18 * u} color={PAPER_INK} style={{ opacity: 0.55 }} />
-      <Text style={[fonts.note, { marginTop: 2 * u, fontSize: 15 * u, lineHeight: 19 * u, color: PAPER_INK, opacity: 0.65 }]}>Hidden Chit</Text>
+      <Text style={[fonts.note, contentTextStyle(body), { marginTop: 2 * u, fontSize: 15 * u, lineHeight: 19 * u, color: PAPER_INK, opacity: 0.65 }]}>{tr("index.hiddenChit")}</Text>
     </View>
     : obscured
       // Bars shaped like lines of writing: the words are gone from the picture, not blurred.
@@ -55,9 +61,9 @@ export const PaperNote = memo(function PaperNote({ kind = 'sticky', color, title
     return <View style={{ width, height, transform: [{ rotate: `${rotation}deg` }] }}>
       <View style={{ flex: 1, backgroundColor: paper.base, boxShadow: SHADOW(u, lifted), paddingHorizontal: 12 * u, paddingTop: 16 * u, overflow: 'hidden' }}>
         {title ? <View style={{ borderBottomWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(42,38,34,0.4)', paddingBottom: 5 * u, marginBottom: 6 * u }}>
-          <Text numberOfLines={1} style={[fonts.label, { fontSize: 11 * u, lineHeight: 14 * u, letterSpacing: 1.2 * u, color: PAPER_INK }]}>{title.toUpperCase()}</Text>
+          <Text numberOfLines={1} style={[fonts.label, contentTextStyle(title ?? ''), { fontSize: 11 * u, lineHeight: 14 * u, letterSpacing: 1.2 * u, color: PAPER_INK }]}>{title.toUpperCase()}</Text>
         </View> : null}
-        {writing ?? <Text numberOfLines={title ? 2 : 3} style={[fonts.note, { fontSize: 18 * u, lineHeight: 23 * u, color: PAPER_INK }]}>{body}</Text>}
+        {writing ?? <Text numberOfLines={title ? 2 : 3} style={[fonts.note, contentTextStyle(body), { fontSize: 18 * u, lineHeight: 23 * u, color: PAPER_INK }]}>{body}</Text>}
       </View>
       {/* The torn edge: a row of paper teeth below the receipt. */}
       <View style={[styles.teeth, { height: TOOTH_DEPTH * u }]}>
@@ -72,7 +78,7 @@ export const PaperNote = memo(function PaperNote({ kind = 'sticky', color, title
       {Array.from({ length: rules }, (_, index) => <View key={index} style={[styles.rule, { top: (index + 1) * 22 * u, height: Math.max(1, u) }]} />)}
       <View style={[styles.margin, { left: 24 * u, width: Math.max(1, u) }]} />
       <View style={{ paddingLeft: 30 * u, paddingRight: 10 * u, paddingTop: 5 * u }}>
-        {writing ?? <Text numberOfLines={Math.max(1, rules - 1)} style={[fonts.note, { fontSize: 18 * u, lineHeight: 22 * u, color: PAPER_INK }]}>{title ? `${title}\n${body}` : body}</Text>}
+        {writing ?? <Text numberOfLines={Math.max(1, rules - 1)} style={[fonts.note, contentTextStyle(body), { fontSize: 18 * u, lineHeight: 22 * u, color: PAPER_INK }]}>{title ? `${title}\n${body}` : body}</Text>}
       </View>
     </View>;
   }
@@ -82,7 +88,7 @@ export const PaperNote = memo(function PaperNote({ kind = 'sticky', color, title
     experimental_backgroundImage: `linear-gradient(172deg, ${paper.base} 0%, ${paper.base} 70%, ${paper.curl} 100%)`,
     boxShadow: SHADOW(u, lifted), paddingHorizontal: 13 * u, paddingTop: 18 * u, paddingBottom: 8 * u,
   }}>
-    {writing ?? <Text numberOfLines={3} ellipsizeMode="tail" style={[fonts.note, { fontSize: 21 * u, lineHeight: 24 * u, color: PAPER_INK, includeFontPadding: false }]}>{title ? `${title}\n${body}` : body}</Text>}
+    {writing ?? <Text numberOfLines={3} ellipsizeMode="tail" style={[fonts.note, contentTextStyle(body), { fontSize: 21 * u, lineHeight: 24 * u, color: PAPER_INK, includeFontPadding: false }]}>{title ? `${title}\n${body}` : body}</Text>}
   </View>;
 });
 

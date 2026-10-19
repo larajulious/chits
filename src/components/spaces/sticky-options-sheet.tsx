@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useEffect, useState, type ComponentProps } from 'react';
 import { BackHandler, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -27,11 +29,14 @@ type Props = {
 };
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
-const MEDIA_NAMES = { photo: 'Photo', video: 'Video', audio: 'Voice note' } as const;
+const MEDIA_NAMES = { get photo() { return tr("id.photo"); }, get video() { return tr("addcardattachmentsheet.video"); }, get audio() { return tr("cardlistrow.voiceNote"); } } as const;
 // Each swatch sits at its own slight angle, like squares of paper laid out.
 const SWATCH_TILTS = [-4, 3, -2, 4, -3];
 
 function Tile({ icon, label, onPress, danger = false }: { icon: IconName; label: string; onPress: () => void; danger?: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const ui = useSpaceUI();
   const styles = useSpaceStyles(createStyles);
   const fonts = useSpaceFonts();
@@ -50,6 +55,9 @@ function Tile({ icon, label, onPress, danger = false }: { icon: IconName; label:
  * the dimmed surface by the screen, which lifts the note itself above the dim.
  */
 export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onPaperStyle, onOpen, onBringToFront, onMove, onRemove, onReminder }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const ui = useSpaceUI();
   const styles = useSpaceStyles(createStyles);
   const insets = useSafeAreaInsets();
@@ -65,28 +73,28 @@ export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onPaperSt
   const media = note.hidden ? null : note.media;
   // A photo print has no paper to color; a tape's label does.
   const isPrint = media?.attachment.type === 'photo' || media?.attachment.type === 'video';
-  const title = note.hidden ? 'Hidden Chit' : media ? photoCaption(note) ?? MEDIA_NAMES[media.attachment.type] : stickyText(note).split('\n')[0] || 'Note';
+  const title = note.hidden ? tr("index.hiddenChit") : media ? photoCaption(note) ?? MEDIA_NAMES[media.attachment.type] : stickyText(note).split('\n')[0] || tr("stickyoptionssheet.note");
   return <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, shapes.sheet, { maxHeight: window.height - insets.top - 16, paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
     <View style={styles.grabber} />
     <Text accessibilityRole="header" numberOfLines={1} style={[fonts.uiHeavy, styles.title]}>{title}</Text>
-    <Text style={[fonts.ui, styles.subtitle]}>On your {space.name}</Text>
+    <Text style={[fonts.ui, styles.subtitle]}>{tr("stickyoptionssheet.onYour")}{' '}{space.name}</Text>
     <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} showsVerticalScrollIndicator={false}>
     {moving ? <View style={styles.moveList}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Back to options" onPress={() => setMoving(false)} style={({ pressed }) => [styles.moveRow, shapes.control, pressed && styles.pressed]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={tr("stickyoptionssheet.backToOptions")} onPress={() => setMoving(false)} style={({ pressed }) => [styles.moveRow, shapes.control, pressed && styles.pressed]}>
         <Icon name="chevron-back" size={20} color={ui.paper} />
-        <Text style={[fonts.uiSemi, styles.moveLabel]}>Move to…</Text>
+        <Text style={[fonts.uiSemi, styles.moveLabel]}>{tr("id.moveTo")}</Text>
       </Pressable>
       {SPACE_LIST.filter((item) => item.id !== note.spaceId).map((item) => {
         const full = counts[item.id] >= SPACE_CAPACITY;
-        return <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`${item.name}, ${full ? 'full' : `${counts[item.id]} of ${SPACE_CAPACITY}`}`} accessibilityState={{ disabled: full }} disabled={full} onPress={() => onMove(item.id)} style={({ pressed }) => [styles.moveRow, styles.moveTarget, shapes.control, full && styles.disabled, pressed && styles.pressed]}>
+        return <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`${item.name}, ${full ? tr('stickyoptionssheet.full') : tr("messagerow.valueOfValue", { value1: counts[item.id], value2: SPACE_CAPACITY })}`} accessibilityState={{ disabled: full }} disabled={full} onPress={() => onMove(item.id)} style={({ pressed }) => [styles.moveRow, styles.moveTarget, shapes.control, full && styles.disabled, pressed && styles.pressed]}>
           <Text style={[fonts.uiSemi, styles.moveLabel]}>{item.name}</Text>
-          <Text style={[fonts.label, styles.moveCount]}>{full ? 'FULL' : `${counts[item.id]} / ${SPACE_CAPACITY}`}</Text>
+          <Text style={[fonts.label, styles.moveCount]}>{full ? tr("stickyoptionssheet.full") : `${counts[item.id]} / ${SPACE_CAPACITY}`}</Text>
         </Pressable>;
       })}
     </View> : <>
       {isPrint ? <View style={styles.printGap} /> : <>
-      <Text style={[fonts.label, styles.section]}>{media ? 'LABEL COLOR' : 'PAPER COLOR'}</Text>
-      <View accessibilityRole="radiogroup" accessibilityLabel={media ? 'Label color' : 'Paper color'} style={styles.swatches}>
+      <Text style={[fonts.label, styles.section]}>{media ? tr("stickyoptionssheet.labelColor") : tr("stickyoptionssheet.paperColor")}</Text>
+      <View accessibilityRole="radiogroup" accessibilityLabel={media ? tr("stickyoptionssheet.labelColor2") : tr("stickyoptionssheet.paperColor2")} style={styles.swatches}>
         {STICKY_COLORS.map((color, index) => {
           const selected = color.hex === note.color;
           const paper = paperColor(color.hex);
@@ -99,8 +107,8 @@ export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onPaperSt
       </View>
       </>}
       {!media ? <>
-        <Text style={[fonts.label, styles.styleSection]}>PAPER STYLE</Text>
-        <View accessibilityRole="radiogroup" accessibilityLabel="Paper style" style={styles.paperStyles}>
+        <Text style={[fonts.label, styles.styleSection]}>{tr("stickyoptionssheet.paperStyle")}</Text>
+        <View accessibilityRole="radiogroup" accessibilityLabel={tr("stickyoptionssheet.paperStyle2")} style={styles.paperStyles}>
           {SPACE_PAPER_STYLES.map((style) => {
             const selected = note.paperStyle === style.id;
             return <Pressable key={style.id} accessibilityRole="radio" accessibilityLabel={style.name} accessibilityState={{ selected }} onPress={() => { if (!selected) onPaperStyle(style.id); }} style={({ pressed }) => [styles.paperStyle, shapes.control, selected && styles.paperStyleSelected, pressed && styles.pressed]}>
@@ -111,14 +119,14 @@ export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onPaperSt
         </View>
       </> : null}
       <View style={styles.grid}>
-        {onReminder ? <View style={styles.gridRow}><Tile icon="notifications-outline" label="Reminder" onPress={onReminder} /></View> : null}
+        {onReminder ? <View style={styles.gridRow}><Tile icon="notifications-outline" label={tr("id.reminder")} onPress={onReminder} /></View> : null}
         <View style={styles.gridRow}>
-          <Tile icon="open-outline" label="Open note" onPress={onOpen} />
-          <Tile icon="layers-outline" label="Bring to front" onPress={onBringToFront} />
+          <Tile icon="open-outline" label={tr("revisit.openNote")} onPress={onOpen} />
+          <Tile icon="layers-outline" label={tr("stickyoptionssheet.bringToFront")} onPress={onBringToFront} />
         </View>
         <View style={styles.gridRow}>
-          <Tile icon="swap-horizontal-outline" label="Move to another space" onPress={() => setMoving(true)} />
-          <Tile icon="close-circle-outline" label={`Remove from ${space.name}`} onPress={onRemove} danger />
+          <Tile icon="swap-horizontal-outline" label={tr("stickyoptionssheet.moveToAnotherSpace")} onPress={() => setMoving(true)} />
+          <Tile icon="close-circle-outline" label={tr("stickyoptionssheet.removeFromValue", { value1: space.name })} onPress={onRemove} danger />
         </View>
       </View>
     </>}
@@ -127,7 +135,10 @@ export function StickyOptionsSheet({ note, counts, onDismiss, onColor, onPaperSt
 }
 
 /** The dim over the surface behind a sheet; tapping it closes the sheet. */
-export function SheetDim({ onPress, label = 'Close options' }: { onPress: () => void; label?: string }) {
+export function SheetDim({ onPress, label = tr("stickyoptionssheet.closeOptions") }: { onPress: () => void; label?: string }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const styles = useSpaceStyles(createStyles);
   return <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(160)} style={[StyleSheet.absoluteFill, styles.dim]}>
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={StyleSheet.absoluteFill} />

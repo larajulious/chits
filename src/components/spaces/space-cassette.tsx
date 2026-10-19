@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { memo, useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
@@ -40,6 +42,9 @@ export function formatTapeTime(milliseconds: number | null) {
  * from `width` alone so the board and the sheet share it at any size.
  */
 export function Cassette({ width, color, caption, duration, lifted = false, obscured = false, spinning = false }: CassetteProps) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const fonts = useSpaceFonts();
   const s = width / 132;
   const height = width * CASSETTE_RATIO;
@@ -51,7 +56,7 @@ export function Cassette({ width, color, caption, duration, lifted = false, obsc
 
     <View style={[styles.label, { left: 10 * s, right: 10 * s, top: 7 * s, height: height * 0.66, borderRadius: 3 * s, backgroundColor: paper.base, experimental_backgroundImage: `linear-gradient(180deg, ${paper.base} 0%, ${paper.base} 75%, ${paper.curl} 100%)` }]}>
       <View style={[styles.labelTop, { paddingHorizontal: 5 * s, paddingTop: 3 * s, gap: 4 * s }]}>
-        <Text numberOfLines={1} style={[fonts.note, styles.caption, { fontSize: 12.5 * s, lineHeight: 16 * s }]}>{obscured ? '' : caption ?? 'Voice note'}</Text>
+        <Text numberOfLines={1} style={[fonts.note, styles.caption, { fontSize: 12.5 * s, lineHeight: 16 * s }]}>{obscured ? '' : caption ?? tr("cardlistrow.voiceNote")}</Text>
         <Text style={[fonts.label, styles.time, { fontSize: 7.5 * s, lineHeight: 12 * s, letterSpacing: 0.4 * s }]}>{formatTapeTime(duration)}</Text>
       </View>
       {/* A ruled stripe across the label, like the printed band on a real tape. */}
@@ -71,6 +76,9 @@ export function Cassette({ width, color, caption, duration, lifted = false, obsc
 }
 
 function Reel({ size, spinning }: { size: number; spinning: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const reduceMotion = useReducedMotion();
   const turn = useSharedValue(0);
   useEffect(() => {
@@ -98,6 +106,9 @@ type SpaceCassetteProps = {
 
 /** A voice note on a space, in a sticky's footprint so it drags, stacks and pins like one. */
 export const SpaceCassette = memo(function SpaceCassette({ color, caption, duration, width, height, rotation, lifted = false, obscured = false }: SpaceCassetteProps) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   // Turned about the whole footprint's center, like the pin drawn over it, so the pin stays on the tape's top edge.
   return <View style={{ width, height, transform: [{ rotate: `${rotation}deg` }] }}>
     <Cassette width={width} color={color} caption={caption} duration={duration} lifted={lifted} obscured={obscured} />

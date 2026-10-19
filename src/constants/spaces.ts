@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 // Spaces: a fridge door, a desk, a cork board or a wall that notes can be
 // stuck to as sticky notes and dragged around freely. Every space is defined
 // here and nowhere else — adding one is a new entry in SPACES.
@@ -25,10 +26,10 @@ export type SpaceDefinition = {
 };
 
 export const SPACES: Record<SpaceId, SpaceDefinition> = {
-  fridge: { id: 'fridge', name: 'Fridge', description: 'Daily reminders & lists', pinStyle: 'magnet', background: { light: '#E8ECEF', dark: '#2B3034' } },
-  desk: { id: 'desk', name: 'Desk', description: 'Work and study notes', pinStyle: 'tape', background: { light: '#D9BF9A', dark: '#4A3A2A' } },
-  cork: { id: 'cork', name: 'Cork board', description: 'Ideas and plans', pinStyle: 'pushpin', background: { light: '#B98552', dark: '#5B4029' } },
-  wall: { id: 'wall', name: 'Wall', description: 'Inspiration to revisit', pinStyle: 'washi', background: { light: '#EDE6DC', dark: '#2F2B27' } },
+  fridge: { id: 'fridge', get name() { return tr("spacestheme.fridge"); }, get description() { return tr("spaces.dailyRemindersLists"); }, pinStyle: 'magnet', background: { light: '#E8ECEF', dark: '#2B3034' } },
+  desk: { id: 'desk', get name() { return tr("spacestheme.desk"); }, get description() { return tr("spaces.workAndStudyNotes"); }, pinStyle: 'tape', background: { light: '#D9BF9A', dark: '#4A3A2A' } },
+  cork: { id: 'cork', get name() { return tr("spaces.corkBoard"); }, get description() { return tr("spaces.ideasAndPlans"); }, pinStyle: 'pushpin', background: { light: '#B98552', dark: '#5B4029' } },
+  wall: { id: 'wall', get name() { return tr("spacestheme.wall"); }, get description() { return tr("spaces.inspirationToRevisit"); }, pinStyle: 'washi', background: { light: '#EDE6DC', dark: '#2F2B27' } },
 };
 export const SPACE_LIST: SpaceDefinition[] = SPACE_IDS.map((id) => SPACES[id]);
 
@@ -46,17 +47,17 @@ export const SPACE_CAPACITY = 12;
 /** A sticky's size on the board, in points. */
 export const STICKY_SIZE = { width: 132, height: 124 } as const;
 export const STICKY_COLORS = [
-  { name: 'Yellow', hex: '#FFE58A' },
-  { name: 'Pink', hex: '#FFC7CC' },
-  { name: 'Blue', hex: '#C4E4FF' },
-  { name: 'Green', hex: '#D2F0C4' },
-  { name: 'Orange', hex: '#FFD6AE' },
+  { get name() { return tr("spaces.yellow"); }, hex: '#FFE58A' },
+  { get name() { return tr("spaces.pink"); }, hex: '#FFC7CC' },
+  { get name() { return tr("boardappearance.blue"); }, hex: '#C4E4FF' },
+  { get name() { return tr("boardappearance.green"); }, hex: '#D2F0C4' },
+  { get name() { return tr("boardappearance.orange"); }, hex: '#FFD6AE' },
 ] as const;
 export const DEFAULT_STICKY_COLOR = STICKY_COLORS[0].hex;
 export const SPACE_PAPER_STYLES = [
-  { id: 'sticky', name: 'Sticky note' },
-  { id: 'index', name: 'Lined paper' },
-  { id: 'receipt', name: 'Receipt' },
+  { id: 'sticky', get name() { return tr("spaces.stickyNote"); } },
+  { id: 'index', get name() { return tr("spaces.linedPaper"); } },
+  { id: 'receipt', get name() { return tr("spaces.receipt"); } },
 ] as const;
 export type SpacePaperStyle = typeof SPACE_PAPER_STYLES[number]['id'];
 export const DEFAULT_PAPER_STYLE: SpacePaperStyle = 'sticky';

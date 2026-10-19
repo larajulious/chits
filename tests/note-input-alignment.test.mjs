@@ -1,3 +1,5 @@
+import { contentTextStyle, languageDirection } from '../src/localization/text-layout.ts';
+import { tr } from '../src/localization/runtime.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -21,7 +23,7 @@ const component = 'export ' + source.slice(source.indexOf('function BlockInput('
 const code = ts.transpileModule(component, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
 function render(style, extra) {
   const context = {
-    exports: {}, require: () => ({ jsx: (type, props) => ({ type, props }) }),
+    exports: {}, contentTextStyle, languageDirection, useLocale: () => 'en', tr, require: () => ({ jsx: (type, props) => ({ type, props }) }),
     useTheme: () => ({ tokens: {} }), useRef: current => ({ current }),
     useCallback: callback => callback, useEffect: () => {}, TextInput: 'TextInput',
   };

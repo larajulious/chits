@@ -1,3 +1,5 @@
+import { countLabel, tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -34,6 +36,9 @@ type Props = {
  * hand, so the calendar stays where it was.
  */
 export function EntryDetailSheet({ item, visible, now, onClose, onAction }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const { tokens: theme } = useTheme();
   const [detail, setDetail] = useState<{ key: string; value: SpaceNoteDetail | null } | null>(null);
@@ -67,7 +72,7 @@ export function EntryDetailSheet({ item, visible, now, onClose, onAction }: Prop
   return (
     <Modal visible={visible && item !== null} transparent animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose} onDismiss={dismissed}>
       <View style={styles.backdrop}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close details" style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable accessibilityRole="button" accessibilityLabel={tr("entrydetailsheet.closeDetails")} style={StyleSheet.absoluteFill} onPress={onClose} />
         {item ? (
           <SafeAreaView edges={['bottom', 'left', 'right']} style={[styles.sheet, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
             <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
@@ -76,7 +81,7 @@ export function EntryDetailSheet({ item, visible, now, onClose, onAction }: Prop
                 <View style={[styles.typeDot, { backgroundColor: ENTRY_COLORS[item.type] }]} />
                 <AppText style={[styles.typeText, { color: theme.textSecondary }]}>{ENTRY_TYPE_LABEL[item.type]}</AppText>
               </View>
-              <Pressable accessibilityRole="button" accessibilityLabel="Close details" onPress={onClose} hitSlop={4} style={({ pressed }) => [styles.close, pressed && styles.pressed]}>
+              <Pressable accessibilityRole="button" accessibilityLabel={tr("entrydetailsheet.closeDetails")} onPress={onClose} hitSlop={4} style={({ pressed }) => [styles.close, pressed && styles.pressed]}>
                 <Icon name="close" size={22} color={theme.textSecondary} />
               </Pressable>
             </View>
@@ -90,37 +95,37 @@ export function EntryDetailSheet({ item, visible, now, onClose, onAction }: Prop
                 <Fact
                   icon={item.reminderAt === null ? 'notifications-off-outline' : 'notifications-outline'}
                   color={overdue ? theme.danger : undefined}
-                  text={item.reminderAt === null ? 'No reminder' : `${overdue ? 'Overdue · ' : ''}${formatReminder(new Date(item.reminderAt), new Date(now))}${item.scheduled && item.reminderOffset !== null ? ` (${reminderPresetLabel(item, item.reminderOffset)})` : ''}`}
+                  text={item.reminderAt === null ? tr("schedulefields.noReminder") : `${overdue ? 'Overdue · ' : ''}${formatReminder(new Date(item.reminderAt), new Date(now))}${item.scheduled && item.reminderOffset !== null ? ` (${reminderPresetLabel(item, item.reminderOffset)})` : ''}`}
                 />
                 <Fact icon={item.spaceId ? 'grid-outline' : item.kind === 'card' || item.cardId ? 'albums-outline' : 'chatbubble-outline'} text={item.spaceId ? item.source : loaded?.value?.context ?? item.source} />
-                {item.attachmentCount > 0 ? <Fact icon="attach-outline" text={`${item.attachmentCount} ${item.attachmentCount === 1 ? 'attachment' : 'attachments'}`} /> : null}
+                {item.attachmentCount > 0 ? <Fact icon="attach-outline" text={countLabel('attachment', item.attachmentCount)} /> : null}
               </View>
 
               {/* The same ruled paper Card Details shows the note on, in its board's tint. */}
               <NotePaper accent={item.boardAccent} minHeight={item.hasTitle ? 120 : 150} style={styles.note}>
-                {!loaded ? <ActivityIndicator accessibilityLabel="Loading note" color={theme.textMuted} /> : item.searchText === '' && item.title === 'Hidden note'
-                  ? <AppText style={[styles.muted, { color: theme.textSecondary }]}>This note is hidden in Chat.</AppText>
+                {!loaded ? <ActivityIndicator accessibilityLabel={tr("entrydetailsheet.loadingNote")} color={theme.textMuted} /> : item.searchText === '' && item.title === "Hidden note"
+                  ? <AppText style={[styles.muted, { color: theme.textSecondary }]}>{tr("entrydetailsheet.thisNoteIsHiddenInChat")}</AppText>
                   : thoughts.length
                     ? thoughts.map((thought) => thought.content
                       ? <NoteContentView key={thought.messageId} blocks={thought.content} maxImageHeight={220} gap={spacing.xs} renderText={(text, key) => <AppText key={key} selectable style={[styles.body, !item.hasTitle && styles.bodyLead, { color: theme.textPrimary }]}>{text}</AppText>} />
                       : <AppText key={thought.messageId} selectable style={[styles.body, !item.hasTitle && styles.bodyLead, { color: theme.textPrimary }]}>{thought.text}</AppText>)
-                    : <AppText style={[styles.muted, { color: theme.textSecondary }]}>{loaded.value ? 'No written content.' : 'Couldn’t load this note.'}</AppText>}
+                    : <AppText style={[styles.muted, { color: theme.textSecondary }]}>{loaded.value ? tr("entrydetailsheet.noWrittenContent") : tr("entrydetailsheet.couldnTLoadThisNote")}</AppText>}
               </NotePaper>
             </ScrollView>
 
             <View style={[styles.actions, { borderTopColor: theme.borderSubtle }]}>
               <View style={styles.primaryRow}>
-                <Tile icon="calendar-outline" label={item.scheduled ? 'Reschedule' : 'Add to calendar'} onPress={() => act('schedule')} />
+                <Tile icon="calendar-outline" label={item.scheduled ? tr("calendarsheets.reschedule") : tr("calendarsheets.addToCalendar")} onPress={() => act('schedule')} />
                 {item.scheduled
-                  ? <Tile icon={item.reminderAt === null ? 'notifications-outline' : 'notifications-off-outline'} label={item.reminderAt === null ? 'Remind me' : 'Reminder off'} onPress={() => act(item.reminderAt === null ? 'schedule' : 'reminder-off')} />
-                  : <Tile icon="notifications-outline" label="Change reminder" onPress={() => act('reminder')} />}
-                <Tile icon={item.cardId ? 'albums-outline' : 'create-outline'} label={item.cardId ? 'Card details' : 'Edit note'} onPress={() => act('open')} />
+                  ? <Tile icon={item.reminderAt === null ? 'notifications-outline' : 'notifications-off-outline'} label={item.reminderAt === null ? tr("id.remindMe") : tr("calendar.reminderOff")} onPress={() => act(item.reminderAt === null ? 'schedule' : 'reminder-off')} />
+                  : <Tile icon="notifications-outline" label={tr("entrydetailsheet.changeReminder")} onPress={() => act('reminder')} />}
+                <Tile icon={item.cardId ? 'albums-outline' : 'create-outline'} label={item.cardId ? tr("id.cardDetails") : tr("entrydetailsheet.editNote")} onPress={() => act('open')} />
               </View>
               <View>
-                {item.spaceId || item.kind === 'message' ? <Row icon={item.spaceId ? 'grid-outline' : 'chatbubble-outline'} label={item.spaceId ? 'Open on Space' : 'Show in Chat'} onPress={() => act('source')} /> : null}
-                {!item.scheduled && item.reminderAt !== null ? <Row icon="checkmark-circle-outline" label="Mark reminder done" onPress={() => act('reminder-done')} /> : null}
-                {item.scheduled ? <Row icon="remove-circle-outline" label="Remove from calendar" onPress={() => act('unschedule')} /> : null}
-                <Row icon={item.kind === 'card' ? 'archive-outline' : 'trash-outline'} label={item.kind === 'card' ? 'Archive card' : 'Delete note'} destructive onPress={() => act('delete')} />
+                {item.spaceId || item.kind === 'message' ? <Row icon={item.spaceId ? 'grid-outline' : 'chatbubble-outline'} label={item.spaceId ? tr("entrydetailsheet.openOnSpace") : tr("entrydetailsheet.showInChat")} onPress={() => act('source')} /> : null}
+                {!item.scheduled && item.reminderAt !== null ? <Row icon="checkmark-circle-outline" label={tr("entrydetailsheet.markReminderDone")} onPress={() => act('reminder-done')} /> : null}
+                {item.scheduled ? <Row icon="remove-circle-outline" label={tr("calendarsheets.removeFromCalendar")} onPress={() => act('unschedule')} /> : null}
+                <Row icon={item.kind === 'card' ? 'archive-outline' : 'trash-outline'} label={item.kind === 'card' ? tr("index.archiveCard") : tr("entrydetailsheet.deleteNote")} destructive onPress={() => act('delete')} />
               </View>
             </View>
           </SafeAreaView>
@@ -131,6 +136,9 @@ export function EntryDetailSheet({ item, visible, now, onClose, onAction }: Prop
 }
 
 function Fact({ icon, text, color }: { icon: IconName; text: string; color?: string }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return (
     <View style={styles.fact}>
@@ -141,6 +149,9 @@ function Fact({ icon, text, color }: { icon: IconName; text: string; color?: str
 }
 
 function Tile({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => [styles.tile, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>
@@ -151,6 +162,9 @@ function Tile({ icon, label, onPress }: { icon: IconName; label: string; onPress
 }
 
 function Row({ icon, label, destructive = false, onPress }: { icon: IconName; label: string; destructive?: boolean; onPress: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const color = destructive ? theme.danger : theme.textPrimary;
   return (

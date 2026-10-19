@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +16,9 @@ import { resolveAttachmentUri } from '@/services/attachment-storage';
 import type { AttachmentLike } from '@/db/types';
 
 function PhotoContent({ attachment, onDismiss, previewOnly = false }: { attachment: AttachmentLike; onDismiss: () => void; previewOnly?: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const insets = useSafeAreaInsets();
   const { actionSheet } = useAppDialog();
   const { isCurrentBackground } = useChatBackground();
@@ -24,27 +29,30 @@ function PhotoContent({ attachment, onDismiss, previewOnly = false }: { attachme
   const [shareError, setShareError] = useState(false);
   useEffect(() => { if (!shareError) return; const timer = setTimeout(() => setShareError(false), 2400); return () => clearTimeout(timer); }, [shareError]);
   const current = isCurrentBackground(attachment);
-  const more = () => actionSheet({ title: 'Photo', message: current ? 'Current Chat Background' : undefined, options: [
-    { label: 'Set as Chat Background', icon: 'image-outline', onPress: () => setPreview(true) },
+  const more = () => actionSheet({ title: tr("id.photo"), message: current ? tr("photoattachmentviewer.currentChatBackground") : undefined, options: [
+    { label: tr("attachments.setAsChatBackground"), icon: 'image-outline', onPress: () => setPreview(true) },
     { label: exportActionLabel(attachment), icon: 'download-outline', disabled: download.busy, onPress: () => void download.exportAttachment(attachment) },
-    { label: 'Share', icon: 'share-outline', onPress: () => void shareAttachment(attachment).then((shared) => setShareError(!shared)) },
-    { label: 'Delete', icon: 'trash-outline', destructive: true, onPress: () => deletion.confirmDelete(attachment, () => setDeleted(true)) },
+    { label: tr("attachments.share"), icon: 'share-outline', onPress: () => void shareAttachment(attachment).then((shared) => setShareError(!shared)) },
+    { label: tr("id.delete"), icon: 'trash-outline', destructive: true, onPress: () => deletion.confirmDelete(attachment, () => setDeleted(true)) },
   ] });
   if (preview) return <ChatBackgroundPreview image={attachmentBackgroundImage(attachment)} onCancel={() => setPreview(false)} onApplied={onDismiss} />;
-  const notice = deletion.status ?? (shareError ? 'This photo could not be shared.' : download.status);
+  const notice = deletion.status ?? (shareError ? tr("photoattachmentviewer.thisPhotoCouldNotBeShared") : download.status);
   return <SafeAreaView style={styles.screen}>
-    {deleted ? <Text style={styles.deleted}>Photo removed</Text> : <Image source={resolveAttachmentUri(attachment.storagePath)} contentFit="contain" autoplay={false} style={StyleSheet.absoluteFill} />}
+    {deleted ? <Text style={styles.deleted}>{tr("photoattachmentviewer.photoRemoved")}</Text> : <Image source={resolveAttachmentUri(attachment.storagePath)} contentFit="contain" autoplay={false} style={StyleSheet.absoluteFill} />}
     <View style={[styles.toolbar, { top: insets.top + 8 }]}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Close photo" onPress={onDismiss} style={styles.icon}><Ionicons accessible={false} name="close" size={24} color="#FFFFFF" /></Pressable>
-      {!deleted && !previewOnly ? <Pressable accessibilityRole="button" accessibilityLabel="Photo options" onPress={more} style={styles.icon}><Ionicons accessible={false} name="ellipsis-horizontal" size={24} color="#FFFFFF" /></Pressable> : null}
+      <Pressable accessibilityRole="button" accessibilityLabel={tr("photoattachmentviewer.closePhoto")} onPress={onDismiss} style={styles.icon}><Ionicons accessible={false} name="close" size={24} color="#FFFFFF" /></Pressable>
+      {!deleted && !previewOnly ? <Pressable accessibilityRole="button" accessibilityLabel={tr("photoattachmentviewer.photoOptions")} onPress={more} style={styles.icon}><Ionicons accessible={false} name="ellipsis-horizontal" size={24} color="#FFFFFF" /></Pressable> : null}
     </View>
-    {current && !deleted && !previewOnly ? <View style={[styles.indicator, { bottom: insets.bottom + 16 }]}><Text style={styles.indicatorText}>Current Chat Background</Text></View> : null}
+    {current && !deleted && !previewOnly ? <View style={[styles.indicator, { bottom: insets.bottom + 16 }]}><Text style={styles.indicatorText}>{tr("photoattachmentviewer.currentChatBackground")}</Text></View> : null}
     {notice ? <View style={[styles.notice, { bottom: insets.bottom + 64 }]}><Text accessibilityRole={deletion.status ? 'alert' : undefined} accessibilityLiveRegion="polite" style={styles.noticeText}>{notice}</Text></View> : null}
   </SafeAreaView>;
 }
 
 // The photo and its background preview share one native modal host.
 export function PhotoAttachmentViewer({ attachment, onDismiss, previewOnly = false }: { attachment: AttachmentLike; onDismiss: () => void; previewOnly?: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   return <Modal visible animationType="fade" presentationStyle="fullScreen" onRequestClose={onDismiss}><SafeAreaProvider><AppDialogProvider><PhotoContent attachment={attachment} onDismiss={onDismiss} previewOnly={previewOnly} /></AppDialogProvider></SafeAreaProvider></Modal>;
 }
 const styles = StyleSheet.create({ screen: { flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' }, toolbar: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' }, icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.6)' }, indicator: { position: 'absolute', alignSelf: 'center', borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 14, paddingVertical: 8 }, indicatorText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' }, notice: { position: 'absolute', maxWidth: '86%', alignSelf: 'center', backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12 }, noticeText: { color: '#111111', textAlign: 'center', fontSize: 14 }, deleted: { color: '#FFFFFF', fontSize: 18 } });

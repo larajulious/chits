@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 export type NoteKey = `thought:${string}` | `card:${string}`;
 export type RevisitNote = {
   key: NoteKey; title: string; text: string; createdAt: number; updatedAt: number;
@@ -19,7 +20,7 @@ export type ReviewSuggestion = { note: RevisitNote; kind: 'worth' | 'progress'; 
 export type ConnectionSuggestion = { a: RevisitNote; b: RevisitNote; confidence: number; terms: string[] };
 
 export function canonicalPair(a: string, b: string): [string, string] {
-  if (a === b) throw new Error('Choose two different notes.');
+  if (a === b) throw new Error(tr("revisitengine.chooseTwoDifferentNotes"));
   return a < b ? [a, b] : [b, a];
 }
 export function pairKey(a: string, b: string) { return JSON.stringify(canonicalPair(a, b)); }
@@ -39,13 +40,13 @@ export function reviewSuggestion(note: RevisitNote, now: number, config: Revisit
   const w = config.weights;
   const score = Math.min(inactiveDays, 180) * w.inactivity + (remaining > 0 ? w.unfinished : 0) + (note.pinned ? w.pinned : 0) + (note.reminderAt ? w.overdueReminder : 0) - note.dismissalCount * w.dismissal;
   if (score <= 0) return null;
-  const reason = kind === 'progress'
-    ? `${note.completed} of ${note.total} completed · No checklist or content changes for ${inactiveDays} days.`
-    : `${note.pinned ? 'Pinned · ' : ''}No content changes for ${inactiveDays} days${note.reminderAt ? ' · Reminder overdue' : ''}.`;
-  return { note, kind, score, reason };
+  const reason = () => kind === 'progress'
+    ? tr("messages.ofCompletedNoChecklistOrContentChangesFor", { value1: note.completed, value2: note.total, value3: inactiveDays })
+    : tr("messages.noContentChangesForDays", { value1: note.pinned ? tr('index.pinned') + ' · ' : '', value2: inactiveDays, value3: note.reminderAt ? tr("revisitengine.reminderOverdue") : '' });
+  return { note, kind, score, get reason() { return reason(); } };
 }
 
-const stopwords = new Set(('a an the and or but if to of in on for from by with without is are was were be been being it its this that these those i me my mine we our you your they their he she as at not no yes do does did have has had can could should would will may might than then there here how what which who when where why all any some also just very more most new old latest update updates updated note notes important todo task tasks list checklist plan plans idea ideas thought thoughts please about into out over under through before after so such use using used make made really get got un una el la los las de del y en le les des et du au und der die das').split(' '));
+const stopwords = new Set(("a an the and or but if to of in on for from by with without is are was were be been being it its this that these those i me my mine we our you your they their he she as at not no yes do does did have has had can could should would will may might than then there here how what which who when where why all any some also just very more most new old latest update updates updated note notes important todo task tasks list checklist plan plans idea ideas thought thoughts please about into out over under through before after so such use using used make made really get got un una el la los las de del y en le les des et du au und der die das").split(' '));
 
 export function keywords(text: string, config: RevisitConfig = REVISIT_DEFAULTS): string[] {
   const normalized = text.slice(0, config.maxTextLength).normalize('NFKC').toLowerCase();

@@ -9,7 +9,7 @@ test('column navigator is a compact text rail rather than a chip control', () =>
   assert.doesNotMatch(navigator, />COLUMNS</);
   assert.doesNotMatch(navigator, /navigatorCount|navigatorHeader|navigatorLabel/);
   assert.doesNotMatch(navigator, /borderColor: selected|backgroundColor: selected/);
-  assert.match(navigator, /columnIndex \+ 1} of \{columns\.length/);
+  assert.match(navigator, /columnIndex \+ 1\}[\s\S]*?tr\("id\.of"\)[\s\S]*?\{columns\.length/);
   assert.match(navigator, /styles\.navigatorNameSelected/);
 });
 

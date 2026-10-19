@@ -1,3 +1,5 @@
+import { getFormattingLocale, tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { createContext, useContext, type ComponentProps, type PropsWithChildren, type ReactNode } from 'react';
 import { StyleSheet, View, type TextProps } from 'react-native';
 
@@ -14,18 +16,27 @@ type Ink = { primary: string; secondary: string; fill: string; frame: string; pr
 const PaperInk = createContext<Ink | null>(null);
 
 function useInk(): Ink {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens, scheme } = useTheme();
   const paper = useContext(PaperInk);
   return paper ?? { primary: tokens.textPrimary, secondary: tokens.textSecondary, fill: tokens.surface, frame: tokens.borderSubtle, progress: scheme === 'dark' ? '#E6A5B6' : '#802743' };
 }
 
 export function RevisitText({ style, ...props }: ComponentProps<typeof Text>) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const ink = useInk();
   return <Text {...props} style={[{ color: ink.primary }, style]} />;
 }
 
 /** The same collection variant, board tint, frame and ink as Notes → Cards. */
 export function RevisitPaper({ children, note, id, onPress, label }: PropsWithChildren<{ note?: RevisitNote; id?: string; onPress?: () => void; label?: string }>) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens, scheme, styleTokens } = useTheme();
   const colors = useNoteColors(note?.boardAccent);
   const accent = note?.boardAccent;
@@ -46,6 +57,9 @@ export function RevisitPaper({ children, note, id, onPress, label }: PropsWithCh
 }
 
 export function RevisitAction({ children, onPress, disabled = false, label, primary = false, quiet = false }: PropsWithChildren<{ onPress: () => void; disabled?: boolean; label?: string; primary?: boolean; quiet?: boolean }>) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens, styleColors, styleTokens } = useTheme();
   const ink = useInk();
   const sticky = styleTokens.card.tinted;
@@ -58,6 +72,9 @@ export function RevisitAction({ children, onPress, disabled = false, label, prim
 }
 
 export function RevisitMore({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const ink = useInk();
   return <PressableSurface accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress} hitSlop={2} outline={false} edge={false} style={[styles.more, disabled && { opacity: 0.4 }]}>
     <Icon name="ellipsis-horizontal" size={18} color={ink.secondary} />
@@ -65,61 +82,88 @@ export function RevisitMore({ label, onPress, disabled }: { label: string; onPre
 }
 
 export function RevisitHeading({ children, count }: PropsWithChildren<{ count?: number }>) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   return <View style={styles.heading} accessibilityRole="header"><Text variant="display" weight="700" style={[styles.headingText, { color: tokens.textPrimary }]}>{children}</Text>
     {count !== undefined ? <Text style={[styles.count, { color: tokens.textMuted }]}>{count}</Text> : null}
   </View>;
 }
 
-export function RevisitBody({ children }: PropsWithChildren) { return <View style={styles.body}>{children}</View>; }
-export function RevisitTitle({ children, style, ...props }: TextProps) { return <RevisitText variant="display" weight="600" numberOfLines={2} {...props} style={[styles.title, style]}>{children}</RevisitText>; }
+export function RevisitBody({ children }: PropsWithChildren) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale(); return <View style={styles.body}>{children}</View>; }
+export function RevisitTitle({ children, style, ...props }: TextProps) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale(); return <RevisitText variant="display" weight="600" numberOfLines={2} {...props} style={[styles.title, style]}>{children}</RevisitText>; }
 export function RevisitCaption({ children, style, ...props }: TextProps) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const ink = useInk();
   return <Text {...props} style={[styles.caption, { color: ink.secondary }, style]}>{children}</Text>;
 }
 
 export function RevisitProgress({ note }: { note: RevisitNote }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const ink = useInk();
   if (!note.total) return null;
   const percent = Math.round(note.completed / note.total * 100);
-  return <View style={styles.progress} accessible accessibilityLabel={`${note.completed} of ${note.total} completed, ${percent} percent, ${note.total - note.completed} remaining`}>
-    <View style={styles.progressLabels}><RevisitCaption>{note.completed} of {note.total} done</RevisitCaption><RevisitCaption>{percent}%</RevisitCaption></View>
+  return <View style={styles.progress} accessible accessibilityLabel={tr("revisitcomponents.valueOfValueCompletedValuePercentValueRemaining", { value1: note.completed, value2: note.total, value3: percent, value4: note.total - note.completed })}>
+    <View style={styles.progressLabels}><RevisitCaption>{note.completed} {' '}{tr("id.of")}{' '}{note.total} {' '}{tr("cardlistrow.done")}</RevisitCaption><RevisitCaption>{percent}%</RevisitCaption></View>
     <View style={[styles.progressTrack, { backgroundColor: mix(ink.fill, ink.progress, 0.12) }]}><View style={[styles.progressFill, { width: `${percent}%`, backgroundColor: ink.progress }]} /></View>
   </View>;
 }
 
 export function RevisitFooter({ note, children }: PropsWithChildren<{ note?: RevisitNote }>) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const ink = useInk();
   return <View style={styles.footer}><View style={styles.footerCopy}>
     {note ? <><View style={styles.location}>{note.boardAccent ? <View style={[styles.dot, { backgroundColor: note.boardAccent }]} /> : null}
-      <RevisitCaption numberOfLines={1}>{note.boardName ?? 'Unorganized'}</RevisitCaption></View>
-      <View style={styles.dateRow}><RevisitCaption>{new Date(note.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</RevisitCaption>{note.pinned ? <Icon name="pin" size={10} color={ink.secondary} /> : null}</View></> : null}
+      <RevisitCaption numberOfLines={1}>{note.boardName ?? tr("index.unorganized")}</RevisitCaption></View>
+      <View style={styles.dateRow}><RevisitCaption>{new Date(note.updatedAt).toLocaleDateString(getFormattingLocale(), { month: 'short', day: 'numeric' })}</RevisitCaption>{note.pinned ? <Icon name="pin" size={10} color={ink.secondary} /> : null}</View></> : null}
   </View>{children}</View>;
 }
 
 export function RevisitNoteContent({ note, dates = false, moreRecent = false, previewLines }: { note: RevisitNote; dates?: boolean; moreRecent?: boolean; previewLines?: number }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const ink = useInk();
   // A derived first-line title should not repeat as the first line of its body.
   const text = note.text.trim();
   const preview = text === note.title ? '' : text.startsWith(`${note.title}\n`) ? text.slice(note.title.length).trimStart() : text;
   const thoughtPreview = !dates && note.key.startsWith('thought:') && text.startsWith(note.title);
-  const date = (value: number) => new Date(value).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  const date = (value: number) => new Date(value).toLocaleString(getFormattingLocale(), { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
   return <RevisitBody>
     {thoughtPreview ? <RevisitText variant="paragraph" numberOfLines={previewLines ?? 6} style={styles.thought}>{text.slice(0, 260)}{text.length > 260 ? '…' : ''}</RevisitText> : <RevisitTitle numberOfLines={dates ? 0 : 2}>{note.title}</RevisitTitle>}
-    {dates ? <View style={styles.dates}><RevisitCaption>Created {date(note.createdAt)}</RevisitCaption><RevisitCaption>Updated {date(note.updatedAt)}</RevisitCaption>
-      {moreRecent ? <View style={[styles.recentBadge, { backgroundColor: mix(ink.fill, ink.progress, 0.08) }]}><Icon name="time-outline" size={12} color={ink.secondary} /><RevisitCaption>More recently updated</RevisitCaption></View> : null}
+    {dates ? <View style={styles.dates}><RevisitCaption>{tr("id.created")}{' '}{date(note.createdAt)}</RevisitCaption><RevisitCaption>{tr("revisitcomponents.updated")}{' '}{date(note.updatedAt)}</RevisitCaption>
+      {moreRecent ? <View style={[styles.recentBadge, { backgroundColor: mix(ink.fill, ink.progress, 0.08) }]}><Icon name="time-outline" size={12} color={ink.secondary} /><RevisitCaption>{tr("revisitcomponents.moreRecentlyUpdated")}</RevisitCaption></View> : null}
     </View> : null}
     <RevisitProgress note={note} />
-    {!thoughtPreview && preview ? <RevisitText variant="paragraph" numberOfLines={previewLines} style={[styles.preview, dates && styles.detailPreview]}>{preview.slice(0, dates ? 2400 : 260)}{preview.length > (dates ? 2400 : 260) ? '…' : ''}</RevisitText> : !text ? <RevisitCaption>Open the original to see its attachments.</RevisitCaption> : null}
+    {!thoughtPreview && preview ? <RevisitText variant="paragraph" numberOfLines={previewLines} style={[styles.preview, dates && styles.detailPreview]}>{preview.slice(0, dates ? 2400 : 260)}{preview.length > (dates ? 2400 : 260) ? '…' : ''}</RevisitText> : !text ? <RevisitCaption>{tr("revisitcomponents.openTheOriginalToSeeItsAttachments")}</RevisitCaption> : null}
   </RevisitBody>;
 }
 
 export function RevisitEmpty({ children, icon = 'documents-outline' }: PropsWithChildren<{ icon?: ComponentProps<typeof Icon>['name'] }>) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   return <View style={styles.empty}><View style={[styles.emptyIcon, { backgroundColor: tokens.surfaceElevated }]}><Icon name={icon} size={18} color={tokens.textMuted} /></View><Text variant="paragraph" style={[styles.emptyText, { color: tokens.textSecondary }]}>{children}</Text></View>;
 }
 
-export function RevisitActions({ children }: { children: ReactNode }) { return <View style={styles.actions}>{children}</View>; }
+export function RevisitActions({ children }: { children: ReactNode }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale(); return <View style={styles.actions}>{children}</View>; }
 
 const styles = StyleSheet.create({
   body: { minWidth: 0, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4, gap: 8 },

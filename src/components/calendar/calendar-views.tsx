@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useEffect, useMemo, useRef } from 'react';
 import { Pressable, ScrollView, SectionList, StyleSheet, View } from 'react-native';
 
@@ -15,13 +17,16 @@ type ListHandlers = { now: number; onOpen: (item: CalendarItem) => void; onActio
 
 function dayHeading(date: Date, todayKey: string): string {
   const key = localDayKey(date);
-  if (key === todayKey) return 'Today';
-  if (key === localDayKey(addLocalDays(parseDayKey(todayKey)!, 1))) return 'Tomorrow';
+  if (key === todayKey) return tr("calendarviews.today");
+  if (key === localDayKey(addLocalDays(parseDayKey(todayKey)!, 1))) return tr("remindertime.tomorrow");
   return dateFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(date);
 }
 
 /** Week: the seven days stacked, each with its entries or a quiet "Add" line. */
 export function WeekView({ weekStartDate, itemsByDay, todayKey, bottomInset, onAddOnDay, onPressDay, ...handlers }: ListHandlers & { weekStartDate: Date; itemsByDay: Map<string, CalendarItem[]>; todayKey: string; bottomInset: number; onAddOnDay: (dateKey: string) => void; onPressDay: (dateKey: string) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const weekday = dateFormat(undefined, { weekday: 'short' });
   return (
@@ -33,7 +38,7 @@ export function WeekView({ weekStartDate, itemsByDay, todayKey, bottomInset, onA
         const today = key === todayKey;
         return (
           <View key={key} style={[styles.weekDay, { borderBottomColor: theme.borderSubtle }]}>
-            <Pressable accessibilityRole="button" accessibilityLabel={`${dayHeading(date, todayKey)}, ${items.length} ${items.length === 1 ? 'entry' : 'entries'}. Open day`} onPress={() => onPressDay(key)} style={styles.weekDate}>
+            <Pressable accessibilityRole="button" accessibilityLabel={tr("calendarviews.valueValueValueOpenDay", { value1: dayHeading(date, todayKey), value2: items.length, value3: items.length === 1 ? 'entry' : 'entries' })} onPress={() => onPressDay(key)} style={styles.weekDate}>
               <AppText style={[styles.weekName, { color: today ? theme.accentStrong : theme.textMuted }]}>{weekday.format(date).toUpperCase()}</AppText>
               <View style={[styles.weekNumber, today && { backgroundColor: theme.accentStrong }]}>
                 <AppText style={[styles.weekNumberText, { color: today ? theme.background : theme.textPrimary }]}>{date.getDate()}</AppText>
@@ -41,9 +46,9 @@ export function WeekView({ weekStartDate, itemsByDay, todayKey, bottomInset, onA
             </Pressable>
             <View style={styles.weekEntries}>
               {items.length ? items.map((item) => <EntryRow key={item.key} item={item} {...handlers} />) : (
-                <Pressable accessibilityRole="button" accessibilityLabel={`Add a note on ${dayHeading(date, todayKey)}`} onPress={() => onAddOnDay(key)} style={({ pressed }) => [styles.weekEmpty, pressed && styles.pressed]}>
+                <Pressable accessibilityRole="button" accessibilityLabel={tr("calendarviews.addANoteOnValue", { value1: dayHeading(date, todayKey) })} onPress={() => onAddOnDay(key)} style={({ pressed }) => [styles.weekEmpty, pressed && styles.pressed]}>
                   <Icon name="add" size={16} color={theme.textMuted} />
-                  <AppText style={[styles.weekEmptyText, { color: theme.textMuted }]}>Add a note</AppText>
+                  <AppText style={[styles.weekEmptyText, { color: theme.textMuted }]}>{tr("calendarviews.addANote")}</AppText>
                 </Pressable>
               )}
             </View>
@@ -64,6 +69,9 @@ const MIN_BLOCK_MINUTES = 30;
  * Tapping an empty hour adds a note at that time.
  */
 export function DayView({ dateKey, items, todayKey, bottomInset, onAddAt, ...handlers }: ListHandlers & { dateKey: string; items: CalendarItem[]; todayKey: string; bottomInset: number; onAddAt: (minute: number | null) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const scroll = useRef<ScrollView>(null);
   const allDay = items.filter((item) => item.allDay);
@@ -89,10 +97,10 @@ export function DayView({ dateKey, items, todayKey, bottomInset, onAddAt, ...han
     <View style={styles.flex}>
       {allDay.length ? (
         <View style={[styles.allDay, { borderBottomColor: theme.borderSubtle }]}>
-          <AppText style={[styles.allDayLabel, { color: theme.textMuted }]}>ALL DAY</AppText>
+          <AppText style={[styles.allDayLabel, { color: theme.textMuted }]}>{tr("calendarviews.allDay")}</AppText>
           <View style={styles.allDayItems}>
             {allDay.map((item) => (
-              <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={`Open ${entryAccessibilityLabel(item, handlers.now)}`} onPress={() => handlers.onOpen(item)} onLongPress={() => handlers.onActions(item)} style={({ pressed }) => [styles.allDayChip, { backgroundColor: ENTRY_COLORS[item.type] }, pressed && styles.pressed]}>
+              <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={tr("revisit.openValue", { value1: entryAccessibilityLabel(item, handlers.now) })} onPress={() => handlers.onOpen(item)} onLongPress={() => handlers.onActions(item)} style={({ pressed }) => [styles.allDayChip, { backgroundColor: ENTRY_COLORS[item.type] }, pressed && styles.pressed]}>
                 {item.reminderAt !== null ? <Icon name="notifications" size={11} color={ENTRY_INK} /> : null}
                 <AppText numberOfLines={1} style={[styles.blockTitle, { color: ENTRY_INK }]}>{item.title}</AppText>
               </Pressable>
@@ -103,7 +111,7 @@ export function DayView({ dateKey, items, todayKey, bottomInset, onAddAt, ...han
       <ScrollView ref={scroll} contentContainerStyle={{ paddingBottom: bottomInset }}>
         <View style={{ height: 24 * HOUR_HEIGHT }}>
           {Array.from({ length: 24 }, (_, hour) => (
-            <Pressable key={hour} accessibilityRole="button" accessibilityLabel={`Add a note at ${formatMinute(hour * 60)}`} onPress={() => onAddAt(hour * 60)} style={[styles.hour, { top: hour * HOUR_HEIGHT, borderTopColor: theme.borderSubtle }]}>
+            <Pressable key={hour} accessibilityRole="button" accessibilityLabel={tr("calendarviews.addANoteAtValue", { value1: formatMinute(hour * 60) })} onPress={() => onAddAt(hour * 60)} style={[styles.hour, { top: hour * HOUR_HEIGHT, borderTopColor: theme.borderSubtle }]}>
               <AppText style={[styles.hourLabel, { color: theme.textMuted }]}>{hour === 0 ? '' : formatMinute(hour * 60)}</AppText>
             </Pressable>
           ))}
@@ -116,8 +124,8 @@ export function DayView({ dateKey, items, todayKey, bottomInset, onAddAt, ...han
                 <Pressable
                   key={item.key}
                   accessibilityRole="button"
-                  accessibilityLabel={`Open ${entryAccessibilityLabel(item, handlers.now)}`}
-                  accessibilityHint="Long press for more actions"
+                  accessibilityLabel={tr("revisit.openValue", { value1: entryAccessibilityLabel(item, handlers.now) })}
+                  accessibilityHint={tr("calendarviews.longPressForMoreActions")}
                   onPress={() => handlers.onOpen(item)}
                   onLongPress={() => handlers.onActions(item)}
                   style={({ pressed }) => [styles.block, { top: (start / 60) * HOUR_HEIGHT + 1, height: ((end - start) / 60) * HOUR_HEIGHT - 2, left: `${lane.lane * width}%`, width: `${width}%`, backgroundColor: ENTRY_COLORS[item.type] }, pressed && styles.pressed]}
@@ -147,8 +155,13 @@ export function DayView({ dateKey, items, todayKey, bottomInset, onAddAt, ...han
  * reminders that have already gone off listed first under Overdue.
  */
 export function AgendaView({ items, todayKey, bottomInset, emptyText, ...handlers }: ListHandlers & { items: CalendarItem[]; todayKey: string; bottomInset: number; emptyText: string }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  const localeVersion = useLocale();
   const { tokens: theme } = useTheme();
   const sections = useMemo(() => {
+    void localeVersion; // Refresh translated display metadata without reloading the database.
+
     // Each overdue note once, even when it also shows on its reminder's day.
     const seen = new Set<string>();
     const overdue = items.filter((item) => {
@@ -157,7 +170,7 @@ export function AgendaView({ items, todayKey, bottomInset, emptyText, ...handler
       seen.add(note);
       return true;
     });
-    const groups: { key: string; title: string; data: CalendarItem[] }[] = overdue.length ? [{ key: 'overdue', title: 'Overdue', data: overdue }] : [];
+    const groups: { key: string; title: string; data: CalendarItem[] }[] = overdue.length ? [{ key: 'overdue', title: tr("calendarentry.overdue"), data: overdue }] : [];
     for (const item of items) {
       if (item.dateKey < todayKey) continue;
       const last = groups.at(-1);
@@ -165,7 +178,7 @@ export function AgendaView({ items, todayKey, bottomInset, emptyText, ...handler
       else groups.push({ key: item.dateKey, title: dayHeading(parseDayKey(item.dateKey)!, todayKey), data: [item] });
     }
     return groups;
-  }, [items, todayKey, handlers.now]);
+  }, [items, todayKey, handlers.now, localeVersion]);
   if (!sections.length) return <View style={styles.agendaEmpty}><AppText style={[styles.weekEmptyText, { color: theme.textSecondary, textAlign: 'center' }]}>{emptyText}</AppText></View>;
   return (
     <SectionList
@@ -186,8 +199,11 @@ export function AgendaView({ items, todayKey, bottomInset, emptyText, ...handler
 
 /** Search results across every date, each showing its day; tapping one opens the day. */
 export function SearchResults({ items, query, bottomInset, ...handlers }: ListHandlers & { items: CalendarItem[]; query: string; bottomInset: number }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
-  if (!items.length) return <View style={styles.agendaEmpty}><AppText style={[styles.weekEmptyText, { color: theme.textSecondary, textAlign: 'center' }]}>{query.trim() ? `Nothing on the calendar matches “${query.trim()}”.` : 'Search notes and reminders on your calendar.'}</AppText></View>;
+  if (!items.length) return <View style={styles.agendaEmpty}><AppText style={[styles.weekEmptyText, { color: theme.textSecondary, textAlign: 'center' }]}>{query.trim() ? tr("calendarviews.nothingOnTheCalendarMatchesValue", { value1: query.trim() }) : tr("calendarviews.searchNotesAndRemindersOnYourCalendar")}</AppText></View>;
   return (
     <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={[styles.list, { paddingBottom: bottomInset }]}>
       {items.map((item) => <View key={item.key} style={styles.agendaRow}><EntryRow item={item} showDate {...handlers} /></View>)}

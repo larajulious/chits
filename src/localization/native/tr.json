@@ -1,0 +1,7 @@
+{
+  "ios": {
+    "NSMicrophoneUsageDescription": "Chits, mikrofonunuzu yalnızca sesli not kaydetmeyi seçtiğinizde kullanır.",
+    "NSPhotoLibraryUsageDescription": "Chits yalnızca bir nota eklemeyi seçtiğiniz veya sohbet arka planınız olarak ayarladığınız fotoğraf ve videoları kullanır.",
+    "NSPhotoLibraryAddUsageDescription": "Chits, bir fotoğrafın, videonun veya Paylaşım Notu görselinin bir kopyasını yalnızca siz kaydetmeyi seçtiğinizde fotoğraf kitaplığınıza kaydeder."
+  }
+}

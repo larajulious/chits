@@ -1,3 +1,4 @@
+import { useLocale } from '@/localization/provider';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
@@ -15,6 +16,9 @@ import { endTour } from '../tour';
 const CHOICES: OnboardingStringKey[] = ['setup.board.personal', 'setup.board.work', 'setup.board.study', 'setup.board.home', 'setup.board.projects'];
 
 export default function OnboardingSetupScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const router = useRouter();
   const { tokens: theme } = useTheme();

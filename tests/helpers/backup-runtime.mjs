@@ -32,6 +32,7 @@ function moduleUrl(path) {
   const actual = existsSync(`${path}.ts`) ? `${path}.ts` : path;
   let code = ts.transpileModule(readFileSync(actual, 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
   code = code.replace(/from ['"]([^'"]+)['"]/g, (match, specifier) => {
+    if (specifier === '@/localization/runtime') return `from '${new URL('../../src/localization/runtime.ts', import.meta.url).href}'`;
     const external = externals.get(specifier);
     if (external) return `from '${external}'`;
     const local = specifier.startsWith('@/') ? resolve(root, 'src', specifier.slice(2)) : resolve(dirname(actual), specifier);

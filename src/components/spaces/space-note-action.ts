@@ -1,10 +1,11 @@
+import { tr } from '@/localization/runtime';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { DEFAULT_SPACE_ID, SPACES } from '@/constants/spaces';
 import { createSpaceRepository } from '@/db/repositories';
 import type { SpaceNoteKind } from '@/db/types';
 
-export const SPACE_FULL_MESSAGE = 'This space is full. Remove a note to make room.';
+export const spaceFullMessage = () => tr("spacenoteaction.thisSpaceIsFullRemoveANoteTo");
 
 export type SpaceNoteAction = {
   noteId: string;
@@ -26,12 +27,12 @@ export async function spaceNoteAction(database: SQLiteDatabase, kind: SpaceNoteK
   const placement = await repository.placementFor(kind, noteId);
   if (placement) {
     const { name } = SPACES[placement.spaceId];
-    return { noteId, label: `Remove from ${name}`, icon: 'close-circle-outline', run: async () => { await repository.remove(placement.id); return `Removed from ${name}`; } };
+    return { noteId, label: tr("messages.removeFrom", { value1: name }), icon: 'close-circle-outline', run: async () => { await repository.remove(placement.id); return tr("messages.removedFrom", { value1: name }); } };
   }
   const target = (await repository.getSelectedSpace()) ?? DEFAULT_SPACE_ID;
   const { name } = SPACES[target];
   return {
-    noteId, label: `Stick to ${name}`, icon: 'magnet-outline',
-    run: async () => ((await repository.stick(kind, noteId, target)).status === 'full' ? SPACE_FULL_MESSAGE : `Stuck on your ${name}`),
+    noteId, label: tr("messages.stickTo", { value1: name }), icon: 'magnet-outline',
+    run: async () => ((await repository.stick(kind, noteId, target)).status === 'full' ? spaceFullMessage() : tr("messages.stuckOnYour", { value1: name })),
   };
 }

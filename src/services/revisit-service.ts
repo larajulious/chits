@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { createRevisitRepository } from '../db/revisit-repository';
 import { discoverConnections, indexNote, pairKey, REVISIT_DEFAULTS, reviewSuggestion, type ConnectionSuggestion, type IndexedNote, type NoteKey, type RevisitNote, type ReviewSuggestion } from './revisit-engine';
@@ -52,7 +53,7 @@ async function calculate(database: SQLiteDatabase, now: number): Promise<Revisit
   const report = { reviews, connections, notes, preferences, elapsedMs: performance.now() - started, fts5Supported };
   // Never cache a mixed snapshot if edits happened between pages. The next
   // refresh will retry; writes never depend on this disposable report.
-  if (await repository.revision() !== revision) throw new Error('Your notes changed while Revisit was loading. Try again.');
+  if (await repository.revision() !== revision) throw new Error(tr("revisitservice.yourNotesChangedWhileRevisitWasLoadingTry"));
   caches.set(database, { revision, bucket, report, indexed, blocked, focused: new Map() });
   return report;
 }

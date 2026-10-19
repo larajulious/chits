@@ -10,6 +10,7 @@
     "@expo-google-fonts/space-mono": "^0.4.2",
     "@expo/ui": "~57.0.21",
     "@expo/vector-icons": "^15.0.2",
+    "@formatjs/intl-pluralrules": "^6.3.15",
     "@react-native-masked-view/masked-view": "0.3.2",
     "@shopify/flash-list": "2.0.2",
     "expo": "~57.0.26",
@@ -41,9 +42,11 @@
     "expo-system-ui": "~57.0.4",
     "expo-video": "~57.0.5",
     "expo-web-browser": "~57.0.3",
+    "i18next": "^26.5.2",
     "lucide-react-native": "^1.49.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-i18next": "^17.1.0",
     "react-native": "0.86.3",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-reanimated": "4.5.1",
@@ -69,10 +72,12 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "node --test tests/*.test.mjs",
-    "test:timeline": "node --test tests/chat-timeline-pagination.test.mjs",
-    "test:retirement": "node --test tests/reminder-retirement.test.mjs",
-    "check:style": "scripts/check-style-tokens.sh"
+    "test": "node --import ./tests/helpers/localization-loader.mjs --test tests/*.test.mjs",
+    "test:timeline": "node --import ./tests/helpers/localization-loader.mjs --test tests/chat-timeline-pagination.test.mjs",
+    "test:retirement": "node --import ./tests/helpers/localization-loader.mjs --test tests/reminder-retirement.test.mjs",
+    "check:style": "scripts/check-style-tokens.sh",
+    "check:localization": "node scripts/check-localization.mjs",
+    "test:localization": "node --import ./tests/helpers/localization-loader.mjs --test tests/localization.test.mjs"
   },
   "private": true
 }

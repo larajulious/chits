@@ -1,3 +1,5 @@
+import { countLabel, tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View, type LayoutRectangle, type StyleProp, type ViewStyle } from 'react-native';
 import { Icon } from '@/components/ui/icon';
@@ -15,7 +17,7 @@ import { LabelTape } from '@/components/spaces/label-tape';
 import { MagnetButton } from '@/components/spaces/magnet-button';
 import { NotePicker } from '@/components/spaces/note-picker';
 import { useSpaceFonts } from '@/components/spaces/space-fonts';
-import { SPACE_FULL_MESSAGE } from '@/components/spaces/space-note-action';
+import { spaceFullMessage } from '@/components/spaces/space-note-action';
 import { LetterMagnets, SpaceSurface } from '@/components/spaces/space-surface';
 import { StickyPaper } from '@/components/spaces/sticky-note';
 import { useNoteSpaceName } from '@/components/spaces/use-notespace-name';
@@ -43,6 +45,9 @@ const openNote = (note: Pick<PinnedNote, 'kind' | 'noteId' | 'boardId'>) => rout
  * on Pick a Space the first time — decided before the first frame.
  */
 export default function SpacesScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const { spaceId, noteId, chitsGuided, chitsRelationship } = useLocalSearchParams<{ spaceId?: string; noteId?: string; chitsGuided?: string; chitsRelationship?: string }>();
   const [initial] = useState(() => resolveSpaceId(spaceId) ?? createSpaceRepository(database).getSelectedSpaceSync());
@@ -51,6 +56,9 @@ export default function SpacesScreen() {
 }
 
 function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { initialSpaceId: SpaceId; focusNoteId?: string; guided: boolean; relationship: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const { tokens: theme, styleTokens, styleColors } = useTheme();
   const inkSurface = useInkSurface();
@@ -130,7 +138,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
           if (active && reading === request && spaceId === currentSpaceRef.current) notesCacheRef.current[next] = nextNotes;
         }
       } catch {
-        if (active && reading === request) setToast('Could not load this space. Try again.');
+        if (active && reading === request) setToast(tr("spaces.couldNotLoadThisSpaceTryAgain"));
       }
     };
     void read();
@@ -161,7 +169,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
         if (pendingSelectionRef.current === next) pendingSelectionRef.current = null;
       }, () => {
         if (pendingSelectionRef.current === next) pendingSelectionRef.current = null;
-        setToast('Could not save the selected space.');
+        setToast(tr("spaces.couldNotSaveTheSelectedSpace"));
       });
     };
     const cached = notesCacheRef.current[next];
@@ -169,7 +177,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
     else void repository.list(next).then((list) => {
       notesCacheRef.current[next] = list;
       show(list);
-    }, () => { if (request === switchRequestRef.current) setToast('Could not open this space. Try again.'); });
+    }, () => { if (request === switchRequestRef.current) setToast(tr("spaces.couldNotOpenThisSpaceTryAgain")); });
   }, [repository]);
 
   // Swiping across the space steps through the dock's order: left for the
@@ -210,7 +218,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
     });
     void repository.savePosition(id, unit).then(() => {
       if (guided && notes?.find((note) => note.id === id)?.noteId === focusNoteId) setGuideState('success');
-    }).catch(() => { setToast('That move couldn’t be saved.'); load(); });
+    }).catch(() => { setToast(tr("spaces.thatMoveCouldnTBeSaved")); load(); });
   }, [board, load, repository, guided, notes, focusNoteId]);
   // A tap reads the note right here, over the space; leaving for the card or
   // Chat is the sheet's own button.
@@ -224,47 +232,47 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
     if (!selected) return;
     void Haptics.selectionAsync();
     setNotes((current) => current?.map((note) => (note.id === selected.id ? { ...note, color } : note)) ?? current);
-    run(() => repository.setColor(selected.id, color), 'That color couldn’t be saved.');
+    run(() => repository.setColor(selected.id, color), tr("spaces.thatColorCouldnTBeSaved"));
   };
   const changePaperStyle = (paperStyle: SpacePaperStyle) => {
     if (!selected) return;
     void Haptics.selectionAsync();
     setNotes((current) => current?.map((note) => note.id === selected.id ? { ...note, paperStyle } : note) ?? current);
-    run(() => repository.setPaperStyle(selected.id, paperStyle), 'That paper style couldn’t be saved.');
+    run(() => repository.setPaperStyle(selected.id, paperStyle), tr("spaces.thatPaperStyleCouldnTBeSaved"));
   };
   const bringToFront = () => {
     if (!selected) return;
     setNotes((current) => (current ? [...current.filter((note) => note.id !== selected.id), selected] : current));
     setSelectedId(null);
-    run(() => repository.bringToFront(selected.id), 'That couldn’t be saved.');
+    run(() => repository.bringToFront(selected.id), tr("spaces.thatCouldnTBeSaved"));
   };
   const moveTo = async (target: SpaceId) => {
     if (!selected) return;
     try {
       const result = await repository.moveToSpace(selected.id, target);
-      if (result?.status === 'full') { setToast(SPACE_FULL_MESSAGE); return; }
+      if (result?.status === 'full') { setToast(spaceFullMessage()); return; }
       setSelectedId(null);
-      setToast(`Moved to ${SPACES[target].name}`);
-    } catch { setToast('That note couldn’t be moved.'); }
+      setToast(tr("spaces.movedToValue", { value1: SPACES[target].name }));
+    } catch { setToast(tr("spaces.thatNoteCouldnTBeMoved")); }
   };
   const remove = () => {
     if (!selected) return;
     setSelectedId(null);
     setNotes((current) => current?.filter((note) => note.id !== selected.id) ?? current);
-    void repository.remove(selected.id).then(() => setToast(`Removed from ${space.name}`), () => { setToast('That note couldn’t be removed.'); load(); });
+    void repository.remove(selected.id).then(() => setToast(tr("spaces.removedFromValue", { value1: space.name })), () => { setToast(tr("spaces.thatNoteCouldnTBeRemoved")); load(); });
   };
 
   const openPicker = () => {
-    if (count >= SPACE_CAPACITY) { setToast(SPACE_FULL_MESSAGE); return; }
+    if (count >= SPACE_CAPACITY) { setToast(spaceFullMessage()); return; }
     setPickerOpen(true);
   };
   const stick = async (candidate: SpaceCandidate) => {
     setPickerOpen(false);
     try {
       const result = await repository.stick(candidate.kind, candidate.id, spaceId);
-      if (result.status === 'full') setToast(SPACE_FULL_MESSAGE);
+      if (result.status === 'full') setToast(spaceFullMessage());
       else void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch { setToast('That note couldn’t be added.'); }
+    } catch { setToast(tr("spaces.thatNoteCouldnTBeAdded")); }
   };
   const openReminder = (note: PinnedNote) => {
     setSelectedId(null);
@@ -272,7 +280,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
     const key = note.kind === 'card' ? 'card_id' : 'message_id';
     void database.getFirstAsync<{ scheduledAt: number }>(`SELECT scheduled_at AS scheduledAt FROM ${table} WHERE ${key} = ? AND completed_at IS NULL`, note.noteId)
       .then((row) => { setReminderAt(row?.scheduledAt ?? null); setReminderNote(note); setReminderKey((value) => value + 1); })
-      .catch(() => setToast('Could not open reminder. Try again.'));
+      .catch(() => setToast(tr("chat.couldNotOpenReminderTryAgain")));
   };
 
   const empty = notes !== null && notes.length === 0;
@@ -296,7 +304,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
       {/* Keyed by space, so a switch fades the old notes out and the new ones in with the surface. */}
       {board && notes ? <Animated.View key={spaceId} collapsable={false} entering={FadeIn.duration(200)} exiting={FadeOut.duration(200)} pointerEvents="box-none" style={StyleSheet.absoluteFill}>{notes.map((note, index) => <DraggableSticky key={note.id} note={note} order={index} seed={noteSeed(note.id)} board={board} pinStyle={space.pinStyle} onLift={onLift} onDrop={onDrop} onOpen={onOpen} onOptions={onOptions} />)}</Animated.View> : null}
       {empty ? <View style={styles.emptyWrap} pointerEvents="box-none">
-        <Pressable accessibilityRole="button" accessibilityLabel={`Nothing here yet. Stick a note on your ${space.name}.`} onPress={openPicker} style={({ pressed }) => pressed && styles.pressed}>
+        <Pressable accessibilityRole="button" accessibilityLabel={tr("spaces.nothingHereYetStickANoteOnYour", { value1: space.name })} onPress={openPicker} style={({ pressed }) => pressed && styles.pressed}>
           <StickyPaper note={EMPTY_NOTE} space={spaceId} seed={0} />
         </Pressable>
       </View> : null}
@@ -305,34 +313,34 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
     <View pointerEvents="box-none" style={[styles.topBar, { top }]}>
       {/* Each side is two buttons wide (the right has Chat and Share) so the name stays centered. */}
       <View style={styles.sideGroup}>
-        <MagnetButton size={44} icon="add" accessibilityLabel="Stick a note" onPress={openPicker} />
+        <MagnetButton size={44} icon="add" accessibilityLabel={tr("spaces.stickANote")} onPress={openPicker} />
       </View>
       <View style={styles.middle}>
-        <View accessible accessibilityRole="header" accessibilityLabel={`${space.name}, ${count} of ${SPACE_CAPACITY} notes`} style={styles.titles}>
+        <View accessible accessibilityRole="header" accessibilityLabel={tr("spaces.valueValueOfValueNotes", { value1: space.name, value2: count, value3: SPACE_CAPACITY })} style={styles.titles}>
           <LabelTape themed text={space.name} variant="dark" size="lg" rotation={-2} />
-          <LabelTape themed text={`${count} / ${SPACE_CAPACITY} notes`} variant="red" size="sm" rotation={2} style={styles.countTape} />
+          <LabelTape themed text={tr("spaces.valueValueNotes", { value1: count, value2: SPACE_CAPACITY })} variant="red" size="sm" rotation={2} style={styles.countTape} />
         </View>
       </View>
       <View style={[styles.sideGroup, styles.sideGroupEnd]}>
-        <RoundButton icon="chatbox-outline" label="Open Chat" onPress={() => { void Haptics.selectionAsync(); router.navigate('/chat'); }} />
-        <RoundButton icon="share-outline" label={`Share your ${space.name}`} disabled={!notes?.length} onPress={() => router.push({ pathname: '/spaces/share', params: { space: spaceId } })} />
+        <RoundButton icon="chatbox-outline" label={tr("spaces.openChat")} onPress={() => { void Haptics.selectionAsync(); router.navigate('/chat'); }} />
+        <RoundButton icon="share-outline" label={tr("spaces.shareYourValue", { value1: space.name })} disabled={!notes?.length} onPress={() => router.push({ pathname: '/spaces/share', params: { space: spaceId } })} />
       </View>
     </View>
 
-    <View accessibilityRole="radiogroup" accessibilityLabel="Space" style={[styles.dock, { bottom: dockBottom }, inkSurface({ fill: styleColors.controlFill, radius: styleTokens.nav.radius, edge: styleTokens.nav.edge })]}>
+    <View accessibilityRole="radiogroup" accessibilityLabel={tr("spaces.space")} style={[styles.dock, { bottom: dockBottom }, inkSurface({ fill: styleColors.controlFill, radius: styleTokens.nav.radius, edge: styleTokens.nav.edge })]}>
       {SPACE_LIST.map((item) => {
         const active = item.id === spaceId;
-        return <Pressable key={item.id} accessibilityRole="radio" accessibilityLabel={`${item.name}, ${counts[item.id]} ${counts[item.id] === 1 ? 'note' : 'notes'}`} accessibilityState={{ selected: active }} onPress={() => switchSpace(item.id)} style={({ pressed }) => [active ? styles.dockPill : styles.dockIcon, active && inkSurface({ fill: styleColors.accentFill, radius: styles.dockPill.height / 2, edge: false }), pressed && styles.pressed]}>
+        return <Pressable key={item.id} accessibilityRole="radio" accessibilityLabel={`${item.name}, ${countLabel('note', counts[item.id])}`} accessibilityState={{ selected: active }} onPress={() => switchSpace(item.id)} style={({ pressed }) => [active ? styles.dockPill : styles.dockIcon, active && inkSurface({ fill: styleColors.accentFill, radius: styles.dockPill.height / 2, edge: false }), pressed && styles.pressed]}>
           <MaterialCommunityIcons accessible={false} name={DOCK_ICONS[item.id]} size={active ? 20 : 23} color={active ? ui.accentText : ui.dockIcon} />
           {active ? <Text numberOfLines={1} style={[fonts.uiSemi, styles.dockLabel, { color: ui.accentText }]}>{DOCK_LABELS[item.id]}</Text> : null}
         </Pressable>;
       })}
     </View>
-    <RoundButton icon="chevron-back" label="Go back" onPress={() => (router.canGoBack() ? router.back() : router.navigate('/'))} size={DOCK_HEIGHT} style={[styles.bottomBack, { bottom: dockBottom }]} />
-    {guideState ? <ChitsGuide text={guideState === 'success' ? 'Perfect spot ✨' : relationship ? 'Drop it anywhere you like. It’s still in Chat.' : 'Drop it anywhere you like.'} bottom={dockBottom + DOCK_HEIGHT + 12} onClose={() => setGuideState(null)} /> : null}
+    <RoundButton icon="chevron-back" label={tr("search.goBack")} onPress={() => router.navigate({ pathname: '/', params: { view: 'cards' } })} size={DOCK_HEIGHT} style={[styles.bottomBack, { bottom: dockBottom }]} />
+    {guideState ? <ChitsGuide text={guideState === 'success' ? tr("spaces.perfectSpot") : relationship ? tr("spaces.dropItAnywhereYouLikeItSStill") : tr("spaces.dropItAnywhereYouLike")} bottom={dockBottom + DOCK_HEIGHT + 12} onClose={() => setGuideState(null)} /> : null}
 
     {viewing && !selected ? <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      <SheetDim label="Close note" onPress={closeView} />
+      <SheetDim label={tr("spaces.closeNote")} onPress={closeView} />
       <StickyViewSheet
         note={viewing}
         viewportHeight={screenSize.height}
@@ -362,13 +370,13 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
     <ReminderSheet key={reminderKey} visible={reminderNote !== null} existing={reminderAt} accent={theme.accent} accentOn={theme.accentText} onClose={() => setReminderNote(null)} onSave={async (date) => {
       if (!reminderNote) return { ok: false, reason: 'failed' };
       const result = reminderNote.kind === 'card' ? await setCardReminder(database, reminderNote.noteId, date.getTime()) : await setMessageReminder(database, reminderNote.noteId, date.getTime());
-      if (result.ok) setToast('Reminder set');
+      if (result.ok) setToast(tr("chat.reminderSet"));
       return result;
     }} onRemove={async () => {
       if (!reminderNote) return;
       if (reminderNote.kind === 'card') await removeCardReminder(database, reminderNote.noteId);
       else await removeMessageReminder(database, reminderNote.noteId);
-      setToast('Reminder removed');
+      setToast(tr("chat.reminderRemoved"));
     }} />
     <Toast message={toast} />
   </View></GestureDetector>;
@@ -376,6 +384,9 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
 
 /** A round paper button floating over the surface. */
 function RoundButton({ icon, label, onPress, disabled = false, size = 44, style }: { icon: 'chevron-back' | 'share-outline' | 'chatbox-outline'; label: string; onPress: () => void; disabled?: boolean; size?: number; style?: StyleProp<ViewStyle> }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { styleTokens, styleColors } = useTheme();
   const inkSurface = useInkSurface();
   const ui = useSpaceUI();
@@ -387,7 +398,7 @@ function RoundButton({ icon, label, onPress, disabled = false, size = 44, style 
 
 const DOCK_HEIGHT = 60;
 // The empty board's one note, stuck there to say what to do.
-const EMPTY_NOTE = { title: null, text: 'Empty.\nTap + to\nadd a note.', hidden: false, color: DEFAULT_STICKY_COLOR, rotation: -2 };
+const EMPTY_NOTE = { title: null, get text() { return tr("spaces.emptyTapToAddANote"); }, hidden: false, color: DEFAULT_STICKY_COLOR, rotation: -2 };
 
 const createStyles = (ui: SpaceUI) => StyleSheet.create({
   root: { flex: 1, backgroundColor: ui.ink },

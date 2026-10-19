@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import { manipulateAsync, SaveFormat, type Action } from 'expo-image-manipulator';
 import { copyAsync, deleteAsync, documentDirectory, getInfoAsync, makeDirectoryAsync } from 'expo-file-system/legacy';
 
@@ -11,7 +12,7 @@ const PHOTO_QUALITY = 0.82;
 type AttachmentMetadata = Pick<AttachmentLike, 'type' | 'originalName' | 'mimeType' | 'size' | 'duration' | 'width' | 'height'>;
 
 function documentsDirectory() {
-  if (!documentDirectory) throw new Error('Chits could not access private device storage.');
+  if (!documentDirectory) throw new Error(tr("attachmentstorage.chitsCouldNotAccessPrivateDeviceStorage"));
   return documentDirectory;
 }
 
@@ -53,9 +54,9 @@ export async function deleteAttachment(storedPath: string): Promise<void> {
 }
 
 export async function copyIntoAttachmentStorage(sourceUri: string, directory: string, details: AttachmentMetadata) {
-  if (!sourceUri || !/^(file|content|ph|assets-library):\/\//i.test(sourceUri)) throw new Error('This attachment could not be read from your device.');
+  if (!sourceUri || !/^(file|content|ph|assets-library):\/\//i.test(sourceUri)) throw new Error(tr("attachmentstorage.thisAttachmentCouldNotBeReadFromYour"));
   const source = await getInfoAsync(sourceUri);
-  if (!source.exists) throw new Error('The selected file is no longer available.');
+  if (!source.exists) throw new Error(tr("attachmentstorage.theSelectedFileIsNoLongerAvailable"));
 
   let preparedUri = sourceUri;
   let preparedDetails = details;
@@ -71,19 +72,19 @@ export async function copyIntoAttachmentStorage(sourceUri: string, directory: st
   const preparedSize = prepared.exists && 'size' in prepared ? prepared.size : null;
   if (preparedSize && preparedSize > MAX_ATTACHMENT_BYTES) {
     if (optimizedUri) await deleteAsync(optimizedUri, { idempotent: true }).catch(() => undefined);
-    throw new Error('Attachments must be 100 MB or smaller.');
+    throw new Error(tr("attachmentstorage.attachmentsMustBe100MbOrSmaller"));
   }
 
   const safeDirectory = directory.split('/').filter((segment) => segment && segment !== '.' && segment !== '..').join('/');
   const storagePath = `${ATTACHMENT_STORAGE_ROOT}/${safeDirectory}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}${safeExtension(preparedUri, preparedDetails.mimeType)}`;
   const destinationUri = resolveAttachmentUri(storagePath);
-  if (!destinationUri) throw new Error('Chits could not prepare a safe attachment path.');
+  if (!destinationUri) throw new Error(tr("attachmentstorage.chitsCouldNotPrepareASafeAttachmentPath"));
   const destinationDirectory = destinationUri.slice(0, destinationUri.lastIndexOf('/') + 1);
   try {
     await makeDirectoryAsync(destinationDirectory, { intermediates: true });
     await copyAsync({ from: preparedUri, to: destinationUri });
     const persisted = await getInfoAsync(destinationUri);
-    if (!persisted.exists) throw new Error('Chits could not save this attachment.');
+    if (!persisted.exists) throw new Error(tr("attachmentstorage.chitsCouldNotSaveThisAttachment"));
     const persistedSize = 'size' in persisted ? persisted.size : preparedSize;
     return { attachment: { ...preparedDetails, storagePath, size: persistedSize }, remove: () => deleteAttachment(storagePath) };
   } catch (error) {

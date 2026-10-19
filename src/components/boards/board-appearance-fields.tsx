@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { useTheme } from '@/components/theme-provider';
@@ -16,13 +18,16 @@ type Props = {
 // The one icon/accent picker in the app — Create Board and Edit Board both render
 // this exact component so the two flows can never visually drift apart.
 export function BoardAppearanceFields({ icon, accent, onIconChange, onAccentChange }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return <>
-    <AppText style={[styles.label, { color: theme.textSecondary }]}>Icon</AppText>
+    <AppText style={[styles.label, { color: theme.textSecondary }]}>{tr("boardappearancefields.icon")}</AppText>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.iconChoices}>
       <Pressable
         accessibilityRole="radio"
-        accessibilityLabel="No icon"
+        accessibilityLabel={tr("boardappearancefields.noIcon")}
         accessibilityState={{ selected: icon === null }}
         onPress={() => onIconChange(null)}
         style={[styles.iconChoice, { backgroundColor: theme.surfaceElevated }, icon === null && { borderColor: theme.accentStrong, backgroundColor: theme.accentSoft }]}
@@ -43,13 +48,13 @@ export function BoardAppearanceFields({ icon, accent, onIconChange, onAccentChan
       ))}
     </ScrollView>
 
-    <AppText style={[styles.label, { color: theme.textSecondary }]}>Accent</AppText>
+    <AppText style={[styles.label, { color: theme.textSecondary }]}>{tr("boardappearancefields.accent")}</AppText>
     <View style={styles.swatches}>
       {BOARD_ACCENTS.map((choice) => (
         <Pressable
           key={choice.label}
           accessibilityRole="radio"
-          accessibilityLabel={`${choice.label} accent`}
+          accessibilityLabel={tr("boardappearancefields.valueAccent", { value1: choice.label })}
           accessibilityState={{ selected: accent === choice.value }}
           onPress={() => onAccentChange(choice.value)}
           style={[styles.swatchHit, accent === choice.value && { borderColor: theme.textPrimary }]}

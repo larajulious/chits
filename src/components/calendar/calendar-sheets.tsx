@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,6 +15,9 @@ import { ScheduleFields } from './schedule-fields';
 import { dateFormat } from '@/services/reminder-time';
 
 function Sheet({ visible, onClose, closeLabel, children }: { visible: boolean; onClose: () => void; closeLabel: string; children: React.ReactNode }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return (
     <Modal visible={visible} transparent animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
@@ -29,17 +34,20 @@ function Sheet({ visible, onClose, closeLabel, children }: { visible: boolean; o
 
 /** Jump to any month: a year stepper over the twelve months. */
 export function MonthPickerSheet({ visible, year: initialYear, month, onPick, onClose }: { visible: boolean; year: number; month: number; onPick: (year: number, month: number) => void; onClose: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const [year, setYear] = useState(initialYear);
   const names = dateFormat(undefined, { month: 'short' });
   const now = new Date();
   return (
-    <Sheet visible={visible} onClose={onClose} closeLabel="Close month picker">
+    <Sheet visible={visible} onClose={onClose} closeLabel={tr("calendarsheets.closeMonthPicker")}>
       <View style={styles.content}>
         <View style={styles.yearRow}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Previous year, ${year - 1}`} onPress={() => setYear(year - 1)} style={styles.iconButton}><Icon name="chevron-back" size={22} color={theme.textSecondary} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr("calendarsheets.previousYearValue", { value1: year - 1 })} onPress={() => setYear(year - 1)} style={styles.iconButton}><Icon name="chevron-back" size={22} color={theme.textSecondary} /></Pressable>
           <AppText accessibilityRole="header" style={[styles.year, { color: theme.textPrimary }]}>{year}</AppText>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Next year, ${year + 1}`} onPress={() => setYear(year + 1)} style={styles.iconButton}><Icon name="chevron-forward" size={22} color={theme.textSecondary} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr("calendarsheets.nextYearValue", { value1: year + 1 })} onPress={() => setYear(year + 1)} style={styles.iconButton}><Icon name="chevron-forward" size={22} color={theme.textSecondary} /></Pressable>
         </View>
         <View style={styles.months}>
           {Array.from({ length: 12 }, (_, index) => {
@@ -64,6 +72,9 @@ export function MonthPickerSheet({ visible, year: initialYear, month, onPick, on
  * reschedules its notification; "Remove from calendar" keeps the note.
  */
 export function ScheduleSheet({ visible, title, initial, scheduled, onSave, onRemove, onClose }: { visible: boolean; title: string; initial: ScheduleDraft; scheduled: boolean; onSave: (draft: ScheduleDraft) => Promise<void>; onRemove: () => Promise<void>; onClose: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const controls = useStickyControls();
   // The parent remounts this sheet (new key) each time it opens.
@@ -77,12 +88,12 @@ export function ScheduleSheet({ visible, title, initial, scheduled, onSave, onRe
     try { if (kind === 'save') await onSave(draft); else await onRemove(); onClose(); } finally { setBusy(null); }
   };
   return (
-    <Sheet visible={visible} onClose={close} closeLabel="Close schedule">
+    <Sheet visible={visible} onClose={close} closeLabel={tr("calendarsheets.closeSchedule")}>
       <ScrollView bounces={false} style={styles.scroll} contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <View style={[styles.headerIcon, { backgroundColor: theme.surfaceElevated }]}><Icon name="calendar-outline" size={18} color={theme.accentStrong} /></View>
           <View style={styles.flex}>
-            <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{scheduled ? 'Reschedule' : 'Add to calendar'}</AppText>
+            <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{scheduled ? tr("calendarsheets.reschedule") : tr("calendarsheets.addToCalendar")}</AppText>
             <AppText numberOfLines={1} style={[styles.subtitle, { color: theme.textSecondary }]}>{title}</AppText>
           </View>
         </View>
@@ -91,15 +102,15 @@ export function ScheduleSheet({ visible, title, initial, scheduled, onSave, onRe
       <View style={[styles.footer, { borderTopColor: theme.borderSubtle }]}>
         {scheduled ? (
           <Pressable accessibilityRole="button" disabled={busy !== null} onPress={() => void run('remove')} style={({ pressed }) => [styles.textButton, pressed && styles.pressed]}>
-            {busy === 'remove' ? <ActivityIndicator size="small" color={theme.danger} /> : <AppText style={[styles.textLabel, { color: theme.danger }]}>Remove from calendar</AppText>}
+            {busy === 'remove' ? <ActivityIndicator size="small" color={theme.danger} /> : <AppText style={[styles.textLabel, { color: theme.danger }]}>{tr("calendarsheets.removeFromCalendar")}</AppText>}
           </Pressable>
         ) : <View />}
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" disabled={busy !== null} onPress={close} style={({ pressed }) => [styles.textButton, pressed && styles.pressed]}>
-            <AppText style={[styles.textLabel, { color: theme.textSecondary }]}>Cancel</AppText>
+            <AppText style={[styles.textLabel, { color: theme.textSecondary }]}>{tr("chat.cancel")}</AppText>
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityState={{ disabled: invalid || busy !== null }} disabled={invalid || busy !== null} onPress={() => void run('save')} style={({ pressed }) => [styles.primary, controls.button, { backgroundColor: theme.accentStrong }, invalid && styles.disabled, pressed && styles.pressed]}>
-            {busy === 'save' ? <ActivityIndicator size="small" color={theme.background} /> : <AppText style={[styles.primaryLabel, { color: theme.background }]}>Save</AppText>}
+            {busy === 'save' ? <ActivityIndicator size="small" color={theme.background} /> : <AppText style={[styles.primaryLabel, { color: theme.background }]}>{tr("editcontent.save")}</AppText>}
           </Pressable>
         </View>
       </View>

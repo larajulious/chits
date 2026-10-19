@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 
@@ -48,5 +49,5 @@ export function useAttachmentExport() {
     }
   }, []);
 
-  return { exportAttachment: run, busy, status: preparing ? 'Saving file…' : feedback };
+  return { exportAttachment: run, busy, status: preparing ? tr("useattachmentexport.savingFile") : feedback };
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getLocales } from 'expo-localization';
+import { i18n } from '@/localization/runtime';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { AppState, Keyboard } from 'react-native';
@@ -51,9 +51,7 @@ export function useMascotGreeting() {
         if (settings.get('onboarding.firstRun') === 'shown' && !settings.has('onboarding.completedAt')) return;
 
         const now = new Date();
-        let deviceLocale: string | undefined;
-        try { deviceLocale = getLocales()[0]?.languageTag; } catch { /* English remains available. */ }
-        const language = getGreetingLanguage(settings.get('app_language') || deviceLocale);
+        const language = getGreetingLanguage(i18n.resolvedLanguage);
         const period = getGreetingPeriod(now);
         const recent = parseRecent(settings.get(RECENT_KEY));
         const text = chooseGreeting(getGreetingsForPeriod(language, period), recent);

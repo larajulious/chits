@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import type { AttachmentLike } from '@/db/types';
 
 type Exportable = Pick<AttachmentLike, 'type' | 'storagePath' | 'originalName' | 'mimeType' | 'createdAt'>;
@@ -24,7 +25,7 @@ const MIME_ALIASES: Record<string, string> = {
 const GENERIC_MIME_TYPES = new Set(['', 'application/octet-stream', 'binary/octet-stream', 'application/binary', 'application/unknown', 'application/force-download']);
 
 const TYPE_FALLBACK_MIME: Partial<Record<AttachmentLike['type'], string>> = { photo: 'image/jpeg', video: 'video/mp4', audio: 'audio/mp4' };
-const TYPE_BASE_NAME: Record<AttachmentLike['type'], string> = { photo: 'Photo', video: 'Video', audio: 'Voice note', file: 'Attachment', text: 'Attachment' };
+const TYPE_BASE_NAME: Record<AttachmentLike['type'], string> = { get photo() { return tr("id.photo"); }, get video() { return tr("addcardattachmentsheet.video"); }, get audio() { return tr("cardlistrow.voiceNote"); }, get file() { return tr("attachmentexportnaming.attachment"); }, get text() { return tr("attachmentexportnaming.attachment"); } };
 
 function extensionOf(value: string | null | undefined): string | null {
   const last = value?.split(/[?#]/)[0].split('/').pop() ?? '';
@@ -72,9 +73,9 @@ export function exportFileName(attachment: Exportable): string {
   const originalExtension = extensionOf(original);
   const base = original && !original.startsWith('.')
     ? (originalExtension ? stripExtension(original) : original)
-    : `${TYPE_BASE_NAME[attachment.type] ?? 'Attachment'} ${timestampLabel(attachment.createdAt)}`;
+    : `${TYPE_BASE_NAME[attachment.type] ?? tr("attachmentexportnaming.attachment")} ${timestampLabel(attachment.createdAt)}`;
   const extension = storedExtension ?? originalExtension ?? extensionForMime(normalizedMime(attachment.mimeType) ?? TYPE_FALLBACK_MIME[attachment.type] ?? null);
-  const safeBase = base.trim() || TYPE_BASE_NAME[attachment.type] || 'Attachment';
+  const safeBase = base.trim() || TYPE_BASE_NAME[attachment.type] || tr("attachmentexportnaming.attachment");
   return extension ? `${safeBase}.${extension}` : safeBase;
 }
 
@@ -109,8 +110,8 @@ export function downloadMethod(platform: string, platformVersion: number | strin
 
 /** The action's label, matching what it will actually do. */
 export function downloadActionLabel(platform: string, type: AttachmentLike['type']): string {
-  if (platform !== 'ios') return 'Download';
-  return type === 'photo' || type === 'video' ? 'Save to Photos' : 'Save to Files';
+  if (platform !== 'ios') return tr("attachmentexportnaming.download");
+  return type === 'photo' || type === 'video' ? tr("attachmentexportnaming.saveToPhotos") : tr("attachmentexportnaming.saveToFiles");
 }
 
 /**
@@ -118,12 +119,12 @@ export function downloadActionLabel(platform: string, type: AttachmentLike['type
  * (cancel, or 'permission', which gets the explicit Settings prompt instead).
  */
 export function exportFeedback(outcome: ExportOutcome): string | null {
-  if (outcome.status === 'saved') return outcome.destination === 'downloads' ? 'Saved to Downloads/Chits' : outcome.destination === 'photos' ? 'Saved to Photos' : 'File saved successfully';
+  if (outcome.status === 'saved') return outcome.destination === 'downloads' ? tr("attachmentexportnaming.savedToDownloadsChits") : outcome.destination === 'photos' ? tr("attachmentexportnaming.savedToPhotos") : tr("attachmentexportnaming.fileSavedSuccessfully");
   if (outcome.status === 'cancelled') return null;
-  if (outcome.code === 'missing') return 'This file is no longer on this device.';
-  if (outcome.code === 'no_space') return 'Not enough storage space to save this file.';
+  if (outcome.code === 'missing') return tr("attachmentexportnaming.thisFileIsNoLongerOnThisDevice");
+  if (outcome.code === 'no_space') return tr("attachmentexportnaming.notEnoughStorageSpaceToSaveThisFile");
   if (outcome.code === 'permission') return null;
-  return 'Unable to save this file. Please try again.';
+  return tr("attachmentexportnaming.unableToSaveThisFilePleaseTryAgain");
 }
 
 export function failureCodeFromNative(code: unknown): ExportFailureCode {

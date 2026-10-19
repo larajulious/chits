@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import { noteListMarkers, type NoteList } from './note-content.ts';
 import type { AttachmentLike, Message } from '@/db/types';
 
@@ -17,18 +18,18 @@ export const SHARE_NOTE_DESIGN_WIDTH = 360;
 export const MAX_SHARE_NOTE_IMAGE_HEIGHT = 12000;
 
 export const SHARE_NOTE_FORMATS = {
-  portrait: { label: 'Portrait', width: 1080, height: 1350 },
-  square: { label: 'Square', width: 1080, height: 1080 },
-  story: { label: 'Story', width: 1080, height: 1920 },
+  portrait: { get label() { return tr("sharenote.portrait"); }, width: 1080, height: 1350 },
+  square: { get label() { return tr("sharenote.square"); }, width: 1080, height: 1080 },
+  story: { get label() { return tr("sharenote.story"); }, width: 1080, height: 1920 },
 } as const;
 export type ShareNoteFormat = keyof typeof SHARE_NOTE_FORMATS;
 export const DEFAULT_SHARE_NOTE_FORMAT: ShareNoteFormat = 'portrait';
 
 export type ShareNoteMode = 'text' | 'text-image' | 'image';
 export const SHARE_NOTE_MODES: { key: ShareNoteMode; label: string }[] = [
-  { key: 'text', label: 'Text' },
-  { key: 'text-image', label: 'Text + image' },
-  { key: 'image', label: 'Image' },
+  { key: 'text', get label() { return tr("sharenote.text"); } },
+  { key: 'text-image', get label() { return tr("sharenote.textImage"); } },
+  { key: 'image', get label() { return tr("sharenote.image"); } },
 ];
 
 export type ShareNoteImage = Pick<AttachmentLike, 'id' | 'storagePath' | 'width' | 'height'>;
@@ -89,10 +90,10 @@ export function buildShareNoteSource({ title, messages, cardAttachments = [], su
 }
 
 export const SHARE_NOTE_COPY = {
-  empty: 'This note has no text or image to share yet.',
-  unsupported: 'Only text and images can be used in Share Note for now.',
-  imageLimit: 'You can include up to 2 images.',
-  tooLong: 'This note is too long for this style. Try a shorter note or a different layout.',
+  get empty() { return tr("sharenote.thisNoteHasNoTextOrImageTo"); },
+  get unsupported() { return tr("sharenote.onlyTextAndImagesCanBeUsedIn"); },
+  get imageLimit() { return tr("sharenote.youCanIncludeUpTo2Images"); },
+  get tooLong() { return tr("sharenote.thisNoteIsTooLongForThisStyle"); },
 } as const;
 
 export type ChecklistPageRange = { start: number; end: number };

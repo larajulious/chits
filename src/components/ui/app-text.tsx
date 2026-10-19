@@ -1,3 +1,6 @@
+import { Children, isValidElement, type ReactNode } from 'react';
+import { contentTextStyle, languageDirection, needsSystemFont } from '@/localization/text-layout';
+import { useLocale } from '@/localization/provider';
 import { StyleSheet, Text, type TextProps, type TextStyle } from 'react-native';
 
 import { useTheme } from '@/components/theme-provider';
@@ -29,6 +32,10 @@ export function useFontStyle(role: TextRole = 'body', weight?: FontWeight): Text
   return fontStyle(styleTokens, look, role, weight);
 }
 
+function visibleText(children: ReactNode): string {
+  return Children.toArray(children).map(child => typeof child === 'string' || typeof child === 'number' ? String(child) : isValidElement<{children?: ReactNode}>(child) ? visibleText(child.props.children) : '').join('');
+}
+
 const WEIGHTS: Record<string, FontWeight> = { normal: '400', bold: '700', 100: '400', 200: '400', 300: '400', 400: '400', 500: '500', 600: '600', 700: '700', 800: '800', 900: '800' };
 
 /**
@@ -36,8 +43,15 @@ const WEIGHTS: Record<string, FontWeight> = { normal: '400', bold: '700', 100: '
  * style already asks for, so swapping Text for AppText never changes Classic.
  */
 export function AppText({ variant = 'body', weight, style, ...props }: TextProps & { variant?: TextRole; weight?: FontWeight }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  const locale = useLocale();
   const { styleTokens } = useTheme();
   const styled = !weight && styleTokens.font.body ? StyleSheet.flatten(style)?.fontWeight : undefined;
   const font = useFontStyle(variant, weight ?? (styled !== undefined ? WEIGHTS[String(styled)] : undefined));
-  return <Text {...props} style={[style, font]} />;
+  const text = visibleText(props.children);
+  const flattened = StyleSheet.flatten(style);
+  const bidi = contentTextStyle(text, languageDirection(locale));
+  const scriptFont = needsSystemFont(text, locale) ? { fontFamily: undefined, includeFontPadding: true, ...(flattened?.fontSize ? { lineHeight: Math.max(flattened.lineHeight ?? 0, Math.ceil(flattened.fontSize * 1.5)) } : {}) } : {};
+  return <Text {...props} accessibilityLanguage={props.accessibilityLanguage ?? locale} style={[bidi, style, font, scriptFont]} />;
 }

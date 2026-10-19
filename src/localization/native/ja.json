@@ -1,0 +1,7 @@
+{
+  "ios": {
+    "NSMicrophoneUsageDescription": "Chits は、音声メモの録音を選択した場合にのみマイクを使用します。",
+    "NSPhotoLibraryUsageDescription": "Chits は、メモに添付するか、チャットの背景として設定するために選択した写真とビデオのみを使用します。",
+    "NSPhotoLibraryAddUsageDescription": "Chits は、保存を選択した場合にのみ、写真、ビデオ、または共有メモ画像のコピーを写真ライブラリに保存します。"
+  }
+}

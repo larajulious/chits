@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import { Appearance, useColorScheme } from 'react-native';
 import { isLoaded, loadAsync } from 'expo-font';
@@ -72,7 +73,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     return () => { active = false; };
   }, [customHeader]);
   const setCustomHeader = useCallback(async (next: HeaderPhoto | null) => {
-    if (next && !await attachmentExists(next.storagePath)) throw new Error('This photo is no longer available. Choose it again.');
+    if (next && !await attachmentExists(next.storagePath)) throw new Error(tr("themeprovider.thisPhotoIsNoLongerAvailableChooseIt"));
     const previous = await writeHeaderPhoto(database, next);
     setHeaderPhotoFailed(false);
     setHeaderState(next);
@@ -122,9 +123,11 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   }, [customHeader, setCustomHeader, headerPhotoFailed, failHeaderPhoto, appearance, setAppearance, scheme, identity, setIdentity, setThemeKey, themeKey, style, setStyle, stickyFontsReady]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
-export function useTheme() { const value = useContext(ThemeContext); if (!value) throw new Error('useTheme must be used within ThemeProvider.'); return value; }
+export function useTheme() {
+  const value = useContext(ThemeContext); if (!value) throw new Error('useTheme must be used within ThemeProvider.'); return value; }
 // For the rare component that can render before ThemeProvider mounts (e.g. the
 // root Suspense fallback while DatabaseProvider/ThemeProvider are still
 // suspended) — returns null instead of throwing, so callers fall back to the
 // static default tokens rather than crashing.
-export function useOptionalTheme() { return useContext(ThemeContext); }
+export function useOptionalTheme() {
+  return useContext(ThemeContext); }

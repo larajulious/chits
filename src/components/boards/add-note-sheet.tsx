@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -37,9 +39,9 @@ type Props = {
 };
 
 const ATTACH_OPTIONS = [
-  { key: 'photo', label: 'Photo', icon: 'image-outline' },
-  { key: 'video', label: 'Video', icon: 'videocam-outline' },
-  { key: 'file', label: 'File', icon: 'document-outline' },
+  { key: 'photo', get label() { return tr("id.photo"); }, icon: 'image-outline' },
+  { key: 'video', get label() { return tr("addcardattachmentsheet.video"); }, icon: 'videocam-outline' },
+  { key: 'file', get label() { return tr("addcardattachmentsheet.file"); }, icon: 'document-outline' },
 ] as const;
 
 const MAX_NOTE_LENGTH = 10000;
@@ -51,7 +53,10 @@ const MAX_NOTE_LENGTH = 10000;
 // text where the cursor was. Picking and storage are the same shared path Chat uses
 // (services/attachment-import), so media is optimized and stored identically; a
 // staged file is deleted again if the sheet is dismissed without adding.
-export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit, title = 'Add note', context, extra, extraSummary, canSubmit = true }: Props) {
+export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit, title = tr("id.addNote"), context, extra, extraSummary, canSubmit = true }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const controls = useStickyControls();
   const inputRef = useRef<NoteBlocksEditorControl>(null);
@@ -116,7 +121,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
       const staged = kind === 'file' ? await pickAndStageFile() : await pickAndStageMedia(kind);
       if (staged) { if (inline) pasteImage.insertAttachment(staged, cursor); else setDraft(staged); }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'That attachment could not be added.');
+      setError(cause instanceof Error ? cause.message : tr("id.thatAttachmentCouldNotBeAdded"));
     } finally {
       setStaging(false);
     }
@@ -131,11 +136,11 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   const noteInput = (
     <NoteBlocksEditor
       ref={inputRef}
-      accessibilityLabel="Note text"
+      accessibilityLabel={tr("addnotesheet.noteText")}
       blocks={blocks}
       onChangeBlocks={changeBlocks}
       onReplaceImage={(key) => void pasteImage.pick(key)}
-      placeholder={fullscreen ? 'Start writing…' : 'Write something...'}
+      placeholder={tr('editcontent.startWriting')}
       maxLength={MAX_NOTE_LENGTH}
       editable={!busy}
       maxImageHeight={fullscreen ? 320 : 140}
@@ -162,8 +167,8 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
         <Pressable
           key={option.key}
           accessibilityRole="button"
-          accessibilityLabel={`Attach ${option.label.toLowerCase()}`}
-          accessibilityHint={option.key === 'photo' ? 'Hold to insert a photo at the cursor' : undefined}
+          accessibilityLabel={tr("addnotesheet.attachValue", { value1: option.label.toLowerCase() })}
+          accessibilityHint={option.key === 'photo' ? tr("addnotesheet.holdToInsertAPhotoAtTheCursor") : undefined}
           onLongPress={option.key === 'photo' ? () => void attach('photo', true) : undefined}
           accessibilityState={{ disabled: busy }}
           disabled={busy}
@@ -174,13 +179,13 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
           <AppText style={[styles.attachLabel, { color: theme.textPrimary }]}>{option.label}</AppText>
         </Pressable>
       ))}
-      {staging ? <ActivityIndicator accessibilityLabel="Preparing attachment" size="small" color={theme.textMuted} /> : null}
+      {staging ? <ActivityIndicator accessibilityLabel={tr("addnotesheet.preparingAttachment")} size="small" color={theme.textMuted} /> : null}
     </View>
   );
 
   const contextLine = context ?? (boardName && columnName
-    ? <AppText accessibilityLabel={`Adding to ${boardName}, ${columnName}`} style={[styles.context, { color: theme.textSecondary }]}>Adding to <AppText style={{ color: theme.textPrimary, fontWeight: '700' }}>{boardName}</AppText>  ›  <AppText style={{ color: theme.textPrimary, fontWeight: '700' }}>{columnName}</AppText></AppText>
-    : <AppText style={[styles.context, { color: theme.textSecondary }]}>Saved to <AppText style={{ color: theme.textPrimary, fontWeight: '700' }}>Unorganized</AppText> — add it to a board anytime.</AppText>);
+    ? <AppText accessibilityLabel={tr("addnotesheet.addingToValueValue", { value1: boardName, value2: columnName })} style={[styles.context, { color: theme.textSecondary }]}>{tr("addnotesheet.addingTo")}{' '}<AppText style={{ color: theme.textPrimary, fontWeight: '700' }}>{boardName}</AppText>  ›  <AppText style={{ color: theme.textPrimary, fontWeight: '700' }}>{columnName}</AppText></AppText>
+    : <AppText style={[styles.context, { color: theme.textSecondary }]}>{tr("addnotesheet.savedTo")}{' '}<AppText style={{ color: theme.textPrimary, fontWeight: '700' }}>{tr("index.unorganized")}</AppText> {' '}{tr("addnotesheet.addItToABoardAnytime")}</AppText>);
 
   const submit = async () => {
     if (!canAdd) return;
@@ -193,7 +198,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
       setBlocks(textDraft());
       onClose();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Couldn’t add that note. Try again.');
+      setError(cause instanceof Error ? cause.message : tr("addnotesheet.couldnTAddThatNoteTryAgain"));
     } finally {
       setSaving(false);
     }
@@ -213,19 +218,19 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
           <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={styles.fullScreen}>
             {/* Same header pattern as Edit Note: exit on the left, Add (✓) on the right. */}
             <View style={[styles.fullHeader, { borderBottomColor: theme.borderSubtle }]}>
-              <Pressable accessibilityRole="button" accessibilityLabel="Exit full screen" hitSlop={8} disabled={saving} onPress={toggleFullscreen} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
+              <Pressable accessibilityRole="button" accessibilityLabel={tr("addnotesheet.exitFullScreen")} hitSlop={8} disabled={saving} onPress={toggleFullscreen} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
                 <Icon name="contract-outline" size={22} color={theme.textPrimary} />
               </Pressable>
               <AppText accessibilityRole="header" style={[styles.fullTitle, { color: theme.textPrimary }]}>{title}</AppText>
-              <Pressable accessibilityRole="button" accessibilityLabel="Add note" accessibilityState={{ disabled: !canAdd }} disabled={!canAdd} hitSlop={8} onPress={() => void submit()} style={({ pressed }) => [styles.headerButton, pressed && canAdd && styles.pressed]}>
-                {saving ? <ActivityIndicator accessibilityLabel="Adding note" size="small" color={theme.accent} /> : <Icon name="checkmark" size={24} color={canAdd ? theme.accent : theme.textMuted} />}
+              <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addNote")} accessibilityState={{ disabled: !canAdd }} disabled={!canAdd} hitSlop={8} onPress={() => void submit()} style={({ pressed }) => [styles.headerButton, pressed && canAdd && styles.pressed]}>
+                {saving ? <ActivityIndicator accessibilityLabel={tr("addnotesheet.addingNote")} size="small" color={theme.accent} /> : <Icon name="checkmark" size={24} color={canAdd ? theme.accent : theme.textMuted} />}
               </Pressable>
             </View>
             <View style={styles.fullContext}>{contextLine}</View>
             {noteInput}
             <View style={[styles.fullFooter, { borderTopColor: theme.borderSubtle }]}>
               {extra ? (keyboardVisible && extraSummary
-                ? <Pressable accessibilityRole="button" accessibilityLabel={`${extraSummary}. Hide keyboard to change`} onPress={() => Keyboard.dismiss()} style={({ pressed }) => [styles.summary, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>
+                ? <Pressable accessibilityRole="button" accessibilityLabel={tr("addnotesheet.valueHideKeyboardToChange", { value1: extraSummary })} onPress={() => Keyboard.dismiss()} style={({ pressed }) => [styles.summary, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>
                   <Icon name="calendar-outline" size={16} color={theme.textSecondary} />
                   <AppText numberOfLines={1} style={[styles.summaryText, { color: theme.textPrimary }]}>{extraSummary}</AppText>
                   <Icon name="chevron-up" size={16} color={theme.textSecondary} />
@@ -238,14 +243,14 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
           </SafeAreaView>
         ) : (
           <>
-            <Pressable accessibilityRole="button" accessibilityLabel="Close add note" style={StyleSheet.absoluteFill} onPress={close} />
+            <Pressable accessibilityRole="button" accessibilityLabel={tr("addnotesheet.closeAddNote")} style={StyleSheet.absoluteFill} onPress={close} />
             <SafeAreaView edges={['bottom']} style={[styles.safeArea, { backgroundColor: theme.surface }]}>
               <GlassSurface style={[styles.sheet, { borderColor: theme.borderSubtle }]}>
                 <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
                 <ScrollView scrollEnabled={Boolean(extra)} bounces={false} keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={styles.content}>
                   <View style={styles.titleRow}>
                     <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{title}</AppText>
-                    <Pressable accessibilityRole="button" accessibilityLabel="Write in full screen" hitSlop={8} disabled={busy} onPress={toggleFullscreen} style={({ pressed }) => [styles.expandButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>
+                    <Pressable accessibilityRole="button" accessibilityLabel={tr("addnotesheet.writeInFullScreen")} hitSlop={8} disabled={busy} onPress={toggleFullscreen} style={({ pressed }) => [styles.expandButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>
                       <Icon name="expand-outline" size={18} color={theme.textSecondary} />
                     </Pressable>
                   </View>
@@ -257,17 +262,17 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
 
                   <View style={styles.actions}>
                     <Pressable accessibilityRole="button" disabled={busy} onPress={close} style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
-                      <AppText style={[styles.cancelText, { color: theme.textSecondary }]}>Cancel</AppText>
+                      <AppText style={[styles.cancelText, { color: theme.textSecondary }]}>{tr("chat.cancel")}</AppText>
                     </Pressable>
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="Add note"
+                      accessibilityLabel={tr("id.addNote")}
                       accessibilityState={{ disabled: !canAdd }}
                       disabled={!canAdd}
                       onPress={() => void submit()}
                       style={({ pressed }) => [styles.addButton, controls.button, { backgroundColor: theme.accent }, !canAdd && styles.disabled, pressed && canAdd && styles.pressed]}
                     >
-                      {saving ? <ActivityIndicator accessibilityLabel="Adding note" size="small" color={theme.accentText} /> : <AppText style={[styles.addText, { color: theme.accentText }]}>Add</AppText>}
+                      {saving ? <ActivityIndicator accessibilityLabel={tr("addnotesheet.addingNote")} size="small" color={theme.accentText} /> : <AppText style={[styles.addText, { color: theme.accentText }]}>{tr("addnotesheet.add")}</AppText>}
                     </Pressable>
                   </View>
                 </ScrollView>

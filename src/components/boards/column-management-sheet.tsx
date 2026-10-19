@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
@@ -44,6 +46,9 @@ export function ColumnManagementSheet({
   onGetDeleteCardCount,
   onDelete,
 }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const controls = useStickyControls();
   const [page, setPage] = useState<Page>('manage');
@@ -120,12 +125,12 @@ export function ColumnManagementSheet({
     try {
       setDeleteCardCount(await onGetDeleteCardCount());
     } catch {
-      setError('Couldn’t check this column. Try again.');
+      setError(tr("columnmanagementsheet.couldnTCheckThisColumnTryAgain"));
     }
   };
 
   const trimmedName = name.trim();
-  const nameError = touched && !trimmedName ? 'Column name can’t be empty.' : null;
+  const nameError = touched && !trimmedName ? tr("columnmanagementsheet.columnNameCanTBeEmpty") : null;
   const nameChanged = Boolean(currentColumn && trimmedName && trimmedName !== currentColumn.name);
 
   const saveName = async () => {
@@ -138,7 +143,7 @@ export function ColumnManagementSheet({
       setName(trimmedName);
       setTouched(false);
     } catch {
-      setError('Couldn’t update column. Try again.');
+      setError(tr("columnmanagementsheet.couldnTUpdateColumnTryAgain"));
     } finally {
       setBusy(false);
     }
@@ -159,7 +164,7 @@ export function ColumnManagementSheet({
         setTouched(false);
       }
     } catch {
-      setError('Couldn’t add column. Try again.');
+      setError(tr("columnmanagementsheet.couldnTAddColumnTryAgain"));
     } finally {
       setBusy(false);
     }
@@ -172,7 +177,7 @@ export function ColumnManagementSheet({
     try {
       await onMove(direction);
     } catch {
-      setError('Couldn’t move column. Try again.');
+      setError(tr("columnmanagementsheet.couldnTMoveColumnTryAgain"));
     } finally {
       setBusy(false);
     }
@@ -186,16 +191,16 @@ export function ColumnManagementSheet({
       await onDelete(destinationId ?? undefined);
       onClose();
     } catch {
-      setError('Couldn’t delete column. Try again.');
+      setError(tr("columnmanagementsheet.couldnTDeleteColumnTryAgain"));
     } finally {
       setBusy(false);
     }
   };
 
   const pageTitle = page === 'manage'
-    ? 'Manage column'
+    ? tr("columnmanagementsheet.manageColumn")
     : page === 'add'
-      ? 'New column'
+      ? tr("unorganized.newColumn")
       : `Delete “${currentColumn?.name ?? 'column'}”?`;
   // The add page has nowhere to go back to when it was opened without an existing
   // column to manage (an empty board's "Add column" placeholder).
@@ -210,14 +215,14 @@ export function ColumnManagementSheet({
       <View style={styles.header}>
         <View style={styles.headerSide}>
           {back ? (
-            <Pressable accessibilityRole="button" accessibilityLabel="Go back" disabled={busy} onPress={back} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+            <Pressable accessibilityRole="button" accessibilityLabel={tr("search.goBack")} disabled={busy} onPress={back} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
               <Icon name="chevron-back" size={22} color={theme.textPrimary} />
             </Pressable>
           ) : null}
         </View>
         <AppText accessibilityRole="header" numberOfLines={1} style={[styles.title, { color: theme.textPrimary }]}>{pageTitle}</AppText>
         <View style={[styles.headerSide, styles.headerSideRight]}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Close" disabled={busy} onPress={close} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr("attachments.close")} disabled={busy} onPress={close} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
             <Icon name="close-outline" size={22} color={theme.textSecondary} />
           </Pressable>
         </View>
@@ -230,7 +235,7 @@ export function ColumnManagementSheet({
       ref={scrollRef}
       visible={visible}
       onRequestClose={close}
-      closeAccessibilityLabel="Close column settings"
+      closeAccessibilityLabel={tr("columnmanagementsheet.closeColumnSettings")}
       onModalShow={focusNameInput}
       maxHeightPercent={86}
       header={header}
@@ -238,11 +243,11 @@ export function ColumnManagementSheet({
     >
       {page === 'manage' && currentColumn ? (
                 <>
-                  <AppText nativeID="column-name-label" style={[styles.fieldLabel, { color: theme.textSecondary }]}>Column name</AppText>
+                  <AppText nativeID="column-name-label" style={[styles.fieldLabel, { color: theme.textSecondary }]}>{tr("unorganized.columnName")}</AppText>
                   <TextInput
                     ref={nameInputRef}
                     accessibilityLabelledBy="column-name-label"
-                    accessibilityLabel="Column name"
+                    accessibilityLabel={tr("unorganized.columnName")}
                     value={name}
                     onChangeText={(value) => { setName(value); setTouched(true); setError(null); }}
                     onFocus={() => scrollRef.current?.requestVisible(nameInputRef)}
@@ -255,77 +260,77 @@ export function ColumnManagementSheet({
                   {nameError ? <AppText accessibilityRole="alert" style={[styles.validation, { color: theme.danger }]}>{nameError}</AppText> : null}
                   {nameChanged ? (
                     <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => void saveName()} style={({ pressed }) => [styles.saveButton, controls.button, { backgroundColor: theme.accent }, pressed && styles.pressed]}>
-                      <AppText style={[styles.saveText, { color: theme.accentText }]}>{busy ? 'Saving…' : 'Save changes'}</AppText>
+                      <AppText style={[styles.saveText, { color: theme.accentText }]}>{busy ? tr("id.saving") : tr("columnmanagementsheet.saveChanges")}</AppText>
                     </Pressable>
                   ) : null}
 
                   <View style={styles.sectionHeading}>
-                    <AppText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Position</AppText>
-                    <AppText accessibilityLabel={`Current position ${currentIndex + 1} of ${columns.length}`} style={[styles.position, { color: theme.textMuted }]}>{currentIndex + 1} of {columns.length}</AppText>
+                    <AppText style={[styles.fieldLabel, { color: theme.textSecondary }]}>{tr("columnmanagementsheet.position")}</AppText>
+                    <AppText accessibilityLabel={tr("columnmanagementsheet.currentPositionValueOfValue", { value1: currentIndex + 1, value2: columns.length })} style={[styles.position, { color: theme.textMuted }]}>{currentIndex + 1} {' '}{tr("id.of")}{' '}{columns.length}</AppText>
                   </View>
                   <View style={styles.positionActions}>
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="Move column left"
+                      accessibilityLabel={tr("columnmanagementsheet.moveColumnLeft")}
                       accessibilityState={{ disabled: leftDisabled }}
                       disabled={leftDisabled}
                       onPress={() => void moveColumn(-1)}
                       style={({ pressed }) => [styles.positionButton, controls.panel, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, leftDisabled && styles.disabled, pressed && !leftDisabled && styles.pressed]}
                     >
                       <Icon name="arrow-back-outline" size={18} color={theme.textPrimary} />
-                      <AppText style={[styles.positionText, { color: theme.textPrimary }]}>Move left</AppText>
+                      <AppText style={[styles.positionText, { color: theme.textPrimary }]}>{tr("columnmanagementsheet.moveLeft")}</AppText>
                     </Pressable>
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="Move column right"
+                      accessibilityLabel={tr("columnmanagementsheet.moveColumnRight")}
                       accessibilityState={{ disabled: rightDisabled }}
                       disabled={rightDisabled}
                       onPress={() => void moveColumn(1)}
                       style={({ pressed }) => [styles.positionButton, controls.panel, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, rightDisabled && styles.disabled, pressed && !rightDisabled && styles.pressed]}
                     >
-                      <AppText style={[styles.positionText, { color: theme.textPrimary }]}>Move right</AppText>
+                      <AppText style={[styles.positionText, { color: theme.textPrimary }]}>{tr("columnmanagementsheet.moveRight")}</AppText>
                       <Icon name="arrow-forward-outline" size={18} color={theme.textPrimary} />
                     </Pressable>
                   </View>
 
-                  <Pressable accessibilityRole="button" accessibilityLabel="Add column" disabled={busy} onPress={openAdd} style={({ pressed }) => [styles.addAction, pressed && styles.pressed]}>
+                  <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addColumn")} disabled={busy} onPress={openAdd} style={({ pressed }) => [styles.addAction, pressed && styles.pressed]}>
                     <Icon name="add-outline" size={19} color={theme.accent} />
-                    <AppText style={[styles.addText, { color: theme.accent }]}>Add column</AppText>
+                    <AppText style={[styles.addText, { color: theme.accent }]}>{tr("id.addColumn")}</AppText>
                   </Pressable>
 
                   <View style={[styles.danger, { borderTopColor: theme.borderSubtle }]}>
-                    <AppText style={[styles.sectionLabel, { color: theme.textMuted }]}>DANGER ZONE</AppText>
+                    <AppText style={[styles.sectionLabel, { color: theme.textMuted }]}>{tr("columnmanagementsheet.dangerZone")}</AppText>
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="Delete column. Destructive action."
+                      accessibilityLabel={tr("columnmanagementsheet.deleteColumnDestructiveAction")}
                       accessibilityState={{ disabled: columns.length <= 1 || busy }}
                       disabled={columns.length <= 1 || busy}
                       onPress={() => void openDelete()}
                       style={({ pressed }) => [styles.deleteAction, columns.length <= 1 && styles.disabled, pressed && columns.length > 1 && styles.pressed]}
                     >
                       <Icon name="trash-outline" size={18} color={theme.danger} />
-                      <AppText style={[styles.deleteText, { color: theme.danger }]}>Delete column</AppText>
+                      <AppText style={[styles.deleteText, { color: theme.danger }]}>{tr("columnmanagementsheet.deleteColumn")}</AppText>
                     </Pressable>
-                    {columns.length <= 1 ? <AppText style={[styles.rowDetail, { color: theme.textMuted }]}>A board needs at least one column.</AppText> : null}
+                    {columns.length <= 1 ? <AppText style={[styles.rowDetail, { color: theme.textMuted }]}>{tr("columnmanagementsheet.aBoardNeedsAtLeastOneColumn")}</AppText> : null}
                   </View>
                 </>
               ) : null}
 
               {page === 'add' ? (
                 <>
-                  <AppText style={[styles.context, { color: theme.textSecondary }]}>New columns are added to the end.</AppText>
-                  <AppText nativeID="new-column-name-label" style={[styles.fieldLabel, { color: theme.textSecondary }]}>Column name</AppText>
+                  <AppText style={[styles.context, { color: theme.textSecondary }]}>{tr("columnmanagementsheet.newColumnsAreAddedToTheEnd")}</AppText>
+                  <AppText nativeID="new-column-name-label" style={[styles.fieldLabel, { color: theme.textSecondary }]}>{tr("unorganized.columnName")}</AppText>
                   <TextInput
                     ref={nameInputRef}
                     accessibilityLabelledBy="new-column-name-label"
-                    accessibilityLabel="New column name"
+                    accessibilityLabel={tr("columnmanagementsheet.newColumnName")}
                     value={name}
                     onChangeText={(value) => { setName(value); setTouched(true); setError(null); }}
                     onFocus={() => scrollRef.current?.requestVisible(nameInputRef)}
                     onSubmitEditing={() => void addColumn()}
                     maxLength={MAX_COLUMN_NAME_LENGTH}
                     returnKeyType="done"
-                    placeholder="e.g. To do"
+                    placeholder={tr("unorganized.eGToDo")}
                     placeholderTextColor={theme.textMuted}
                     style={[styles.input, controls.input, { color: theme.textPrimary, backgroundColor: theme.background, borderColor: nameError ? theme.danger : theme.borderSubtle }]}
                   />
@@ -337,21 +342,21 @@ export function ColumnManagementSheet({
                     onPress={() => void addColumn()}
                     style={({ pressed }) => [styles.fullButton, controls.button, { backgroundColor: theme.accent }, (!trimmedName || busy) && styles.disabled, pressed && trimmedName && styles.pressed]}
                   >
-                    <AppText style={[styles.saveText, { color: theme.accentText }]}>{busy ? 'Adding…' : 'Add column'}</AppText>
+                    <AppText style={[styles.saveText, { color: theme.accentText }]}>{busy ? tr("columnmanagementsheet.adding") : tr("id.addColumn")}</AppText>
                   </Pressable>
                 </>
               ) : null}
 
               {page === 'delete' && currentColumn ? (
                 <>
-                  {deleteCardCount === null && !error ? <ActivityIndicator accessibilityLabel="Checking column" color={theme.accent} style={styles.loader} /> : null}
+                  {deleteCardCount === null && !error ? <ActivityIndicator accessibilityLabel={tr("columnmanagementsheet.checkingColumn")} color={theme.accent} style={styles.loader} /> : null}
                   {deleteCardCount === 0 ? (
-                    <AppText style={[styles.deleteCopy, { color: theme.textSecondary }]}>This column is empty. Deleting it can’t be undone.</AppText>
+                    <AppText style={[styles.deleteCopy, { color: theme.textSecondary }]}>{tr("columnmanagementsheet.thisColumnIsEmptyDeletingItCanT")}</AppText>
                   ) : null}
                   {deleteCardCount !== null && deleteCardCount > 0 ? (
                     <>
-                      <AppText style={[styles.deleteCopy, { color: theme.textSecondary }]}>This column contains {deleteCardCount} {deleteCardCount === 1 ? 'card' : 'cards'}. Choose where to move {deleteCardCount === 1 ? 'it' : 'them'} first.</AppText>
-                      <AppText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Move cards to</AppText>
+                      <AppText style={[styles.deleteCopy, { color: theme.textSecondary }]}>{tr("columnmanagementsheet.thisColumnContains")}{' '}{deleteCardCount} {deleteCardCount === 1 ? tr("id.card") : tr("index.cards")}{tr("columnmanagementsheet.chooseWhereToMove")}{' '}{deleteCardCount === 1 ? 'it' : 'them'} {' '}{tr("columnmanagementsheet.first")}</AppText>
+                      <AppText style={[styles.fieldLabel, { color: theme.textSecondary }]}>{tr("columnmanagementsheet.moveCardsTo")}</AppText>
                       <View style={[styles.destinationList, controls.panel, { borderColor: theme.borderSubtle }]}>
                         {destinations.map((column, index) => {
                           const selected = destinationId === column.id;
@@ -376,17 +381,17 @@ export function ColumnManagementSheet({
                   {deleteCardCount !== null ? (
                     <View style={styles.confirmActions}>
                       <Pressable accessibilityRole="button" disabled={busy} onPress={openManage} style={styles.cancelButton}>
-                        <AppText style={[styles.cancelText, { color: theme.textSecondary }]}>Cancel</AppText>
+                        <AppText style={[styles.cancelText, { color: theme.textSecondary }]}>{tr("chat.cancel")}</AppText>
                       </Pressable>
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel={deleteCardCount > 0 ? 'Move cards and delete column' : 'Delete column'}
+                        accessibilityLabel={deleteCardCount > 0 ? tr("columnmanagementsheet.moveCardsAndDeleteColumn") : tr("columnmanagementsheet.deleteColumn")}
                         accessibilityState={{ disabled: busy || (deleteCardCount > 0 && !destinationId) }}
                         disabled={busy || (deleteCardCount > 0 && !destinationId)}
                         onPress={() => void confirmDelete()}
                         style={({ pressed }) => [styles.destructiveButton, { backgroundColor: theme.danger }, (busy || (deleteCardCount > 0 && !destinationId)) && styles.disabled, pressed && styles.pressed]}
                       >
-                        <AppText style={styles.destructiveButtonText}>{busy ? 'Deleting…' : deleteCardCount > 0 ? 'Move & Delete' : 'Delete'}</AppText>
+                        <AppText style={styles.destructiveButtonText}>{busy ? tr("columnmanagementsheet.deleting") : deleteCardCount > 0 ? tr("columnmanagementsheet.moveDelete") : tr("id.delete")}</AppText>
                       </Pressable>
                     </View>
                   ) : null}

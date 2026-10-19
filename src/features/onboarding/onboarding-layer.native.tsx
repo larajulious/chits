@@ -1,3 +1,4 @@
+import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, usePathname } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -19,6 +20,9 @@ type Placement = { boardId: string; columnId: string; cardId: string };
 
 /** A transient layer over the real Chat and Board screens. */
 export function OnboardingLayer() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const pathname = usePathname();
   const pathnameRef = useRef(pathname);

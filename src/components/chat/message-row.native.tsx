@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
@@ -41,14 +43,14 @@ function durationSeconds(duration: number | null) { return duration ? Math.max(1
 function formatSeconds(seconds: number) { return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds) % 60).padStart(2, '0')}`; }
 function formatSize(size: number | null) { if (!size) return null; if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`; return `${(size / (1024 * 1024)).toFixed(1)} MB`; }
 function typeLabel(attachment: AttachmentLike) {
-  if (attachment.type === 'photo') return 'Photo';
-  if (attachment.type === 'video') return 'Video';
-  if (attachment.type === 'audio') return 'Audio note';
+  if (attachment.type === 'photo') return tr("id.photo");
+  if (attachment.type === 'video') return tr("addcardattachmentsheet.video");
+  if (attachment.type === 'audio') return tr("messagerow.audioNote");
   if (isPdfAttachment(attachment)) return 'PDF file';
   const extension = attachment.originalName?.split('.').pop()?.toUpperCase();
   if (extension && extension.length <= 8) return `${extension} file`;
   if (attachment.mimeType?.includes('pdf')) return 'PDF file';
-  return 'File';
+  return tr("addcardattachmentsheet.file");
 }
 function fileIcon(attachment: AttachmentLike): IconName {
   if (isPdfAttachment(attachment)) return 'document-text-outline';
@@ -60,6 +62,9 @@ function fileIcon(attachment: AttachmentLike): IconName {
 }
 
 function useAttachmentAvailable(uri: string) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const [available, setAvailable] = useState<boolean | null>(() => uri ? availabilityCache.get(uri) ?? null : false);
   useEffect(() => {
     if (!uri || availabilityCache.has(uri)) return;
@@ -75,19 +80,25 @@ function useAttachmentAvailable(uri: string) {
 // Absolutely positioned children ignore the SafeAreaView's padding, so the
 // top inset is applied explicitly to keep both buttons out of the status bar.
 function ViewerActions({ attachment, label, onDismiss }: { attachment: AttachmentLike; label: string; onDismiss: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const download = useAttachmentExport();
   const insets = useSafeAreaInsets();
   const top = { top: insets.top + spacing.sm };
   return <>
     <Pressable accessibilityRole="button" accessibilityLabel={`${exportActionLabel(attachment)}, ${label}`} disabled={download.busy} onPress={() => void download.exportAttachment(attachment)} style={[styles.viewerClose, styles.viewerSecondary, top]}><Icon name="download-outline" size={22} color="#FFFFFF" /></Pressable>
-    <Pressable accessibilityRole="button" accessibilityLabel={`Close ${label}`} onPress={onDismiss} style={[styles.viewerClose, top]}><Icon name="close" size={24} color="#FFFFFF" /></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel={tr("messagerow.closeValue", { value1: label })} onPress={onDismiss} style={[styles.viewerClose, top]}><Icon name="close" size={24} color="#FFFFFF" /></Pressable>
     {download.status ? <View pointerEvents="none" style={[styles.viewerToast, { bottom: insets.bottom + spacing.xl }]}><AppText accessibilityLiveRegion="polite" style={styles.viewerToastText}>{download.status}</AppText></View> : null}
   </>;
 }
 
 function VideoViewer({ attachment, onDismiss }: { attachment: AttachmentLike; onDismiss: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const player = useVideoPlayer(resolveAttachmentUri(attachment.storagePath) ?? '', (videoPlayer) => videoPlayer.play());
-  return <Modal visible animationType="fade" presentationStyle="fullScreen" statusBarTranslucent={false} navigationBarTranslucent={false} onRequestClose={onDismiss}><SafeAreaProvider><SafeAreaView edges={['top', 'right', 'bottom', 'left']} style={styles.videoViewer}><VideoView player={player as never} nativeControls fullscreenOptions={{ enable: true }} contentFit="contain" style={styles.video} /><ViewerActions attachment={attachment} label="video" onDismiss={onDismiss} /></SafeAreaView></SafeAreaProvider></Modal>;
+  return <Modal visible animationType="fade" presentationStyle="fullScreen" statusBarTranslucent={false} navigationBarTranslucent={false} onRequestClose={onDismiss}><SafeAreaProvider><SafeAreaView edges={['top', 'right', 'bottom', 'left']} style={styles.videoViewer}><VideoView player={player as never} nativeControls fullscreenOptions={{ enable: true }} contentFit="contain" style={styles.video} /><ViewerActions attachment={attachment} label={tr("cardlistrow.video")} onDismiss={onDismiss} /></SafeAreaView></SafeAreaProvider></Modal>;
 }
 
 function mediaAspectRatio(attachment: Pick<Attachment, 'width' | 'height'>) {
@@ -96,6 +107,9 @@ function mediaAspectRatio(attachment: Pick<Attachment, 'width' | 'height'>) {
 }
 
 export function useVideoThumbnail(storagePath: string) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const uri = resolveAttachmentUri(storagePath) ?? '';
   const [thumbnail, setThumbnail] = useState<VideoThumbnail | null>(null);
   useEffect(() => {
@@ -110,6 +124,9 @@ export function useVideoThumbnail(storagePath: string) {
 }
 
 export function VideoPoster({ attachment, style }: { attachment: AttachmentLike; style?: StyleProp<ViewStyle> }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const thumbnail = useVideoThumbnail(attachment.storagePath);
   return <View style={[styles.media, style, { backgroundColor: theme.surfaceElevated }]}>{thumbnail ? <Image source={thumbnail} contentFit="cover" style={StyleSheet.absoluteFill} /> : <Icon name="videocam-outline" size={36} color={theme.textMuted} />}<View style={styles.videoPlay}><Icon name="play" size={23} color="#FFFFFF" /></View><View style={styles.durationBadge}><AppText style={styles.durationText}>{formatDuration(attachment.duration)}</AppText></View></View>;
@@ -132,6 +149,9 @@ function waveformBars(seed: string) {
 }
 
 function AudioPlayer({ attachment }: { attachment: AttachmentLike }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const player = useAudioPlayer(resolveAttachmentUri(attachment.storagePath) ?? '', { updateInterval: 250 });
   const status = useAudioPlayerStatus(player);
@@ -158,8 +178,8 @@ function AudioPlayer({ attachment }: { attachment: AttachmentLike }) {
   return <View style={styles.audioPlayer}>
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={status.playing ? 'Pause audio note' : 'Play audio note'}
-      accessibilityHint={unavailable ? undefined : status.playing ? 'Pauses playback' : 'Starts playback'}
+      accessibilityLabel={status.playing ? tr("messagerow.pauseAudioNote") : tr("messagerow.playAudioNote")}
+      accessibilityHint={unavailable ? undefined : status.playing ? tr("messagerow.pausesPlayback") : tr("messagerow.startsPlayback")}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={toggle}
@@ -178,14 +198,14 @@ function AudioPlayer({ attachment }: { attachment: AttachmentLike }) {
     </Pressable>
     <View style={styles.audioBody}>
       <View style={styles.audioHeading}>
-        <AppText style={[styles.audioTitle, { color: theme.textPrimary }]}>Audio note</AppText>
-        <AppText style={[styles.audioState, { color: unavailable ? theme.textMuted : theme.accentStrong }]}>{unavailable ? 'Unavailable' : loading ? 'Loading' : formatSeconds(duration)}</AppText>
+        <AppText style={[styles.audioTitle, { color: theme.textPrimary }]}>{tr("messagerow.audioNote")}</AppText>
+        <AppText style={[styles.audioState, { color: unavailable ? theme.textMuted : theme.accentStrong }]}>{unavailable ? tr("messagerow.unavailable") : loading ? tr("messagerow.loading") : formatSeconds(duration)}</AppText>
       </View>
       <View
         accessible
         accessibilityRole="progressbar"
-        accessibilityLabel="Audio progress"
-        accessibilityValue={{ min: 0, max: progressMax, now: progressNow, text: `${formatSeconds(currentTime)} of ${formatSeconds(duration)}` }}
+        accessibilityLabel={tr("messagerow.audioProgress")}
+        accessibilityValue={{ min: 0, max: progressMax, now: progressNow, text: tr("messagerow.valueOfValue", { value1: formatSeconds(currentTime), value2: formatSeconds(duration) }) }}
         style={styles.waveform}
       >
         {bars.map((height, index) => <View key={index} style={[styles.waveformBar, { height, backgroundColor: index < playedBars ? theme.accent : theme.borderSubtle }]} />)}
@@ -196,21 +216,30 @@ function AudioPlayer({ attachment }: { attachment: AttachmentLike }) {
 }
 
 function Unavailable({ attachment, style }: { attachment: AttachmentLike; style?: StyleProp<ViewStyle> }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const icon = attachment.type === 'photo' ? 'image-outline' : attachment.type === 'video' ? 'videocam-outline' : attachment.type === 'audio' ? 'volume-medium-outline' : fileIcon(attachment);
-  const label = attachment.type === 'photo' ? 'Photo unavailable' : attachment.type === 'video' ? 'Video unavailable' : 'Attachment unavailable';
+  const label = attachment.type === 'photo' ? tr("attachmentdraftpreview.photoUnavailable") : attachment.type === 'video' ? tr("messagerow.videoUnavailable") : tr("messagerow.attachmentUnavailable");
   return <View accessibilityLabel={label} style={[styles.unavailable, style, { backgroundColor: theme.surfaceElevated }]}><Icon name={icon} size={25} color={theme.textMuted} /><AppText style={[styles.unavailableText, { color: theme.textSecondary }]}>{label}</AppText></View>;
 }
 
 function AttachmentLoading({ attachment, style }: { attachment: AttachmentLike; style?: StyleProp<ViewStyle> }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const icon = attachment.type === 'photo' ? 'image-outline' : attachment.type === 'video' ? 'videocam-outline' : attachment.type === 'audio' ? 'volume-medium-outline' : fileIcon(attachment);
-  return <View accessibilityLabel={`${typeLabel(attachment)} loading`} style={[styles.unavailable, style, { backgroundColor: theme.surfaceElevated }]}><Icon name={icon} size={25} color={theme.textMuted} /></View>;
+  return <View accessibilityLabel={tr("messagerow.valueLoading", { value1: typeLabel(attachment) })} style={[styles.unavailable, style, { backgroundColor: theme.surfaceElevated }]}><Icon name={icon} size={25} color={theme.textMuted} /></View>;
 }
 
 // `onOpen` (photo/video only): a tap hands off to the caller's multi-attachment
 // gallery instead of this attachment's own single-item viewer.
 export function AttachmentContent({ attachment, accessibilityLabel, overlay, variant = 'chat', accentColor, onLongPress, onOpen }: { attachment: AttachmentLike; accessibilityLabel?: string; overlay?: ReactNode; variant?: 'chat' | 'board' | 'detail' | 'thumbnail' | 'grid'; accentColor?: string; onLongPress?: () => void; onOpen?: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const { height: screenHeight } = useWindowDimensions();
   const uri = resolveAttachmentUri(attachment.storagePath) ?? '';
@@ -238,38 +267,41 @@ export function AttachmentContent({ attachment, accessibilityLabel, overlay, var
   const mediaStyle = variant === 'board' ? [styles.media, styles.boardMedia] : variant === 'thumbnail' ? [styles.media, styles.thumbnailMedia] : variant === 'grid' ? [styles.media, styles.gridMedia] : variant === 'detail' ? [styles.media, styles.detailMedia, { aspectRatio }] : [styles.media, styles.chatMedia, { aspectRatio, maxHeight: Math.round(screenHeight * 0.6) }];
   if (available === null) return <AttachmentLoading attachment={attachment} style={mediaStyle} />;
   if (available === false || mediaError) return <Unavailable attachment={attachment} style={mediaStyle} />;
-  const galleryHint = 'Opens all attachments on this card';
-  if (attachment.type === 'photo') return <><View style={[mediaStyle, { backgroundColor: theme.surfaceElevated }]}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? 'Photo. Double tap to view fullscreen.'} accessibilityHint={onOpen ? galleryHint : 'Opens the photo fullscreen'} onPress={onOpen ?? (() => setViewerOpen(true))} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><Image source={uri} contentFit="cover" transition={120} allowDownscaling onError={() => setMediaError(true)} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <PhotoAttachmentViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
-  if (attachment.type === 'video') return <><View style={mediaStyle}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? `Video${attachment.duration ? `, ${durationSeconds(attachment.duration)} seconds` : ''}. Play video.`} accessibilityHint={onOpen ? galleryHint : 'Opens the video player'} onPress={onOpen ?? (() => setViewerOpen(true))} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><VideoPoster attachment={attachment} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <VideoViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
+  const galleryHint = tr("messagerow.opensAllAttachmentsOnThisCard");
+  if (attachment.type === 'photo') return <><View style={[mediaStyle, { backgroundColor: theme.surfaceElevated }]}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? tr("messagerow.photoDoubleTapToViewFullscreen")} accessibilityHint={onOpen ? galleryHint : tr("messagerow.opensThePhotoFullscreen")} onPress={onOpen ?? (() => setViewerOpen(true))} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><Image source={uri} contentFit="cover" transition={120} allowDownscaling onError={() => setMediaError(true)} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <PhotoAttachmentViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
+  if (attachment.type === 'video') return <><View style={mediaStyle}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? tr("messagerow.videoValuePlayVideo", { value1: attachment.duration ? ', ' + tr('common.seconds', { count: durationSeconds(attachment.duration) }) : '' })} accessibilityHint={onOpen ? galleryHint : tr("messagerow.opensTheVideoPlayer")} onPress={onOpen ?? (() => setViewerOpen(true))} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><VideoPoster attachment={attachment} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <VideoViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
   if (attachment.type === 'audio') return <AudioPlayer attachment={attachment} />;
   // PDFs open in Chits' own viewer; every other document keeps the existing
   // system share/open-with flow.
   const pdf = isPdfAttachment(attachment);
   const meta = [typeLabel(attachment).replace(/ file$/, ''), formatSize(attachment.size)].filter(Boolean).join(' · ');
-  if (pdf) return <><Pressable accessibilityRole="button" accessibilityLabel={`Open PDF, ${attachment.originalName ?? 'document'}${attachment.size ? `, ${formatSize(attachment.size)}` : ''}`} accessibilityHint="Opens the PDF in Chits" onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [styles.fileTile, pressed && styles.fileTilePressed]}><View style={[styles.fileIcon, { backgroundColor: theme.surface }]}><Icon name="document-text-outline" size={22} color={accentColor ?? theme.accent} /><AppText style={[styles.pdfBadge, { color: accentColor ?? theme.accent }]}>PDF</AppText></View><View style={styles.fileCopy}><AppText numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{attachment.originalName ?? 'Document.pdf'}</AppText><AppText style={[styles.attachmentMeta, { color: theme.textMuted }]}>{meta}</AppText></View><Icon name="chevron-forward" size={18} color={theme.textMuted} />{overlay}</Pressable>{viewerOpen ? <PdfViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
-  const open = async () => { setOpenError(null); try { if (!uri || !await Sharing.isAvailableAsync()) throw new Error(); await Sharing.shareAsync(uri, { mimeType: attachment.mimeType ?? undefined }); } catch { setOpenError('This file could not be opened.'); } };
-  return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${typeLabel(attachment)}, ${attachment.originalName ?? 'document'}${attachment.size ? `, ${formatSize(attachment.size)}` : ''}`} onPress={() => void open()} onLongPress={onLongPress} delayLongPress={350} style={styles.fileTile}><View style={[styles.fileIcon, { backgroundColor: theme.surface }]}><Icon name={fileIcon(attachment)} size={24} color={accentColor ?? theme.accent} /></View><View style={styles.fileCopy}><AppText numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{attachment.originalName ?? 'Document'}</AppText><AppText style={[styles.attachmentMeta, { color: theme.textMuted }]}>{openError ?? meta}</AppText></View><Icon name="open-outline" size={18} color={theme.textMuted} />{overlay}</Pressable>;
+  if (pdf) return <><Pressable accessibilityRole="button" accessibilityLabel={tr("messagerow.openPdfValueValue", { value1: attachment.originalName ?? 'document', value2: attachment.size ? `, ${formatSize(attachment.size)}` : '' })} accessibilityHint={tr("messagerow.opensThePdfInChits")} onPress={() => setViewerOpen(true)} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [styles.fileTile, pressed && styles.fileTilePressed]}><View style={[styles.fileIcon, { backgroundColor: theme.surface }]}><Icon name="document-text-outline" size={22} color={accentColor ?? theme.accent} /><AppText style={[styles.pdfBadge, { color: accentColor ?? theme.accent }]}>PDF</AppText></View><View style={styles.fileCopy}><AppText numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{attachment.originalName ?? 'Document.pdf'}</AppText><AppText style={[styles.attachmentMeta, { color: theme.textMuted }]}>{meta}</AppText></View><Icon name="chevron-forward" size={18} color={theme.textMuted} />{overlay}</Pressable>{viewerOpen ? <PdfViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
+  const open = async () => { setOpenError(null); try { if (!uri || !await Sharing.isAvailableAsync()) throw new Error(); await Sharing.shareAsync(uri, { mimeType: attachment.mimeType ?? undefined }); } catch { setOpenError(tr("messagerow.thisFileCouldNotBeOpened")); } };
+  return <Pressable accessibilityRole="button" accessibilityLabel={tr("messagerow.openValueValueValue", { value1: typeLabel(attachment), value2: attachment.originalName ?? 'document', value3: attachment.size ? `, ${formatSize(attachment.size)}` : '' })} onPress={() => void open()} onLongPress={onLongPress} delayLongPress={350} style={styles.fileTile}><View style={[styles.fileIcon, { backgroundColor: theme.surface }]}><Icon name={fileIcon(attachment)} size={24} color={accentColor ?? theme.accent} /></View><View style={styles.fileCopy}><AppText numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{attachment.originalName ?? tr("attachments.document")}</AppText><AppText style={[styles.attachmentMeta, { color: theme.textMuted }]}>{openError ?? meta}</AppText></View><Icon name="open-outline" size={18} color={theme.textMuted} />{overlay}</Pressable>;
 }
 
 // `timestampLeft`: the bottom-right corner is taken (a video's duration or the
 // "+N" badge), so the timestamp moves to the bottom-left instead.
 function MediaMetadata({ message, timestampLeft = false, onActions, onHideAgain }: { message: Message; timestampLeft?: boolean; onActions: () => void; onHideAgain?: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const router = useRouter();
   const organization = message.organization;
   return <>
     {organization ? <Pressable
       accessibilityRole="link"
-      accessibilityLabel={`Open ${organization.columnName} in ${organization.boardName}`}
-      accessibilityHint={organization.cardId ? "Opens this column and highlights the linked card" : "Opens this column on its board"}
+      accessibilityLabel={tr("messagenotecards.openValueInValue", { value1: organization.columnName, value2: organization.boardName })}
+      accessibilityHint={organization.cardId ? tr("messagenotecards.opensThisColumnAndHighlightsTheLinkedCard") : tr("messagenotecards.opensThisColumnOnItsBoard")}
       onPress={(event) => {
         event.stopPropagation();
         router.push({ pathname: '/board/[id]', params: { id: organization.boardId, highlightColumnId: organization.columnId, ...(organization.cardId ? { highlightCardId: organization.cardId } : {}) } });
       }}
       style={({ pressed }) => [styles.mediaBoardChip, pressed && styles.pressed]}
     ><AppText numberOfLines={1} style={styles.mediaBoardChipText}>{organization.boardName} · {organization.columnName}</AppText></Pressable> : null}
-    <View style={[styles.mediaTimestamp, timestampLeft && styles.mediaTimestampLeft]}><AppText style={styles.mediaTimestampText}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? ' · edited' : ''}</AppText>{message.pinned ? <Icon accessibilityLabel="Pinned" name="pin-outline" size={12} color="#FFFFFF" /> : null}{(message.reminderAt ?? message.organization?.reminderAt) != null ? <Icon accessibilityLabel="Reminder set" name="notifications-outline" size={12} color="#FFFFFF" /> : null}</View>
-    {onHideAgain ? <Pressable accessibilityRole="button" accessibilityLabel="Hide again" onPress={onHideAgain} hitSlop={6} style={styles.mediaPrivacy}><Icon name="eye-off-outline" size={16} color="#FFFFFF" /></Pressable> : null}
-    <Pressable accessibilityRole="button" accessibilityLabel="Thought actions" onPress={onActions} hitSlop={6} style={styles.mediaActions}><Icon name="ellipsis-horizontal" size={17} color="#FFFFFF" /></Pressable>
+    <View style={[styles.mediaTimestamp, timestampLeft && styles.mediaTimestampLeft]}><AppText style={styles.mediaTimestampText}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? tr("messagenotecards.edited") : ''}</AppText>{message.pinned ? <Icon accessibilityLabel={tr("index.pinned")} name="pin-outline" size={12} color="#FFFFFF" /> : null}{(message.reminderAt ?? message.organization?.reminderAt) != null ? <Icon accessibilityLabel={tr("chat.reminderSet")} name="notifications-outline" size={12} color="#FFFFFF" /> : null}</View>
+    {onHideAgain ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.hideAgain")} onPress={onHideAgain} hitSlop={6} style={styles.mediaPrivacy}><Icon name="eye-off-outline" size={16} color="#FFFFFF" /></Pressable> : null}
+    <Pressable accessibilityRole="button" accessibilityLabel={tr("messagenotecards.thoughtActions")} onPress={onActions} hitSlop={6} style={styles.mediaActions}><Icon name="ellipsis-horizontal" size={17} color="#FFFFFF" /></Pressable>
   </>;
 }
 
@@ -277,6 +309,9 @@ function MediaMetadata({ message, timestampLeft = false, onActions, onHideAgain 
 // bordered background on Android can invalidate its clip bounds and hide every
 // descendant; the content mask must not share that mutable painted background.
 function MediaMessageSurface({ focused, onLongPress, children }: { focused: boolean; onLongPress: () => void; children: ReactNode }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme, styleTokens } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const sticky = useStickySurface();
@@ -297,6 +332,9 @@ function MediaMessageSurface({ focused, onLongPress, children }: { focused: bool
 }
 
 function AttachmentMessage({ message, attachment, focused, onLongPress, onHideAgain }: { message: Message; attachment: Attachment; focused: boolean; onLongPress: (message: Message) => void; onHideAgain?: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const database = useSQLiteContext();
   const [gallery, setGallery] = useState<{ items: AttachmentLike[]; initialIndex: number } | null>(null);
@@ -318,11 +356,11 @@ function AttachmentMessage({ message, attachment, focused, onLongPress, onHideAg
     setGallery({ items: list, initialIndex: Math.max(0, start >= 0 ? start : list.findIndex((item) => item.id === attachment.id)) });
   };
   const seconds = durationSeconds(attachment.duration);
-  const moreLabel = moreCount ? ` ${moreCount} more attachment${moreCount === 1 ? '' : 's'}.` : '';
+  const moreLabel = moreCount ? tr('common.moreAttachments', { count: moreCount }) : '';
   const accessibilityLabel = attachment.type === 'photo'
-    ? `Photo.${message.text ? ` Description: ${message.text}.` : ''}${moreLabel}`
+    ? tr('common.photoSummary', { description: message.text ? tr('common.description', { text: message.text }) : '', more: moreLabel })
     : attachment.type === 'video'
-      ? `Video${seconds ? `, ${seconds} seconds` : ''}.${message.text ? ` Description: ${message.text}.` : ''}${moreLabel} Play video.`
+      ? tr("messages.videoPlayVideo", { value1: seconds ? ', ' + tr('common.seconds', { count: seconds }) : '', value2: message.text ? tr('common.description', { text: message.text }) : '', value3: moreLabel })
       : undefined;
   return <MediaMessageSurface focused={focused} onLongPress={() => onLongPress(message)}>
     {mosaicItems.length > 1
@@ -339,6 +377,9 @@ function AttachmentMessage({ message, attachment, focused, onLongPress, onHideAg
 // picked photo, video, recording or file) leads, as it always has; images
 // keep their own proportions, within a screen-relative height.
 function InlineNoteMessage({ message, content, focused, onLongPress, onHideAgain }: { message: Message; content: NonNullable<ReturnType<typeof noteRenderContent<Attachment>>>; focused: boolean; onLongPress: (message: Message) => void; onHideAgain?: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { height: screenHeight } = useWindowDimensions();
   return <MediaMessageSurface focused={focused} onLongPress={() => onLongPress(message)}>
     {content.leading.map((attachment) => <AttachmentContent key={attachment.id} attachment={attachment} />)}
@@ -353,6 +394,9 @@ const MOSAIC_MAX_TILES = 4;
 function mosaicAspectRatio(count: number) { return count === 2 ? 4 / 3 : 1; }
 
 function MosaicVideoFace({ item }: { item: AttachmentLike }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const thumbnail = useVideoThumbnail(item.storagePath);
   return <>
@@ -364,6 +408,9 @@ function MosaicVideoFace({ item }: { item: AttachmentLike }) {
 
 // Audio, PDFs and other files have no picture, so their tile is an icon + name.
 function MosaicFileFace({ item }: { item: AttachmentLike }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const icon = item.type === 'photo' ? 'image-outline' : item.type === 'audio' ? 'volume-medium-outline' : fileIcon(item);
   const name = item.type === 'file' ? item.originalName ?? typeLabel(item) : typeLabel(item);
@@ -374,11 +421,14 @@ function MosaicFileFace({ item }: { item: AttachmentLike }) {
 }
 
 function MosaicTile({ item, label, hiddenCount, onPress, onLongPress }: { item: AttachmentLike; label: string; hiddenCount: number; onPress: () => void; onLongPress: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const [photoFailed, setPhotoFailed] = useState(false);
-  return <Pressable accessibilityRole="button" accessibilityLabel={hiddenCount ? `${label} ${hiddenCount} more attachment${hiddenCount === 1 ? '' : 's'}.` : label} accessibilityHint="Opens the card's attachments" onPress={onPress} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [styles.mosaicTile, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>
-    {item.type === 'photo' && !photoFailed ? <Image source={resolveAttachmentUri(item.storagePath)} contentFit="cover" transition={120} allowDownscaling recyclingKey={item.id} onError={() => setPhotoFailed(true)} style={StyleSheet.absoluteFill} />
-      : item.type === 'video' ? <MosaicVideoFace item={item} />
+  return <Pressable accessibilityRole="button" accessibilityLabel={hiddenCount ? tr('common.withMoreAttachments', { label, more: tr('common.moreAttachments', { count: hiddenCount }) }) : label} accessibilityHint={tr("messagerow.opensTheCardSAttachments")} onPress={onPress} onLongPress={onLongPress} delayLongPress={350} style={({ pressed }) => [styles.mosaicTile, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>
+    {item.type === "photo" && !photoFailed ? <Image source={resolveAttachmentUri(item.storagePath)} contentFit="cover" transition={120} allowDownscaling recyclingKey={item.id} onError={() => setPhotoFailed(true)} style={StyleSheet.absoluteFill} />
+      : item.type === "video" ? <MosaicVideoFace item={item} />
       : <MosaicFileFace item={item} />}
     {hiddenCount > 0 ? <View style={styles.mosaicMore}><AppText style={styles.mosaicMoreText}>+{hiddenCount}</AppText></View> : null}
   </Pressable>;
@@ -390,6 +440,9 @@ function MosaicTile({ item, label, hiddenCount, onPress, onLongPress }: { item: 
 // not fully visible, so "+3" always means three more to see. Any tile opens the
 // gallery on that attachment.
 function MediaMosaic({ items, total, firstLabel, onOpen, onLongPress, overlay }: { items: AttachmentLike[]; total: number; firstLabel?: string; onOpen: (startId: string) => void; onLongPress: () => void; overlay?: ReactNode }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { height: screenHeight } = useWindowDimensions();
   const hiddenCount = total > items.length ? total - (items.length - 1) : 0;
   const tile = (index: number) => {
@@ -406,6 +459,9 @@ function MediaMosaic({ items, total, firstLabel, onOpen, onLongPress, overlay }:
 }
 
 function GalleryVideo({ attachment }: { attachment: AttachmentLike }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const player = useVideoPlayer(resolveAttachmentUri(attachment.storagePath) ?? '', (videoPlayer) => videoPlayer.play());
   return <VideoView player={player as never} nativeControls fullscreenOptions={{ enable: true }} contentFit="contain" style={styles.video} />;
 }
@@ -414,11 +470,14 @@ function GalleryVideo({ attachment }: { attachment: AttachmentLike }) {
 // away stops (and releases) it. Audio/PDF/files reuse AttachmentContent's own
 // player/viewer/open flow on a card, exactly as Card Details presents them.
 function GalleryPage({ attachment, active, width }: { attachment: AttachmentLike; active: boolean; width: number }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const insets = useSafeAreaInsets();
   return <View style={[styles.galleryPage, { width, paddingTop: insets.top + 60, paddingBottom: insets.bottom + spacing.md }]}>
-    {attachment.type === 'photo' ? <Image source={resolveAttachmentUri(attachment.storagePath)} contentFit="contain" style={StyleSheet.absoluteFill} />
-      : attachment.type === 'video' ? (active ? <GalleryVideo attachment={attachment} /> : <VideoPoster attachment={attachment} style={styles.video} />)
+    {attachment.type === "photo" ? <Image source={resolveAttachmentUri(attachment.storagePath)} contentFit="contain" style={StyleSheet.absoluteFill} />
+      : attachment.type === "video" ? (active ? <GalleryVideo attachment={attachment} /> : <VideoPoster attachment={attachment} style={styles.video} />)
       : <View style={[styles.galleryCard, { backgroundColor: theme.surface }]}><AttachmentContent attachment={attachment} variant="detail" /></View>}
   </View>;
 }
@@ -426,6 +485,9 @@ function GalleryPage({ attachment, active, width }: { attachment: AttachmentLike
 // Swipe through every attachment behind a "+N" preview, starting on the one
 // that was tapped.
 function AttachmentGallery({ attachments, initialIndex, onDismiss }: { attachments: AttachmentLike[]; initialIndex: number; onDismiss: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { width } = useWindowDimensions();
   const [index, setIndex] = useState(initialIndex);
   const current = attachments[index] ?? attachments[0];
@@ -449,18 +511,21 @@ function AttachmentGallery({ attachments, initialIndex, onDismiss }: { attachmen
 }
 
 function GalleryPosition({ label }: { label: string }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const insets = useSafeAreaInsets();
   return <View style={[styles.galleryPosition, { top: insets.top + spacing.sm }]}><AppText accessibilityLiveRegion="polite" style={styles.galleryPositionText}>{label}</AppText></View>;
 }
 
 function hiddenCopy(message: Message) {
-  if (message.content) return { title: 'Hidden Chit', accessibilityLabel: 'Hidden Chit. Double tap to reveal.' };
+  if (message.content) return { title: tr("index.hiddenChit"), accessibilityLabel: tr("messagerow.hiddenChitDoubleTapToReveal") };
   const type = message.attachments[0]?.type ?? message.type;
-  if (type === 'photo') return { title: 'Photo hidden', accessibilityLabel: 'Hidden photo. Double tap to reveal.' };
-  if (type === 'video') return { title: 'Video hidden', accessibilityLabel: 'Hidden video. Double tap to reveal.' };
-  if (type === 'audio') return { title: 'Audio hidden', accessibilityLabel: 'Hidden audio. Double tap to reveal.' };
-  if (type === 'file') return { title: 'File hidden', accessibilityLabel: 'Hidden file. Double tap to reveal.' };
-  return { title: 'Hidden Chit', accessibilityLabel: 'Hidden Chit. Double tap to reveal.' };
+  if (type === 'photo') return { title: tr("messagerow.photoHidden"), accessibilityLabel: tr("messagerow.hiddenPhotoDoubleTapToReveal") };
+  if (type === 'video') return { title: tr("messagerow.videoHidden"), accessibilityLabel: tr("messagerow.hiddenVideoDoubleTapToReveal") };
+  if (type === 'audio') return { title: tr("messagerow.audioHidden"), accessibilityLabel: tr("messagerow.hiddenAudioDoubleTapToReveal") };
+  if (type === 'file') return { title: tr("messagerow.fileHidden"), accessibilityLabel: tr("messagerow.hiddenFileDoubleTapToReveal") };
+  return { title: tr("index.hiddenChit"), accessibilityLabel: tr("messagerow.hiddenChitDoubleTapToReveal") };
 }
 
 function hiddenFallbackHeight(message: Message, width: number, screenHeight: number) {
@@ -480,6 +545,9 @@ function hiddenFallbackHeight(message: Message, width: number, screenHeight: num
 }
 
 function HiddenMessageCover({ message, height, focused, onReveal, onLongPress }: { message: Message; height: number; focused: boolean; onReveal: (message: Message) => void; onLongPress: (message: Message) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { scheme, tokens: theme, styleTokens } = useTheme();
   const sticky = useStickySurface();
   const blurTargetRef = useRef<View | null>(null);
@@ -488,7 +556,7 @@ function HiddenMessageCover({ message, height, focused, onReveal, onLongPress }:
     accessible
     accessibilityRole="button"
     accessibilityLabel={copy.accessibilityLabel}
-    accessibilityHint="Temporarily reveals this content for the current Chat session"
+    accessibilityHint={tr("messagerow.temporarilyRevealsThisContentForTheCurrentChat")}
     onPress={() => onReveal(message)}
     onLongPress={() => onLongPress(message)}
     delayLongPress={350}
@@ -511,13 +579,16 @@ function HiddenMessageCover({ message, height, focused, onReveal, onLongPress }:
       <View style={[styles.hiddenBadgeIcon, { backgroundColor: `${theme.accentSoft}E6` }]}><Icon name="eye-off-outline" size={18} color={theme.accentStrong} /></View>
       <View style={styles.hiddenBadgeCopy}>
         <AppText style={[styles.hiddenTitle, { color: theme.textPrimary }]}>{copy.title}</AppText>
-        <AppText style={[styles.hiddenHint, { color: theme.textMuted }]}>Tap to reveal</AppText>
+        <AppText style={[styles.hiddenHint, { color: theme.textMuted }]}>{tr("id.tapToReveal")}</AppText>
       </View>
     </View>
   </Pressable>;
 }
 
 function MessageRowComponent({ message, onLongPress, onReveal, onHideAgain, temporarilyRevealed = false, focused = false }: { message: Message; onLongPress: (message: Message) => void; onReveal: (message: Message) => void; onHideAgain: (message: Message) => void; temporarilyRevealed?: boolean; focused?: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
   const attachment = message.attachments[0];

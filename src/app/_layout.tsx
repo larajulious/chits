@@ -1,6 +1,8 @@
+import '@/localization/bootstrap';
+import { useDirection, LanguageProvider } from '@/localization/provider';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { AppState, View } from 'react-native';
-import { router, Stack, usePathname } from 'expo-router';
+import { LocaleProvider, router, Stack, usePathname } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -57,6 +59,9 @@ function ReminderCoordinator() {
 }
 
 function ThemedApp() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  const { direction } = useDirection();
   const { scheme, tokens, topBar, customHeader, headerPhotoFailed } = useTheme();
   const pathname = usePathname();
   useEffect(() => {
@@ -66,8 +71,8 @@ function ThemedApp() {
   // Chat's status area and header share a fade in the page's light/dark palette.
   const statusBarStyle = customHeader && !headerPhotoFailed && pathname !== '/chat' ? 'light' : topBar && pathname !== '/chat' ? (topBar.dark ? 'light' : 'dark') : scheme === 'dark' ? 'light' : 'dark';
   return (
-    <AppDialogProvider>
-      <View style={{ flex: 1, backgroundColor: tokens.background }}>
+    <LocaleProvider direction={direction}><AppDialogProvider>
+      <View style={{ flex: 1, direction: 'ltr', backgroundColor: tokens.background }}>
         <ResetNotice />
         <ReminderCoordinator />
         <AppDrawerProvider><StatusBar style={statusBarStyle} />
@@ -88,7 +93,7 @@ function ThemedApp() {
           <OnboardingLayer />
         </AppDrawerProvider>
       </View>
-    </AppDialogProvider>
+    </AppDialogProvider></LocaleProvider>
   );
 }
 
@@ -104,7 +109,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Suspense fallback={<LoadingState />} key={resetKey}>
         <DatabaseProvider>
-          <ThemeProvider><ChatBackgroundProvider><ThemedApp /></ChatBackgroundProvider></ThemeProvider>
+          <LanguageProvider><ThemeProvider><ChatBackgroundProvider><ThemedApp /></ChatBackgroundProvider></ThemeProvider></LanguageProvider>
         </DatabaseProvider>
       </Suspense>
     </GestureHandlerRootView>

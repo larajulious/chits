@@ -1,6 +1,11 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { AppHeader, EmptyState, IconButton, Screen } from '@/components/ui/primitives';
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { useTheme } from '@/components/theme-provider';
 import { Text } from 'react-native';
 
-export default function AttachmentsScreen() { const { openDrawer } = useAppDrawer(); const { tokens } = useTheme(); return <Screen><AppHeader title="Attachments" leading={<IconButton label="Open navigation" onPress={openDrawer}><Text style={{ color: tokens.textPrimary, fontSize: 20 }}>☰</Text></IconButton>} /><EmptyState title="No attachments yet" description="Photos, videos, audio and files you attach to your notes will appear here." /></Screen>; }
+export default function AttachmentsScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale(); const { openDrawer } = useAppDrawer(); const { tokens } = useTheme(); return <Screen><AppHeader title={tr("attachments.attachments")} leading={<IconButton label={tr("archive.openNavigation")} onPress={openDrawer}><Text style={{ color: tokens.textPrimary, fontSize: 20 }}>☰</Text></IconButton>} /><EmptyState title={tr("attachments.noAttachmentsYet")} description={tr("attachments.photosVideosAudioAndFilesYouAttachTo")} /></Screen>; }

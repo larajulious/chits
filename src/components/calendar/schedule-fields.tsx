@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
 import { DateTimePicker } from '@expo/ui/community/datetime-picker';
@@ -40,6 +42,9 @@ export function defaultStartMinute(dateKey: string, now = new Date()): number {
  * the reminder sheet.
  */
 export function ScheduleFields({ value, onChange, destination, destinations, onDestinationChange }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { scheme, tokens: theme } = useTheme();
   const controls = useStickyControls();
   const [androidPicker, setAndroidPicker] = useState<'date' | 'start' | 'end' | null>(null);
@@ -76,43 +81,43 @@ export function ScheduleFields({ value, onChange, destination, destinations, onD
 
   const timeField = (which: 'start' | 'end', minute: number) => Platform.OS === 'ios'
     ? <DateTimePicker style={styles.iosTime} value={timeAsDate(minute % DAY_MINUTES)} mode="time" display="compact" accentColor={theme.accentStrong} themeVariant={themeVariant} onValueChange={(_, date) => (which === 'start' ? setStart : setEnd)(minuteOfDay(date) || (which === 'end' ? DAY_MINUTES : 0))} />
-    : <FieldButton text={formatMinute(minute % DAY_MINUTES)} label={`${which === 'start' ? 'Starts' : 'Ends'} ${formatMinute(minute % DAY_MINUTES)}. Change time`} onPress={() => setAndroidPicker(which)} />;
+    : <FieldButton text={formatMinute(minute % DAY_MINUTES)} label={tr("schedulefields.valueValueChangeTime", { value1: which === 'start' ? tr("schedulefields.starts") : tr("schedulefields.ends"), value2: formatMinute(minute % DAY_MINUTES) })} onPress={() => setAndroidPicker(which)} />;
 
   return (
     <View style={styles.root}>
       <View style={[styles.group, controls.panel, { borderColor: theme.borderSubtle }]}>
-        <Row label="Date" icon="calendar-outline" first>
+        <Row label={tr("schedulefields.date")} icon="calendar-outline" first>
           {Platform.OS === 'ios'
             ? <DateTimePicker style={styles.iosDate} value={day} mode="date" display="compact" accentColor={theme.accentStrong} themeVariant={themeVariant} onValueChange={(_, date) => setDay(date.getFullYear(), date.getMonth(), date.getDate())} />
-            : <FieldButton text={formatReminderDay(day, new Date())} label={`Date, ${formatReminderDay(day, new Date())}. Change date`} onPress={() => setAndroidPicker('date')} />}
+            : <FieldButton text={formatReminderDay(day, new Date())} label={tr("schedulefields.dateValueChangeDate", { value1: formatReminderDay(day, new Date()) })} onPress={() => setAndroidPicker('date')} />}
         </Row>
-        <Row label="All day" icon="sunny-outline">
-          <Switch accessibilityLabel="All day" value={allDay} onValueChange={toggleAllDay} trackColor={{ true: theme.accentStrong, false: theme.borderSubtle }} thumbColor={Platform.OS === 'android' ? theme.surface : undefined} ios_backgroundColor={theme.borderSubtle} />
+        <Row label={tr("schedulefields.allDay")} icon="sunny-outline">
+          <Switch accessibilityLabel={tr("schedulefields.allDay")} value={allDay} onValueChange={toggleAllDay} trackColor={{ true: theme.accentStrong, false: theme.borderSubtle }} thumbColor={Platform.OS === 'android' ? theme.surface : undefined} ios_backgroundColor={theme.borderSubtle} />
         </Row>
         {!allDay ? <>
-          <Row label="Starts" icon="time-outline">{timeField('start', start)}</Row>
-          <Row label="Ends" icon="hourglass-outline">{timeField('end', end)}</Row>
+          <Row label={tr("schedulefields.starts")} icon="time-outline">{timeField('start', start)}</Row>
+          <Row label={tr("schedulefields.ends")} icon="hourglass-outline">{timeField('end', end)}</Row>
         </> : null}
       </View>
 
-      <AppText style={[styles.sectionLabel, { color: theme.textMuted }]}>REMINDER</AppText>
+      <AppText style={[styles.sectionLabel, { color: theme.textMuted }]}>{tr("schedulefields.reminder")}</AppText>
       <ChipRow>
-        <Chip label="None" selected={value.reminder.mode === 'none'} onPress={() => chooseReminder({ mode: 'none' })} accessibilityLabel="No reminder" />
+        <Chip label={tr("schedulefields.none")} selected={value.reminder.mode === 'none'} onPress={() => chooseReminder({ mode: 'none' })} accessibilityLabel={tr("schedulefields.noReminder")} />
         {presets.map((preset) => (
-          <Chip key={preset.offset} label={preset.label} selected={value.reminder.mode === 'offset' && value.reminder.offset === preset.offset} onPress={() => chooseReminder({ mode: 'offset', offset: preset.offset })} accessibilityLabel={`Remind ${preset.label}`} />
+          <Chip key={preset.offset} label={preset.label} selected={value.reminder.mode === 'offset' && value.reminder.offset === preset.offset} onPress={() => chooseReminder({ mode: 'offset', offset: preset.offset })} accessibilityLabel={tr("schedulefields.remindValue", { value1: preset.label })} />
         ))}
-        <Chip label={value.reminder.mode === 'custom' ? formatReminder(new Date(value.reminder.at), new Date()) : 'Custom…'} selected={value.reminder.mode === 'custom'} onPress={() => { setCustomKey((key) => key + 1); setCustomOpen(true); }} accessibilityLabel="Remind at a custom date and time" />
+        <Chip label={value.reminder.mode === 'custom' ? formatReminder(new Date(value.reminder.at), new Date()) : tr('schedulefields.custom')} selected={value.reminder.mode === 'custom'} onPress={() => { setCustomKey((key) => key + 1); setCustomOpen(true); }} accessibilityLabel={tr("schedulefields.remindAtACustomDateAndTime")} />
       </ChipRow>
-      {wantsReminder && alarmAccess === false ? <ExactAlarmNotice action="save this reminder" /> : null}
-      {past ? <View accessibilityRole="alert" style={styles.inline}><Icon name="alert-circle-outline" size={16} color={theme.danger} /><AppText style={[styles.inlineText, { color: theme.danger }]}>That reminder time has passed. Choose another.</AppText></View> : null}
+      {wantsReminder && alarmAccess === false ? <ExactAlarmNotice action={tr("schedulefields.saveThisReminder")} /> : null}
+      {past ? <View accessibilityRole="alert" style={styles.inline}><Icon name="alert-circle-outline" size={16} color={theme.danger} /><AppText style={[styles.inlineText, { color: theme.danger }]}>{tr("schedulefields.thatReminderTimeHasPassedChooseAnother")}</AppText></View> : null}
 
       {destination && destinations && onDestinationChange ? <>
-        <AppText style={[styles.sectionLabel, { color: theme.textMuted }]}>SAVE TO</AppText>
+        <AppText style={[styles.sectionLabel, { color: theme.textMuted }]}>{tr("schedulefields.saveTo")}</AppText>
         <ChipRow>
           {destinations.map((option) => {
             const key = destinationKey(option);
-            const label = option.type === 'chat' ? 'Chat' : option.label;
-            return <Chip key={key} label={label} selected={key === destinationKey(destination)} onPress={() => onDestinationChange(option)} accessibilityLabel={`Save to ${option.type === 'chat' ? 'Chat' : `${option.type === 'board' ? 'board' : 'space'} ${option.label}`}`} />;
+            const label = option.type === 'chat' ? tr("calendarnotepicker.chat") : option.label;
+            return <Chip key={key} label={label} selected={key === destinationKey(destination)} onPress={() => onDestinationChange(option)} accessibilityLabel={tr("schedulefields.saveToValue", { value1: option.type === 'chat' ? tr("calendarnotepicker.chat") : `${option.type === 'board' ? 'board' : 'space'} ${option.label}` })} />;
           })}
         </ChipRow>
       </> : null}
@@ -157,6 +162,9 @@ export function destinationKey(destination: CalendarDestination): string {
 }
 
 function Row({ label, icon, first = false, children }: { label: string; icon: IconName; first?: boolean; children: React.ReactNode }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return (
     <View style={[styles.row, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.borderSubtle }]}>
@@ -168,6 +176,9 @@ function Row({ label, icon, first = false, children }: { label: string; icon: Ic
 }
 
 function FieldButton({ text, label, onPress }: { text: string; label: string; onPress: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} hitSlop={6} style={({ pressed }) => [styles.fieldButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>

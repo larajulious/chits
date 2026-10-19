@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useRef, type ComponentProps } from 'react';
@@ -18,6 +20,9 @@ type Props = {
 };
 
 function Row({ icon, label, onPress }: { icon: ComponentProps<typeof Ionicons>['name']; label: string; onPress: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
     <Icon name={icon} size={20} color={theme.textPrimary} />
@@ -29,6 +34,9 @@ function Row({ icon, label, onPress }: { icon: ComponentProps<typeof Ionicons>['
 // language used by the redesigned message-actions sheet, rather than a Photo/
 // Video/File picker embedded directly in Card Details.
 export function AddCardAttachmentSheet({ visible, onClose, onPick }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   // The chosen kind waits here until the sheet has closed: onDismiss on iOS,
   // the next frame on Android (which has no onDismiss and no such limitation).
@@ -48,15 +56,15 @@ export function AddCardAttachmentSheet({ visible, onClose, onPick }: Props) {
   }, [visible]);
   return <Modal transparent animationType="slide" visible={visible} onRequestClose={dismiss} onDismiss={Platform.OS === 'ios' ? finishClosing : undefined}>
     <View style={styles.backdrop}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Close add attachment" onPress={dismiss} style={StyleSheet.absoluteFill} />
+      <Pressable accessibilityRole="button" accessibilityLabel={tr("addcardattachmentsheet.closeAddAttachment")} onPress={dismiss} style={StyleSheet.absoluteFill} />
       <SafeAreaView edges={['bottom']} style={styles.sheet}>
         <BottomSheetSurface>
           <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
-          <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Add attachment</AppText>
+          <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{tr("id.addAttachment")}</AppText>
           <View style={styles.group}>
-            <Row icon="image-outline" label="Photo" onPress={() => choose('photo')} />
-            <Row icon="videocam-outline" label="Video" onPress={() => choose('video')} />
-            <Row icon="document-outline" label="File" onPress={() => choose('file')} />
+            <Row icon="image-outline" label={tr("id.photo")} onPress={() => choose('photo')} />
+            <Row icon="videocam-outline" label={tr("addcardattachmentsheet.video")} onPress={() => choose('video')} />
+            <Row icon="document-outline" label={tr("addcardattachmentsheet.file")} onPress={() => choose('file')} />
           </View>
         </BottomSheetSurface>
       </SafeAreaView>

@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { memo, useEffect, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -36,6 +38,9 @@ type Props = {
  * saved once, on drop. Tap opens the note; long-press opens its options.
  */
 export const DraggableSticky = memo(function DraggableSticky({ note, order, seed, board, pinStyle, onLift, onDrop, onOpen, onOptions }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   // Reduce Motion: no lift scale; the deeper shadow alone says "lifted".
   const reduceMotion = useReducedMotion();
   const origin = fromUnit(note, board);
@@ -91,8 +96,8 @@ export const DraggableSticky = memo(function DraggableSticky({ note, order, seed
       accessible
       accessibilityRole="button"
       accessibilityLabel={stickyAccessibilityLabel(note)}
-      accessibilityHint="Shows the whole note. Options are in the actions menu."
-      accessibilityActions={[{ name: 'activate' }, { name: 'longpress', label: 'Options' }]}
+      accessibilityHint={tr("draggablesticky.showsTheWholeNoteOptionsAreInThe")}
+      accessibilityActions={[{ name: 'activate' }, { name: 'longpress', label: tr("draggablesticky.options") }]}
       onAccessibilityAction={({ nativeEvent }) => (nativeEvent.actionName === 'longpress' ? onOptions(note.id) : onOpen(note.id))}
       // Only as tall as the note itself, so a cassette's empty strip below it isn't a touch target.
       style={[styles.sticky, { height: shape.height }, position]}
@@ -108,6 +113,9 @@ export const DraggableSticky = memo(function DraggableSticky({ note, order, seed
 
 /** A still copy of a sticky, lifted above the dimmed board while its options are open. */
 export function RaisedSticky({ note, seed, board, pinStyle }: Pick<Props, 'note' | 'seed' | 'board' | 'pinStyle' | 'fontFamily'>) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const reduceMotion = useReducedMotion();
   const { x, y } = fromUnit(note, board);
   return <View pointerEvents="none" style={[styles.sticky, { transform: [{ translateX: x }, { translateY: y }, { scale: reduceMotion ? 1 : 1.08 }] }]}>

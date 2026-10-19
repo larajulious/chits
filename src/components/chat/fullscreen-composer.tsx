@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useEffect, useState, type ReactNode, type RefObject } from 'react';
 import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -30,6 +32,9 @@ export function FullscreenComposer({ blocks, onChangeBlocks, editorRef, onClose,
   listButtons?: ReactNode;
   onReplaceImage?: (key: string) => void;
 }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   const font = useFontStyle('body');
   const value = draftPlainText(blocks);
@@ -42,17 +47,17 @@ export function FullscreenComposer({ blocks, onChangeBlocks, editorRef, onClose,
   return <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { if (!saving) onClose(); }} onShow={() => editorRef.current?.focus()}>
     <SafeAreaProvider>
       <SafeAreaView edges={['top', 'left', 'right']} style={[styles.screen, { backgroundColor: tokens.background }]}>
-        <AppHeader title="Edit thought" leading={<IconButton label="Return to chat with draft" disabled={saving} onPress={onClose}><Icon name="contract-outline" size={22} color={tokens.textPrimary} /></IconButton>} />
+        <AppHeader title={tr("fullscreencomposer.editThought")} leading={<IconButton label={tr("fullscreencomposer.returnToChatWithDraft")} disabled={saving} onPress={onClose}><Icon name="contract-outline" size={22} color={tokens.textPrimary} /></IconButton>} />
         <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           {attachmentLabel ? <AppText style={[styles.attachment, { color: tokens.textSecondary }]}>{attachmentLabel}</AppText> : null}
           <NoteBlocksEditor
             ref={editorRef}
-            accessibilityLabel={attachmentLabel ? 'Attachment description' : 'Message note'}
+            accessibilityLabel={attachmentLabel ? tr("chat.attachmentDescription") : tr("chat.messageNote")}
             blocks={blocks}
             onChangeBlocks={onChangeBlocks}
             onReplaceImage={onReplaceImage}
             editable={!saving}
-            placeholder={attachmentLabel ? 'Add a description...' : 'Message note...'}
+            placeholder={attachmentLabel ? tr('chat.attachmentDescription') : tr('chatbackgroundpreview.messageNote')}
             maxLength={10000}
             maxImageHeight={320}
             singleInputStyle={[styles.input, font, { color: tokens.textPrimary }]}
@@ -61,10 +66,10 @@ export function FullscreenComposer({ blocks, onChangeBlocks, editorRef, onClose,
           />
           <View style={styles.paste}>{insertImageButton}{listButtons}{pasteButton}</View>
           <SafeAreaView edges={keyboardVisible ? [] : ['bottom']} style={[styles.footer, { borderTopColor: tokens.borderSubtle }]}>
-            <AppText accessibilityLiveRegion="polite" style={[styles.status, { color: error ? tokens.danger : tokens.textSecondary }]}>{error ?? (saving ? 'Saving...' : savedText === value.trim() && savedContent === draftContentForStorage(blocks) && !draftHasUnsavedImages(blocks) ? 'Saved in chat' : savedText !== null ? 'Unsaved changes' : 'Save to chat and keep writing.')}</AppText>
+            <AppText accessibilityLiveRegion="polite" style={[styles.status, { color: error ? tokens.danger : tokens.textSecondary }]}>{error ?? (saving ? tr("fullscreencomposer.saving") : savedText === value.trim() && savedContent === draftContentForStorage(blocks) && !draftHasUnsavedImages(blocks) ? tr("fullscreencomposer.savedInChat") : savedText !== null ? tr("fullscreencomposer.unsavedChanges") : tr("fullscreencomposer.saveToChatAndKeepWriting"))}</AppText>
             <View style={styles.actions}>
-              <Button label="Save as draft" onPress={() => { void onSaveDraft().then(() => requestAnimationFrame(() => editorRef.current?.focus())); }} disabled={!canSave || saving} style={styles.action} />
-              <Button label="Send" onPress={onSend} disabled={!canSave || saving} style={styles.action} />
+              <Button label={tr("fullscreencomposer.saveAsDraft")} onPress={() => { void onSaveDraft().then(() => requestAnimationFrame(() => editorRef.current?.focus())); }} disabled={!canSave || saving} style={styles.action} />
+              <Button label={tr("fullscreencomposer.send")} onPress={onSend} disabled={!canSave || saving} style={styles.action} />
               {saving ? <ActivityIndicator color={tokens.accent} /> : null}
             </View>
           </SafeAreaView>

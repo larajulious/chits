@@ -1,4 +1,4 @@
-export type ChatReturnPath = '/' | '/spaces' | '/attachments' | '/calendar';
+export type ChatReturnPath = '/' | '/spaces' | '/attachments' | '/calendar' | '/archive' | '/search';
 
 // Guards callbacks crossing the UI/JS bridge against a newer navigation intent.
 export function createChatTransitionLifecycle() {
@@ -31,6 +31,7 @@ export function createChatTransitionLifecycle() {
       return true;
     },
     focus() {
+      if (focused) return openingToken !== null;
       focused = true;
       closing = false;
       balloonVisit = expectingBalloonFocus;

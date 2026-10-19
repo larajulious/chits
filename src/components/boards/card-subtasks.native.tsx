@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useCallback, useMemo, useRef, useState, type RefObject } from 'react';
 import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
@@ -11,6 +13,9 @@ import { radii, spacing } from '@/constants/theme';
 import { createCardSubtaskRepository, type CardSubtask } from '@/db/repositories';
 
 export function CardSubtasks({ cardId, scrollRef }: { cardId: string; scrollRef: RefObject<ScrollView | null> }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const repository = useMemo(() => createCardSubtaskRepository(database), [database]);
   const { tokens } = useTheme();
@@ -30,7 +35,7 @@ export function CardSubtasks({ cardId, scrollRef }: { cardId: string; scrollRef:
   const toggleQueue = useRef(Promise.resolve());
 
   const reload = useCallback(async () => { setItems(await repository.list(cardId)); }, [repository, cardId]);
-  useFocusEffect(useCallback(() => { void reload().catch(() => setError('Could not load subtasks.')); }, [reload]));
+  useFocusEffect(useCallback(() => { void reload().catch(() => setError(tr("cardsubtasks.couldNotLoadSubtasks"))); }, [reload]));
   const scrollToRow = (id?: string) => setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, sectionY.current + listY.current + (id ? rowY.current.get(id) ?? 0 : 0) - 100), animated: true }), 90);
 
   const saveNew = async (keepOpen: boolean) => {
@@ -45,7 +50,7 @@ export function CardSubtasks({ cardId, scrollRef }: { cardId: string; scrollRef:
       await reload();
       if (keepOpen) requestAnimationFrame(() => addRef.current?.focus());
       else setAdding(false);
-    } catch { setError('Could not save that subtask. Try again.'); }
+    } catch { setError(tr("cardsubtasks.couldNotSaveThatSubtaskTryAgain")); }
     finally { busyAdd.current = false; }
   };
   const saveEdit = async () => {
@@ -58,13 +63,13 @@ export function CardSubtasks({ cardId, scrollRef }: { cardId: string; scrollRef:
       setEditingId(null);
       setError(null);
       await reload();
-    } catch { setError('Could not update that subtask. Try again.'); }
+    } catch { setError(tr("cardsubtasks.couldNotUpdateThatSubtaskTryAgain")); }
     finally { busyEdit.current = false; }
   };
   const toggle = (item: CardSubtask) => {
     setItems((current) => current.map((row) => row.id === item.id ? { ...row, isCompleted: !row.isCompleted } : row));
     toggleQueue.current = toggleQueue.current.then(async () => { await repository.toggle(cardId, item.id); }, async () => { await repository.toggle(cardId, item.id); })
-      .catch(() => { setError('Could not update that subtask.'); void reload(); });
+      .catch(() => { setError(tr("cardsubtasks.couldNotUpdateThatSubtask")); void reload(); });
   };
   const move = async (id: string, delta: -1 | 1) => {
     const from = items.findIndex((item) => item.id === id);
@@ -74,26 +79,26 @@ export function CardSubtasks({ cardId, scrollRef }: { cardId: string; scrollRef:
     [next[from], next[to]] = [next[to], next[from]];
     setItems(next);
     try { await repository.reorder(cardId, next.map((item) => item.id)); setError(null); }
-    catch { setError('Could not reorder subtasks.'); void reload(); }
+    catch { setError(tr("cardsubtasks.couldNotReorderSubtasks")); void reload(); }
   };
   const remove = async (id: string) => {
     setItems((current) => current.filter((item) => item.id !== id));
     try { await repository.remove(cardId, id); setError(null); }
-    catch { setError('Could not delete that subtask.'); void reload(); }
+    catch { setError(tr("cardsubtasks.couldNotDeleteThatSubtask")); void reload(); }
   };
   const openActions = (item: CardSubtask) => {
     const index = items.findIndex((row) => row.id === item.id);
     actionSheet({ title: item.title, options: [
-      { label: 'Move up', icon: 'arrow-up-outline', disabled: index <= 0, onPress: () => void move(item.id, -1) },
-      { label: 'Move down', icon: 'arrow-down-outline', disabled: index >= items.length - 1, onPress: () => void move(item.id, 1) },
-      { label: 'Delete subtask', icon: 'trash-outline', destructive: true, onPress: () => void remove(item.id) },
+      { label: tr("cardsubtasks.moveUp"), icon: 'arrow-up-outline', disabled: index <= 0, onPress: () => void move(item.id, -1) },
+      { label: tr("cardsubtasks.moveDown"), icon: 'arrow-down-outline', disabled: index >= items.length - 1, onPress: () => void move(item.id, 1) },
+      { label: tr("cardsubtasks.deleteSubtask"), icon: 'trash-outline', destructive: true, onPress: () => void remove(item.id) },
     ] });
   };
   const completed = items.filter((item) => item.isCompleted).length;
 
   return <View onLayout={(event) => { sectionY.current = event.nativeEvent.layout.y; }}>
     <View style={styles.header}>
-      <AppText accessibilityRole="header" style={[styles.heading, { color: tokens.textMuted }]}>SUBTASKS</AppText>
+      <AppText accessibilityRole="header" style={[styles.heading, { color: tokens.textMuted }]}>{tr("cardsubtasks.subtasks")}</AppText>
       {items.length ? <AppText style={[styles.progress, { color: tokens.textSecondary }]}>{completed} / {items.length}</AppText> : null}
     </View>
     <View onLayout={(event) => { listY.current = event.nativeEvent.layout.y; }} style={[styles.list, { borderColor: tokens.borderSubtle, backgroundColor: tokens.surface }]}>
@@ -102,20 +107,20 @@ export function CardSubtasks({ cardId, scrollRef }: { cardId: string; scrollRef:
           <Icon name={item.isCompleted ? 'checkbox' : 'square-outline'} size={22} color={item.isCompleted ? tokens.accentStrong : tokens.textMuted} />
         </Pressable>
         {editingId === item.id ? <TextInput
-          autoFocus multiline accessibilityLabel="Edit subtask" value={editDraft} onChangeText={setEditDraft}
+          autoFocus multiline accessibilityLabel={tr("cardsubtasks.editSubtask")} value={editDraft} onChangeText={setEditDraft}
           onFocus={() => scrollToRow(item.id)} onBlur={() => void saveEdit()}
           onSubmitEditing={() => { void saveEdit(); Keyboard.dismiss(); }} returnKeyType="done" submitBehavior="submit"
           selectionColor={tokens.accent} style={[styles.input, { color: tokens.textPrimary }]}
-        /> : <Pressable accessibilityRole="button" accessibilityLabel={`Edit subtask, ${item.title}`} onPress={() => { setEditingId(item.id); setEditDraft(item.title); }} onLongPress={() => openActions(item)} style={styles.titleTarget}>
+        /> : <Pressable accessibilityRole="button" accessibilityLabel={tr("cardsubtasks.editSubtaskValue", { value1: item.title })} onPress={() => { setEditingId(item.id); setEditDraft(item.title); }} onLongPress={() => openActions(item)} style={styles.titleTarget}>
           <AppText style={[styles.title, { color: item.isCompleted ? tokens.textMuted : tokens.textPrimary }, item.isCompleted && styles.done]}>{item.title}</AppText>
         </Pressable>}
-        <Pressable accessibilityRole="button" accessibilityLabel={`Options for ${item.title}`} hitSlop={6} onPress={() => openActions(item)} style={styles.more}>
+        <Pressable accessibilityRole="button" accessibilityLabel={tr("cardsubtasks.optionsForValue", { value1: item.title })} hitSlop={6} onPress={() => openActions(item)} style={styles.more}>
           <Icon name="ellipsis-horizontal" size={18} color={tokens.textMuted} />
         </Pressable>
       </View>)}
       {adding ? <View onLayout={(event) => { rowY.current.set('new', event.nativeEvent.layout.y); scrollToRow('new'); }} style={[styles.row, items.length > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: tokens.borderSubtle }]}>
         <Icon name="square-outline" size={22} color={tokens.textMuted} style={styles.draftCheckbox} />
-        <TextInput ref={addRef} autoFocus multiline accessibilityLabel="New subtask" placeholder="Add a subtask" placeholderTextColor={tokens.textMuted}
+        <TextInput ref={addRef} autoFocus multiline accessibilityLabel={tr("cardsubtasks.newSubtask")} placeholder={tr("cardsubtasks.addASubtask")} placeholderTextColor={tokens.textMuted}
           value={draft} onChangeText={setDraft} onFocus={() => scrollToRow('new')} onBlur={() => void saveNew(false)}
           onSubmitEditing={() => void saveNew(true)} returnKeyType="done" submitBehavior="submit" selectionColor={tokens.accent}
           style={[styles.input, { color: tokens.textPrimary }]} />
@@ -123,7 +128,7 @@ export function CardSubtasks({ cardId, scrollRef }: { cardId: string; scrollRef:
     </View>
     {!adding ? <Pressable accessibilityRole="button" onPress={() => { setAdding(true); setError(null); }} style={styles.add}>
       <Icon name="add" size={18} color={tokens.accentStrong} />
-      <AppText style={[styles.addText, { color: tokens.accentStrong }]}>Add subtask</AppText>
+      <AppText style={[styles.addText, { color: tokens.accentStrong }]}>{tr("cardsubtasks.addSubtask")}</AppText>
     </Pressable> : null}
     {error ? <AppText accessibilityRole="alert" style={[styles.error, { color: tokens.danger }]}>{error}</AppText> : null}
   </View>;

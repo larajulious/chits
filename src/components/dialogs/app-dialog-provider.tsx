@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type PropsWithChildren, type ReactNode } from 'react';
 import { AppDialog, type ActionSheetOption, type DialogIconName } from './app-dialog';
 import type { DialogType } from './dialog-colors';
@@ -122,8 +123,8 @@ export function AppDialogProvider({ children }: PropsWithChildren) {
         icon={options.icon}
         accentColor={options.accentColor}
         dismissOnBackdrop={(options.dismissOnBackdrop ?? true) && !loading}
-        confirmText={options.confirmText ?? 'Confirm'}
-        cancelText={options.cancelText ?? 'Cancel'}
+        confirmText={options.confirmText ?? tr("appdialogprovider.confirm")}
+        cancelText={options.cancelText ?? tr("chat.cancel")}
         loading={loading}
         onConfirm={() => void handleConfirmPrimary()}
         onCancel={handleConfirmCancel}
@@ -142,7 +143,7 @@ export function AppDialogProvider({ children }: PropsWithChildren) {
         message={options.message}
         icon={options.icon}
         accentColor={options.accentColor}
-        actionText={options.actionText ?? 'OK'}
+        actionText={options.actionText ?? tr("appdialogprovider.ok")}
         onAction={handleAlertAction}
         onRequestClose={handleAlertAction}
       />
@@ -158,7 +159,7 @@ export function AppDialogProvider({ children }: PropsWithChildren) {
         title={options.title}
         message={options.message}
         options={options.options.map((option) => ({ ...option, onPress: () => dismiss(option.onPress) }))}
-        cancelText={options.cancelText ?? 'Cancel'}
+        cancelText={options.cancelText ?? tr("chat.cancel")}
         onCancel={() => dismiss()}
         onRequestClose={() => dismiss()}
       />

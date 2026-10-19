@@ -103,7 +103,7 @@ export function SegmentedControl<Key extends string>({ options, value, onChange 
   return <View style={[
     styles.segmentTrack,
     { padding: s.padding, borderRadius: s.radius, backgroundColor: sticky ? styleColors.controlFill : tokens.surfaceElevated },
-    sticky ? surfaceStyle(t, styleColors, { edge: s.edge }) : { height: s.height },
+    sticky ? surfaceStyle(t, styleColors, { edge: s.edge }) : { minHeight: s.height },
   ]}>
     {options.map((option) => {
       const selected = option.key === value;
@@ -118,7 +118,7 @@ export function SegmentedControl<Key extends string>({ options, value, onChange 
         outline={sticky && selected ? outline : false}
         edge={false}
         pressedStyle={null}
-        style={[styles.segment, sticky && { height: s.height }]}
+        style={[styles.segment, sticky && { minHeight: s.height }]}
       >
         <AppText weight={sticky ? '800' : '600'} style={{ fontSize: s.labelSize, color: sticky ? (selected ? styleColors.onAccent : styleColors.textSecondary) : selected ? tokens.textPrimary : tokens.textMuted }}>{option.label}</AppText>
       </PressableSurface>;

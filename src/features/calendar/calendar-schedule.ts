@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 // Pure date logic for the Calendar (no React Native imports, so it is unit-tested directly).
 //
 // A calendar entry's day and time are local wall-clock values: a day key
@@ -62,13 +63,13 @@ export function minuteOfDay(date: Date): number {
 
 /** Rejects anything SQLite's checks would (bad day, minutes out of range, end before start). */
 export function normalizeSchedule(schedule: CalendarSchedule): CalendarSchedule {
-  if (!parseDayKey(schedule.dateKey)) throw new Error('Choose a valid date.');
+  if (!parseDayKey(schedule.dateKey)) throw new Error(tr("calendarschedule.chooseAValidDate"));
   if (schedule.startMinute === null) return { dateKey: schedule.dateKey, startMinute: null, endMinute: null };
   const start = Math.trunc(schedule.startMinute);
-  if (start < 0 || start >= DAY_MINUTES) throw new Error('Choose a valid start time.');
+  if (start < 0 || start >= DAY_MINUTES) throw new Error(tr("calendarschedule.chooseAValidStartTime"));
   if (schedule.endMinute === null) return { dateKey: schedule.dateKey, startMinute: start, endMinute: null };
   const end = Math.trunc(schedule.endMinute);
-  if (end < start || end > DAY_MINUTES) throw new Error('The end time must be after the start time.');
+  if (end < start || end > DAY_MINUTES) throw new Error(tr("calendarschedule.theEndTimeMustBeAfterTheStart"));
   return { dateKey: schedule.dateKey, startMinute: start, endMinute: end };
 }
 
@@ -77,16 +78,16 @@ export function normalizeSchedule(schedule: CalendarSchedule): CalendarSchedule 
 
 export type ReminderPreset = { offset: number; label: string };
 export const TIMED_REMINDER_PRESETS: ReminderPreset[] = [
-  { offset: 0, label: 'At start time' },
-  { offset: 5, label: '5 min before' },
-  { offset: 15, label: '15 min before' },
-  { offset: 30, label: '30 min before' },
-  { offset: 60, label: '1 hour before' },
-  { offset: DAY_MINUTES, label: '1 day before' },
+  { offset: 0, get label() { return tr("calendarschedule.atStartTime"); } },
+  { offset: 5, get label() { return tr("calendarschedule.5MinBefore"); } },
+  { offset: 15, get label() { return tr("calendarschedule.15MinBefore"); } },
+  { offset: 30, get label() { return tr("calendarschedule.30MinBefore"); } },
+  { offset: 60, get label() { return tr("calendarschedule.1HourBefore"); } },
+  { offset: DAY_MINUTES, get label() { return tr("calendarschedule.1DayBefore"); } },
 ];
 export const ALL_DAY_REMINDER_PRESETS: ReminderPreset[] = [
-  { offset: 0, label: 'On the day, 9 AM' },
-  { offset: DAY_MINUTES, label: 'Day before, 9 AM' },
+  { offset: 0, get label() { return tr("calendarschedule.onTheDay9Am"); } },
+  { offset: DAY_MINUTES, get label() { return tr("calendarschedule.dayBefore9Am"); } },
 ];
 export function reminderPresets(schedule: Pick<CalendarSchedule, 'startMinute'>): ReminderPreset[] {
   return schedule.startMinute === null ? ALL_DAY_REMINDER_PRESETS : TIMED_REMINDER_PRESETS;
@@ -110,7 +111,7 @@ export function reminderTimeForOffset(schedule: CalendarSchedule, offset: number
 /** The preset matching a stored offset, for labels; null for a custom reminder. */
 export function reminderPresetLabel(schedule: Pick<CalendarSchedule, 'startMinute'>, offset: number | null): string | null {
   if (offset === null) return null;
-  return reminderPresets(schedule).find((preset) => preset.offset === offset)?.label ?? `${offset} min before`;
+  return reminderPresets(schedule).find((preset) => preset.offset === offset)?.label ?? tr("messages.minBefore", { value1: offset });
 }
 
 export type ScheduledReminderRow = { kind: 'card' | 'message'; id: string; schedule: CalendarSchedule; offset: number; reminderAt: number };
@@ -214,7 +215,7 @@ export function formatMinute(minute: number, locale?: string): string {
 
 /** "All day", "9:00 AM" or "9:00 – 10:30 AM"-style label for a schedule. */
 export function formatScheduleTime(schedule: Pick<CalendarSchedule, 'startMinute' | 'endMinute'>, locale?: string): string {
-  if (schedule.startMinute === null) return 'All day';
+  if (schedule.startMinute === null) return tr('schedulefields.allDay');
   if (schedule.endMinute === null || schedule.endMinute === schedule.startMinute) return formatMinute(schedule.startMinute, locale);
   return `${formatMinute(schedule.startMinute, locale)} – ${formatMinute(schedule.endMinute % DAY_MINUTES, locale)}`;
 }

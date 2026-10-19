@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ComponentProps } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -38,6 +40,9 @@ function formatRecordingTime(durationMillis: number) {
 }
 
 export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(function AttachmentPicker({ disabled = false, onSelected, onInlineSelected, onError, onRecordingChange, onOpenChange }, ref) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder, 250);
@@ -60,7 +65,7 @@ export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(functi
       selected(draft);
       setOpen(false);
     } catch (error) {
-      onError(error instanceof Error ? error.message : 'The attachment could not be prepared.');
+      onError(error instanceof Error ? error.message : tr("attachmentimport.theAttachmentCouldNotBePrepared"));
       setOpen(false);
     } finally {
       busy.current = false;
@@ -89,7 +94,7 @@ export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(functi
       recorder.record();
       setOpen(false);
     } catch {
-      onError('Audio recording could not start. Please try again.');
+      onError(tr("attachmentpicker.audioRecordingCouldNotStartPleaseTryAgain"));
     } finally {
       busy.current = false;
     }
@@ -99,10 +104,10 @@ export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(functi
     try {
       const duration = Math.round(recorderState.durationMillis);
       await recorder.stop();
-      if (!recorder.uri) throw new Error('The recording was unavailable.');
+      if (!recorder.uri) throw new Error(tr("attachmentpicker.theRecordingWasUnavailable"));
       await stage(recorder.uri, 'audio', { originalName: 'Voice note.m4a', mimeType: 'audio/m4a', size: null, duration, width: null, height: null });
     } catch (error) {
-      onError(error instanceof Error ? error.message : 'The recording could not be prepared.');
+      onError(error instanceof Error ? error.message : tr("attachmentpicker.theRecordingCouldNotBePrepared"));
     } finally {
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true, interruptionMode: 'doNotMix', shouldPlayInBackground: false, shouldRouteThroughEarpiece: false });
     }
@@ -123,15 +128,15 @@ export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(functi
   useEffect(() => () => onOpenChange?.(false), [onOpenChange]);
 
   if (recorderState.isRecording) return <View style={styles.recording}>
-    <Pressable accessibilityRole="button" accessibilityLabel="Cancel recording" onPress={() => void cancelRecording()} style={({ pressed }) => [styles.recordingAction, { backgroundColor: theme.surfaceElevated }, pressed && styles.actionPressed]}><Icon name="close" size={21} color={theme.textSecondary} /></Pressable>
-    <View accessibilityLiveRegion="polite" accessibilityLabel={`Recording, ${formatRecordingTime(recorderState.durationMillis)}`} style={styles.recordingStatus}>
-      <View style={styles.recordingLabel}><View style={[styles.recordingDot, { backgroundColor: theme.danger }]} /><AppText style={[styles.recordingText, { color: theme.textSecondary }]}>Recording</AppText></View>
+    <Pressable accessibilityRole="button" accessibilityLabel={tr("attachmentpicker.cancelRecording")} onPress={() => void cancelRecording()} style={({ pressed }) => [styles.recordingAction, { backgroundColor: theme.surfaceElevated }, pressed && styles.actionPressed]}><Icon name="close" size={21} color={theme.textSecondary} /></Pressable>
+    <View accessibilityLiveRegion="polite" accessibilityLabel={tr("attachmentpicker.recordingValue", { value1: formatRecordingTime(recorderState.durationMillis) })} style={styles.recordingStatus}>
+      <View style={styles.recordingLabel}><View style={[styles.recordingDot, { backgroundColor: theme.danger }]} /><AppText style={[styles.recordingText, { color: theme.textSecondary }]}>{tr("attachmentpicker.recording")}</AppText></View>
       <AppText style={[styles.recordingTime, { color: theme.textPrimary }]}>{formatRecordingTime(recorderState.durationMillis)}</AppText>
     </View>
-    <Pressable accessibilityRole="button" accessibilityLabel="Use recording" accessibilityHint="Stops recording and prepares it to send" onPress={() => void finishRecording()} style={({ pressed }) => [styles.recordingAction, { backgroundColor: theme.accent }, pressed && styles.actionPressed]}><Icon name="checkmark" size={22} color={theme.accentText} /></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel={tr("attachmentpicker.useRecording")} accessibilityHint={tr("attachmentpicker.stopsRecordingAndPreparesItToSend")} onPress={() => void finishRecording()} style={({ pressed }) => [styles.recordingAction, { backgroundColor: theme.accent }, pressed && styles.actionPressed]}><Icon name="checkmark" size={22} color={theme.accentText} /></Pressable>
   </View>;
 
-  return <><Pressable accessibilityRole="button" accessibilityLabel="Add attachment" accessibilityState={{ disabled: disabled || saving }} disabled={disabled || saving} onPress={() => setOpen(true)} style={[styles.trigger, (disabled || saving) && styles.disabled]}><Icon name="add" size={24} color={theme.textSecondary} /></Pressable><Modal transparent visible={open} animationType="slide" onRequestClose={() => setOpen(false)}><Pressable style={styles.backdrop} onPress={() => setOpen(false)}><Pressable style={styles.sheetShield} onPress={() => undefined}><BottomSheetSurface><View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />{choose('Photo', 'image-outline', () => void pickMedia('photo'))}{onInlineSelected ? choose('Insert photo inline', 'image-outline', () => void run(() => pickAndStageMedia('photo'), onInlineSelected)) : null}{choose('Video', 'videocam-outline', () => void pickMedia('video'))}{choose('Audio', 'mic-outline', () => void startRecording())}{choose('File', 'document-outline', () => void pickFile())}{choose('Cancel', 'close-outline', () => setOpen(false))}</BottomSheetSurface></Pressable></Pressable></Modal></>;
+  return <><Pressable accessibilityRole="button" accessibilityLabel={tr("id.addAttachment")} accessibilityState={{ disabled: disabled || saving }} disabled={disabled || saving} onPress={() => setOpen(true)} style={[styles.trigger, (disabled || saving) && styles.disabled]}><Icon name="add" size={24} color={theme.textSecondary} /></Pressable><Modal transparent visible={open} animationType="slide" onRequestClose={() => setOpen(false)}><Pressable style={styles.backdrop} onPress={() => setOpen(false)}><Pressable style={styles.sheetShield} onPress={() => undefined}><BottomSheetSurface><View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />{choose(tr("id.photo"), 'image-outline', () => void pickMedia('photo'))}{onInlineSelected ? choose(tr("attachmentpicker.insertPhotoInline"), 'image-outline', () => void run(() => pickAndStageMedia('photo'), onInlineSelected)) : null}{choose(tr("addcardattachmentsheet.video"), 'videocam-outline', () => void pickMedia('video'))}{choose(tr("attachments.audio"), 'mic-outline', () => void startRecording())}{choose(tr("addcardattachmentsheet.file"), 'document-outline', () => void pickFile())}{choose(tr("chat.cancel"), 'close-outline', () => setOpen(false))}</BottomSheetSurface></Pressable></Pressable></Modal></>;
 });
 
 const styles = StyleSheet.create({

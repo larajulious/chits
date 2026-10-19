@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import type { View } from 'react-native';
 
 import type { ExportFailureCode } from '@/services/attachment-export-naming';
@@ -12,7 +13,7 @@ export function shareNoteExportWidth(format: ShareNoteFormat): number {
 }
 
 export async function captureShareNote(_view: View, _format: ShareNoteFormat, _hasPhotos: boolean, _name?: string, _imageHeight?: number): Promise<ShareNoteImageFile> {
-  throw new Error('Share Note is available in the Chits iOS and Android app.');
+  throw new Error(tr("sharenoteexport.shareNoteIsAvailableInTheChitsIos"));
 }
 
 export async function saveShareNoteImage(_file: ShareNoteImageFile): Promise<ShareNoteSaveOutcome> {

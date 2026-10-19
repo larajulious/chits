@@ -1,3 +1,5 @@
+import { countLabel, tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
@@ -42,16 +44,14 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 type TypeFilter = 'all' | AttachmentFilterType;
 const TYPE_FILTERS: { key: TypeFilter; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'photo', label: 'Photos' },
-  { key: 'video', label: 'Videos' },
-  { key: 'audio', label: 'Audio' },
-  { key: 'file', label: 'Files' },
+  { key: 'all', get label() { return tr("attachments.all"); } },
+  { key: 'photo', get label() { return tr("attachments.photos"); } },
+  { key: 'video', get label() { return tr("attachments.videos"); } },
+  { key: 'audio', get label() { return tr("attachments.audio"); } },
+  { key: 'file', get label() { return tr("attachments.files"); } },
 ];
 
-function pluralize(count: number, singular: string) {
-  return `${count} ${count === 1 ? singular : `${singular}s`}`;
-}
+function pluralize(count: number, singular: string) { return countLabel(singular, count); }
 
 function toAttachmentLike(item: AttachmentSummary): AttachmentLike {
   return { id: item.id, type: item.type, storagePath: item.storagePath, originalName: item.originalName, mimeType: item.mimeType, size: item.size, duration: item.duration, width: item.width, height: item.height, createdAt: item.createdAt };
@@ -83,10 +83,13 @@ function fileTileIcon(item: AttachmentSummary): IconName {
 }
 
 function TypeFilterChips({ filter, onChange }: { filter: TypeFilter; onChange: (next: TypeFilter) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   return (
     <ChipRow style={styles.chipScroll}>
       {TYPE_FILTERS.map((chip) => (
-        <Chip key={chip.key} label={chip.label} selected={chip.key === filter} accessibilityLabel={`Filter by ${chip.label}`} onPress={() => onChange(chip.key)} />
+        <Chip key={chip.key} label={chip.label} selected={chip.key === filter} accessibilityLabel={tr("attachments.filterByValue", { value1: chip.label })} onPress={() => onChange(chip.key)} />
       ))}
     </ChipRow>
   );
@@ -101,6 +104,9 @@ function TypeFilterChips({ filter, onChange }: { filter: TypeFilter; onChange: (
 // those), so they get compact custom tiles here instead, matching the same
 // pattern card-list-row.native.tsx already uses for its own audio thumbnail.
 function AttachmentTile({ item, size, onPress, onLongPress, selectingBackground = false }: { item: AttachmentSummary; size: number; onPress: () => void; onLongPress: () => void; selectingBackground?: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme, styleTokens } = useTheme();
   const tileStyle = { width: size, height: size };
   const radius = styleTokens.radius.tile;
@@ -108,7 +114,7 @@ function AttachmentTile({ item, size, onPress, onLongPress, selectingBackground 
   let accessibilityLabel: string;
   if (item.type === 'photo' || item.type === 'video') {
     content = <View pointerEvents="none" style={StyleSheet.absoluteFill}><AttachmentContent attachment={toAttachmentLike(item)} variant="grid" /></View>;
-    accessibilityLabel = item.type === 'photo' ? 'Photo' : `Video${item.duration ? `, ${formatDurationSeconds(item.duration)}` : ''}`;
+    accessibilityLabel = item.type === 'photo' ? tr("id.photo") : tr('addcardattachmentsheet.video') + (item.duration ? ', ' + formatDurationSeconds(item.duration) : '');
   } else if (item.type === 'audio') {
     content = (
       <View style={[styles.tileFill, { backgroundColor: theme.accentSoft }]}>
@@ -116,17 +122,17 @@ function AttachmentTile({ item, size, onPress, onLongPress, selectingBackground 
         {item.duration ? <AppText weight="600" style={[styles.tileMeta, { color: theme.accentStrong }]}>{formatDurationSeconds(item.duration)}</AppText> : null}
       </View>
     );
-    accessibilityLabel = `Audio note${item.duration ? `, ${formatDurationSeconds(item.duration)}` : ''}`;
+    accessibilityLabel = tr('messagerow.audioNote') + (item.duration ? ', ' + formatDurationSeconds(item.duration) : '');
   } else {
     const size2 = formatFileSize(item.size);
     content = (
       <View style={[styles.tileFill, styles.filePadding, { backgroundColor: theme.surfaceElevated }]}>
         <Icon name={fileTileIcon(item)} size={22} color={theme.textSecondary} />
-        <AppText weight="600" numberOfLines={2} style={[styles.tileFileName, { color: theme.textPrimary }]}>{item.originalName ?? 'Document'}</AppText>
+        <AppText weight="600" numberOfLines={2} style={[styles.tileFileName, { color: theme.textPrimary }]}>{item.originalName ?? tr("attachments.document")}</AppText>
         <AppText weight="600" numberOfLines={1} style={[styles.tileMeta, { color: theme.textMuted }]}>{[fileExtension(item), size2].filter(Boolean).join(' · ')}</AppText>
       </View>
     );
-    accessibilityLabel = `${isPdfAttachment(item) ? 'PDF' : 'File'}, ${item.originalName ?? 'document'}`;
+    accessibilityLabel = `${isPdfAttachment(item) ? 'PDF' : tr("addcardattachmentsheet.file")}, ${item.originalName ?? 'document'}`;
   }
   return (
     // The outline and edge sit on the outer surface; the inner view clips the
@@ -134,8 +140,8 @@ function AttachmentTile({ item, size, onPress, onLongPress, selectingBackground 
     <PressableSurface
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityHint={selectingBackground ? 'Opens Chat Background Preview.' : 'Opens details. Hold for more actions.'}
-      accessibilityActions={selectingBackground ? [] : [{ name: 'longpress', label: 'More actions' }]}
+      accessibilityHint={selectingBackground ? tr("attachments.opensChatBackgroundPreview") : tr("attachments.opensDetailsHoldForMoreActions")}
+      accessibilityActions={selectingBackground ? [] : [{ name: 'longpress', label: tr("attachments.moreActions") }]}
       onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === 'longpress') onLongPress(); }}
       onPress={onPress}
       onLongPress={onLongPress}
@@ -151,19 +157,22 @@ function AttachmentTile({ item, size, onPress, onLongPress, selectingBackground 
 }
 
 function AttachmentDetailModal({ item, onClose, onViewCard }: { item: AttachmentSummary; onClose: () => void; onViewCard: (cardId: string) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme, styleTokens } = useTheme();
   const download = useAttachmentExport();
   const [shareFailed, setShareFailed] = useState(false);
   useEffect(() => { if (!shareFailed) return; const timer = setTimeout(() => setShareFailed(false), 2400); return () => clearTimeout(timer); }, [shareFailed]);
   const attachment = toAttachmentLike(item);
-  const contextLine = item.boardName ? `${item.boardName} • ${item.columnName}` : 'Unorganized';
+  const contextLine = item.boardName ? `${item.boardName} • ${item.columnName}` : tr("index.unorganized");
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" statusBarTranslucent={false} navigationBarTranslucent={false} onRequestClose={onClose}>
       <SafeAreaProvider>
         <SafeAreaView edges={['top', 'right', 'bottom', 'left']} style={[styles.detailScreen, { backgroundColor: theme.background }]}>
           <AppHeader
-            title={item.cardTitle ?? (item.type === 'photo' ? 'Photo' : item.type === 'video' ? 'Video' : item.type === 'audio' ? 'Audio note' : 'File')}
-            leading={<IconButton label="Close" onPress={onClose}><HeaderIcon name="close" size={24} /></IconButton>}
+            title={item.cardTitle ?? (item.type === 'photo' ? tr("id.photo") : item.type === 'video' ? tr("addcardattachmentsheet.video") : item.type === 'audio' ? tr("messagerow.audioNote") : tr("addcardattachmentsheet.file"))}
+            leading={<IconButton label={tr("attachments.close")} onPress={onClose}><HeaderIcon name="close" size={24} /></IconButton>}
             trailing={<IconButton label={exportActionLabel(attachment)} disabled={download.busy} onPress={() => void download.exportAttachment(attachment)}><HeaderIcon name="download-outline" size={22} /></IconButton>}
           />
           <ScrollView contentContainerStyle={styles.detailContent}>
@@ -172,10 +181,10 @@ function AttachmentDetailModal({ item, onClose, onViewCard }: { item: Attachment
               <AttachmentContent attachment={attachment} variant="detail" />
             </View>
             <Text numberOfLines={2} style={[styles.detailFileName, { color: theme.textSecondary }]}>{exportFileName(attachment)}{item.size ? ` · ${formatFileSize(item.size)}` : ''}</Text>
-            <SecondaryButton label="Share" onPress={() => void shareAttachment(attachment).then((shared) => setShareFailed(!shared))} />
-            {item.cardId ? <PrimaryButton label="View card" onPress={() => onViewCard(item.cardId!)} /> : null}
+            <SecondaryButton label={tr("attachments.share")} onPress={() => void shareAttachment(attachment).then((shared) => setShareFailed(!shared))} />
+            {item.cardId ? <PrimaryButton label={tr("attachments.viewCard")} onPress={() => onViewCard(item.cardId!)} /> : null}
           </ScrollView>
-          <Toast message={shareFailed ? 'This file could not be shared.' : download.status} />
+          <Toast message={shareFailed ? tr("attachments.thisFileCouldNotBeShared") : download.status} />
         </SafeAreaView>
       </SafeAreaProvider>
     </Modal>
@@ -183,14 +192,17 @@ function AttachmentDetailModal({ item, onClose, onViewCard }: { item: Attachment
 }
 
 function emptyStateFor(filter: TypeFilter, hasSearch: boolean, mascot: boolean) {
-  if (hasSearch) return { title: 'No attachments found', description: 'Try a different search term.' };
-  if (filter === 'all' && mascot) return { title: 'Nothing clipped yet', description: 'Photos, videos, audio and files you add to your notes will show up here.' };
-  if (filter === 'all') return { title: 'No attachments yet', description: 'Photos, videos, audio and files you attach to your notes will appear here.' };
+  if (hasSearch) return { title: tr("attachments.noAttachmentsFound"), description: tr("attachments.tryADifferentSearchTerm") };
+  if (filter === 'all' && mascot) return { title: tr("attachments.nothingClippedYet"), description: tr("attachments.photosVideosAudioAndFilesYouAddTo") };
+  if (filter === 'all') return { title: tr("attachments.noAttachmentsYet"), description: tr("attachments.photosVideosAudioAndFilesYouAttachTo") };
   const label = filter === 'photo' ? 'photos' : filter === 'video' ? 'videos' : filter === 'audio' ? 'audio' : 'files';
-  return { title: `No ${label} yet`, description: `${label[0].toUpperCase()}${label.slice(1)} you attach to your notes will appear here.` };
+  return { title: tr("attachments.noValueYet", { value1: label }), description: tr("attachments.valueValueYouAttachToYourNotesWill", { value1: label[0].toUpperCase(), value2: label.slice(1) }) };
 }
 
 export default function AttachmentsScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const router = useRouter();
   const { chooseBackground } = useLocalSearchParams<{ chooseBackground?: string }>();
@@ -278,14 +290,14 @@ export default function AttachmentsScreen() {
     const attachment = toAttachmentLike(item);
     actionSheet({
       title: exportFileName(attachment),
-      message: isCurrentBackground(attachment) ? 'Current Chat Background' : undefined,
+      message: isCurrentBackground(attachment) ? tr("photoattachmentviewer.currentChatBackground") : undefined,
       options: [
-        ...(item.type === 'photo' ? [{ label: 'Set as Chat Background', icon: 'image-outline' as const, onPress: () => selectPhoto(item) }] : []),
-        { label: 'Open', icon: 'open-outline', onPress: () => setDetailItem(item) },
-        { label: 'Share', icon: 'share-outline', onPress: () => void shareAttachment(attachment).then((shared) => setShareFailed(!shared)) },
+        ...(item.type === 'photo' ? [{ label: tr("attachments.setAsChatBackground"), icon: 'image-outline' as const, onPress: () => selectPhoto(item) }] : []),
+        { label: tr("attachments.open"), icon: 'open-outline', onPress: () => setDetailItem(item) },
+        { label: tr("attachments.share"), icon: 'share-outline', onPress: () => void shareAttachment(attachment).then((shared) => setShareFailed(!shared)) },
         { label: exportActionLabel(attachment), icon: 'download-outline', disabled: download.busy, onPress: () => void download.exportAttachment(attachment) },
-        { label: 'Delete Attachment', icon: 'trash-outline', destructive: true, onPress: () => deletion.confirmDelete(attachment, () => setDetailItem(null)) },
-        ...(item.cardId ? [{ label: 'View card', icon: 'albums-outline' as const, onPress: () => viewCard(item.cardId!) }] : []),
+        { label: tr("attachments.deleteAttachment"), icon: 'trash-outline', destructive: true, onPress: () => deletion.confirmDelete(attachment, () => setDetailItem(null)) },
+        ...(item.cardId ? [{ label: tr("attachments.viewCard"), icon: 'albums-outline' as const, onPress: () => viewCard(item.cardId!) }] : []),
       ],
     });
   };
@@ -298,15 +310,15 @@ export default function AttachmentsScreen() {
   const empty = emptyStateFor(choosingBackground ? 'photo' : filter, Boolean(searchTerm), styleTokens.mascotEmptyStates);
   // Sticky's empty Attachments points to where attachments come from.
   const emptyAction = styleTokens.mascotEmptyStates && !choosingBackground && filter === 'all' && !searchTerm
-    ? { label: 'Attach something in Chat', onPress: () => router.navigate({ pathname: '/chat', params: { focusInput: '1' } }) }
+    ? { label: tr("attachments.attachSomethingInChat"), onPress: () => router.navigate({ pathname: '/chat', params: { focusInput: '1' } }) }
     : undefined;
 
   return (
     <Screen edges={['top', 'left', 'right']}>
       <AppHeader
-        title={choosingBackground ? 'Choose a Background' : 'Attachments'}
+        title={choosingBackground ? tr("attachments.chooseABackground") : tr("attachments.attachments")}
         subtitle={ready ? pluralize(totalCount, 'item') : undefined}
-        leading={<IconButton label={choosingBackground ? 'Cancel background selection' : 'Open navigation'} onPress={() => { if (choosingBackground) returnToAppearance('current'); else openDrawer(); }}>{choosingBackground ? <HeaderIcon name="close" size={24} /> : <MenuIcon />}</IconButton>}
+        leading={<IconButton label={choosingBackground ? tr("attachments.cancelBackgroundSelection") : tr("archive.openNavigation")} onPress={() => { if (choosingBackground) returnToAppearance('current'); else openDrawer(); }}>{choosingBackground ? <HeaderIcon name="close" size={24} /> : <MenuIcon />}</IconButton>}
       />
       <FlatList
         data={items}
@@ -318,9 +330,9 @@ export default function AttachmentsScreen() {
         renderItem={({ item }) => <AttachmentTile item={item} size={tileSize} selectingBackground={choosingBackground} onPress={() => choosingBackground ? selectPhoto(item) : setDetailItem(item)} onLongPress={() => { if (!choosingBackground) openItemMenu(item); }} />}
         ListHeaderComponent={
           <View style={styles.listHeader}>
-            <SearchField accessibilityLabel="Search attachments" value={searchInput} onChangeText={setSearchInput} placeholder="Search attachments" />
-            {choosingBackground ? <AppText weight="700" style={[styles.sectionLabel, { color: theme.textSecondary }]}>Photos · Choose a photo to preview</AppText> : <TypeFilterChips filter={filter} onChange={setFilter} />}
-            {items.length ? <AppText weight="700" style={[styles.sectionLabel, { color: theme.textMuted }]}>Recent</AppText> : null}
+            <SearchField accessibilityLabel={tr("attachments.searchAttachments")} value={searchInput} onChangeText={setSearchInput} placeholder={tr("attachments.searchAttachments")} />
+            {choosingBackground ? <AppText weight="700" style={[styles.sectionLabel, { color: theme.textSecondary }]}>{tr("attachments.photosChooseAPhotoToPreview")}</AppText> : <TypeFilterChips filter={filter} onChange={setFilter} />}
+            {items.length ? <AppText weight="700" style={[styles.sectionLabel, { color: theme.textMuted }]}>{tr("attachments.recent")}</AppText> : null}
           </View>
         }
         ListEmptyComponent={
@@ -332,8 +344,8 @@ export default function AttachmentsScreen() {
           hasMore ? (
             <View style={styles.footer}>
               {loadingMore ? <ChitsLoader size="small" /> : (
-                <Pressable accessibilityRole="button" accessibilityLabel="Load more attachments" onPress={() => void loadMore()} style={styles.loadMoreButton}>
-                  <AppText weight="700" style={[styles.loadMoreText, { color: theme.accent }]}>Load more</AppText>
+                <Pressable accessibilityRole="button" accessibilityLabel={tr("attachments.loadMoreAttachments")} onPress={() => void loadMore()} style={styles.loadMoreButton}>
+                  <AppText weight="700" style={[styles.loadMoreText, { color: theme.accent }]}>{tr("attachments.loadMore")}</AppText>
                 </Pressable>
               )}
             </View>
@@ -345,8 +357,8 @@ export default function AttachmentsScreen() {
         maxToRenderPerBatch={18}
         windowSize={7}
       />
-      <Toast message={deletion.status ?? (shareFailed ? 'This file could not be shared.' : download.status)} />
-      {detailItem?.type === 'photo' ? <PhotoAttachmentViewer attachment={toAttachmentLike(detailItem)} onDismiss={() => setDetailItem(null)} /> : detailItem ? <AttachmentDetailModal item={detailItem} onClose={() => setDetailItem(null)} onViewCard={viewCard} /> : null}
+      <Toast message={deletion.status ?? (shareFailed ? tr("attachments.thisFileCouldNotBeShared") : download.status)} />
+      {detailItem?.type === "photo" ? <PhotoAttachmentViewer attachment={toAttachmentLike(detailItem)} onDismiss={() => setDetailItem(null)} /> : detailItem ? <AttachmentDetailModal item={detailItem} onClose={() => setDetailItem(null)} onViewCard={viewCard} /> : null}
     </Screen>
   );
 }

@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { NoteSubmission } from '@/components/boards/add-note-sheet';
@@ -103,10 +104,10 @@ export async function createCalendarNote(database: SQLiteDatabase, submission: N
 /** A short status line for a reminder outcome, or null when there's nothing to say. */
 export function reminderOutcomeMessage(outcome: ReminderOutcome): string | null {
   switch (outcome) {
-    case 'declined': case 'blocked': return 'Saved. Reminder not set — notifications are off for Chits.';
-    case 'exact-alarm': return 'Saved. Allow Alarms & reminders to get this reminder on time.';
-    case 'past': return 'Saved. That reminder time has already passed.';
-    case 'failed': return 'Saved, but the reminder couldn’t be set. Try again.';
+    case 'declined': case 'blocked': return tr("calendaractions.savedReminderNotSetNotificationsAreOffFor");
+    case 'exact-alarm': return tr("calendaractions.savedAllowAlarmsRemindersToGetThisReminder");
+    case 'past': return tr("calendaractions.savedThatReminderTimeHasAlreadyPassed");
+    case 'failed': return tr("calendaractions.savedButTheReminderCouldnTBeSet");
     default: return null;
   }
 }

@@ -1,3 +1,6 @@
+import { useLocale } from '@/localization/provider';
+import { firstStrongDirection } from '@/localization/text-layout';
+import { tr } from '@/localization/runtime';
 import { useState, type ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
@@ -40,6 +43,8 @@ type Props = {
  * own proportions), within the width the note is given.
  */
 export function NoteContentView({ blocks, renderText, maxImageHeight = 360, gap = spacing.sm, style, onImageLongPress, onToggleChecklist }: Props) {
+  "use no memo"; // Global translation labels follow locale changes.
+  useLocale();
   const [width, setWidth] = useState(0);
   const segments = segmentsOf(blocks);
   const imageNumbers = new Map(blocks.filter((block) => block.type === 'image').map((block, index) => [block.key, index + 1]));
@@ -49,12 +54,12 @@ export function NoteContentView({ blocks, renderText, maxImageHeight = 360, gap 
       const previous = segments[index - 1];
       const consecutiveTasks = segment.type === 'text' && segment.checked !== undefined && previous?.type === 'text' && previous.checked !== undefined;
       const spaceBefore = { marginTop: index ? (consecutiveTasks ? Math.min(gap, spacing.xxs) : gap) : 0 };
-      if (segment.type === 'text' && segment.checked !== undefined) return <View key={segment.key} style={[styles.listRow, spaceBefore]}>
+      if (segment.type === 'text' && segment.checked !== undefined) return <View key={segment.key} style={[styles.listRow, { flexDirection: firstStrongDirection(segment.text) === 'rtl' ? 'row-reverse' : 'row' }, spaceBefore]}>
         <NoteCheckbox checked={segment.checked} label={segment.text} onPress={onToggleChecklist ? () => onToggleChecklist(segment.key) : undefined} />
         <View style={[styles.listBody, segment.checked && { opacity: 0.6 }]}>{renderText(segment.text, segment.key)}</View>
       </View>;
       if (segment.type === 'text') return segment.marker
-        ? <View key={segment.key} style={[styles.listRow, spaceBefore]}><View style={styles.listMarker}>{renderText(segment.marker, `${segment.key}:marker`)}</View><View style={styles.listBody}>{renderText(segment.text, segment.key)}</View></View>
+        ? <View key={segment.key} style={[styles.listRow, { flexDirection: firstStrongDirection(segment.text) === 'rtl' ? 'row-reverse' : 'row' }, spaceBefore]}><View style={styles.listMarker}>{renderText(segment.marker, `${segment.key}:marker`)}</View><View style={styles.listBody}>{renderText(segment.text, segment.key)}</View></View>
         : <View key={segment.key} style={spaceBefore}>{renderText(segment.text, segment.key)}</View>;
       // Until the width is known, hold roughly the space the images will take.
       if (!width) return <View key={segment.key} style={[spaceBefore, { height: Math.min(maxImageHeight, 160) }]} />;
@@ -62,7 +67,7 @@ export function NoteContentView({ blocks, renderText, maxImageHeight = 360, gap 
         {imageRows(segment.images.map((image) => image.attachment), width, IMAGE_GAP, maxImageHeight).map((row) => <View key={row.indexes.join('-')} style={styles.row}>
           {row.indexes.map((index, position) => {
             const { key, attachment } = segment.images[index];
-            return <NoteImage key={key} image={attachment} attachment={attachment} width={row.widths[position]} height={row.height} accessibilityLabel={imageCount > 1 ? `Image ${imageNumbers.get(key)} of ${imageCount}` : 'Image'} onLongPress={onImageLongPress ? () => onImageLongPress(attachment) : undefined} />;
+            return <NoteImage key={key} image={attachment} attachment={attachment} width={row.widths[position]} height={row.height} accessibilityLabel={imageCount > 1 ? tr('noteblockseditor.imagePosition', { position: imageNumbers.get(key), total: imageCount }) : tr("sharenote.image")} onLongPress={onImageLongPress ? () => onImageLongPress(attachment) : undefined} />;
           })}
         </View>)}
       </View>;

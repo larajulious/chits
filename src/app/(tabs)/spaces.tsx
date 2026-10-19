@@ -1,5 +1,10 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { EmptyState, Screen } from '@/components/ui/primitives';
 
 export default function SpacesWebScreen() {
-  return <Screen><EmptyState title="Spaces live in the app" description="Open Chits on your iPhone or Android device to stick notes on your fridge, desk, cork board or wall." /></Screen>;
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
+  return <Screen><EmptyState title={tr("spaces.spacesLiveInTheApp")} description={tr("spaces.openChitsOnYourIphoneOrAndroidDevice")} /></Screen>;
 }

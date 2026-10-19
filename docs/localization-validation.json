@@ -1,0 +1,23 @@
+{
+  "catalogAuditGeneratedAt": "2026-10-18T06:48:12.579Z",
+  "originalCatalogValuesPreserved": {
+    "en": 1549,
+    "fil": 1549,
+    "pt-BR": 1571,
+    "es": 1571
+  },
+  "checks": {
+    "testsPassed": 370,
+    "testsFailed": 0,
+    "typecheck": "passed",
+    "lint": "passed",
+    "hermesExports": [
+      "ios",
+      "android"
+    ],
+    "nativeReleaseBuild": "not performed",
+    "nativeSpeakerReview": "required for all new catalogs",
+    "deviceSmoke": "Samsung SM-S911B Android 16: picker, search/keyboard visibility, live Arabic/Japanese, Japanese restart persistence; original Filipino restored",
+    "imeCompositionMatrix": "not performed"
+  }
+}

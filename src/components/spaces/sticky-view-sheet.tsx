@@ -1,3 +1,5 @@
+import { countLabel, tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { BackHandler, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Icon } from '@/components/ui/icon';
@@ -40,6 +42,9 @@ type Props = {
  * the tap itself.
  */
 export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOptions }: Props) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const ui = useSpaceUI();
   const styles = useSpaceStyles(createStyles);
   const database = useSQLiteContext();
@@ -105,17 +110,17 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
   const moreThoughts = isCard ? thoughts.filter((thought) => thought.messageId !== primaryMessageId) : [];
   const moreExpanded = expandedNoteId === note.id;
   const onBoard = !isCard && !!note.boardId;
-  const context = detail?.context ?? (isCard || onBoard ? null : 'Chat');
-  const open = isCard ? { label: 'Open card', icon: 'open-outline' as const } : onBoard ? { label: 'Open board', icon: 'grid-outline' as const } : { label: 'Open in Chat', icon: 'chatbubble-outline' as const };
-  const heading = note.hidden ? 'Hidden Chit' : title ?? caption ?? (media ? MEDIA_NAMES[media.attachment.type] : thoughts[0]?.text.split('\n')[0] ?? 'Note');
+  const context = detail?.context ?? (isCard || onBoard ? null : tr("calendarnotepicker.chat"));
+  const open = isCard ? { label: tr("stickyviewsheet.openCard"), icon: 'open-outline' as const } : onBoard ? { label: tr("stickyviewsheet.openBoard"), icon: 'grid-outline' as const } : { label: tr("id.openInChat"), icon: 'chatbubble-outline' as const };
+  const heading = note.hidden ? tr("index.hiddenChit") : title ?? caption ?? (media ? MEDIA_NAMES[media.attachment.type] : thoughts[0]?.text.split('\n')[0] ?? tr("stickyoptionssheet.note"));
   // A little of the sticky's own tilt, kept small enough to read comfortably.
   const tilt = Math.max(-1.5, Math.min(1.5, note.rotation / 2));
   const pin = <PinDecoration space={note.spaceId} color={magnetColor(noteSeed(note.id))} noteWidth={contentWidth} unit={1.2} seed={noteSeed(note.id)} />;
 
   const actionButtons = <>
-    <Pressable accessibilityRole="button" accessibilityLabel={`Options for ${heading}`} onPress={onOptions} style={({ pressed }) => [styles.button, styles.secondary, stickySurface({ fill: styleColors.controlFill, radius: styleTokens.button.radius, edge: styleTokens.button.edge }, pressed), !stickyFooter && pressed && styles.pressed]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={tr("cardsubtasks.optionsForValue", { value1: heading })} onPress={onOptions} style={({ pressed }) => [styles.button, styles.secondary, stickySurface({ fill: styleColors.controlFill, radius: styleTokens.button.radius, edge: styleTokens.button.edge }, pressed), !stickyFooter && pressed && styles.pressed]}>
       <Icon name="ellipsis-horizontal" size={20} color={ui.paper} />
-      <Text style={[fonts.uiSemi, styles.buttonLabel, { color: ui.paper }]}>Options</Text>
+      <Text style={[fonts.uiSemi, styles.buttonLabel, { color: ui.paper }]}>{tr("draggablesticky.options")}</Text>
     </Pressable>
     <Pressable accessibilityRole="button" onPress={onOpen} style={({ pressed }) => [styles.button, styles.primary, stickySurface({ fill: styleColors.accentFill, radius: styleTokens.button.radius, edge: styleTokens.button.edge }, pressed), !stickyFooter && pressed && styles.pressed]}>
       <Icon name={open.icon} size={19} color={ui.accentText} />
@@ -128,7 +133,7 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
     <Animated.View entering={SlideInDown.duration(220)} exiting={SlideOutDown.duration(180)} accessibilityViewIsModal style={[styles.sheet, shapes.sheet, { width: sheetWidth, left: insets.left + (window.width - insets.left - insets.right - sheetWidth) / 2, maxHeight: maxSheetHeight }]}>
     <View style={styles.grabber} />
     <View style={styles.header}>
-      <Text style={[fonts.label, styles.where]}>ON YOUR {space.name.toUpperCase()}</Text>
+      <Text style={[fonts.label, styles.where]}>{tr("stickyviewsheet.onYour")}{' '}{space.name.toUpperCase()}</Text>
       {context ? <Text numberOfLines={1} style={[fonts.ui, styles.context]}>{context}</Text> : null}
     </View>
 
@@ -142,7 +147,7 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
       showsVerticalScrollIndicator
       indicatorStyle="white"
     >
-      {media?.attachment.type === 'audio'
+      {media?.attachment.type === "audio"
         ? <SheetTape media={media} caption={caption} color={note.color} width={Math.min(contentWidth, 240)} tilt={tilt} pin={<PinDecoration space={note.spaceId} color={magnetColor(noteSeed(note.id))} noteWidth={Math.min(contentWidth, 240)} unit={1.2} seed={noteSeed(note.id)} />} />
         : media ? <View style={{ transform: [{ rotate: `${tilt}deg` }] }}>
           <SheetPrint media={media} caption={caption} maxWidth={Math.min(contentWidth, 260)} maxHeight={Math.min(window.height * 0.28, 220)} />
@@ -157,10 +162,10 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
             <View style={{ position: 'absolute', top: 0, bottom: 0, left: 24, width: 1, backgroundColor: '#E9A3A3' }} />
           </View> : null}
           <View style={[styles.paperContent, note.paperStyle === 'index' && { paddingLeft: 32 }]}>
-            {note.hidden ? <View accessible accessibilityLabel="Hidden Chit. Open it in Chat to see it." style={styles.hidden}>
+            {note.hidden ? <View accessible accessibilityLabel={tr("stickyviewsheet.hiddenChitOpenItInChatToSee")} style={styles.hidden}>
               <Icon name="eye-off-outline" size={26} color={PAPER_INK} style={styles.hiddenIcon} />
-              <Text style={[fonts.note, styles.hiddenText]}>Hidden Chit</Text>
-              <Text style={[fonts.note, styles.hiddenHint]}>Open it in Chat to see it.</Text>
+              <Text style={[fonts.note, styles.hiddenText]}>{tr("index.hiddenChit")}</Text>
+              <Text style={[fonts.note, styles.hiddenHint]}>{tr("stickyviewsheet.openItInChatToSeeIt")}</Text>
             </View> : <>
               {title && !media ? <Text accessibilityRole="header" selectable style={[fonts.note, styles.title]}>{title}</Text> : null}
               {primaryThoughts.map((thought, index) => <View key={thought.messageId} style={[styles.thoughtSection, (index > 0 || (title && !media)) ? styles.thoughtDivider : null]}>
@@ -179,21 +184,21 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
       </View> : null}
       {moreExpanded ? <View style={styles.expandedThoughts} onLayout={({ nativeEvent }) => scrollRef.current?.scrollTo({ y: nativeEvent.layout.y, animated: true })}>
         {moreThoughts.map((thought) => <View key={thought.messageId} style={styles.expandedThought}>
-          <Text style={[fonts.uiSemi, styles.thoughtLabel]}>THOUGHT {thought.number}</Text>
+          <Text style={[fonts.uiSemi, styles.thoughtLabel]}>{tr("id.thought")}{' '}{thought.number}</Text>
           {thought.content
             ? <NoteContentView blocks={thought.content} maxImageHeight={160} gap={8} renderText={(text) => <Text selectable style={[fonts.ui, styles.expandedThoughtText]}>{text}</Text>} />
-            : <Text selectable style={[fonts.ui, styles.expandedThoughtText]}>{thought.text || 'Empty thought'}</Text>}
+            : <Text selectable style={[fonts.ui, styles.expandedThoughtText]}>{thought.text || tr("stickyviewsheet.emptyThought")}</Text>}
         </View>)}
       </View> : null}
       {moreThoughts.length > 0 ? <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${moreExpanded ? 'Hide' : 'See'} ${moreThoughts.length} more ${moreThoughts.length === 1 ? 'thought' : 'thoughts'} in this card`}
+        accessibilityLabel={tr("stickyviewsheet.valueValueMoreValueInThisCard", { value1: moreExpanded ? tr("stickyviewsheet.hide") : tr("stickyviewsheet.see"), value2: countLabel('thought', moreThoughts.length), value3: '' })}
         accessibilityState={{ expanded: moreExpanded }}
         onPress={() => setExpandedNoteId((current) => current === note.id ? null : note.id)}
         style={({ pressed }) => [styles.moreToggle, pressed && styles.pressed]}
       >
         <Icon name="layers-outline" size={18} color={ui.paper} />
-        <Text style={[fonts.uiSemi, styles.moreToggleText]}>{moreExpanded ? 'Hide' : 'See'} {moreThoughts.length} more {moreThoughts.length === 1 ? 'thought' : 'thoughts'}</Text>
+        <Text style={[fonts.uiSemi, styles.moreToggleText]}>{moreExpanded ? tr("stickyviewsheet.hide") : tr("stickyviewsheet.see")} {moreThoughts.length} {' '}{tr("cardlistrow.more")}{' '}{moreThoughts.length === 1 ? 'thought' : tr("id.thoughts")}</Text>
         <Icon name={moreExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={ui.textMuted} />
       </Pressable> : null}
     </ScrollView>
@@ -213,6 +218,9 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
  * video plays right here.
  */
 function SheetPrint({ media, caption, maxWidth, maxHeight }: { media: SpaceNoteMedia; caption: string | null; maxWidth: number; maxHeight: number }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const styles = useSpaceStyles(createStyles);
   const fonts = useSpaceFonts();
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -224,9 +232,9 @@ function SheetPrint({ media, caption, maxWidth, maxHeight }: { media: SpaceNoteM
   const width = height * ratio;
   return <View style={[styles.print, { width: width + PRINT_BORDER * 2 }]}>
     <View style={[styles.picture, { width, height }]}>
-      {attachment.type === 'video'
+      {attachment.type === "video"
         ? <SheetVideo storagePath={attachment.storagePath} />
-        : <Pressable accessibilityRole="button" accessibilityLabel={caption ? `Photo: ${caption}` : 'Photo'} accessibilityHint="Opens the photo full screen" onPress={() => setViewerOpen(true)} style={StyleSheet.absoluteFill}>
+        : <Pressable accessibilityRole="button" accessibilityLabel={caption ? tr("stickyviewsheet.photoValue", { value1: caption }) : tr("id.photo")} accessibilityHint={tr("stickyviewsheet.opensThePhotoFullScreen")} onPress={() => setViewerOpen(true)} style={StyleSheet.absoluteFill}>
           <Image source={resolveAttachmentUri(attachment.storagePath)} contentFit="cover" transition={120} style={StyleSheet.absoluteFill} />
         </Pressable>}
     </View>
@@ -238,6 +246,9 @@ function SheetPrint({ media, caption, maxWidth, maxHeight }: { media: SpaceNoteM
 }
 
 function SheetVideo({ storagePath }: { storagePath: string }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const player = useVideoPlayer(resolveAttachmentUri(storagePath) ?? '');
   // `as never`: expo-video types VideoView for web too; native gets the native player (same as Chat's viewer).
   return <VideoView player={player as never} nativeControls fullscreenOptions={{ enable: true }} contentFit="cover" style={StyleSheet.absoluteFill} />;
@@ -248,6 +259,9 @@ function SheetVideo({ storagePath }: { storagePath: string }) {
  * turn while it plays. It stops when the sheet closes.
  */
 function SheetTape({ media, caption, color, width, tilt, pin }: { media: SpaceNoteMedia; caption: string | null; color: string; width: number; tilt: number; pin: ReactNode }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const ui = useSpaceUI();
   const styles = useSpaceStyles(createStyles);
   const fonts = useSpaceFonts();
@@ -276,7 +290,7 @@ function SheetTape({ media, caption, color, width, tilt, pin }: { media: SpaceNo
     <View style={styles.deck}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={status.playing ? 'Pause voice note' : 'Play voice note'}
+        accessibilityLabel={status.playing ? tr("stickyviewsheet.pauseVoiceNote") : tr("stickyviewsheet.playVoiceNote")}
         accessibilityState={{ disabled }}
         disabled={disabled}
         onPress={() => void toggle()}
@@ -284,11 +298,11 @@ function SheetTape({ media, caption, color, width, tilt, pin }: { media: SpaceNo
         <Icon name={status.playing ? 'pause' : 'play'} size={24} color={ui.accentText} style={status.playing ? undefined : styles.playGlyph} />
       </Pressable>
       <View style={styles.deckTrack}>
-        <View accessible accessibilityRole="progressbar" accessibilityLabel="Playback" accessibilityValue={{ min: 0, max: Math.max(1, Math.round(duration)), now: Math.round(currentTime) }} style={styles.track}>
+        <View accessible accessibilityRole="progressbar" accessibilityLabel={tr("stickyviewsheet.playback")} accessibilityValue={{ min: 0, max: Math.max(1, Math.round(duration)), now: Math.round(currentTime) }} style={styles.track}>
           <View style={[styles.trackFill, { width: `${progress * 100}%` }]} />
         </View>
         <View style={styles.times}>
-          <Text style={[fonts.label, styles.timeText]}>{unavailable ? 'UNAVAILABLE' : formatTapeTime(currentTime * 1000)}</Text>
+          <Text style={[fonts.label, styles.timeText]}>{unavailable ? tr("stickyviewsheet.unavailable") : formatTapeTime(currentTime * 1000)}</Text>
           <Text style={[fonts.label, styles.timeText]}>{formatTapeTime(duration * 1000)}</Text>
         </View>
       </View>
@@ -296,7 +310,7 @@ function SheetTape({ media, caption, color, width, tilt, pin }: { media: SpaceNo
   </>;
 }
 
-const MEDIA_NAMES = { photo: 'Photo', video: 'Video', audio: 'Voice note' } as const;
+const MEDIA_NAMES = { get photo() { return tr("id.photo"); }, get video() { return tr("addcardattachmentsheet.video"); }, get audio() { return tr("cardlistrow.voiceNote"); } } as const;
 const PRINT_BORDER = 12;
 
 const createStyles = (ui: SpaceUI) => StyleSheet.create({

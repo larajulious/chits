@@ -1,3 +1,5 @@
+import { useDirection } from '@/localization/provider';
+import { navigationIconName } from '@/localization/text-layout';
 import { memo, useContext, useState } from 'react';
 import { StyleSheet, View, type StyleProp, type TextStyle } from 'react-native';
 import { Image } from 'expo-image';
@@ -30,9 +32,12 @@ export function useHeaderInk() {
 
 /** A header icon that stays readable on the theme's top bar (or on its button's tile). */
 export function HeaderIcon({ name, size, muted = false }: { name: IconName; size: number; muted?: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
   const { ink, inkMuted } = useHeaderInk();
+  const { direction } = useDirection();
   const tileInk = useContext(TileInkContext);
-  return <Icon name={name} size={size} color={tileInk ?? (muted ? inkMuted : ink)} />;
+  return <Icon name={navigationIconName(name, direction)} size={size} color={tileInk ?? (muted ? inkMuted : ink)} />;
 }
 
 /**
@@ -41,9 +46,12 @@ export function HeaderIcon({ name, size, muted = false }: { name: IconName; size
  * the tile whatever the header band behind it.
  */
 export function HeaderGlyph({ children, style }: { children: string; style?: StyleProp<TextStyle> }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
   const { ink } = useHeaderInk();
+  const { direction } = useDirection();
   const tileInk = useContext(TileInkContext);
-  return <AppText accessible={false} style={[style, { color: tileInk ?? ink }]}>{children}</AppText>;
+  return <AppText accessible={false} style={[style, { color: tileInk ?? ink }]}>{direction === 'rtl' && children === '‹' ? '›' : children}</AppText>;
 }
 
 /**

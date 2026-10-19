@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useEffect, useState } from 'react';
 import { AppState, Platform, Pressable, StyleSheet, View } from 'react-native';
 
@@ -13,6 +15,9 @@ import { hasExactReminderAccess, openReminderAlarmSettings } from '@/services/re
  * elsewhere (iOS has no such switch).
  */
 export function useExactAlarmAccess(active: boolean): boolean | null {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const [allowed, setAllowed] = useState<boolean | null>(Platform.OS === 'android' ? null : true);
   useEffect(() => {
     if (!active || Platform.OS !== 'android') return;
@@ -31,7 +36,10 @@ export function useExactAlarmAccess(active: boolean): boolean | null {
  * soon as a reminder is chosen — not after a failed save. It goes away by
  * itself once access is allowed and the person comes back.
  */
-export function ExactAlarmNotice({ action = 'set the reminder' }: { action?: string }) {
+export function ExactAlarmNotice({ action = tr("exactalarmnotice.setTheReminder") }: { action?: string }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens: theme } = useTheme();
   const [failed, setFailed] = useState(false);
   return (
@@ -39,20 +47,20 @@ export function ExactAlarmNotice({ action = 'set the reminder' }: { action?: str
       <View style={styles.top}>
         <View style={[styles.icon, { backgroundColor: theme.accentStrong }]}><Icon name="alarm-outline" size={18} color={theme.background} /></View>
         <View style={styles.copy}>
-          <AppText style={[styles.title, { color: theme.textPrimary }]}>Allow Alarms & reminders</AppText>
-          <AppText style={[styles.text, { color: theme.textSecondary }]}>Android needs this before Chits can {action} and notify you on time, even when the app is closed.</AppText>
+          <AppText style={[styles.title, { color: theme.textPrimary }]}>{tr("exactalarmnotice.allowAlarmsReminders")}</AppText>
+          <AppText style={[styles.text, { color: theme.textSecondary }]}>{tr("exactalarmnotice.androidNeedsThisBeforeChitsCan")}{' '}{action} {' '}{tr("exactalarmnotice.andNotifyYouOnTimeEvenWhenThe")}</AppText>
         </View>
       </View>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Open settings to allow alarms and reminders"
+        accessibilityLabel={tr("exactalarmnotice.openSettingsToAllowAlarmsAndReminders")}
         onPress={() => { setFailed(false); void openReminderAlarmSettings().catch(() => setFailed(true)); }}
         style={({ pressed }) => [styles.button, { backgroundColor: theme.accentStrong }, pressed && styles.pressed]}
       >
         <Icon name="settings-outline" size={17} color={theme.background} />
-        <AppText style={[styles.buttonText, { color: theme.background }]}>Open Settings</AppText>
+        <AppText style={[styles.buttonText, { color: theme.background }]}>{tr("calendar.openSettings")}</AppText>
       </Pressable>
-      {failed ? <AppText style={[styles.text, { color: theme.danger }]}>Settings couldn’t be opened. Find Chits under Settings › Apps › Special app access › Alarms & reminders.</AppText> : null}
+      {failed ? <AppText style={[styles.text, { color: theme.danger }]}>{tr("exactalarmnotice.settingsCouldnTBeOpenedFindChitsUnder")}</AppText> : null}
     </View>
   );
 }

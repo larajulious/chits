@@ -1,3 +1,4 @@
+import { matchSupportedLanguage } from '../src/localization/runtime.ts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -12,7 +13,7 @@ function load(source) {
   const module = { exports: {} };
   modules.set(path, module);
   const compiled = ts.transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  const localRequire = (specifier) => load(resolve(dirname(path), `${specifier}.ts`));
+  const localRequire = (specifier) => specifier.endsWith('/localization/runtime') ? { matchSupportedLanguage } : load(resolve(dirname(path), `${specifier}.ts`));
   new Function('require', 'module', 'exports', compiled)(localRequire, module, module.exports);
   return module.exports;
 }
@@ -35,9 +36,11 @@ test('local clock selects all six greeting periods at their boundaries', () => {
   assert.equal(periodAt(22), 'night');
 });
 
-test('Filipino and Tagalog locales have their own library; other locales use English', () => {
+test('supported regional locales use their own greeting library', () => {
   for (const locale of ['fil-PH', 'tl-PH', 'FIL_us']) assert.equal(greetings.getGreetingLanguage(locale), 'fil');
-  for (const locale of ['en-US', 'en-GB', 'ja-JP', 'de-DE', null]) assert.equal(greetings.getGreetingLanguage(locale), 'en');
+  for (const locale of ['en-US', 'en-GB', 'zh-CN', null]) assert.equal(greetings.getGreetingLanguage(locale), 'en');
+  assert.equal(greetings.getGreetingLanguage('ja-JP'), 'ja');
+  assert.equal(greetings.getGreetingLanguage('de-DE'), 'de');
   assert.notDeepEqual(greetings.getGreetingsForPeriod('fil', 'morning'), greetings.getGreetingsForPeriod('en', 'morning'));
 });
 

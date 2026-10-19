@@ -1,6 +1,8 @@
+import { countLabel, tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { noteChecklistSummary, type NoteBlock } from '@/services/note-content';
 import { subscribeToNoteChanges } from '@/services/note-changes';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -42,18 +44,16 @@ type ViewMode = 'boards' | 'cards';
 
 type UnorganizedSummaryRow = { id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; isHiddenContent: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number };
 
-function pluralize(count: number, singular: string) {
-  return `${count} ${count === 1 ? singular : `${singular}s`}`;
-}
+function pluralize(count: number, singular: string) { return countLabel(singular, count); }
 
 function unorganizedDisplayTitle(row: UnorganizedSummaryRow): string {
-  if (row.isHiddenContent === 1) return 'Hidden Chit';
+  if (row.isHiddenContent === 1) return tr("index.hiddenChit");
   const text = row.text?.trim();
   if (text) return text.slice(0, 120);
-  if (row.firstAttachmentType === 'file') return row.firstAttachmentName?.trim() || 'Attachment';
-  if (row.firstAttachmentType === 'photo') return 'Photo';
-  if (row.firstAttachmentType === 'video') return 'Video';
-  if (row.firstAttachmentType === 'audio') return 'Audio note';
+  if (row.firstAttachmentType === 'file') return row.firstAttachmentName?.trim() || tr("attachmentexportnaming.attachment");
+  if (row.firstAttachmentType === 'photo') return tr("id.photo");
+  if (row.firstAttachmentType === 'video') return tr("addcardattachmentsheet.video");
+  if (row.firstAttachmentType === 'audio') return tr("messagerow.audioNote");
   return `${row.type[0].toUpperCase()}${row.type.slice(1)} attachment`;
 }
 
@@ -84,6 +84,9 @@ type CardFilter = 'all' | 'unorganized' | (string & {});
 type CardFilterChip = { key: CardFilter; label: string; count: number };
 
 export default function BoardsScreen() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  const localeVersion = useLocale();
   const database = useSQLiteContext();
   const boardRepository = useMemo(() => createBoardRepository(database), [database]);
   const messageRepository = useMemo(() => createMessageRepository(database), [database]);
@@ -112,13 +115,23 @@ export default function BoardsScreen() {
   // not a second hardcoded "Chits" string that would drift the moment it's renamed.
   const [appTitle, setAppTitle] = useState('Chits');
   const [ready, setReady] = useState(false);
-  const showLoader = useChitsLoading(!ready);
+  // Board metadata can finish before the card queries. Keep empty states hidden
+  // until both have loaded and the loader's minimum visible duration has ended.
+  const [cardsReady, setCardsReady] = useState(false);
+  const isLoading = !ready || !cardsReady;
+  const showLoader = useChitsLoading(isLoading);
   const isNameValid = Boolean(name.trim());
 
-  // Choose the initial tab after loading boards; subsequent choices are session-local.
-  const [viewMode, setViewMode] = useState<ViewMode>('boards');
+  // Land on Cards on each launch; manual view switches remain session-local.
+  const [viewMode, setViewMode] = useState<ViewMode>('cards');
   const [headerSection, setHeaderSection] = useState<{ sections: CardSection[]; key: string } | null>(null);
-  const initialViewResolved = useRef(false);
+  const { view } = useLocalSearchParams<{ view?: string }>();
+  useFocusEffect(useCallback(() => {
+    if (view !== 'cards') return;
+    setViewMode('cards');
+    setHeaderSection(null);
+    router.setParams({ view: undefined });
+  }, [view]));
   const [addNoteOpen, setAddNoteOpen] = useState(false);
   const [cards, setCards] = useState<CardListItem[]>([]);
   // Chat thoughts not yet organized into any board/card — the Cards view
@@ -146,7 +159,7 @@ export default function BoardsScreen() {
       if (messages && (messages.length !== 1 || messages[0].isHiddenContent)) { openDetails(); return; }
       router.push({ pathname: '/card/edit-content', params: { messageId: messages ? messages[0].id : item.id, autoFocus: '0' } });
     } catch {
-      setCardToast('That note could not be opened. Please try again.');
+      setCardToast(tr("index.thatNoteCouldNotBeOpenedPleaseTry"));
     } finally {
       openingNote.current = false;
     }
@@ -161,10 +174,6 @@ export default function BoardsScreen() {
       database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', 'chat_title'),
     ]);
     setBoards(nextBoards);
-    if (!initialViewResolved.current) {
-      initialViewResolved.current = true;
-      setViewMode(nextBoards.length ? 'boards' : 'cards');
-    }
     setUnorganizedCount(nextCount);
     setAppTitle(titleRow?.value.trim() || 'Chits');
     setReady(true);
@@ -191,9 +200,10 @@ export default function BoardsScreen() {
     }
     // A card whose thought is hidden in Chat is covered here too, the same as on its board.
     setCards(cardRows.map(({ isHidden, ...row }) => isHidden === 1
-      ? { ...row, kind: 'card' as const, title: 'Hidden Chit', preview: null, pinned: row.pinned === 1, hidden: true, previewMediaType: null, thumbnailPath: null, mediaDuration: null, mediaCount: 0 }
+      ? { ...row, kind: 'card' as const, title: tr("index.hiddenChit"), preview: null, pinned: row.pinned === 1, hidden: true, previewMediaType: null, thumbnailPath: null, mediaDuration: null, mediaCount: 0 }
       : { ...row, kind: 'card' as const, pinned: row.pinned === 1, hidden: false, mediaCount: row.mediaCount ?? 0, subtaskPreview: subtasksByCard.get(row.id) ?? [], checklistSummary: noteChecklistSummary(contentByCard.get(row.id) ?? []) }));
     setUnorganizedThoughts(thoughtRows.map((row) => ({ ...unorganizedToCardListItem(row), checklistSummary: row.isHiddenContent ? null : noteChecklistSummary(contentByThought.get(row.id) ?? []) })));
+    setCardsReady(true);
   }, [boardRepository, messageRepository]);
   // Card deletes/archives/hides go through loadCards afterwards, so reconciling
   // here cancels notifications for removed cards and refreshes hidden text;
@@ -209,7 +219,6 @@ export default function BoardsScreen() {
   }, [load, loadCards]));
 
   const changeViewMode = (next: ViewMode) => {
-    initialViewResolved.current = true;
     if (next !== viewMode) {
       setHeaderSection(null);
       setViewMode(next);
@@ -223,21 +232,23 @@ export default function BoardsScreen() {
     else if (attachment) await messageRepository.createAttachmentMessage(attachment, text || null);
     else await messageRepository.createText(text);
     await Promise.all([load(), loadCards()]);
-    setCardToast('Note added');
+    setCardToast(tr("calendar.noteAdded"));
   };
 
   // Chip counts reflect the loaded cards and unorganized thoughts.
   const cardFilterChips = useMemo<CardFilterChip[]>(() => {
+    void localeVersion; // Refresh translated display metadata without reloading the database.
+
     const perBoardCount = new Map<string, number>();
     for (const card of cards) if (card.boardId) perBoardCount.set(card.boardId, (perBoardCount.get(card.boardId) ?? 0) + 1);
     return [
-      { key: 'all', label: 'All', count: cards.length + unorganizedThoughts.length },
-      { key: 'unorganized', label: 'Unorganized', count: unorganizedThoughts.length },
+      { key: 'all', label: tr("attachments.all"), count: cards.length + unorganizedThoughts.length },
+      { key: 'unorganized', label: tr("index.unorganized"), count: unorganizedThoughts.length },
       ...boards
         .filter((board) => board.cardCount > 0)
         .map((board) => ({ key: board.id, label: board.name, count: perBoardCount.get(board.id) ?? 0 })),
     ];
-  }, [boards, cards, unorganizedThoughts]);
+  }, [boards, cards, unorganizedThoughts, localeVersion]);
 
   // Cards and unorganized thoughts are two separately-sorted (both already
   // updated_at DESC from SQL) lists that get interleaved here — a plain
@@ -245,6 +256,8 @@ export default function BoardsScreen() {
   // re-sort client-side and this only runs when either source list (or the
   // active filter chip) changes.
   const cardSections = useMemo<CardSection[]>(() => {
+    void localeVersion; // Refresh translated display metadata without reloading the database.
+
     const all = cardFilter === 'unorganized' ? unorganizedThoughts
       : cardFilter === 'all' ? [...cards, ...unorganizedThoughts]
       : cards.filter((card) => card.boardId === cardFilter);
@@ -253,10 +266,10 @@ export default function BoardsScreen() {
     // Pinned stays on top; recent notes use familiar calendar headings.
     const groups = groupRecentNotes(rest);
     return [
-      ...(pinned.length ? [{ key: 'pinned', title: 'Pinned', pinned: true, count: pinned.length, data: pinned }] : []),
+      ...(pinned.length ? [{ key: 'pinned', title: tr("index.pinned"), pinned: true, count: pinned.length, data: pinned }] : []),
       ...groups.map((group) => ({ key: group.key, title: group.title, count: group.items.length, data: group.items })),
     ];
-  }, [cards, unorganizedThoughts, cardFilter]);
+  }, [cards, unorganizedThoughts, cardFilter, localeVersion]);
 
   const updateHeaderSection = useCallback((section: CardSection | null) => {
     setHeaderSection((previous) => {
@@ -283,15 +296,15 @@ export default function BoardsScreen() {
       void requestReminderSync();
       await Promise.all(removableUris.map((uri) => removeCardAttachmentFile(uri)));
       await loadCards();
-      setCardToast('Moved back to Unorganized');
+      setCardToast(tr("index.movedBackToUnorganized"));
     };
 
     confirm({
       type: 'default',
       icon: 'arrow-undo-outline',
-      title: 'Move this card back to Unorganized?',
+      title: tr("index.moveThisCardBackToUnorganized"),
       message: detachConfirmationMessage({ boardName: item.boardName, messageCount: preview.messageCount, commentCount: preview.commentCount, attachmentCount: preview.attachmentCount }),
-      confirmText: 'Move',
+      confirmText: tr("index.move"),
       accentColor: item.boardAccent,
       onConfirm: run,
     });
@@ -300,28 +313,28 @@ export default function BoardsScreen() {
   const openCardActions = useCallback(async (item: CardListItem) => {
     // "Stick to Fridge" / "Remove from Fridge", looked up as the menu opens.
     const space = await spaceNoteAction(database, item.kind, item.id).catch(() => null);
-    const spaceOption = space ? [{ label: space.label, icon: space.icon, onPress: () => void space.run().then(setCardToast, () => setCardToast('That couldn’t be saved. Please try again.')) }] : [];
+    const spaceOption = space ? [{ label: space.label, icon: space.icon, onPress: () => void space.run().then(setCardToast, () => setCardToast(tr("chat.thatCouldnTBeSavedPleaseTryAgain"))) }] : [];
     if (item.kind === 'thought') {
       actionSheet({
         title: item.title,
         options: [
-          { label: 'Add to board', icon: 'albums-outline', onPress: () => router.push({ pathname: '/unorganized', params: { messageId: item.id, openBoardPicker: '1' } }) },
-          ...(item.hidden ? [] : [{ label: 'Share Note', icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ messageId: item.id })) }]),
-          { label: item.pinned ? 'Unpin' : 'Pin', icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void messageRepository.setPinned(item.id, !item.pinned).then(() => loadCards()) },
+          { label: tr("index.addToBoard"), icon: 'albums-outline', onPress: () => router.push({ pathname: '/unorganized', params: { messageId: item.id, openBoardPicker: '1' } }) },
+          ...(item.hidden ? [] : [{ label: tr("index.shareNote"), icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ messageId: item.id })) }]),
+          { label: item.pinned ? tr("index.unpin") : tr("index.pin"), icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void messageRepository.setPinned(item.id, !item.pinned).then(() => loadCards()) },
           ...spaceOption,
           {
-            label: 'Archive thought', icon: 'archive-outline', onPress: () => confirm({
-              type: 'default', icon: 'archive-outline', title: 'Archive thought?',
-              message: 'You can restore it later from Archive.',
-              confirmText: 'Archive thought',
+            label: tr("index.archiveThought"), icon: 'archive-outline', onPress: () => confirm({
+              type: 'default', icon: 'archive-outline', title: tr("index.archiveThought2"),
+              message: tr("index.youCanRestoreItLaterFromArchive"),
+              confirmText: tr("index.archiveThought"),
               onConfirm: () => messageRepository.archive(item.id).then(() => { void requestReminderSync(); return loadCards(); }),
             }),
           },
           {
-            label: 'Delete thought', icon: 'trash-outline', destructive: true, onPress: () => confirm({
-              type: 'destructive', icon: 'trash-outline', title: 'Delete thought?',
-              message: 'This can’t be undone.',
-              confirmText: 'Delete thought',
+            label: tr("index.deleteThought"), icon: 'trash-outline', destructive: true, onPress: () => confirm({
+              type: 'destructive', icon: 'trash-outline', title: tr("chat.deleteThought"),
+              message: tr("index.thisCanTBeUndone"),
+              confirmText: tr("index.deleteThought"),
               onConfirm: () => messageRepository.softDelete(item.id).then(() => { void requestReminderSync(); return loadCards(); }),
             }),
           },
@@ -332,23 +345,23 @@ export default function BoardsScreen() {
     actionSheet({
       title: item.title,
       options: [
-        ...(item.hidden ? [] : [{ label: 'Share Note', icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ cardId: item.id })) }]),
-        { label: item.pinned ? 'Unpin' : 'Pin', icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void boardRepository.setPinned('card', item.id, !item.pinned).then(() => loadCards()) },
+        ...(item.hidden ? [] : [{ label: tr("index.shareNote"), icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ cardId: item.id })) }]),
+        { label: item.pinned ? tr("index.unpin") : tr("index.pin"), icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void boardRepository.setPinned('card', item.id, !item.pinned).then(() => loadCards()) },
         ...spaceOption,
-        { label: 'Move back to Unorganized', icon: 'arrow-undo-outline', onPress: () => void moveCardBackToUnorganized(item) },
+        { label: tr("index.moveBackToUnorganized"), icon: 'arrow-undo-outline', onPress: () => void moveCardBackToUnorganized(item) },
         {
-          label: 'Archive card', icon: 'archive-outline', onPress: () => confirm({
-            type: 'default', icon: 'archive-outline', title: 'Archive card?',
-            message: 'You can restore it later from Archive. Your original messages remain in Chat.',
-            confirmText: 'Archive card', accentColor: item.boardAccent,
+          label: tr("index.archiveCard"), icon: 'archive-outline', onPress: () => confirm({
+            type: 'default', icon: 'archive-outline', title: tr("calendar.archiveCard"),
+            message: tr("index.youCanRestoreItLaterFromArchiveYour"),
+            confirmText: tr("index.archiveCard"), accentColor: item.boardAccent,
             onConfirm: () => boardRepository.archiveCard(item.id).then(() => { void requestReminderSync(); return loadCards(); }),
           }),
         },
         {
-          label: 'Delete card', icon: 'trash-outline', destructive: true, onPress: () => confirm({
-            type: 'destructive', icon: 'trash-outline', title: 'Delete card?',
-            message: 'This deletes the card and its Chits, including from Chat. This can’t be undone.',
-            confirmText: 'Delete card',
+          label: tr("index.deleteCard"), icon: 'trash-outline', destructive: true, onPress: () => confirm({
+            type: 'destructive', icon: 'trash-outline', title: tr("index.deleteCard2"),
+            message: tr("index.thisDeletesTheCardAndItsChitsIncluding"),
+            confirmText: tr("index.deleteCard"),
             onConfirm: async () => {
               const removableUris = await boardRepository.deleteCard(item.id);
       void requestReminderSync();
@@ -395,7 +408,7 @@ export default function BoardsScreen() {
       setIcon(null);
       setAccent(null);
     } catch {
-      setError('Couldn’t create board. Try again.');
+      setError(tr("index.couldnTCreateBoardTryAgain"));
     } finally {
       setSaving(false);
     }
@@ -411,12 +424,12 @@ export default function BoardsScreen() {
         subtitle={viewMode === 'boards' ? pluralize(boards.length, 'board') : pluralize(activeHeaderSection?.count ?? cards.length + unorganizedThoughts.length, 'card')}
         leading={(
           <View style={[styles.headerActions, styleTokens.header.iconButton.filled && styles.headerActionsTiled]}>
-            <IconButton label="Open navigation" onPress={openDrawer}>
+            <IconButton label={tr("archive.openNavigation")} onPress={openDrawer}>
               <MenuIcon />
             </IconButton>
             <IconButton
-              label={viewMode === 'boards' ? 'Boards view. Switch to Cards' : 'Cards view. Switch to Boards'}
-              disabled={!ready}
+              label={viewMode === 'boards' ? tr("index.boardsViewSwitchToCards") : tr("index.cardsViewSwitchToBoards")}
+              disabled={isLoading || showLoader}
               onPress={() => changeViewMode(viewMode === 'boards' ? 'cards' : 'boards')}
             >
               <HeaderIcon name={viewMode === 'boards' ? 'albums-outline' : 'reader-outline'} size={22} />
@@ -425,7 +438,7 @@ export default function BoardsScreen() {
         )}
         trailing={(
           <View style={[styles.headerActions, styleTokens.header.iconButton.filled && styles.headerActionsTiled]}>
-            <IconButton label={viewMode === 'cards' && cardFilter !== 'all' && cardFilter !== 'unorganized' ? `Search in ${boards.find((board) => board.id === cardFilter)?.name ?? 'board'}` : 'Search'} onPress={() => {
+            <IconButton label={viewMode === 'cards' && cardFilter !== 'all' && cardFilter !== 'unorganized' ? tr("index.searchInValue", { value1: boards.find((board) => board.id === cardFilter)?.name ?? 'board' }) : tr("search.search")} onPress={() => {
               const selectedBoard = viewMode === 'cards' ? boards.find((board) => board.id === cardFilter) : undefined;
               router.push(selectedBoard
                 ? { pathname: '/search', params: { source: 'board', boardId: selectedBoard.id, boardName: selectedBoard.name } }
@@ -433,7 +446,7 @@ export default function BoardsScreen() {
             }}>
               <HeaderIcon name="search-outline" size={23} />
             </IconButton>
-            <IconButton accent label={viewMode === 'boards' ? 'Create board' : 'Add note'} onPress={viewMode === 'boards' ? openCreate : () => setAddNoteOpen(true)}>
+            <IconButton accent label={viewMode === 'boards' ? tr("index.createBoard") : tr("id.addNote")} onPress={viewMode === 'boards' ? openCreate : () => setAddNoteOpen(true)}>
               <HeaderIcon name="add" size={26} />
             </IconButton>
           </View>
@@ -442,15 +455,15 @@ export default function BoardsScreen() {
 
       <GettingStartedCard onHome />
 
-      {!ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : (
+      {isLoading || showLoader ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : (
       <View style={styles.flex}>
-        {viewMode === 'cards' ? (
+        {viewMode === "cards" ? (
           totalCardCount === 0 ? (
             <EmptyState
               pose="no-notes"
-              title="Your thoughts will show up here."
-              description="Send yourself something in Chat and it becomes a note you can organize later."
-              action={{ label: 'Start a Chit', onPress: () => router.push('/chat?focusInput=1') }}
+              title={tr("index.yourThoughtsWillShowUpHere")}
+              description={tr("index.sendYourselfSomethingInChatAndItBecomes")}
+              action={{ label: tr("index.startAChit"), onPress: () => router.push('/chat?focusInput=1') }}
             />
           ) : (
             <CardsCollection
@@ -467,12 +480,11 @@ export default function BoardsScreen() {
         ) : (
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.md }]}>
         <AppText style={[styles.intro, { color: styleTokens.mascotEmptyStates ? styleColors.textSecondary : theme.textSecondary }]}>
-          Keep related thoughts together and easy to find.
-        </AppText>
+          {tr("index.keepRelatedThoughtsTogetherAndEasyToFind")}</AppText>
 
         <PressableSurface
           accessibilityRole="button"
-          accessibilityLabel={`${pluralize(unorganizedCount, 'unorganized thought')}. Open Unorganized.`}
+          accessibilityLabel={tr("index.valueOpenUnorganized", { value1: pluralize(unorganizedCount, 'unorganized thought') })}
           onPress={() => router.push('/unorganized')}
           fill={styleTokens.card.tinted ? styleColors.cardTint : theme.accentSoft}
           border={theme.accentBorder}
@@ -485,16 +497,16 @@ export default function BoardsScreen() {
             <Icon name="file-tray-outline" size={20} color={styleTokens.card.tinted ? theme.textPrimary : theme.accentStrong} />
           </Surface>
           <View style={styles.rowCopy}>
-            <AppText variant="display" weight="700" style={[styles.unorganizedTitle, { color: styleTokens.card.tinted ? styleColors.cardInk : theme.textPrimary }]}>Unorganized</AppText>
+            <AppText variant="display" weight="700" style={[styles.unorganizedTitle, { color: styleTokens.card.tinted ? styleColors.cardInk : theme.textPrimary }]}>{tr("index.unorganized")}</AppText>
             <AppText style={[styles.rowDetail, { color: styleTokens.card.tinted ? styleColors.cardInkMuted : theme.textSecondary }]}>
-              {unorganizedCount === 0 ? 'All caught up' : `${pluralize(unorganizedCount, 'thought')} waiting`}
+              {unorganizedCount === 0 ? tr("index.allCaughtUp") : tr("index.valueWaiting", { value1: pluralize(unorganizedCount, 'thought') })}
             </AppText>
           </View>
           <Icon name="chevron-forward" size={20} color={styleTokens.card.tinted ? styleColors.cardInk : theme.textMuted} />
         </PressableSurface>
 
         <View style={styles.sectionHeader}>
-          <AppText accessibilityRole="header" variant="display" weight="700" style={[styles.sectionTitle, { color: theme.textPrimary }]}>Your boards</AppText>
+          <AppText accessibilityRole="header" variant="display" weight="700" style={[styles.sectionTitle, { color: theme.textPrimary }]}>{tr("index.yourBoards")}</AppText>
           {boards.length > 0 ? (
             <View style={[styles.boardCount, { backgroundColor: theme.surfaceElevated }]}><AppText weight="600" style={[styles.sectionCount, { color: theme.textSecondary }]}>{boards.length}</AppText></View>
           ) : null}
@@ -505,7 +517,7 @@ export default function BoardsScreen() {
             {boards.map((board) => <BoardListItem key={board.id} board={board} onPress={() => router.push(`/board/${board.id}`)} />)}
           </View>
         ) : (
-          <EmptyState pose="empty-board" title="No boards yet." description="Organize your Chits when you’re ready." action={{ label: 'Create board', onPress: openCreate }} />
+          <EmptyState pose="empty-board" title={tr("index.noBoardsYet")} description={tr("index.organizeYourChitsWhenYouReReady")} action={{ label: tr("index.createBoard"), onPress: openCreate }} />
         )}
       </ScrollView>
         )}
@@ -516,26 +528,26 @@ export default function BoardsScreen() {
         ref={scrollRef}
         visible={createOpen}
         onRequestClose={closeCreate}
-        closeAccessibilityLabel="Close new board"
+        closeAccessibilityLabel={tr("index.closeNewBoard")}
         accessibilityViewIsModal
         onModalShow={() => requestAnimationFrame(() => nameInputRef.current?.focus())}
         contentContainerStyle={styles.sheetContent}
       >
         <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
-        <AppText accessibilityRole="header" variant="display" weight="700" style={[styles.sheetTitle, { color: theme.textPrimary }]}>New board</AppText>
-        <AppText variant="paragraph" style={[styles.sheetIntro, { color: theme.textSecondary }]}>Give this collection a clear, memorable name.</AppText>
+        <AppText accessibilityRole="header" variant="display" weight="700" style={[styles.sheetTitle, { color: theme.textPrimary }]}>{tr("index.newBoard")}</AppText>
+        <AppText variant="paragraph" style={[styles.sheetIntro, { color: theme.textSecondary }]}>{tr("index.giveThisCollectionAClearMemorableName")}</AppText>
 
-        <AppText weight="600" style={[styles.label, { color: theme.textSecondary }]}>Board name</AppText>
+        <AppText weight="600" style={[styles.label, { color: theme.textSecondary }]}>{tr("index.boardName")}</AppText>
         <TextInput
           ref={nameInputRef}
-          accessibilityLabel="Board name"
+          accessibilityLabel={tr("index.boardName")}
           value={name}
           onChangeText={(value) => {
             setName(value);
             setError(null);
           }}
           onFocus={() => scrollRef.current?.requestVisible(nameInputRef)}
-          placeholder="e.g. Tasks"
+          placeholder={tr("index.eGTasks")}
           placeholderTextColor={theme.textMuted}
           maxLength={80}
           style={[styles.nameInput, controls.input, inputFont, { borderRadius: styleTokens.radius.control, borderWidth: styleTokens.outline.width || 1, borderColor: styleTokens.outline.width ? styleColors.outline : theme.borderSubtle, color: theme.textPrimary, backgroundColor: theme.background }]}
@@ -543,14 +555,14 @@ export default function BoardsScreen() {
           onSubmitEditing={() => void createBoard()}
         />
 
-        <AppText weight="700" style={[styles.optionalLabel, { color: theme.textMuted }]}>OPTIONAL PERSONALIZATION</AppText>
+        <AppText weight="700" style={[styles.optionalLabel, { color: theme.textMuted }]}>{tr("index.optionalPersonalization")}</AppText>
         <BoardAppearanceFields icon={icon} accent={accent} onIconChange={setIcon} onAccentChange={setAccent} />
 
         {error ? <AppText accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>{error}</AppText> : null}
 
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" onPress={closeCreate} disabled={saving} style={styles.secondary}>
-            <AppText weight="600" style={{ color: theme.textSecondary }}>Cancel</AppText>
+            <AppText weight="600" style={{ color: theme.textSecondary }}>{tr("chat.cancel")}</AppText>
           </Pressable>
           <PressableSurface
             accessibilityRole="button"
@@ -563,13 +575,13 @@ export default function BoardsScreen() {
             pressedStyle={styles.pressed}
             style={[styles.primary, (!isNameValid || saving) && styles.disabled]}
           >
-            <AppText weight={styleTokens.elevation === 'edge' ? '800' : '700'} style={{ color: styleTokens.elevation === 'edge' ? styleColors.onAccent : theme.accentText }}>{saving ? 'Creating…' : 'Create board'}</AppText>
+            <AppText weight={styleTokens.elevation === 'edge' ? '800' : '700'} style={{ color: styleTokens.elevation === 'edge' ? styleColors.onAccent : theme.accentText }}>{saving ? tr("index.creating") : tr("index.createBoard")}</AppText>
           </PressableSurface>
         </View>
       </FormSheet>
       <Toast message={cardToast} />
       <AddNoteSheet visible={addNoteOpen} onClose={() => setAddNoteOpen(false)} onSubmit={addNote} />
-      {!createOpen && !addNoteOpen ? <StickyGreeting bottom={tabBarHeight + spacing.sm} /> : null}
+      {!createOpen && !addNoteOpen ? <StickyGreeting /> : null}
     </Screen>
   );
 }

@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
 import { FlatList, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
@@ -17,6 +19,9 @@ import type { SpaceCandidate } from '@/db/types';
  * day or give a reminder.
  */
 export function CalendarNotePicker({ visible, dayLabel, onClose, onPick }: { visible: boolean; dayLabel: string; onClose: () => void; onPick: (candidate: SpaceCandidate) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const database = useSQLiteContext();
   const { tokens: theme } = useTheme();
   const [query, setQuery] = useState('');
@@ -45,15 +50,15 @@ export function CalendarNotePicker({ visible, dayLabel, onClose, onPick }: { vis
       <SafeAreaView edges={Platform.OS === 'ios' ? ['bottom'] : ['top', 'bottom']} style={[styles.screen, { backgroundColor: theme.background }]}>
         <View style={styles.header}>
           <View style={styles.flex}>
-            <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>Add an existing note</AppText>
-            <AppText style={[styles.subtitle, { color: theme.textSecondary }]}>To {dayLabel}</AppText>
+            <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{tr("calendarnotepicker.addAnExistingNote")}</AppText>
+            <AppText style={[styles.subtitle, { color: theme.textSecondary }]}>{tr("calendarnotepicker.to")}{' '}{dayLabel}</AppText>
           </View>
-          <IconButton label="Close" onPress={close}><Icon name="close" size={24} color={theme.textPrimary} /></IconButton>
+          <IconButton label={tr("attachments.close")} onPress={close}><Icon name="close" size={24} color={theme.textPrimary} /></IconButton>
         </View>
         <View style={[styles.search, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
           <Icon name="search-outline" size={17} color={theme.textMuted} />
-          <TextInput accessibilityLabel="Search notes" value={query} onChangeText={setQuery} placeholder="Search notes and cards…" placeholderTextColor={theme.textMuted} returnKeyType="search" autoCorrect={false} style={[styles.input, { color: theme.textPrimary }]} />
-          {query ? <Pressable accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={12} onPress={() => setQuery('')}><Icon name="close-circle" size={16} color={theme.textMuted} /></Pressable> : null}
+          <TextInput accessibilityLabel={tr("calendarnotepicker.searchNotes")} value={query} onChangeText={setQuery} placeholder={tr("calendarnotepicker.searchNotesAndCards")} placeholderTextColor={theme.textMuted} returnKeyType="search" autoCorrect={false} style={[styles.input, { color: theme.textPrimary }]} />
+          {query ? <Pressable accessibilityRole="button" accessibilityLabel={tr("unorganized.clearSearch")} hitSlop={12} onPress={() => setQuery('')}><Icon name="close-circle" size={16} color={theme.textMuted} /></Pressable> : null}
         </View>
         <FlatList
           data={items ?? []}
@@ -61,11 +66,11 @@ export function CalendarNotePicker({ visible, dayLabel, onClose, onPick }: { vis
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           contentContainerStyle={styles.list}
-          ListEmptyComponent={items ? <AppText style={[styles.empty, { color: theme.textSecondary }]}>{query ? 'No notes match that search.' : 'Every note is already on your calendar.'}</AppText> : null}
+          ListEmptyComponent={items ? <AppText style={[styles.empty, { color: theme.textSecondary }]}>{query ? tr("calendarnotepicker.noNotesMatchThatSearch") : tr("calendarnotepicker.everyNoteIsAlreadyOnYourCalendar")}</AppText> : null}
           renderItem={({ item }) => (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`${item.title}${item.context ? `, ${item.context}` : ', Chat'}. Add to ${dayLabel}.`}
+              accessibilityLabel={tr("calendarnotepicker.valueValueAddToValue", { value1: item.title, value2: item.context ? `, ${item.context}` : ', Chat', value3: dayLabel })}
               onPress={() => pick(item)}
               style={({ pressed }) => [styles.row, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, pressed && styles.pressed]}
             >
@@ -74,7 +79,7 @@ export function CalendarNotePicker({ visible, dayLabel, onClose, onPick }: { vis
               </View>
               <View style={styles.flex}>
                 <AppText numberOfLines={2} style={[styles.rowTitle, { color: theme.textPrimary }]}>{item.title}</AppText>
-                <AppText numberOfLines={1} style={[styles.rowContext, { color: theme.textSecondary }]}>{item.context ?? 'Chat'}</AppText>
+                <AppText numberOfLines={1} style={[styles.rowContext, { color: theme.textSecondary }]}>{item.context ?? tr("calendarnotepicker.chat")}</AppText>
               </View>
               <Icon name="calendar-outline" size={18} color={theme.accentStrong} />
             </Pressable>

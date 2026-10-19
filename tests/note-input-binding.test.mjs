@@ -1,3 +1,4 @@
+import { contentTextStyle, languageDirection } from '../src/localization/text-layout.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -10,7 +11,7 @@ test('native boundary/paste binding follows mounted input layout and focus, then
   const compiled = ts.transpileModule(component, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const effects = [], operations = [];
   const context = {
-    exports: {}, require: () => ({ jsx: (type, props) => ({ type, props }) }),
+    exports: {}, contentTextStyle, languageDirection, useLocale: () => 'en', require: () => ({ jsx: (type, props) => ({ type, props }) }),
     useTheme: () => ({ tokens: {} }), useRef: value => ({ current: value }),
     useCallback: callback => callback, useEffect: callback => effects.push(callback),
     TextInput: 'TextInput', setTimeout, clearTimeout,

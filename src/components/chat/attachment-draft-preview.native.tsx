@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
@@ -26,10 +28,13 @@ function readableType(mimeType: string | null, name: string | null) {
   const extension = name?.split('.').pop()?.toUpperCase();
   if (extension && extension.length <= 8) return extension;
   if (mimeType?.includes('pdf')) return 'PDF';
-  return 'File';
+  return tr("addcardattachmentsheet.file");
 }
 
 function VideoPoster({ uri, duration, aspectRatio, compact }: { uri: string; duration: number | null; aspectRatio: number; compact: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   const [thumbnail, setThumbnail] = useState<VideoThumbnail | null>(null);
   useEffect(() => {
@@ -44,14 +49,20 @@ function VideoPoster({ uri, duration, aspectRatio, compact }: { uri: string; dur
 }
 
 function PhotoPreview({ uri, aspectRatio, compact }: { uri: string; aspectRatio: number; compact: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   const [failed, setFailed] = useState(false);
   const mediaStyle = [styles.media, compact ? styles.mediaCompact : styles.mediaExpanded, { aspectRatio }];
-  if (failed) return <View accessibilityLabel="Photo unavailable" style={[mediaStyle, { backgroundColor: tokens.surfaceElevated }]}><Icon name="image-outline" size={26} color={tokens.textMuted} /><AppText style={[styles.unavailable, { color: tokens.textSecondary }]}>Photo unavailable</AppText></View>;
+  if (failed) return <View accessibilityLabel={tr("attachmentdraftpreview.photoUnavailable")} style={[mediaStyle, { backgroundColor: tokens.surfaceElevated }]}><Icon name="image-outline" size={26} color={tokens.textMuted} /><AppText style={[styles.unavailable, { color: tokens.textSecondary }]}>{tr("attachmentdraftpreview.photoUnavailable")}</AppText></View>;
   return <Image source={uri} contentFit="cover" transition={120} allowDownscaling onError={() => setFailed(true)} style={mediaStyle} />;
 }
 
 function AudioDraft({ uri, duration }: { uri: string; duration: number | null }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   const player = useAudioPlayer(uri, { updateInterval: 250 });
   const status = useAudioPlayerStatus(player);
@@ -62,21 +73,24 @@ function AudioDraft({ uri, duration }: { uri: string; duration: number | null })
     if (status.didJustFinish || (total && status.currentTime >= total)) void player.seekTo(0);
     player.play();
   };
-  return <View style={styles.audio}><Pressable accessibilityRole="button" accessibilityLabel={status.playing ? 'Pause recording preview' : 'Play recording preview'} onPress={toggle} style={[styles.audioButton, { backgroundColor: tokens.accent }]}><Icon name={status.playing ? 'pause' : 'play'} size={16} color={tokens.accentText} /></Pressable><View style={styles.audioCopy}><View style={[styles.track, { backgroundColor: tokens.borderSubtle }]}><View style={[styles.progress, { width: `${progress * 100}%`, backgroundColor: tokens.accent }]} /></View><AppText style={[styles.meta, { color: tokens.textMuted }]}>{formatDuration(duration)}</AppText></View></View>;
+  return <View style={styles.audio}><Pressable accessibilityRole="button" accessibilityLabel={status.playing ? tr("attachmentdraftpreview.pauseRecordingPreview") : tr("attachmentdraftpreview.playRecordingPreview")} onPress={toggle} style={[styles.audioButton, { backgroundColor: tokens.accent }]}><Icon name={status.playing ? 'pause' : 'play'} size={16} color={tokens.accentText} /></Pressable><View style={styles.audioCopy}><View style={[styles.track, { backgroundColor: tokens.borderSubtle }]}><View style={[styles.progress, { width: `${progress * 100}%`, backgroundColor: tokens.accent }]} /></View><AppText style={[styles.meta, { color: tokens.textMuted }]}>{formatDuration(duration)}</AppText></View></View>;
 }
 
 export function AttachmentDraftPreview({ draft, compact, onRemove }: { draft: AttachmentDraft; compact: boolean; onRemove: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const { tokens } = useTheme();
   const { attachment } = draft;
   const uri = resolveAttachmentUri(attachment.storagePath) ?? '';
   const size = formatSize(attachment.size);
   const aspectRatio = attachment.width && attachment.height ? Math.max(0.72, Math.min(1.9, attachment.width / attachment.height)) : 4 / 3;
-  return <View accessibilityLabel={`${attachment.type} attachment ready to send`} style={[styles.container, compact && styles.containerCompact, { backgroundColor: tokens.accentSoft, borderColor: tokens.accentBorder }]}> 
-    {attachment.type === 'photo' ? <PhotoPreview uri={uri} aspectRatio={aspectRatio} compact={compact} /> : null}
-    {attachment.type === 'video' ? <VideoPoster uri={uri} duration={attachment.duration} aspectRatio={aspectRatio} compact={compact} /> : null}
-    {attachment.type === 'audio' ? <AudioDraft uri={uri} duration={attachment.duration} /> : null}
-    {attachment.type === 'file' ? <View style={styles.file}><View style={[styles.fileIcon, { backgroundColor: tokens.surface }]}><Icon name="document-outline" size={22} color={tokens.accent} /></View><View style={styles.fileCopy}><AppText numberOfLines={2} style={[styles.fileName, { color: tokens.textPrimary }]}>{attachment.originalName ?? 'Document'}</AppText><AppText style={[styles.meta, { color: tokens.textMuted }]}>{[readableType(attachment.mimeType, attachment.originalName), size].filter(Boolean).join(' · ')}</AppText></View></View> : null}
-    <Pressable accessibilityRole="button" accessibilityLabel="Remove attachment" hitSlop={6} onPress={onRemove} style={[styles.remove, { backgroundColor: tokens.surface }]}><Icon name="close" size={17} color={tokens.textPrimary} /></Pressable>
+  return <View accessibilityLabel={tr("chat.valueAttachmentReadyToSend", { value1: attachment.type })} style={[styles.container, compact && styles.containerCompact, { backgroundColor: tokens.accentSoft, borderColor: tokens.accentBorder }]}>
+    {attachment.type === "photo" ? <PhotoPreview uri={uri} aspectRatio={aspectRatio} compact={compact} /> : null}
+    {attachment.type === "video" ? <VideoPoster uri={uri} duration={attachment.duration} aspectRatio={aspectRatio} compact={compact} /> : null}
+    {attachment.type === "audio" ? <AudioDraft uri={uri} duration={attachment.duration} /> : null}
+    {attachment.type === "file" ? <View style={styles.file}><View style={[styles.fileIcon, { backgroundColor: tokens.surface }]}><Icon name="document-outline" size={22} color={tokens.accent} /></View><View style={styles.fileCopy}><AppText numberOfLines={2} style={[styles.fileName, { color: tokens.textPrimary }]}>{attachment.originalName ?? tr("attachments.document")}</AppText><AppText style={[styles.meta, { color: tokens.textMuted }]}>{[readableType(attachment.mimeType, attachment.originalName), size].filter(Boolean).join(' · ')}</AppText></View></View> : null}
+    <Pressable accessibilityRole="button" accessibilityLabel={tr("attachmentdraftpreview.removeAttachment")} hitSlop={6} onPress={onRemove} style={[styles.remove, { backgroundColor: tokens.surface }]}><Icon name="close" size={17} color={tokens.textPrimary} /></Pressable>
   </View>;
 }
 

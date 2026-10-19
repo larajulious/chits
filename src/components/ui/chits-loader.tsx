@@ -1,3 +1,5 @@
+import { useLocale } from '@/localization/provider';
+import { tr } from '@/localization/runtime';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,6 +29,9 @@ function useReduceMotion() {
 }
 
 export function ChitsLoader({ size = 'medium', label, fullscreen = false }: { size?: ChitsLoaderSize; label?: string; fullscreen?: boolean }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   // Can render before ThemeProvider mounts (it's the root Suspense fallback) —
   // fall back to the static default tokens rather than crashing on a missing
   // context, same as primitives.tsx's LoadingState did before it used this.
@@ -38,7 +43,7 @@ export function ChitsLoader({ size = 'medium', label, fullscreen = false }: { si
   // when genuinely useful" rule) stays purely decorative to the screen reader.
   useEffect(() => { if (label) void AccessibilityInfo.announceForAccessibility(label); }, [label]);
   const content = (
-    <View accessibilityRole="progressbar" accessibilityLabel={label ?? 'Loading'} style={styles.wrap}>
+    <View accessibilityRole="progressbar" accessibilityLabel={label ?? tr("messagerow.loading")} style={styles.wrap}>
       {reduceMotion ? (
         // Reduce Motion: a static, non-spinning mark stands in for the animation
         // rather than forcing continuous motion — the artwork itself isn't recolored
@@ -60,6 +65,9 @@ export function ChitsLoader({ size = 'medium', label, fullscreen = false }: { si
 // Restore) — the current screen stays visible underneath a light semantic scrim so
 // the user can't accidentally interact with data mid-operation.
 export function ChitsLoaderOverlay({ label }: { label?: string }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const theme = useOptionalTheme()?.tokens ?? staticTokens;
   return <View pointerEvents="auto" style={[styles.overlay, { backgroundColor: `${theme.background}CC` }]}>
     <ChitsLoader size="large" label={label} />

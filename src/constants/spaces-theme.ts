@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import { STICKY_COLORS, type SpaceId } from './spaces';
 
 // Spaces' physical surfaces, paper and pins keep their material colors.
@@ -55,7 +56,7 @@ export const noteSeed = (id: string) => [...id].reduce((sum, char) => sum + char
 export const magnetColor = (seed: number) => MAGNET_COLORS[seed % MAGNET_COLORS.length];
 
 /** Short labels for the dock, where space is tight; screen readers hear the full name. */
-export const DOCK_LABELS: Record<SpaceId, string> = { fridge: 'Fridge', desk: 'Desk', cork: 'Cork', wall: 'Wall' };
+export const DOCK_LABELS: Record<SpaceId, string> = { get fridge() { return tr("spacestheme.fridge"); }, get desk() { return tr("spacestheme.desk"); }, get cork() { return tr("spacestheme.cork"); }, get wall() { return tr("spacestheme.wall"); } };
 /** Material Community icon per space in the dock. */
 export const DOCK_ICONS: Record<SpaceId, 'fridge-outline' | 'desk' | 'pin-outline' | 'image-frame'> = { fridge: 'fridge-outline', desk: 'desk', cork: 'pin-outline', wall: 'image-frame' };
 /** Whether controls over this surface need light status-bar icons. */

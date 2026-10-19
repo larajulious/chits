@@ -1,6 +1,7 @@
+import { i18n, LANGUAGES, tr } from '@/localization/runtime';
 // Pure notification text and sync planning for card reminders (unit-tested directly).
 
-export const REMINDER_TITLE = 'Chits Reminder';
+export const reminderTitle = () => tr("remindercontent.chitsReminder");
 export const REMINDER_NOTIFICATION_TYPE = 'card-reminder';
 const MAX_BODY = 110;
 
@@ -17,14 +18,25 @@ export type ReminderCardContent = {
  * filename or any of the file's contents).
  */
 export function reminderBody(card: ReminderCardContent): string {
-  if (card.hidden) return 'A hidden note';
+  if (card.hidden) return tr("remindercontent.aHiddenNote");
   const words = (card.text?.trim() || card.title?.trim() || '').replace(/\s+/g, ' ');
   if (words) return truncate(words, MAX_BODY);
-  if (card.attachmentType === 'photo') return 'A photo note';
-  if (card.attachmentType === 'video') return 'A video note';
-  if (card.attachmentType === 'audio') return 'A voice note';
-  if (card.attachmentType === 'file') return 'A file note';
-  return 'Open your note';
+  if (card.attachmentType === 'photo') return tr("remindercontent.aPhotoNote");
+  if (card.attachmentType === 'video') return tr("remindercontent.aVideoNote");
+  if (card.attachmentType === 'audio') return tr("remindercontent.aVoiceNote");
+  if (card.attachmentType === 'file') return tr("remindercontent.aFileNote");
+  return tr("remindercontent.openYourNote");
+}
+
+/** Only generated fallback copy has locale variants. User words stay exact.
+ * Existing device notifications keep their title/body when the display language
+ * changes; editing or hiding the source still causes the normal reconciliation.
+ */
+export function reminderBodyAlternatives(card: ReminderCardContent): readonly string[] {
+  if (!card.hidden && (card.text?.trim() || card.title?.trim())) return [reminderBody(card)];
+  const keys = { photo: 'remindercontent.aPhotoNote', video: 'remindercontent.aVideoNote', audio: 'remindercontent.aVoiceNote', file: 'remindercontent.aFileNote', text: 'remindercontent.openYourNote' };
+  const key = card.hidden ? 'remindercontent.aHiddenNote' : keys[card.attachmentType ?? 'text'];
+  return LANGUAGES.map(language => String(i18n.getFixedT(language)(key)));
 }
 
 function truncate(text: string, max: number) {
@@ -34,7 +46,7 @@ function truncate(text: string, max: number) {
   return `${(lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
-export type ReminderRow = { cardId: string; scheduledAt: number; notificationId: string | null; cardActive: boolean; body: string };
+export type ReminderRow = { cardId: string; scheduledAt: number; notificationId: string | null; cardActive: boolean; body: string; bodyAlternatives?: readonly string[] };
 export type ScheduledReminder = { identifier: string; cardId: string | null; body: string | null };
 export type ReminderSyncPlan = {
   /** Rows to delete because their card was archived/removed. */
@@ -63,7 +75,7 @@ export function planReminderSync(rows: ReminderRow[], scheduled: ScheduledRemind
     // Its device notification has already fired and must never be scheduled again.
     if (row.scheduledAt <= now) continue;
     const current = row.notificationId ? byId.get(row.notificationId) : undefined;
-    if (current && current.cardId === row.cardId && current.body === row.body) { keep.add(current.identifier); continue; }
+    if (current && current.cardId === row.cardId && (current.body === row.body || (current.body !== null && row.bodyAlternatives?.includes(current.body)))) { keep.add(current.identifier); continue; }
     plan.schedule.push({ cardId: row.cardId, scheduledAt: row.scheduledAt, body: row.body });
   }
   for (const item of scheduled) if (!keep.has(item.identifier)) plan.cancel.push(item.identifier);

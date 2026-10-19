@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import type { Message } from '@/db/types';
 
 export const ORGANIZATION_ENABLED_KEY = 'chitsOrganizationSuggestionsEnabled';
@@ -54,8 +55,8 @@ export function scoreOrganizationCandidate(message: Pick<Message, 'text' | 'atta
 }
 
 export function openingCopy(state: OrganizationState): string {
-  if (!state.introSeen) return 'You can keep this here in Chat, or organize it into a Board or Space.';
-  const lines = ['Want to put this somewhere?', 'Keep this one handy?', 'Should we organize this?', 'Where should this one live?', 'This looks worth keeping somewhere.'];
+  if (!state.introSeen) return tr("chitsorganization.youCanKeepThisHereInChatOr");
+  const lines = [tr("chitsorganization.wantToPutThisSomewhere"), tr("chitsorganization.keepThisOneHandy"), tr("chitsorganization.shouldWeOrganizeThis"), tr("chitsorganization.whereShouldThisOneLive"), tr("chitsorganization.thisLooksWorthKeepingSomewhere")];
   return lines[state.suggestionShownCount % lines.length];
 }
 

@@ -1,3 +1,5 @@
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { memo, useEffect, useState, type ComponentProps } from 'react';
 import { Platform, StyleSheet, Text, View, type TextStyle } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -73,6 +75,9 @@ export function measureShareNote({ content, theme, format, mode, showBranding }:
  * text and photos appear; everything else about the note stays private.
  */
 export const ShareNoteTemplate = memo(function ShareNoteTemplate({ content, theme, format, mode, showBranding, width, onImageLoad, onCanvasReady, page }: ShareNoteTemplateProps) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   if (content.blocks?.length) return <InlineShareNoteTemplate content={content} theme={theme} format={format} mode={mode} showBranding={showBranding} width={width} onImageLoad={onImageLoad} onCanvasReady={onCanvasReady} page={page} />;
   if (content.subtasks?.length) return <ChecklistShareNoteTemplate content={content} theme={theme} format={format} mode={mode} showBranding={showBranding} width={width} onImageLoad={onImageLoad} onCanvasReady={onCanvasReady} page={page} />;
   const u = width / SHARE_NOTE_DESIGN_WIDTH;
@@ -131,7 +136,7 @@ export const ShareNoteTemplate = memo(function ShareNoteTemplate({ content, them
 
         {layout.footer ? <View style={[styles.absolute, styles.footer, { top: layout.footer.top * u, height: layout.footer.height * u, justifyContent: center || mode === 'image' ? 'center' : 'flex-start', gap: 5 * u }]}>
           <Ionicons name="chatbubbles" size={11 * u} color={colors.accent} />
-          <Text style={[styles.footerText, { fontSize: 10 * u, lineHeight: 14 * u, letterSpacing: 0.3 * u, color: colors.textSecondary }]}>Shared from Chits</Text>
+          <Text style={[styles.footerText, { fontSize: 10 * u, lineHeight: 14 * u, letterSpacing: 0.3 * u, color: colors.textSecondary }]}>{tr("sharenotetemplate.sharedFromChits")}</Text>
         </View> : null}
       </View>
     </View>
@@ -142,6 +147,9 @@ export const ShareNoteTemplate = memo(function ShareNoteTemplate({ content, them
 });
 
 function ChecklistRows({ subtasks, theme, u, onRowHeight }: { subtasks: ShareNoteSubtask[]; theme: ShareNoteTheme; u: number; onRowHeight?: (index: number, height: number) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   return <View style={{ gap: 7 * u }}>
     {subtasks.map((item, index) => <View key={index} onLayout={onRowHeight ? ({ nativeEvent }) => onRowHeight(index, nativeEvent.layout.height / u) : undefined} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 * u, minHeight: 22 * u }}>
       <Ionicons name={item.isCompleted ? 'checkbox-outline' : 'square-outline'} size={18 * u} color={theme.colors.accent} style={{ marginTop: 2 * u }} />
@@ -153,6 +161,9 @@ function ChecklistRows({ subtasks, theme, u, onRowHeight }: { subtasks: ShareNot
 // Inline notes use the existing themed paper and typography, with a flowing
 // body so exports keep text and selected photos in their authored positions.
 function InlineShareNoteTemplate({ content, theme, format, showBranding, width, onImageLoad, onCanvasReady }: ShareNoteTemplateProps) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const u = width / SHARE_NOTE_DESIGN_WIDTH;
   const frame = shareNoteLayout({ format, mode: 'text', imageCount: 0, hasTitle: Boolean(content.title), showMark: false, showBranding });
   const [bodyHeight, setBodyHeight] = useState(0);
@@ -172,17 +183,20 @@ function InlineShareNoteTemplate({ content, theme, format, showBranding, width, 
         const imageHeight = Math.min(220, frame.content.width / ratio);
         const uri = resolveAttachmentUri(image.storagePath);
         return <View key={index} style={{ height: imageHeight * u }}>
-          {uri ? <Image source={{ uri }} contentFit="contain" cachePolicy="memory" style={StyleSheet.absoluteFill} onLoad={() => onImageLoad?.(image.id)} onError={() => onImageLoad?.(image.id)} /> : <Text style={textStyle}>Image unavailable</Text>}
+          {uri ? <Image source={{ uri }} contentFit="contain" cachePolicy="memory" style={StyleSheet.absoluteFill} onLoad={() => onImageLoad?.(image.id)} onError={() => onImageLoad?.(image.id)} /> : <Text style={textStyle}>{tr("noteimage.imageUnavailable")}</Text>}
         </View>;
       })}
       {content.subtasks?.length ? <ChecklistRows subtasks={content.subtasks} theme={theme} u={u} /> : null}
-      {showBranding ? <Text style={{ color: colors.textSecondary, fontSize: 10 * u }}>Shared from Chits</Text> : null}
+      {showBranding ? <Text style={{ color: colors.textSecondary, fontSize: 10 * u }}>{tr("sharenotetemplate.sharedFromChits")}</Text> : null}
     </View>
   </View>;
 }
 
 /** Actual row measurements at the export width decide page breaks before capture. */
 export function ChecklistMeasure({ subtasks, theme, format, width, onRowHeight }: { subtasks: ShareNoteSubtask[]; theme: ShareNoteTheme; format: ShareNoteFormat; width: number; onRowHeight: (index: number, height: number) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const frame = shareNoteLayout({ format, mode: 'text', imageCount: 0, hasTitle: false, showMark: false, showBranding: false });
   const u = width / SHARE_NOTE_DESIGN_WIDTH;
   return <View style={{ width: frame.content.width * u }}><ChecklistRows subtasks={subtasks} theme={theme} u={u} onRowHeight={onRowHeight} /></View>;
@@ -190,6 +204,9 @@ export function ChecklistMeasure({ subtasks, theme, format, width, onRowHeight }
 
 /** Cards with checklists use natural text layout, so every row can wrap and grow. */
 const ChecklistShareNoteTemplate = memo(function ChecklistShareNoteTemplate({ content, theme, format, mode, showBranding, width, onImageLoad, onCanvasReady, page }: ShareNoteTemplateProps) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const u = width / SHARE_NOTE_DESIGN_WIDTH;
   const frame = shareNoteLayout({ format, mode, imageCount: content.images.length, hasTitle: Boolean(content.title), showMark: false, showBranding });
   const [measuredContentHeight, setMeasuredContentHeight] = useState(0);
@@ -218,9 +235,9 @@ const ChecklistShareNoteTemplate = memo(function ChecklistShareNoteTemplate({ co
           })}
         </View> : null}
         <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.accent, opacity: 0.35, marginBottom: 12 * u }} />
-        <Text style={{ color: colors.accent, fontSize: 11 * u, lineHeight: 16 * u, fontWeight: '800', letterSpacing: 1.1 * u, marginBottom: 9 * u }}>{page && page.total > 1 ? `CHECKLIST · PAGE ${page.index + 1} OF ${page.total}` : 'CHECKLIST'}</Text>
+        <Text style={{ color: colors.accent, fontSize: 11 * u, lineHeight: 16 * u, fontWeight: '800', letterSpacing: 1.1 * u, marginBottom: 9 * u }}>{page && page.total > 1 ? tr("sharenotetemplate.checklistPageValueOfValue", { value1: page.index + 1, value2: page.total }) : tr("sharenotetemplate.checklist")}</Text>
         <ChecklistRows subtasks={content.subtasks ?? []} theme={theme} u={u} />
-        {showBranding ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 * u, marginTop: 20 * u }}><Ionicons name="chatbubbles" size={11 * u} color={colors.accent} /><Text style={{ color: colors.textSecondary, fontSize: 10 * u, lineHeight: 14 * u, fontWeight: '600' }}>Shared from Chits</Text></View> : null}
+        {showBranding ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 * u, marginTop: 20 * u }}><Ionicons name="chatbubbles" size={11 * u} color={colors.accent} /><Text style={{ color: colors.textSecondary, fontSize: 10 * u, lineHeight: 14 * u, fontWeight: '600' }}>{tr("sharenotetemplate.sharedFromChits")}</Text></View> : null}
       </View>
     </View>
     {theme.mark === 'tape' ? <View style={[styles.absolute, { left: (canvas.width / 2 - 44) * u, top: (frame.card.top - 11) * u, width: 88 * u, height: 24 * u, borderRadius: 3 * u, backgroundColor: colors.accent, opacity: 0.28, transform: [{ rotate: '-3deg' }] }]} /> : null}
@@ -239,6 +256,9 @@ const scatter = (index: number, salt: number) => {
 };
 
 export function Decorations({ theme, u, canvas }: { theme: ShareNoteTheme; u: number; canvas: Canvas }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const ink = theme.colors.decoration;
   const { width, height } = canvas;
   switch (theme.decorationStyle) {
@@ -373,6 +393,9 @@ export function Decorations({ theme, u, canvas }: { theme: ShareNoteTheme; u: nu
 
 // A couple of stickers on the card's corners, like they were pressed on by hand.
 function CornerStickers({ theme, u, canvas, card }: { theme: ShareNoteTheme; u: number; canvas: Canvas; card: ShareNoteLayout['card'] }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
   const glyphs = (theme.stickers ?? []) as IconName[];
   if (!glyphs.length) return null;
   const spots = [
