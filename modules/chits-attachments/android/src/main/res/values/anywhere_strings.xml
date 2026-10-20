@@ -1,0 +1,12 @@
+<resources>
+  <string name="anywhere_brand">Chits Anywhere</string>
+  <string name="anywhere_quick">Quick Note</string>
+  <string name="anywhere_recent">Recent Notes</string>
+  <string name="anywhere_empty">Your next thought starts here.</string>
+  <string name="anywhere_hidden">Note information is hidden.</string>
+  <string name="anywhere_description">Create a note or open your recent notes.</string>
+  <string name="anywhere_privacy">Widget privacy</string>
+  <string name="anywhere_titles">Show note titles</string>
+  <string name="anywhere_previews">Show short text previews</string>
+  <string name="anywhere_warning">Home screen widgets can be seen by anyone using your device. Note information is hidden by default.</string>
+</resources>

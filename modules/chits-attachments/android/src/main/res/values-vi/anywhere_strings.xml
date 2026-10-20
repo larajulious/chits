@@ -1,0 +1,12 @@
+<resources>
+  <string name="anywhere_brand">Chits mọi nơi</string>
+  <string name="anywhere_quick">Ghi chú nhanh</string>
+  <string name="anywhere_recent">Ghi chú gần đây</string>
+  <string name="anywhere_empty">Ý tưởng tiếp theo bắt đầu từ đây.</string>
+  <string name="anywhere_hidden">Thông tin ghi chú đã được ẩn.</string>
+  <string name="anywhere_description">Tạo ghi chú hoặc mở ghi chú gần đây.</string>
+  <string name="anywhere_privacy">Quyền riêng tư tiện ích</string>
+  <string name="anywhere_titles">Hiện tiêu đề ghi chú</string>
+  <string name="anywhere_previews">Hiện bản xem trước ngắn</string>
+  <string name="anywhere_warning">Bất kỳ ai dùng thiết bị của bạn đều có thể xem tiện ích trên màn hình chính. Thông tin ghi chú được ẩn theo mặc định.</string>
+</resources>

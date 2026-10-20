@@ -11,7 +11,7 @@
       "icon": "./assets/images/app_icon.png",
       "bundleIdentifier": "com.larajulious.chitsapp",
       "version": "1.0.7",
-      "buildNumber": "19",
+      "buildNumber": "20",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryAddUsageDescription": "Chits saves a copy of a photo, video or Share Note image to your photo library only when you choose to save it.",
@@ -143,6 +143,26 @@
           },
           "allowDynamicLocaleChangesAndroid": true,
           "supportsRTL": true
+        }
+      ],
+      "./plugins/with-chits-anywhere",
+      [
+        "expo-widgets",
+        {
+          "widgets": [
+            {
+              "name": "ChitsAnywhere",
+              "displayName": "Chits Anywhere",
+              "description": "Quick Note and your recent notes.",
+              "ios": {
+                "supportedFamilies": [
+                  "systemSmall",
+                  "systemMedium",
+                  "systemLarge"
+                ]
+              }
+            }
+          ]
         }
       ]
     ],

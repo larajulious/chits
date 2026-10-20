@@ -1,0 +1,12 @@
+<resources>
+  <string name="anywhere_brand">Chits हर जगह</string>
+  <string name="anywhere_quick">त्वरित नोट</string>
+  <string name="anywhere_recent">हाल के नोट</string>
+  <string name="anywhere_empty">आपका अगला विचार यहीं से शुरू होता है।</string>
+  <string name="anywhere_hidden">नोट की जानकारी छिपी हुई है।</string>
+  <string name="anywhere_description">नोट बनाएँ या अपने हाल के नोट खोलें।</string>
+  <string name="anywhere_privacy">विजेट गोपनीयता</string>
+  <string name="anywhere_titles">नोट के शीर्षक दिखाएँ</string>
+  <string name="anywhere_previews">संक्षिप्त टेक्स्ट पूर्वावलोकन दिखाएँ</string>
+  <string name="anywhere_warning">आपके डिवाइस का उपयोग करने वाला कोई भी व्यक्ति होम स्क्रीन विजेट देख सकता है। नोट की जानकारी डिफ़ॉल्ट रूप से छिपी रहती है।</string>
+</resources>

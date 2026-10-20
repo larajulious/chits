@@ -283,6 +283,15 @@ const migrations: Migration[] = [{
 }, {
   version: 29,
   up: async (database) => { await database.execAsync(FOCUS_SCHEMA); },
+}, {
+  version: 30,
+  up: async (database) => {
+    await database.execAsync(`
+      CREATE INDEX IF NOT EXISTS idx_messages_widget_recent ON messages(updated_at DESC, id DESC)
+        WHERE deleted_at IS NULL AND archived_at IS NULL AND is_hidden_content = 0;
+      CREATE INDEX IF NOT EXISTS idx_cards_widget_recent ON cards(updated_at DESC, id DESC) WHERE archived_at IS NULL;
+    `);
+  },
 }];
 
 /** The schema version this build of Chits understands (the last migration). */

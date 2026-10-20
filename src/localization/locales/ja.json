@@ -1716,5 +1716,15 @@
   "focus.title": "Chits Focus",
   "focus.error": "保存できませんでした。もう一度試してください。",
   "focus.loading": "読み込み中",
-  "focus.reload": "もう一度試してください"
+  "focus.reload": "もう一度試してください",
+  "anywhere.brand": "どこでもChits",
+  "anywhere.quick": "クイックノート",
+  "anywhere.recent": "最近のノート",
+  "anywhere.empty": "次のひらめきはここから。",
+  "anywhere.hidden": "ノート情報は非表示です。",
+  "anywhere.description": "ノートを作成したり、最近のノートを開いたりできます。",
+  "anywhere.privacy": "ウィジェットのプライバシー",
+  "anywhere.titles": "ノートのタイトルを表示",
+  "anywhere.previews": "短いプレビューを表示",
+  "anywhere.warning": "ホーム画面のウィジェットは、端末を使う人なら誰でも見ることができます。初期設定ではノート情報は非表示です。"
 }

@@ -1808,5 +1808,15 @@
   "focus.title": "Chits Focus",
   "focus.error": "لا يمكن حفظ ذلك. يرجى المحاولة مرة أخرى.",
   "focus.loading": "جارٍ التحميل",
-  "focus.reload": "حاول مرة أخرى"
+  "focus.reload": "حاول مرة أخرى",
+  "anywhere.brand": "Chits في كل مكان",
+  "anywhere.quick": "ملاحظة سريعة",
+  "anywhere.recent": "الملاحظات الأخيرة",
+  "anywhere.empty": "فكرتك القادمة تبدأ هنا.",
+  "anywhere.hidden": "معلومات الملاحظات مخفية.",
+  "anywhere.description": "أنشئ ملاحظة أو افتح ملاحظاتك الأخيرة.",
+  "anywhere.privacy": "خصوصية الأداة",
+  "anywhere.titles": "إظهار عناوين الملاحظات",
+  "anywhere.previews": "إظهار معاينات نصية قصيرة",
+  "anywhere.warning": "يمكن لأي شخص يستخدم جهازك رؤية أدوات الشاشة الرئيسية. تُخفى معلومات الملاحظات افتراضيًا."
 }

@@ -1,0 +1,12 @@
+<resources>
+  <string name="anywhere_brand">Chits في كل مكان</string>
+  <string name="anywhere_quick">ملاحظة سريعة</string>
+  <string name="anywhere_recent">الملاحظات الأخيرة</string>
+  <string name="anywhere_empty">فكرتك القادمة تبدأ هنا.</string>
+  <string name="anywhere_hidden">معلومات الملاحظات مخفية.</string>
+  <string name="anywhere_description">أنشئ ملاحظة أو افتح ملاحظاتك الأخيرة.</string>
+  <string name="anywhere_privacy">خصوصية الأداة</string>
+  <string name="anywhere_titles">إظهار عناوين الملاحظات</string>
+  <string name="anywhere_previews">إظهار معاينات نصية قصيرة</string>
+  <string name="anywhere_warning">يمكن لأي شخص يستخدم جهازك رؤية أدوات الشاشة الرئيسية. تُخفى معلومات الملاحظات افتراضيًا.</string>
+</resources>

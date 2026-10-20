@@ -1716,5 +1716,15 @@
   "focus.title": "Chits Focus",
   "focus.error": "That couldn’t be saved. Please try again.",
   "focus.loading": "Loading",
-  "focus.reload": "Try again"
+  "focus.reload": "Try again",
+  "anywhere.brand": "Chits Anywhere",
+  "anywhere.quick": "Quick Note",
+  "anywhere.recent": "Recent Notes",
+  "anywhere.empty": "Your next thought starts here.",
+  "anywhere.hidden": "Note information is hidden.",
+  "anywhere.description": "Create a note or open your recent notes.",
+  "anywhere.privacy": "Widget privacy",
+  "anywhere.titles": "Show note titles",
+  "anywhere.previews": "Show short text previews",
+  "anywhere.warning": "Home screen widgets can be seen by anyone using your device. Note information is hidden by default."
 }

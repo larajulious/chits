@@ -1,0 +1,9 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/anywhere_root" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="14dp" android:background="@drawable/chits_anywhere_background">
+ <ImageView android:layout_width="44dp" android:layout_height="44dp" android:background="@drawable/chits_anywhere_icon_frame" android:clipToOutline="true" android:src="@drawable/chits_anywhere_icon" android:scaleType="fitCenter" android:importantForAccessibility="no"/>
+ <TextView android:layout_width="1dp" android:layout_height="0dp" android:layout_weight="1"/>
+ <TextView android:id="@+id/anywhere_quick" android:layout_width="match_parent" android:layout_height="42dp" android:gravity="center_vertical" android:paddingHorizontal="8dp" android:drawableStart="@drawable/chits_anywhere_compose" android:drawablePadding="5dp" android:background="@drawable/chits_anywhere_action" android:text="@string/anywhere_quick" android:textStyle="bold" android:textSize="13sp" android:maxLines="2" android:ellipsize="end" android:textColor="#2B2410"/>
+ <TextView android:id="@+id/anywhere_brand" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone"/>
+ <TextView android:id="@+id/anywhere_recent" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone"/>
+ <TextView android:id="@+id/anywhere_empty" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone"/>
+ <LinearLayout android:id="@+id/anywhere_notes" android:layout_width="0dp" android:layout_height="0dp" android:orientation="vertical"/>
+</LinearLayout>

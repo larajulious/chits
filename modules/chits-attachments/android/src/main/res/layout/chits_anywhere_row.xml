@@ -1,0 +1,7 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/anywhere_row" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="vertical" android:gravity="center_vertical" android:paddingVertical="1dp">
+ <TextView android:id="@+id/anywhere_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:drawableStart="@drawable/chits_anywhere_note" android:drawablePadding="6dp" android:includeFontPadding="false" android:textSize="14sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end"/>
+ <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="20dp" android:layout_marginTop="0dp" android:gravity="center_vertical">
+  <TextView android:id="@+id/anywhere_preview" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="8dp" android:includeFontPadding="false" android:textSize="11sp" android:maxLines="1" android:ellipsize="end"/>
+  <TextView android:id="@+id/anywhere_time" android:layout_width="wrap_content" android:layout_height="wrap_content" android:maxWidth="120dp" android:includeFontPadding="false" android:textSize="10sp" android:maxLines="1" android:ellipsize="end"/>
+ </LinearLayout>
+</LinearLayout>

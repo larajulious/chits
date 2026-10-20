@@ -1430,3 +1430,48 @@ export function createSpaceRepository(database: SQLiteDatabase) {
     listCandidates: (searchTerm?: string) => listNoteCandidates(database, 'space', searchTerm),
   };
 }
+
+
+/** Bounded indexed candidate walks over the existing note kinds. A linked
+ * thought contributes its saved timestamp to its card without rewriting history. */
+export async function listWidgetRecentNotes(database: SQLiteDatabase) {
+  // Preserve the shared explicit-title/fallback chain while omitting text from
+  // archived/deleted thoughts that can remain linked to an active card.
+  const cardTitle = CARD_TITLE_SQL.replace('WHERE cm.card_id = c.id', 'WHERE cm.card_id = c.id AND m.deleted_at IS NULL AND m.archived_at IS NULL');
+  return database.getAllAsync<{ kind: SpaceNoteKind; id: string; title: string; preview: string | null; updatedAt: number }>(`
+    WITH recent_cards AS (
+      SELECT 'card' AS kind, c.id, c.updated_at AS updatedAt
+      FROM cards c INDEXED BY idx_cards_widget_recent JOIN boards b ON b.id = c.board_id
+      WHERE c.archived_at IS NULL AND b.archived_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM card_messages cm JOIN messages m ON m.id = cm.message_id
+          WHERE cm.card_id = c.id AND m.is_hidden_content = 1)
+      ORDER BY c.updated_at DESC, c.id DESC LIMIT 5
+    ), recent_linked AS (
+      SELECT 'card' AS kind, c.id, m.updated_at AS updatedAt
+      FROM messages m INDEXED BY idx_messages_widget_recent
+      JOIN card_messages cm ON cm.message_id = m.id JOIN cards c ON c.id = cm.card_id JOIN boards b ON b.id = c.board_id
+      WHERE m.deleted_at IS NULL AND m.archived_at IS NULL AND m.is_hidden_content = 0
+        AND c.archived_at IS NULL AND b.archived_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM card_messages other JOIN messages om ON om.id = other.message_id
+          WHERE other.card_id = c.id AND (om.is_hidden_content = 1 OR (om.deleted_at IS NULL AND om.archived_at IS NULL AND
+            (om.updated_at > m.updated_at OR (om.updated_at = m.updated_at AND om.id > m.id)))))
+      ORDER BY m.updated_at DESC, m.id DESC, c.id DESC LIMIT 5
+    ), recent_thoughts AS (
+      SELECT 'thought' AS kind, m.id, m.updated_at AS updatedAt
+      FROM messages m INDEXED BY idx_messages_widget_recent
+      WHERE m.deleted_at IS NULL AND m.archived_at IS NULL AND m.is_hidden_content = 0 AND ${NOT_ORGANIZED_SQL}
+      ORDER BY m.updated_at DESC, m.id DESC LIMIT 5
+    ), candidates AS (
+      SELECT * FROM recent_cards UNION ALL SELECT * FROM recent_linked UNION ALL SELECT * FROM recent_thoughts
+    ), recent AS (
+      SELECT kind, id, MAX(updatedAt) AS updatedAt FROM candidates GROUP BY kind, id
+      ORDER BY updatedAt DESC, id DESC, kind DESC LIMIT 5
+    )
+    SELECT r.kind, r.id, r.updatedAt,
+      CASE WHEN r.kind = 'card' THEN SUBSTR(${cardTitle}, 1, 100) ELSE SUBSTR(${MESSAGE_TEXT_SQL('m')}, 1, 100) END AS title,
+      CASE WHEN r.kind = 'card' THEN (SELECT SUBSTR(lm.text, 1, 160) FROM card_messages lcm JOIN messages lm ON lm.id = lcm.message_id
+        WHERE lcm.card_id = c.id AND lm.deleted_at IS NULL AND lm.archived_at IS NULL ORDER BY lcm.position LIMIT 1)
+        ELSE SUBSTR(m.text, 1, 160) END AS preview
+    FROM recent r LEFT JOIN cards c ON r.kind = 'card' AND c.id = r.id LEFT JOIN messages m ON r.kind = 'thought' AND m.id = r.id
+    ORDER BY r.updatedAt DESC, r.id DESC, r.kind DESC`);
+}

@@ -1716,5 +1716,15 @@
   "focus.title": "Chits Focus",
   "focus.error": "Itu tidak dapat disimpan. Silakan coba lagi.",
   "focus.loading": "Memuat",
-  "focus.reload": "Coba lagi"
+  "focus.reload": "Coba lagi",
+  "anywhere.brand": "Chits di Mana Saja",
+  "anywhere.quick": "Catatan Cepat",
+  "anywhere.recent": "Catatan Terbaru",
+  "anywhere.empty": "Ide berikutnya dimulai di sini.",
+  "anywhere.hidden": "Informasi catatan disembunyikan.",
+  "anywhere.description": "Buat catatan atau buka catatan terbaru.",
+  "anywhere.privacy": "Privasi widget",
+  "anywhere.titles": "Tampilkan judul catatan",
+  "anywhere.previews": "Tampilkan pratinjau singkat",
+  "anywhere.warning": "Widget layar utama dapat dilihat siapa saja yang menggunakan perangkat Anda. Informasi catatan disembunyikan secara default."
 }

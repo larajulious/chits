@@ -1,0 +1,12 @@
+<resources>
+  <string name="anywhere_brand">Chits überall</string>
+  <string name="anywhere_quick">Schnellnotiz</string>
+  <string name="anywhere_recent">Letzte Notizen</string>
+  <string name="anywhere_empty">Dein nächster Gedanke beginnt hier.</string>
+  <string name="anywhere_hidden">Notizinformationen sind ausgeblendet.</string>
+  <string name="anywhere_description">Erstelle eine Notiz oder öffne deine letzten Notizen.</string>
+  <string name="anywhere_privacy">Widget-Datenschutz</string>
+  <string name="anywhere_titles">Notiztitel anzeigen</string>
+  <string name="anywhere_previews">Kurze Textvorschauen anzeigen</string>
+  <string name="anywhere_warning">Alle, die dein Gerät verwenden, können Widgets auf dem Startbildschirm sehen. Notizinformationen sind standardmäßig ausgeblendet.</string>
+</resources>

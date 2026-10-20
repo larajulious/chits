@@ -1739,5 +1739,15 @@
   "focus.title": "Chits Focus",
   "focus.error": "No se pudo guardar. Inténtalo de nuevo.",
   "focus.loading": "Cargando",
-  "focus.reload": "Reintentar"
+  "focus.reload": "Reintentar",
+  "anywhere.brand": "Chits en todas partes",
+  "anywhere.quick": "Nota rápida",
+  "anywhere.recent": "Notas recientes",
+  "anywhere.empty": "Tu próxima idea empieza aquí.",
+  "anywhere.hidden": "La información de las notas está oculta.",
+  "anywhere.description": "Crea una nota o abre tus notas recientes.",
+  "anywhere.privacy": "Privacidad del widget",
+  "anywhere.titles": "Mostrar títulos de notas",
+  "anywhere.previews": "Mostrar vistas previas breves",
+  "anywhere.warning": "Cualquier persona que use tu dispositivo puede ver los widgets de la pantalla de inicio. La información de las notas se oculta de forma predeterminada."
 }

@@ -1,0 +1,12 @@
+<resources>
+  <string name="anywhere_brand">Her Yerde Chits</string>
+  <string name="anywhere_quick">Hızlı Not</string>
+  <string name="anywhere_recent">Son Notlar</string>
+  <string name="anywhere_empty">Bir sonraki düşüncen burada başlar.</string>
+  <string name="anywhere_hidden">Not bilgileri gizli.</string>
+  <string name="anywhere_description">Bir not oluşturun veya son notlarınızı açın.</string>
+  <string name="anywhere_privacy">Widget gizliliği</string>
+  <string name="anywhere_titles">Not başlıklarını göster</string>
+  <string name="anywhere_previews">Kısa metin önizlemelerini göster</string>
+  <string name="anywhere_warning">Cihazınızı kullanan herkes ana ekran widget’larını görebilir. Not bilgileri varsayılan olarak gizlidir.</string>
+</resources>

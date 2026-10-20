@@ -1,3 +1,4 @@
+import { observeDatabaseTransactions } from '@/services/database-transactions';
 import { tr } from '@/localization/runtime';
 import { Component, useCallback, useEffect, useState, type PropsWithChildren } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -9,7 +10,7 @@ import { BackupError } from '@/services/backup-format';
 import { migrateDatabase } from './migrations';
 import { serializeDatabaseStatements } from './serialize-statements';
 
-const OPEN_OPTIONS = { useNewConnection: true };
+const OPEN_OPTIONS = { useNewConnection: true, enableChangeListener: true };
 class DatabaseBoundary extends Component<PropsWithChildren<{ onRetry: () => void }>, { error: Error | null }> {
   state = { error: null as Error | null };
   static getDerivedStateFromError(error: Error) { return { error }; }
@@ -38,6 +39,7 @@ function ReadyDatabase({ children }: PropsWithChildren) {
   const initialize = useCallback(async (database: SQLiteDatabase) => {
     await migrateDatabase(database);
     serializeDatabaseStatements(database);
+    observeDatabaseTransactions(database);
     setInitialized(true);
   }, []);
   if (error) throw error;

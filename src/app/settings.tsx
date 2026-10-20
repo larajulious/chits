@@ -1,3 +1,4 @@
+import { WidgetPrivacySettings } from '@/features/anywhere/privacy-settings';
 import { navigationIconName } from '@/localization/text-layout';
 import { LanguagePicker } from '@/components/settings/language-picker';
 import { useDirection, useLanguage, useLocale } from '@/localization/provider';
@@ -152,6 +153,7 @@ export default function SettingsScreen() {
           <Switch accessibilityLabel={tr("settings.chitsSuggestions")} accessibilityRole="switch" value={organizationSuggestionsEnabled} disabled={busy} onValueChange={(value) => void toggleOrganizationSuggestions(value)} trackColor={{ true: tokens.accent, false: tokens.borderSubtle }} thumbColor={tokens.surface} />
         </View>
       </Section>
+      <Section title={tr("anywhere.privacy")}><WidgetPrivacySettings /></Section>
       <Section title={tr("settings.data")}><SettingsRow label={tr("backup.backupRestore")} description={lastBackup && !Number.isNaN(new Date(Number(lastBackup)).getTime()) ? tr('settings.lastBackup', { date: new Date(Number(lastBackup)).toLocaleDateString(getFormattingLocale()) }) : tr('settings.noBackup')} onPress={() => router.push('/backup')} /></Section>
 
     </ScrollView>

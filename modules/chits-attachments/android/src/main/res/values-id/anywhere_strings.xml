@@ -1,0 +1,12 @@
+<resources>
+  <string name="anywhere_brand">Chits di Mana Saja</string>
+  <string name="anywhere_quick">Catatan Cepat</string>
+  <string name="anywhere_recent">Catatan Terbaru</string>
+  <string name="anywhere_empty">Ide berikutnya dimulai di sini.</string>
+  <string name="anywhere_hidden">Informasi catatan disembunyikan.</string>
+  <string name="anywhere_description">Buat catatan atau buka catatan terbaru.</string>
+  <string name="anywhere_privacy">Privasi widget</string>
+  <string name="anywhere_titles">Tampilkan judul catatan</string>
+  <string name="anywhere_previews">Tampilkan pratinjau singkat</string>
+  <string name="anywhere_warning">Widget layar utama dapat dilihat siapa saja yang menggunakan perangkat Anda. Informasi catatan disembunyikan secara default.</string>
+</resources>

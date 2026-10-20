@@ -77,7 +77,11 @@ export default function CardDetailScreen() {
   useLocale();
   const database = useSQLiteContext();
   const { rowStyle } = useDirection();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, fromWidget } = useLocalSearchParams<{ id: string; fromWidget?: string }>();
+  const goBack = () => {
+    if (fromWidget === '1' && !router.canGoBack()) router.replace('/chat');
+    else router.back();
+  };
   const repository = useMemo(() => createBoardRepository(database), [database]);
   const { tokens: theme, styleTokens, styleColors } = useTheme();
   const sticky = useStickySurface();
@@ -394,7 +398,7 @@ export default function CardDetailScreen() {
       const removableUris = await repository.detachCard(id);
       await Promise.all(removableUris.map((uri) => removeCardAttachmentFile(uri)));
       void requestReminderSync();
-      router.back();
+      goBack();
     };
     confirm({
       type: 'default',
@@ -450,7 +454,7 @@ export default function CardDetailScreen() {
     message: tr("index.youCanRestoreItLaterFromArchiveYour"),
     confirmText: tr("index.archiveCard"),
     accentColor: detail?.boardAccent ?? null,
-    onConfirm: async () => { await repository.archiveCard(id); void requestReminderSync(); router.back(); },
+    onConfirm: async () => { await repository.archiveCard(id); void requestReminderSync(); goBack(); },
   });
 
   const destroy = () => confirm({
@@ -464,13 +468,13 @@ export default function CardDetailScreen() {
       await Promise.all(removableUris.map((uri) => removeCardAttachmentFile(uri)));
       // The reminder row went with the card; cancel its scheduled notification too.
       void requestReminderSync();
-      router.back();
+      goBack();
     },
   });
 
   if (detail === undefined) return <Screen>{showCardLoader ? <View style={styles.cardLoader}><ChitsLoader label={tr("id.loadingCard")} /></View> : null}</Screen>;
   if (!detail) return <Screen>
-    <AppHeader title={tr("id.cardDetails")} leading={<IconButton label={tr("search.goBack")} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
+    <AppHeader title={tr("id.cardDetails")} leading={<IconButton label={tr("search.goBack")} onPress={() => goBack()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
     <EmptyState title={tr("id.cardUnavailable")} description={tr("id.itMayHaveBeenArchivedOrDeleted")} />
   </Screen>;
 
@@ -496,7 +500,7 @@ export default function CardDetailScreen() {
     <AppHeader
       title={tr("id.cardDetails")}
       actionWidth={covered ? 44 : 88}
-      leading={<IconButton label={tr("search.goBack")} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>}
+      leading={<IconButton label={tr("search.goBack")} onPress={() => goBack()}><HeaderIcon name="chevron-back" size={24} /></IconButton>}
       trailing={<View style={[styles.headerActions, rowStyle]}>
         {!covered ? <IconButton label={tr('focus.action')} onPress={() => router.push({ pathname: '/focus', params: { note: `card:${id}` } })}><HeaderIcon name="timer-outline" size={22} /></IconButton> : null}
         <IconButton label={tr("id.openInChat")} onPress={() => router.push(messages[0] ? `/chat?messageId=${messages[0].id}` : '/chat')}><HeaderIcon name="chatbubble-outline" size={22} /></IconButton>

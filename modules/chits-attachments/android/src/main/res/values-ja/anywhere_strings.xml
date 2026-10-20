@@ -1,0 +1,12 @@
+<resources>
+  <string name="anywhere_brand">どこでもChits</string>
+  <string name="anywhere_quick">クイックノート</string>
+  <string name="anywhere_recent">最近のノート</string>
+  <string name="anywhere_empty">次のひらめきはここから。</string>
+  <string name="anywhere_hidden">ノート情報は非表示です。</string>
+  <string name="anywhere_description">ノートを作成したり、最近のノートを開いたりできます。</string>
+  <string name="anywhere_privacy">ウィジェットのプライバシー</string>
+  <string name="anywhere_titles">ノートのタイトルを表示</string>
+  <string name="anywhere_previews">短いプレビューを表示</string>
+  <string name="anywhere_warning">ホーム画面のウィジェットは、端末を使う人なら誰でも見ることができます。初期設定ではノート情報は非表示です。</string>
+</resources>

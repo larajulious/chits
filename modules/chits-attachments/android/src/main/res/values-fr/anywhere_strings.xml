@@ -1,0 +1,12 @@
+<resources>
+  <string name="anywhere_brand">Chits partout</string>
+  <string name="anywhere_quick">Note rapide</string>
+  <string name="anywhere_recent">Notes récentes</string>
+  <string name="anywhere_empty">Votre prochaine idée commence ici.</string>
+  <string name="anywhere_hidden">Les informations des notes sont masquées.</string>
+  <string name="anywhere_description">Créez une note ou ouvrez vos notes récentes.</string>
+  <string name="anywhere_privacy">Confidentialité du widget</string>
+  <string name="anywhere_titles">Afficher les titres des notes</string>
+  <string name="anywhere_previews">Afficher de courts aperçus</string>
+  <string name="anywhere_warning">Toute personne utilisant votre appareil peut voir les widgets sur l’écran d’accueil. Les informations des notes sont masquées par défaut.</string>
+</resources>

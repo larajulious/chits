@@ -13,7 +13,8 @@
     "modules": [
       "expo.modules.chitsattachments.ChitsPdfModule",
       "expo.modules.chitsattachments.ChitsFilesModule",
-      "expo.modules.chitsattachments.ChitsReminderAlarmModule"
+      "expo.modules.chitsattachments.ChitsReminderAlarmModule",
+      "expo.modules.chitsattachments.ChitsAnywhereModule"
     ]
   }
 }

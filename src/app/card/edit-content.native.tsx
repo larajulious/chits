@@ -38,7 +38,12 @@ export default function EditContentScreen() {
   useLocale();
   const { rowStyle } = useDirection();
   const database = useSQLiteContext();
-  const { messageId, autoFocus } = useLocalSearchParams<{ messageId: string; autoFocus?: string }>();
+  const { messageId, autoFocus, fromWidget } = useLocalSearchParams<{ messageId: string; autoFocus?: string; fromWidget?: string }>();
+  const leaveNote = useCallback(() => {
+    if (fromWidget === '1' && !router.canGoBack()) router.replace('/chat');
+    else router.back();
+  }, [fromWidget]);
+  const autoFocusOnOpen = useRef(autoFocus !== '0');
   const messageRepository = useMemo(() => createMessageRepository(database), [database]);
   const { tokens: theme } = useTheme();
   const headerInk = useHeaderInk();
@@ -74,10 +79,10 @@ export default function EditContentScreen() {
       setInitialSignature(signature(loaded));
       setBlocks(loaded);
       setHasOtherAttachments(Boolean(message?.attachments.some((attachment) => attachment.type !== 'photo')));
-      if (autoFocus !== '0') requestAnimationFrame(() => inputRef.current?.focus());
+      if (autoFocusOnOpen.current) requestAnimationFrame(() => inputRef.current?.focus());
     });
     return () => { active = false; };
-  }, [messageId, messageRepository, autoFocus]);
+  }, [messageId, messageRepository]);
 
   const changeBlocks = useCallback((update: (current: NoteDraftBlock[]) => NoteDraftBlock[]) => { setBlocks(update); setError(null); }, []);
   const pasteImage = useNoteImagePaste({ active: initialSignature !== null, blocks, setBlocks: changeBlocks, editor: inputRef, onError: setError });
@@ -117,18 +122,18 @@ export default function EditContentScreen() {
       await Promise.all(removablePaths.map((path) => deleteAttachment(path).catch(() => undefined)));
       void requestReminderSync();
       justSavedRef.current = true;
-      router.back();
+      leaveNote();
     } catch {
       setError(tr("editcontent.chitsCouldNotSaveYourChangesTryAgain"));
       setSaving(false);
     }
-  }, [blocks, canSave, messageId, messageRepository]);
+  }, [blocks, canSave, messageId, messageRepository, leaveNote]);
 
   return (
     <Screen edges={['top', 'left', 'right']}>
       <AppHeader
         title={tr("editcontent.editNote")}
-        leading={<IconButton label={tr("chat.cancel")} disabled={saving || pasteImage.pasting} onPress={() => router.back()}><HeaderIcon name="close" size={24} /></IconButton>}
+        leading={<IconButton label={tr("chat.cancel")} disabled={saving || pasteImage.pasting} onPress={leaveNote}><HeaderIcon name="close" size={24} /></IconButton>}
         trailing={<IconButton label={tr("editcontent.save")} disabled={!canSave} onPress={() => void save()}><Icon name={saving ? 'ellipsis-horizontal' : 'checkmark'} size={24} color={canSave ? (headerInk.banded ? headerInk.ink : theme.accent) : headerInk.inkMuted} /></IconButton>}
       />
       <View style={[styles.noteActions, rowStyle]}>

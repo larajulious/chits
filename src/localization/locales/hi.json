@@ -1716,5 +1716,15 @@
   "focus.title": "Chits Focus",
   "focus.error": "उसे सहेजा नहीं जा सका. कृपया पुनः प्रयास करें.",
   "focus.loading": "लोड हो रहा है",
-  "focus.reload": "पुनः प्रयास करें"
+  "focus.reload": "पुनः प्रयास करें",
+  "anywhere.brand": "Chits हर जगह",
+  "anywhere.quick": "त्वरित नोट",
+  "anywhere.recent": "हाल के नोट",
+  "anywhere.empty": "आपका अगला विचार यहीं से शुरू होता है।",
+  "anywhere.hidden": "नोट की जानकारी छिपी हुई है।",
+  "anywhere.description": "नोट बनाएँ या अपने हाल के नोट खोलें।",
+  "anywhere.privacy": "विजेट गोपनीयता",
+  "anywhere.titles": "नोट के शीर्षक दिखाएँ",
+  "anywhere.previews": "संक्षिप्त टेक्स्ट पूर्वावलोकन दिखाएँ",
+  "anywhere.warning": "आपके डिवाइस का उपयोग करने वाला कोई भी व्यक्ति होम स्क्रीन विजेट देख सकता है। नोट की जानकारी डिफ़ॉल्ट रूप से छिपी रहती है।"
 }

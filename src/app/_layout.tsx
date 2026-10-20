@@ -1,4 +1,5 @@
 import '@/localization/bootstrap';
+import { AnywhereCoordinator } from '@/features/anywhere/coordinator';
 import { useDirection, LanguageProvider } from '@/localization/provider';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { AppState, View } from 'react-native';
@@ -76,6 +77,7 @@ function ThemedApp() {
       <View style={{ flex: 1, direction: 'ltr', backgroundColor: tokens.background }}>
         <ResetNotice />
         <ReminderCoordinator />
+        <AnywhereCoordinator />
         <FocusCoordinator />
         <AppDrawerProvider><StatusBar style={statusBarStyle} />
           <Stack screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: tokens.background } }}>
@@ -85,8 +87,8 @@ function ThemedApp() {
             <Stack.Screen name="backup" />
             <Stack.Screen name="unorganized" />
             <Stack.Screen name="board/[id]" />
-            <Stack.Screen name="card/[id]" />
-            <Stack.Screen name="card/edit-content" />
+            <Stack.Screen name="card/[id]" getId={({ params }) => typeof params?.id === 'string' ? params.id : undefined} />
+            <Stack.Screen name="card/edit-content" getId={({ params }) => typeof params?.messageId === 'string' ? params.messageId : undefined} />
             <Stack.Screen name="focus" options={{ animation: 'fade', gestureEnabled: false }} />
             <Stack.Screen name="focus-history" />
             <Stack.Screen name="focus-settings" />

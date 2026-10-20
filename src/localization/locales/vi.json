@@ -1716,5 +1716,15 @@
   "focus.title": "Chits Focus",
   "focus.error": "Không thể cứu được. Vui lòng thử lại.",
   "focus.loading": "Đang tải",
-  "focus.reload": "Thử lại"
+  "focus.reload": "Thử lại",
+  "anywhere.brand": "Chits mọi nơi",
+  "anywhere.quick": "Ghi chú nhanh",
+  "anywhere.recent": "Ghi chú gần đây",
+  "anywhere.empty": "Ý tưởng tiếp theo bắt đầu từ đây.",
+  "anywhere.hidden": "Thông tin ghi chú đã được ẩn.",
+  "anywhere.description": "Tạo ghi chú hoặc mở ghi chú gần đây.",
+  "anywhere.privacy": "Quyền riêng tư tiện ích",
+  "anywhere.titles": "Hiện tiêu đề ghi chú",
+  "anywhere.previews": "Hiện bản xem trước ngắn",
+  "anywhere.warning": "Bất kỳ ai dùng thiết bị của bạn đều có thể xem tiện ích trên màn hình chính. Thông tin ghi chú được ẩn theo mặc định."
 }

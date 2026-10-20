@@ -1,0 +1,12 @@
+<resources>
+  <string name="anywhere_brand">Chits Kahit Saan</string>
+  <string name="anywhere_quick">Mabilis na Tala</string>
+  <string name="anywhere_recent">Mga Kamakailang Tala</string>
+  <string name="anywhere_empty">Dito nagsisimula ang susunod mong ideya.</string>
+  <string name="anywhere_hidden">Nakatago ang impormasyon ng mga tala.</string>
+  <string name="anywhere_description">Gumawa ng tala o buksan ang mga kamakailang tala.</string>
+  <string name="anywhere_privacy">Privacy ng widget</string>
+  <string name="anywhere_titles">Ipakita ang mga pamagat ng tala</string>
+  <string name="anywhere_previews">Ipakita ang maiikling preview</string>
+  <string name="anywhere_warning">Makikita ng sinumang gumagamit ng device mo ang mga widget sa home screen. Nakatago ang impormasyon ng tala bilang default.</string>
+</resources>
