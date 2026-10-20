@@ -91,7 +91,7 @@ export function runtime() {
         path, raw,
         async getFirstAsync(sql, ...args) { return raw.prepare(sql).get(...args) ?? null; },
         async getAllAsync(sql, ...args) { return raw.prepare(sql).all(...args); },
-        async runAsync(sql, ...args) { fault('sql', sql); return raw.prepare(sql).run(...args); },
+        async runAsync(sql, ...args) { fault('sql', sql); const result = raw.prepare(sql).run(...args); return { changes: result.changes, lastInsertRowId: result.lastInsertRowid }; },
         async execAsync(sql) { fault('sql', sql); raw.exec(sql); },
         async withExclusiveTransactionAsync(action) { raw.exec('BEGIN IMMEDIATE'); try { await action(db); raw.exec('COMMIT'); } catch (error) { raw.exec('ROLLBACK'); throw error; } },
         async closeAsync() { if (!closed) { closed = true; raw.close(); state.connections.delete(db); } },

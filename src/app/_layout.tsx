@@ -90,6 +90,7 @@ function ThemedApp() {
             <Stack.Screen name="card/[id]" getId={({ params }) => typeof params?.id === 'string' ? params.id : undefined} />
             <Stack.Screen name="card/edit-content" getId={({ params }) => typeof params?.messageId === 'string' ? params.messageId : undefined} />
             <Stack.Screen name="focus" options={{ animation: 'fade', gestureEnabled: false }} />
+            <Stack.Screen name="spin" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="focus-history" />
             <Stack.Screen name="focus-settings" />
             <Stack.Screen name="templates" options={{ animation: 'slide_from_right', gestureEnabled: false }} />

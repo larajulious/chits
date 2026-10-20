@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-20T05:00:09.046Z",
+  "generatedAt": "2026-10-20T13:33:55.674Z",
   "languages": [
     "en",
     "fil",
@@ -18,9 +18,9 @@
   ],
   "coverage": {
     "en": {
-      "canonicalKeys": 1728,
-      "translatedKeys": 1728,
-      "totalKeys": 1728,
+      "canonicalKeys": 1839,
+      "translatedKeys": 1839,
+      "totalKeys": 1839,
       "pluralCategories": [
         "one",
         "other"
@@ -1753,14 +1753,125 @@
         "anywhere.privacy",
         "anywhere.titles",
         "anywhere.previews",
-        "anywhere.warning"
+        "anywhere.warning",
+        "spin.title",
+        "spin.subtitle",
+        "spin.categories",
+        "spin.category.tasks",
+        "spin.category.unfinished",
+        "spin.category.revisit",
+        "spin.category.boards",
+        "spin.category.quick",
+        "spin.category.creative",
+        "spin.time",
+        "spin.surprise",
+        "spin.energy",
+        "spin.energy.low",
+        "spin.energy.medium",
+        "spin.energy.high",
+        "spin.challenge",
+        "spin.preferences",
+        "spin.estimatesHelp",
+        "spin.setting.includeUnestimated",
+        "spin.setting.sound",
+        "spin.setting.rewards",
+        "spin.setting.celebrations",
+        "spin.achievements",
+        "spin.spin",
+        "spin.spinning",
+        "spin.wheel",
+        "spin.emptyHelp",
+        "spin.overdue",
+        "spin.addressOverdue",
+        "spin.source.card",
+        "spin.source.note",
+        "spin.unestimated",
+        "spin.priority.0",
+        "spin.priority.1",
+        "spin.priority.2",
+        "spin.reminder",
+        "spin.reason.due",
+        "spin.reason.priority",
+        "spin.reason.revisit",
+        "spin.reason.work",
+        "spin.reason.creative",
+        "spin.reason.board",
+        "spin.prompt.write",
+        "spin.prompt.connect",
+        "spin.prompt.review",
+        "spin.open",
+        "spin.complete",
+        "spin.confirmExercise",
+        "spin.skip",
+        "spin.addBoard",
+        "spin.again",
+        "spin.adjust",
+        "spin.metadata",
+        "spin.requiredEnergy",
+        "spin.noBoards",
+        "spin.unavailable",
+        "spin.changed",
+        "spin.openFirst",
+        "spin.editFirst",
+        "spin.invalidMetadata",
+        "spin.error",
+        "spin.mascot.welcome",
+        "spin.mascot.before",
+        "spin.mascot.spinning",
+        "spin.mascot.result",
+        "spin.mascot.focus",
+        "spin.mascot.completed",
+        "spin.mascot.skipped",
+        "spin.mascot.empty",
+        "spin.achievement.first",
+        "spin.achievement.focus",
+        "spin.achievement.quick",
+        "spin.achievement.revisit",
+        "spin.achievement.momentum",
+        "spin.achievement.creative",
+        "spin.achievementHelp.first",
+        "spin.achievementHelp.focus",
+        "spin.achievementHelp.quick",
+        "spin.achievementHelp.revisit",
+        "spin.achievementHelp.momentum",
+        "spin.achievementHelp.creative",
+        "spin.energyHelp.low",
+        "spin.energyHelp.medium",
+        "spin.energyHelp.high",
+        "spin.reason.continue",
+        "spin.reason.planned",
+        "spin.planned",
+        "spin.energyShort.low",
+        "spin.energyShort.medium",
+        "spin.energyShort.high",
+        "spin.category.suggestions",
+        "spin.newNote",
+        "spin.newNotePrompt",
+        "spin.category.unorganized",
+        "spin.reason.unorganized",
+        "spin.prompt.unorganized",
+        "settings.showChitsSpin",
+        "settings.showChitsSpinHelp",
+        "settings.general",
+        "spin.mode.notes",
+        "spin.mode.custom",
+        "spin.custom.help",
+        "spin.custom.empty",
+        "spin.custom.items",
+        "spin.custom.itemLabel",
+        "spin.custom.add",
+        "spin.custom.clear",
+        "spin.custom.clearHelp",
+        "spin.custom.invalidItem",
+        "spin.custom.limit",
+        "spin.mode.change"
       ],
       "linguisticReview": "source"
     },
     "fil": {
-      "canonicalKeys": 1728,
-      "translatedKeys": 1728,
-      "totalKeys": 1728,
+      "canonicalKeys": 1839,
+      "translatedKeys": 1839,
+      "totalKeys": 1839,
       "pluralCategories": [
         "one",
         "other"
@@ -1837,14 +1948,15 @@
         "appdrawer.cardShortcut",
         "focus.action",
         "focus.minutes",
-        "focus.title"
+        "focus.title",
+        "spin.title"
       ],
       "linguisticReview": "native-speaker review required"
     },
     "pt-BR": {
-      "canonicalKeys": 1728,
-      "translatedKeys": 1728,
-      "totalKeys": 1751,
+      "canonicalKeys": 1839,
+      "translatedKeys": 1839,
+      "totalKeys": 1862,
       "pluralCategories": [
         "one",
         "many",
@@ -1869,14 +1981,15 @@
         "calendar.daySummary",
         "common.withDuration",
         "focus.minutes",
-        "focus.title"
+        "focus.title",
+        "spin.title"
       ],
       "linguisticReview": "native-speaker review required"
     },
     "es": {
-      "canonicalKeys": 1728,
-      "translatedKeys": 1728,
-      "totalKeys": 1751,
+      "canonicalKeys": 1839,
+      "translatedKeys": 1839,
+      "totalKeys": 1862,
       "pluralCategories": [
         "one",
         "many",
@@ -1902,14 +2015,16 @@
         "templates.section.agenda",
         "templates.section.ideas",
         "focus.minutes",
-        "focus.title"
+        "focus.title",
+        "spin.title",
+        "settings.general"
       ],
       "linguisticReview": "native-speaker review required"
     },
     "id": {
-      "canonicalKeys": 1728,
-      "translatedKeys": 1728,
-      "totalKeys": 1728,
+      "canonicalKeys": 1839,
+      "translatedKeys": 1839,
+      "totalKeys": 1839,
       "pluralCategories": [
         "other"
       ],
@@ -1933,14 +2048,16 @@
         "calendar.daySummary",
         "common.withDuration",
         "templates.section.agenda",
-        "focus.title"
+        "focus.title",
+        "spin.title",
+        "spin.achievement.momentum"
       ],
       "linguisticReview": "native-speaker review required"
     },
     "fr": {
-      "canonicalKeys": 1728,
-      "translatedKeys": 1728,
-      "totalKeys": 1751,
+      "canonicalKeys": 1839,
+      "translatedKeys": 1839,
+      "totalKeys": 1862,
       "pluralCategories": [
         "one",
         "many",
@@ -1990,14 +2107,17 @@
         "focus.pause",
         "focus.minutes",
         "focus.noteNumber",
-        "focus.title"
+        "focus.title",
+        "spin.title",
+        "spin.source.note",
+        "spin.category.suggestions"
       ],
       "linguisticReview": "native-speaker review required"
     },
     "de": {
-      "canonicalKeys": 1728,
-      "translatedKeys": 1728,
-      "totalKeys": 1728,
+      "canonicalKeys": 1839,
+      "translatedKeys": 1839,
+      "totalKeys": 1839,
       "pluralCategories": [
         "one",
         "other"
@@ -2034,28 +2154,30 @@
         "common.withDuration",
         "chat.columnInBoard",
         "templates.section.problem",
-        "focus.title"
+        "focus.title",
+        "spin.title"
       ],
       "linguisticReview": "native-speaker review required"
     },
     "ja": {
-      "canonicalKeys": 1728,
-      "translatedKeys": 1728,
-      "totalKeys": 1728,
+      "canonicalKeys": 1839,
+      "translatedKeys": 1839,
+      "totalKeys": 1839,
       "pluralCategories": [
         "other"
       ],
       "identicalToEnglish": [
         "pdfviewer.pdfValueValue",
         "common.withMoreAttachments",
-        "focus.title"
+        "focus.title",
+        "spin.title"
       ],
       "linguisticReview": "native-speaker review required"
     },
     "ko": {
-      "canonicalKeys": 1728,
-      "translatedKeys": 1728,
-      "totalKeys": 1728,
+      "canonicalKeys": 1839,
+      "translatedKeys": 1839,
+      "totalKeys": 1839,
       "pluralCategories": [
         "other"
       ],
@@ -2067,14 +2189,15 @@
         "common.withMoreAttachments",
         "calendar.daySummary",
         "common.withDuration",
-        "focus.title"
+        "focus.title",
+        "spin.title"
       ],
       "linguisticReview": "native-speaker review required"
     },
     "it": {
-      "canonicalKeys": 1728,
-      "translatedKeys": 1728,
-      "totalKeys": 1751,
+      "canonicalKeys": 1839,
+      "translatedKeys": 1839,
+      "totalKeys": 1862,
       "pluralCategories": [
         "one",
         "many",
@@ -2101,14 +2224,15 @@
         "common.withDuration",
         "chat.columnInBoard",
         "focus.minutes",
-        "focus.title"
+        "focus.title",
+        "spin.title"
       ],
       "linguisticReview": "native-speaker review required"
     },
     "vi": {
-      "canonicalKeys": 1728,
-      "translatedKeys": 1728,
-      "totalKeys": 1728,
+      "canonicalKeys": 1839,
+      "translatedKeys": 1839,
+      "totalKeys": 1839,
       "pluralCategories": [
         "other"
       ],
@@ -2123,14 +2247,15 @@
         "common.withMoreAttachments",
         "calendar.daySummary",
         "common.withDuration",
-        "focus.title"
+        "focus.title",
+        "spin.title"
       ],
       "linguisticReview": "native-speaker review required"
     },
     "hi": {
-      "canonicalKeys": 1728,
-      "translatedKeys": 1728,
-      "totalKeys": 1728,
+      "canonicalKeys": 1839,
+      "translatedKeys": 1839,
+      "totalKeys": 1839,
       "pluralCategories": [
         "one",
         "other"
@@ -2142,14 +2267,15 @@
         "common.withMoreAttachments",
         "calendar.daySummary",
         "common.withDuration",
-        "focus.title"
+        "focus.title",
+        "spin.title"
       ],
       "linguisticReview": "native-speaker review required"
     },
     "tr": {
-      "canonicalKeys": 1728,
-      "translatedKeys": 1728,
-      "totalKeys": 1728,
+      "canonicalKeys": 1839,
+      "translatedKeys": 1839,
+      "totalKeys": 1839,
       "pluralCategories": [
         "one",
         "other"
@@ -2165,14 +2291,15 @@
         "common.withMoreAttachments",
         "calendar.daySummary",
         "common.withDuration",
-        "focus.title"
+        "focus.title",
+        "spin.title"
       ],
       "linguisticReview": "native-speaker review required"
     },
     "ar": {
-      "canonicalKeys": 1728,
-      "translatedKeys": 1728,
-      "totalKeys": 1820,
+      "canonicalKeys": 1839,
+      "translatedKeys": 1839,
+      "totalKeys": 1931,
       "pluralCategories": [
         "zero",
         "one",
@@ -2189,7 +2316,8 @@
         "common.withMoreAttachments",
         "calendar.daySummary",
         "common.withDuration",
-        "focus.title"
+        "focus.title",
+        "spin.title"
       ],
       "linguisticReview": "native-speaker review required"
     }

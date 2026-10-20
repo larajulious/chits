@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { tr } from '@/localization/runtime';
 import { canonicalPair, type NoteKey, type RevisitNote } from '../services/revisit-engine';
 import { notifyNoteChanged } from '../services/note-changes';
 
@@ -47,19 +48,20 @@ const SOURCES = `SELECT n.*, coalesce(c.title,m.text) AS title,
       AND NOT EXISTS (SELECT 1 FROM card_messages cm JOIN messages hidden ON hidden.id = cm.message_id WHERE cm.card_id = c.id AND hidden.deleted_at IS NULL AND hidden.is_hidden_content = 1)))`;
 
 const placeholders = (size: number) => Array(size).fill('?').join(',');
-async function hydrate(db: SQLiteDatabase, rows: SourceRow[]): Promise<RevisitNote[]> {
+async function hydrate(db: SQLiteDatabase, rows: SourceRow[], preview = false): Promise<RevisitNote[]> {
+  const textLimit = preview ? 512 : 12000;
   if (!rows.length) return [];
   const cards = rows.flatMap((row) => row.card_id ? [row.card_id] : []);
   const thoughts = rows.flatMap((row) => row.message_id ? [row.message_id] : []);
   const content: ContentRow[] = [];
-  if (thoughts.length) content.push(...await db.getAllAsync<ContentRow>(`SELECT 'thought:' || m.id AS note_key,substr(m.text,1,12000) AS text,${CHECKLIST_SUMMARY} AS checklist FROM messages m WHERE m.id IN (${placeholders(thoughts.length)})`, ...thoughts));
-  if (cards.length) content.push(...await db.getAllAsync<ContentRow>(`SELECT 'card:' || cm.card_id AS note_key,substr(m.text,1,12000) AS text,${CHECKLIST_SUMMARY} AS checklist FROM card_messages cm JOIN messages m ON m.id = cm.message_id
+  if (thoughts.length) content.push(...await db.getAllAsync<ContentRow>(`SELECT 'thought:' || m.id AS note_key,substr(m.text,1,${textLimit}) AS text,${CHECKLIST_SUMMARY} AS checklist FROM messages m WHERE m.id IN (${placeholders(thoughts.length)})`, ...thoughts));
+  if (cards.length) content.push(...await db.getAllAsync<ContentRow>(`SELECT 'card:' || cm.card_id AS note_key,substr(m.text,1,${textLimit}) AS text,${CHECKLIST_SUMMARY} AS checklist FROM card_messages cm JOIN messages m ON m.id = cm.message_id
     WHERE cm.card_id IN (${placeholders(cards.length)}) AND m.deleted_at IS NULL AND m.archived_at IS NULL ORDER BY cm.card_id,cm.position,m.id`, ...cards));
   const tasks = cards.length ? await db.getAllAsync<{ card_id: string; total: number; completed: number }>(`SELECT card_id,count(*) AS total,sum(is_completed) AS completed FROM card_subtasks WHERE card_id IN (${placeholders(cards.length)}) GROUP BY card_id`, ...cards) : [];
   const byKey = new Map<string, { text: string[]; total: number; completed: number }>();
   for (const row of content) {
     const entry = byKey.get(row.note_key) ?? { text: [], total: 0, completed: 0 };
-    if (row.text && entry.text.join('\n\n').length < 12000) entry.text.push(row.text);
+    if (row.text && entry.text.join('\n\n').length < textLimit) entry.text.push(row.text);
     const [total, completed] = JSON.parse(row.checklist) as [number, number];
     entry.total += total; entry.completed += completed;
     byKey.set(row.note_key, entry);
@@ -68,9 +70,9 @@ async function hydrate(db: SQLiteDatabase, rows: SourceRow[]): Promise<RevisitNo
   return rows.map((row) => {
     const body = byKey.get(row.note_key);
     const task = row.card_id ? taskMap.get(row.card_id) : null;
-    const text = (body?.text.join('\n\n') ?? '').slice(0, 12000);
+    const text = (body?.text.join('\n\n') ?? '').slice(0, textLimit);
     return {
-      key: row.note_key, title: row.title?.trim().split('\n')[0].slice(0, 100) || text.trim().split('\n')[0].slice(0, 100) || 'Untitled note', text,
+      key: row.note_key, title: row.title?.trim().split('\n')[0].slice(0, 100) || text.trim().split('\n')[0].slice(0, 100) || tr('calendardata.untitledNote'), text,
       createdAt: row.created_at, updatedAt: Math.max(row.updated_at, row.last_edited_at),
       editedAt: row.last_edited_at, progressAt: row.last_progress_at, openedAt: row.last_opened_at, revisitedAt: row.last_revisited_at,
       snoozedUntil: row.snoozed_until, dismissedAt: row.dismissed_at, dismissalCount: row.dismissal_count, excluded: row.excluded === 1,
@@ -86,6 +88,7 @@ export function createRevisitRepository(database: SQLiteDatabase) {
     async revision() { return (await database.getFirstAsync<{ revision: number }>('SELECT revision FROM revisit_revision WHERE id = 1'))?.revision ?? 0; },
     async supportsFTS5() { return !!(await database.getFirstAsync<{ enabled: number }>("SELECT sqlite_compileoption_used('ENABLE_FTS5') AS enabled"))?.enabled; },
     async page(after = '', limit = 100) { return hydrate(database, await database.getAllAsync<SourceRow>(`${SOURCES} AND n.note_key > ? ORDER BY n.note_key LIMIT ?`, after, limit)); },
+    async metadataPage(after = '', limit = 100) { return hydrate(database, await database.getAllAsync<SourceRow>(`${SOURCES.replace('coalesce(c.title,m.text) AS title', 'substr(coalesce(c.title,m.text),1,100) AS title')} AND n.note_key > ? ORDER BY n.note_key LIMIT ?`, after, limit), true); },
     async get(key: NoteKey) { return (await hydrate(database, await database.getAllAsync<SourceRow>(`${SOURCES} AND n.note_key = ?`, key)))[0] ?? null; },
     async relationships(key?: NoteKey) { return database.getAllAsync<Relationship>(`SELECT * FROM note_relationships${key ? ' WHERE note_a = ? OR note_b = ?' : ''} ORDER BY created_at,note_a,note_b`, ...(key ? [key, key] : [])); },
     async relationshipCounts() {
@@ -140,7 +143,7 @@ export function createRevisitRepository(database: SQLiteDatabase) {
     },
     // Only called after the user confirms a plan showing the exact affected
     // count. Compare all source versions inside the write transaction.
-    async complete(plan: CompletionPlan) {
+    async complete(plan: CompletionPlan, afterComplete?: (transaction: SQLiteDatabase) => Promise<void>) {
       const changed: string[] = [];
       await database.withExclusiveTransactionAsync(async (tx) => {
         const current = await completionSnapshot(tx, plan.key);
@@ -162,6 +165,7 @@ export function createRevisitRepository(database: SQLiteDatabase) {
           }
         }
         if (plan.key.startsWith('card:')) await tx.runAsync('UPDATE card_subtasks SET is_completed = 1,completed_at = ?,updated_at = ? WHERE card_id = ? AND is_completed = 0', now, now, plan.key.slice('card:'.length));
+        await afterComplete?.(tx);
       });
       for (const id of changed) notifyNoteChanged(id);
     },

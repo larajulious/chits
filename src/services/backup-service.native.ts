@@ -10,6 +10,7 @@ import { TEMPLATE_COLUMNS } from '@/db/template-schema';
 import { normalizeTemplateDocument } from './note-templates';
 import { REVISIT_COLUMNS } from '@/db/revisit-schema';
 import { FOCUS_COLUMNS } from '@/db/focus-schema';
+import { SPIN_COLUMNS } from '@/db/spin-schema';
 import { ChitsFiles } from '../../modules/chits-attachments';
 import { archivePathForMedia, BACKUP_VERSION, BackupError, backupErrorMessage, invalidBackupMessage, parseBackupMetadata, portableMediaPath, validateArchiveEntries, type BackupFile, type BackupManifest, type MissingAttachment } from './backup-format';
 import { beginBackupOperation, type BackupProgress } from './backup-operation';
@@ -24,7 +25,7 @@ export type CreatedBackup = { uri: string; manifest: BackupManifest; size: numbe
 export type ValidatedBackup = { valid: true; workDir: string; extractedDir: string; preparedDir: string; manifest: BackupManifest; preparedDatabaseHash: string; size: number };
 export type BackupValidation = ValidatedBackup | { valid: false; reason: string };
 const requiredTables = ['messages', 'attachments', 'boards', 'board_columns', 'cards', 'card_messages'];
-const currentTables = [...requiredTables, 'timeline_events', 'app_settings', 'card_comments', 'card_attachments', 'card_reminders', 'space_placements', 'message_reminders', 'card_subtasks', 'calendar_entries', ...Object.keys(REVISIT_COLUMNS), ...Object.keys(TEMPLATE_COLUMNS), ...Object.keys(FOCUS_COLUMNS)];
+const currentTables = [...requiredTables, 'timeline_events', 'app_settings', 'card_comments', 'card_attachments', 'card_reminders', 'space_placements', 'message_reminders', 'card_subtasks', 'calendar_entries', ...Object.keys(REVISIT_COLUMNS), ...Object.keys(TEMPLATE_COLUMNS), ...Object.keys(FOCUS_COLUMNS), ...Object.keys(SPIN_COLUMNS)];
 const MARGIN = 16 * 1024 * 1024;
 function directory(value: string | null) {
   if (!value) throw new BackupError(tr("attachmentstorage.chitsCouldNotAccessPrivateDeviceStorage"));
@@ -60,6 +61,7 @@ async function validateDatabase(db: SQLiteDatabase, expectedSchema?: number, cur
   if (schema < 1 || schema > LATEST_SCHEMA_VERSION || (expectedSchema !== undefined && schema !== expectedSchema)) throw new BackupError(tr("backupservice.theBackupDatabaseVersionDoesNotMatchIts"));
   const tables = current ? currentTables : [...requiredTables, ...(schema >= 4 ? ['timeline_events'] : []), ...(schema >= 8 ? ['app_settings'] : []), ...(schema >= 16 ? ['card_comments'] : []), ...(schema >= 17 ? ['card_attachments'] : []), ...(schema >= 20 ? ['card_reminders'] : []), ...(schema >= 21 ? ['space_placements'] : []), ...(schema >= 22 ? ['message_reminders'] : []), ...(schema >= 23 ? ['card_subtasks'] : []), ...(schema >= 26 ? ['calendar_entries'] : [])];
   if (!current && schema >= 28) tables.push(...Object.keys(TEMPLATE_COLUMNS));
+  if (!current && schema >= 31) tables.push(...Object.keys(SPIN_COLUMNS));
   if (!current && schema >= 29) tables.push(...Object.keys(FOCUS_COLUMNS));
   if (!current && schema >= 27) tables.push(...Object.keys(REVISIT_COLUMNS));
   for (const table of tables) if (!await tableExists(db, table)) throw new BackupError(tr("backupservice.theBackupDatabaseIsIncompleteARequiredPart"));
@@ -67,6 +69,7 @@ async function validateDatabase(db: SQLiteDatabase, expectedSchema?: number, cur
     ...REVISIT_COLUMNS,
     ...TEMPLATE_COLUMNS,
     ...FOCUS_COLUMNS,
+    ...SPIN_COLUMNS,
     messages: ['id', 'text', 'type', 'created_at', 'updated_at', 'archived_at', 'pinned', 'deleted_at', ...(schema >= 18 ? ['is_hidden_content'] : []), ...(schema >= 24 ? ['content_json'] : [])],
     attachments: ['id', 'message_id', 'type', schema >= 19 ? 'storage_path' : 'local_uri', 'original_name', 'mime_type', 'size', 'duration', 'width', 'height', 'created_at'],
     boards: ['id', 'name', 'icon', 'accent', 'created_at', 'updated_at', 'archived_at', ...(schema >= 2 ? ['pinned'] : []), ...(schema >= 3 ? ['last_opened_at'] : []), ...(schema >= 6 ? ['show_next_column_peek'] : []), ...(schema >= 7 ? ['show_column_navigator'] : [])],

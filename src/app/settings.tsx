@@ -14,12 +14,13 @@ import { CHITS_THEMES } from '@/constants/chits-themes';
 import { APP_STYLE_NAMES, APP_STYLES, type AppStyle } from '@/constants/style-tokens';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Children, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { createSpinRepository } from '@/db/spin-repository';
 import { ORGANIZATION_ENABLED_KEY } from '@/services/chits-organization';
 
-type Sheet = 'appearance' | 'language' | null;
+type Sheet = 'appearance' | 'language' | 'style' | 'accent' | null;
 const appearanceNames = { get system() { return tr('settings.systemDefault'); }, get light() { return tr('settings.light'); }, get dark() { return tr('settings.dark'); } };
 const styleOptions = () => APP_STYLES.map((key: AppStyle) => ({ key, label: APP_STYLE_NAMES[key], accessibilityLabel: tr("settings.valueStyle", { value1: APP_STYLE_NAMES[key] }) }));
 
@@ -34,18 +35,24 @@ function SettingsRow({ label, value, description, onPress, disabled }: { label: 
     {onPress ? <Icon name={navigationIconName("chevron-forward", direction)} size={17} color={tokens.textMuted} /> : null}
   </Pressable>;
 }
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, children, padded = false }: { title: string; children: ReactNode; padded?: boolean }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const { tokens } = useTheme();
-  return <View style={styles.section}><AppText accessibilityRole="header" weight="600" style={[styles.sectionLabel, { color: tokens.textSecondary }]}>{title}</AppText>{children}</View>;
+  const { tokens, styleTokens } = useTheme();
+  const rows = Children.toArray(children);
+  return <View style={styles.section}>
+    <AppText accessibilityRole="header" weight="600" style={[styles.sectionLabel, { color: tokens.textSecondary }]}>{title}</AppText>
+    <Surface fill={tokens.surface} border={tokens.borderSubtle} radius={styleTokens.radius.panel} outline={false} edge={false} shadow={false}>
+      {padded ? <View style={styles.sectionPadding}>{children}</View> : rows.map((child,index) => <View key={index} style={[styles.sectionRow,index < rows.length-1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: tokens.borderSubtle }]}>{child}</View>)}
+    </Surface>
+  </View>;
 }
 
 export default function SettingsScreen() {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
-  const { rowStyle, direction } = useDirection();
+  const { rowStyle } = useDirection();
   const { preference, setLanguage } = useLanguage();
   const { openDrawer } = useAppDrawer();
   const { appearance, setAppearance, identity, themeKey, setThemeKey, themes, tokens, style, setStyle, styleTokens } = useTheme();
@@ -53,6 +60,9 @@ export default function SettingsScreen() {
   const stickySheet = useStickySheet();
   const headerInk = useHeaderInk();
   const database = useSQLiteContext();
+  const spinRepository = useMemo(() => createSpinRepository(database), [database]);
+  const [showSpin, setShowSpin] = useState(true);
+  const [spinVisibilityLoaded, setSpinVisibilityLoaded] = useState(false);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,16 +76,18 @@ export default function SettingsScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const refresh = useCallback(async () => {
     try {
-      const [backup, titleRow, suggestionRow] = await Promise.all([
+      const [backup, titleRow, suggestionRow, spinVisible] = await Promise.all([
         database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', 'last_backup_at'),
         database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', 'chat_title'),
         database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', ORGANIZATION_ENABLED_KEY),
+        spinRepository.visibility(),
       ]);
+      setShowSpin(spinVisible); setSpinVisibilityLoaded(true);
       setLastBackup(backup?.value ?? null);
       setNoteSpaceName(titleRow?.value.trim() || 'Chits');
       setOrganizationSuggestionsEnabled(suggestionRow?.value !== 'false');
     } catch { setError(tr("settings.someSettingsCouldNotBeLoadedReopenSettings")); }
-  }, [database]);
+  }, [database, spinRepository]);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 2200); return () => clearTimeout(timer); }, [toast]);
   const saveNoteSpaceName = async (name: string) => {
@@ -106,34 +118,47 @@ export default function SettingsScreen() {
     </HeaderChromeContext.Provider>
     <ScrollView contentContainerStyle={styles.content}>
       {error && !sheet ? <AppText accessibilityRole="alert" style={{ color: tokens.danger }}>{error}</AppText> : null}
-      <Section title={tr('settings.language')}>
+      <Section title={tr('settings.general')}>
         <SettingsRow label={tr('settings.language')} value={preference === 'system' ? tr('settings.systemDefault') : LANGUAGE_NAMES[preference]} onPress={() => setSheet('language')} />
+        <SettingsRow label={tr('settings.editNotespaceName')} value={noteSpaceName} onPress={() => setEditNameOpen(true)} />
       </Section>
-      <Section title={tr('focus.title')}>
+      <Section title="CHITS">
+        <SettingsRow label={tr('spin.title')} onPress={() => router.push('/spin')} />
+        <View style={[styles.row, rowStyle, { borderBottomColor: tokens.borderSubtle }]}>
+          <View style={styles.rowCopy}><AppText style={[styles.label, { color: tokens.textPrimary }]}>{tr('settings.showChitsSpin')}</AppText><AppText variant="paragraph" style={[styles.description, { color: tokens.textSecondary }]}>{tr('settings.showChitsSpinHelp')}</AppText></View>
+          <Switch accessibilityLabel={tr('settings.showChitsSpin')} accessibilityHint={tr('settings.showChitsSpinHelp')} accessibilityRole="switch" value={showSpin} disabled={busy || !spinVisibilityLoaded} onValueChange={value => void change(async () => { await spinRepository.setVisibility(value); setShowSpin(value); })} trackColor={{ true: tokens.accent, false: tokens.borderSubtle }} thumbColor={tokens.surface} />
+        </View>
+        <View style={[styles.row, rowStyle, { borderBottomColor: tokens.borderSubtle }]}>
+          <View style={styles.rowCopy}><AppText style={[styles.label, { color: tokens.textPrimary }]}>{tr("settings.chitsSuggestions")}</AppText><AppText variant="paragraph" style={[styles.description, { color: tokens.textSecondary }]}>{tr("settings.letChitsOccasionallySuggestBoardsOrSpacesFor")}</AppText></View>
+          <Switch accessibilityLabel={tr("settings.chitsSuggestions")} accessibilityRole="switch" value={organizationSuggestionsEnabled} disabled={busy} onValueChange={(value) => void toggleOrganizationSuggestions(value)} trackColor={{ true: tokens.accent, false: tokens.borderSubtle }} thumbColor={tokens.surface} />
+        </View>
         <SettingsRow label={tr('focus.settings')} onPress={() => router.push('/focus-settings')} />
         <SettingsRow label={tr('focus.history')} onPress={() => router.push('/focus-history')} />
       </Section>
-      <Section title="NOTESPACE">
-        <SettingsRow label={tr("settings.editNotespaceName")} description={tr("settings.changeTheNameShownAcrossYourNotespace")} onPress={() => setEditNameOpen(true)} />
+      <Section title={tr('settings.appearance')}>
+        <SettingsRow label={tr('appearancetheme.theme')} value={CHITS_THEMES[identity].name} onPress={() => router.push('/appearance-theme')} />
+        <SettingsRow label={tr('settings.style')} value={APP_STYLE_NAMES[style]} disabled={busy} onPress={() => setSheet('style')} />
+        <SettingsRow label={tr('settings.appAppearance')} value={appearanceNames[appearance]} onPress={() => setSheet('appearance')} />
+        {identity === 'default' ? <SettingsRow label={tr('settings.accentColor')} value={themes[themeKey].name} disabled={busy} onPress={() => setSheet('accent')} /> : null}
+        <ChatAppearanceSettings compact />
       </Section>
-      <Section title={tr("settings.appearance")}>
-        <Pressable accessibilityRole="button" accessibilityLabel={tr("settings.themeValue", { value1: CHITS_THEMES[identity].name })} onPress={() => router.push('/appearance-theme')} style={({ pressed }) => [styles.row, rowStyle, { borderBottomColor: tokens.borderSubtle }, pressed && styles.pressed]}>
-          <View style={styles.rowCopy}><AppText style={[styles.label, { color: tokens.textPrimary }]}>{tr("appearancetheme.theme")}</AppText><AppText variant="paragraph" style={[styles.description, { color: tokens.textSecondary }]}>{tr("settings.thePersonalityChitsWears")}</AppText></View>
-          <View accessible={false} style={styles.themeSwatches}>{[tokens.chatBackground, tokens.bubble, tokens.accent].map((color, index) => <View key={index} style={[styles.themeSwatch, { backgroundColor: color, borderColor: tokens.borderSubtle }]} />)}</View>
-          <AppText style={[styles.value, { color: tokens.textSecondary }]}>{CHITS_THEMES[identity].name}</AppText>
-          <Icon name={navigationIconName("chevron-forward", direction)} size={17} color={tokens.textMuted} />
-        </Pressable>
-        {/* Style: shape and type, independent of the theme's colors. */}
-        <View style={[styles.styleBlock, { borderBottomColor: tokens.borderSubtle }]}>
-          <AppText style={[styles.label, { color: tokens.textPrimary }]}>{tr("settings.style")}</AppText>
+      <Section title={tr('anywhere.privacy')} padded><WidgetPrivacySettings /></Section>
+      <Section title={tr('settings.data')}><SettingsRow label={tr('backup.backupRestore')} description={lastBackup && !Number.isNaN(new Date(Number(lastBackup)).getTime()) ? tr('settings.lastBackup', { date: new Date(Number(lastBackup)).toLocaleDateString(getFormattingLocale()) }) : tr('settings.noBackup')} onPress={() => router.push('/backup')} /></Section>
+
+    </ScrollView>
+    <Modal visible={sheet !== null} transparent animationType="slide" onRequestClose={closeSheet}>
+      <KeyboardAvoidingView behavior="padding" style={styles.backdrop}>
+        <Pressable accessible={false} style={StyleSheet.absoluteFill} onPress={closeSheet} />
+        <SafeAreaView edges={['bottom', 'left', 'right']} accessibilityViewIsModal style={[styles.sheet, sheet === 'language' && { height: '85%' }, { backgroundColor: tokens.surface, borderTopLeftRadius: styleTokens.radius.sheet, borderTopRightRadius: styleTokens.radius.sheet }, stickySheet()]}>
+          <View style={[styles.sheetHeader, rowStyle]}><AppText accessibilityRole="header" variant="display" weight="600" style={[styles.sheetTitle, { color: tokens.textPrimary }]}>{sheet === 'language' ? tr('settings.language') : sheet === 'style' ? tr('settings.style') : sheet === 'accent' ? tr('settings.accentColor') : tr('settings.appAppearance')}</AppText><IconButton label={tr("settings.closeSettingsSheet")} disabled={busy} onPress={closeSheet}><Icon name="close-outline" size={22} color={tokens.textSecondary} /></IconButton></View>
+          {sheet === 'language' ? <LanguagePicker preference={preference} busy={busy} onSelect={language => void change(() => setLanguage(language), true)} /> : <ScrollView contentContainerStyle={styles.sheetContent}>
+            {sheet === 'style' ? <View style={[styles.styleBlock, { borderBottomColor: tokens.borderSubtle }]}>
           <AppText variant="paragraph" style={[styles.description, styles.styleDescription, { color: tokens.textSecondary }]}>{tr("settings.classicOrOutlinedLikeAStickyNoteWorks")}</AppText>
           <View accessibilityRole="radiogroup" accessibilityLabel={tr("settings.style")}>
             <SegmentedControl options={styleOptions()} value={style} onChange={(next) => { if (next !== style) void change(() => setStyle(next)); }} />
           </View>
-        </View>
-        <SettingsRow label={tr("settings.appAppearance")} value={appearanceNames[appearance]} onPress={() => setSheet('appearance')} />
-        {identity === 'default' ? <View style={styles.paletteBlock}>
-          <AppText style={[styles.label, { color: tokens.textPrimary }]}>{tr("settings.accentColor")}</AppText>
+        </View> : null}
+            {sheet === 'accent' ? <View style={styles.paletteBlock}>
           <AppText variant="paragraph" style={[styles.description, { color: tokens.textSecondary }]}>{tr("settings.usedForControlsAndAccentsInTheDefault")}</AppText>
           <View style={[styles.preview, { backgroundColor: tokens.bubble, borderRadius: styleTokens.radius.bubble }]}><AppText style={{ color: tokens.bubbleText }}>{tr("settings.myThought")}</AppText></View>
           <View style={styles.palette}>{(Object.keys(themes) as ChatThemeKey[]).map((key) => {
@@ -145,24 +170,6 @@ export default function SettingsScreen() {
           })}</View>
           <AppText accessibilityLiveRegion="polite" variant="paragraph" style={[styles.description, { color: tokens.textSecondary }]}>{themes[themeKey].name}</AppText>
         </View> : null}
-      </Section>
-      <ChatAppearanceSettings />
-      <Section title="CHITS">
-        <View style={[styles.row, { borderBottomColor: tokens.borderSubtle }]}>
-          <View style={styles.rowCopy}><AppText style={[styles.label, { color: tokens.textPrimary }]}>{tr("settings.chitsSuggestions")}</AppText><AppText variant="paragraph" style={[styles.description, { color: tokens.textSecondary }]}>{tr("settings.letChitsOccasionallySuggestBoardsOrSpacesFor")}</AppText></View>
-          <Switch accessibilityLabel={tr("settings.chitsSuggestions")} accessibilityRole="switch" value={organizationSuggestionsEnabled} disabled={busy} onValueChange={(value) => void toggleOrganizationSuggestions(value)} trackColor={{ true: tokens.accent, false: tokens.borderSubtle }} thumbColor={tokens.surface} />
-        </View>
-      </Section>
-      <Section title={tr("anywhere.privacy")}><WidgetPrivacySettings /></Section>
-      <Section title={tr("settings.data")}><SettingsRow label={tr("backup.backupRestore")} description={lastBackup && !Number.isNaN(new Date(Number(lastBackup)).getTime()) ? tr('settings.lastBackup', { date: new Date(Number(lastBackup)).toLocaleDateString(getFormattingLocale()) }) : tr('settings.noBackup')} onPress={() => router.push('/backup')} /></Section>
-
-    </ScrollView>
-    <Modal visible={sheet !== null} transparent animationType="slide" onRequestClose={closeSheet}>
-      <KeyboardAvoidingView behavior="padding" style={styles.backdrop}>
-        <Pressable accessible={false} style={StyleSheet.absoluteFill} onPress={closeSheet} />
-        <SafeAreaView edges={['bottom', 'left', 'right']} accessibilityViewIsModal style={[styles.sheet, sheet === 'language' && { height: '85%' }, { backgroundColor: tokens.surface, borderTopLeftRadius: styleTokens.radius.sheet, borderTopRightRadius: styleTokens.radius.sheet }, stickySheet()]}>
-          <View style={[styles.sheetHeader, rowStyle]}><AppText accessibilityRole="header" variant="display" weight="600" style={[styles.sheetTitle, { color: tokens.textPrimary }]}>{sheet === 'language' ? tr('settings.language') : tr('settings.appAppearance')}</AppText><IconButton label={tr("settings.closeSettingsSheet")} disabled={busy} onPress={closeSheet}><Icon name="close-outline" size={22} color={tokens.textSecondary} /></IconButton></View>
-          {sheet === 'language' ? <LanguagePicker preference={preference} busy={busy} onSelect={language => void change(() => setLanguage(language), true)} /> : <ScrollView contentContainerStyle={styles.sheetContent}>
             {sheet === 'appearance' ? (['system', 'light', 'dark'] as AppAppearance[]).map((mode) => <Pressable key={mode} accessibilityRole="radio" accessibilityState={{ selected: appearance === mode, disabled: busy }} disabled={busy} onPress={() => void change(() => setAppearance(mode), true)} style={styles.choice}><AppText style={[styles.label, { color: tokens.textPrimary }]}>{appearanceNames[mode]}</AppText>{appearance === mode ? <Icon name="checkmark" size={22} color={tokens.accent} /> : null}</Pressable>) : null}
             {busy ? <ActivityIndicator accessibilityLabel={tr("settings.savingSetting")} color={tokens.accent} /> : null}
             {error ? <AppText accessibilityRole="alert" style={{ color: tokens.danger }}>{error}</AppText> : null}
@@ -179,12 +186,12 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 }, header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 }, headerLeft: { gap: 10 },
   headerTitle: { flex: 1, textAlign: 'center' }, headerTitleLeft: { textAlign: 'left' },
-  content: { paddingHorizontal: 20, paddingBottom: 28 }, section: { marginTop: 18 },
-  sectionLabel: { fontSize: 11, letterSpacing: 0.8, marginBottom: 4 },
-  row: { minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  rowCopy: { flex: 1 }, label: { fontSize: 16 }, description: { fontSize: 13, lineHeight: 19, marginTop: 3 },
-  value: { fontSize: 14, flexShrink: 1, maxWidth: '45%', textAlign: 'right' },
-  themeSwatches: { flexDirection: 'row' }, themeSwatch: { width: 14, height: 14, borderRadius: 14 / 2, marginLeft: -4, borderWidth: StyleSheet.hairlineWidth },
+  content: { width: '100%', maxWidth: 680, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 28, gap: 18 }, section: { gap: 6 },
+  sectionRow: { paddingHorizontal: 12 }, sectionPadding: { padding: 12 },
+  sectionLabel: { fontSize: 12, lineHeight: 18, letterSpacing: 0.5, paddingHorizontal: 4 },
+  row: { minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 },
+  rowCopy: { flex: 1, minWidth: 0 }, label: { fontSize: 15, lineHeight: 21 }, description: { fontSize: 12, lineHeight: 17, marginTop: 3 },
+  value: { fontSize: 14, flexShrink: 1, maxWidth: '45%', textAlign: 'auto' },
   styleBlock: { paddingTop: 10, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth }, styleDescription: { marginBottom: 10 },
   paletteBlock: { paddingTop: 12, paddingBottom: 2 }, palette: { flexDirection: 'row', flexWrap: 'wrap', gap: 2 },
   swatchTarget: { width: 44, height: 44, borderRadius: 44 / 2, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },

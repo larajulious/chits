@@ -1,5 +1,5 @@
 import { tr } from '@/localization/runtime';
-import { useLocale } from '@/localization/provider';
+import { useDirection, useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
@@ -154,11 +154,12 @@ function AppearanceContent({ close, initialSelection }: { close: (after?: () => 
   </SafeAreaView>;
 }
 
-export function ChatAppearanceSettings() {
+export function ChatAppearanceSettings({ compact = false }: { compact?: boolean } = {}) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
   const { tokens } = useTheme();
+  const { rowStyle, isRTL } = useDirection();
   const { background } = useChatBackground();
   const { chatAppearanceSelection } = useLocalSearchParams<{ chatAppearanceSelection?: string }>();
   const [initialSelection, setInitialSelection] = useState<ChatBackgroundImage | null>(null);
@@ -178,15 +179,15 @@ export function ChatAppearanceSettings() {
     setOpen(true);
   }, [chatAppearanceSelection]));
   return <View>
-    <AppText accessibilityRole="header" style={[styles.sectionTitle, { color: tokens.textSecondary }]}>{tr("chatappearancesettings.chatAppearance2")}</AppText>
-    <Pressable accessibilityRole="button" accessibilityLabel={tr("chatappearancesettings.backgroundValue", { value1: background ? tr("chatappearancesettings.customPhoto") : tr("chatappearancesettings.default") })} onPress={() => { void dismissKeyboardAsync().then(() => { setInitialSelection(null); setMounted(true); setOpen(true); }); }} style={[styles.backgroundRow, { borderColor: tokens.borderSubtle }]}>
-      {background ? <Image source={resolveAttachmentUri(background.storagePath)} blurRadius={background.blur ? 5 : 0} contentFit="cover" style={styles.thumbnail} /> : <View style={[styles.thumbnail, styles.thumbnailDefault, { backgroundColor: tokens.surfaceElevated }]}><Icon name="image-outline" size={22} color={tokens.textMuted} /></View>}
-      <View style={styles.rowCopy}><AppText style={[styles.defaultTitle, { color: tokens.textPrimary }]}>{tr("chatappearancesettings.background")}</AppText><AppText style={[styles.copy, { color: tokens.textSecondary }]}>{background ? tr("chatappearancesettings.customPhoto") : tr("chatappearancesettings.default")}</AppText>{!background ? <AppText style={[styles.copy, { color: tokens.textSecondary }]}>{tr("chatappearancesettings.chooseAPhotoToPersonalizeYourChat")}</AppText> : null}</View>
-      <Icon name="chevron-forward" size={17} color={tokens.textMuted} />
+    {!compact ? <AppText accessibilityRole="header" style={[styles.sectionTitle, { color: tokens.textSecondary }]}>{tr("chatappearancesettings.chatAppearance2")}</AppText> : null}
+    <Pressable accessibilityRole="button" accessibilityLabel={tr("chatappearancesettings.backgroundValue", { value1: background ? tr("chatappearancesettings.customPhoto") : tr("chatappearancesettings.default") })} onPress={() => { void dismissKeyboardAsync().then(() => { setInitialSelection(null); setMounted(true); setOpen(true); }); }} style={[styles.backgroundRow, rowStyle, { borderColor: tokens.borderSubtle }, compact && styles.compactRow]}>
+      {background ? <Image source={resolveAttachmentUri(background.storagePath)} blurRadius={background.blur ? 5 : 0} contentFit="cover" style={[styles.thumbnail,compact && styles.compactThumbnail]} /> : <View style={[styles.thumbnail, compact && styles.compactThumbnail, styles.thumbnailDefault, { backgroundColor: tokens.surfaceElevated }]}><Icon name="image-outline" size={22} color={tokens.textMuted} /></View>}
+      <View style={styles.rowCopy}><AppText style={[styles.defaultTitle, compact && styles.compactLabel, { color: tokens.textPrimary }]}>{tr("chatappearancesettings.background")}</AppText><AppText style={[styles.copy, { color: tokens.textSecondary }]}>{background ? tr("chatappearancesettings.customPhoto") : tr("chatappearancesettings.default")}</AppText>{!background && !compact ? <AppText style={[styles.copy, { color: tokens.textSecondary }]}>{tr("chatappearancesettings.chooseAPhotoToPersonalizeYourChat")}</AppText> : null}</View>
+      <Icon name={isRTL ? "chevron-back" : "chevron-forward"} size={17} color={tokens.textMuted} />
     </Pressable>
     <Modal visible={open} animationType="none" presentationStyle="fullScreen" onRequestClose={() => close()} onDismiss={finishClose}>
       <SafeAreaProvider><AppDialogProvider>{mounted ? <AppearanceContent key={initialSelection?.storagePath ?? 'current'} close={close} initialSelection={initialSelection} /> : null}</AppDialogProvider></SafeAreaProvider>
     </Modal>
   </View>;
 }
-const styles = StyleSheet.create({ screen: { flex: 1 }, sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 1, marginBottom: 8 }, backgroundRow: { minHeight: 80, paddingVertical: 12, gap: 12, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth }, thumbnail: { width: 48, height: 58, borderRadius: 10 }, thumbnailDefault: { alignItems: 'center', justifyContent: 'center' }, rowCopy: { flex: 1, gap: 3 }, content: { padding: 16, gap: 8 }, preview: { height: 220, borderRadius: 20, overflow: 'hidden', marginBottom: 12, borderWidth: StyleSheet.hairlineWidth }, sample: { position: 'absolute', bottom: 16, left: 16, right: 16 }, default: { padding: 24, gap: 8, alignItems: 'center' }, defaultTitle: { fontSize: 16, fontWeight: '600' }, copy: { fontSize: 13, lineHeight: 19 }, option: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: StyleSheet.hairlineWidth }, optionText: { flex: 1, fontSize: 15 }, styleControls: { paddingVertical: 12 }, selectionActions: { gap: 8, paddingBottom: 12 } });
+const styles = StyleSheet.create({ compactLabel: { fontSize: 15, lineHeight: 21, fontWeight: '400' }, compactRow: { minHeight: 58, paddingVertical: 10, borderBottomWidth: 0 }, compactThumbnail: { width: 32, height: 38 }, screen: { flex: 1 }, sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 1, marginBottom: 8 }, backgroundRow: { minHeight: 80, paddingVertical: 12, gap: 12, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth }, thumbnail: { width: 48, height: 58, borderRadius: 10 }, thumbnailDefault: { alignItems: 'center', justifyContent: 'center' }, rowCopy: { flex: 1, gap: 3 }, content: { padding: 16, gap: 8 }, preview: { height: 220, borderRadius: 20, overflow: 'hidden', marginBottom: 12, borderWidth: StyleSheet.hairlineWidth }, sample: { position: 'absolute', bottom: 16, left: 16, right: 16 }, default: { padding: 24, gap: 8, alignItems: 'center' }, defaultTitle: { fontSize: 16, fontWeight: '600' }, copy: { fontSize: 13, lineHeight: 19 }, option: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: StyleSheet.hairlineWidth }, optionText: { flex: 1, fontSize: 15 }, styleControls: { paddingVertical: 12 }, selectionActions: { gap: 8, paddingBottom: 12 } });

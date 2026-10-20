@@ -25,15 +25,19 @@ import { QuickCaptureSheet } from './quick-capture-sheet';
 import { SubtasksSheet } from './subtasks-sheet';
 import { AttachmentsSheet } from './attachments-sheet';
 import { DurationSheet } from './duration-sheet';
+import { useSpinVisibility } from '@/features/spin/use-spin-visibility';
+import { SpinEntry } from '@/features/spin/spin-entry';
+import { createSpinRepository } from '@/db/spin-repository';
 
 export default function FocusScreen() {
   'use no memo';
   useLocale();
   const { rowStyle } = useDirection();
-  const params = useLocalSearchParams<{ note?: string; session?: string }>();
+  const params = useLocalSearchParams<{ note?: string; session?: string; spin?: string; minutes?: string }>();
   const inputKey = parseNoteKey(params.note);
   const { repository, preferences, active } = useFocusState();
   const database = useSQLiteContext();
+  const showSpin = useSpinVisibility();
   const boards = useMemo(() => createBoardRepository(database), [database]);
   const { tokens } = useTheme();
   const navigation = useNavigation();
@@ -85,9 +89,9 @@ export default function FocusScreen() {
       setAttachments(next ? [...cardAttachments, ...otherMedia] : []);
       if (!next) setError(tr('focus.unavailable'));
       if (current && current.note_key === key) assignSession(current);
-      if (!initialized.current) { setMinutes((await repository.preferences()).durationMinutes); initialized.current = true; }
+      if (!initialized.current) { setMinutes(params.spin && [5,15,30,60].includes(Number(params.minutes)) ? Number(params.minutes) : (await repository.preferences()).durationMinutes); initialized.current = true; }
     } catch { if (mounted.current) setError(tr('focus.error')); }
-  }, [assignSession, boards, database, inputKey, repository]);
+  }, [assignSession, boards, database, inputKey, repository, params.spin, params.minutes]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   useEffect(() => subscribeToFocusChanges(() => void load()), [load]);
   useEffect(() => subscribeToNoteChanges(() => void load()), [load]);
@@ -126,7 +130,11 @@ export default function FocusScreen() {
   const start = () => void run(async () => {
     if (!note) return;
     if (sessionRef.current && sessionRef.current.status !== 'completed') assignSession(await repository.update(sessionRef.current.id, 'resume'));
-    else assignSession(await repository.start(note.key, minutes === null ? null : minutes * 60_000));
+    else {
+      const next = await repository.start(note.key, minutes === null ? null : minutes * 60_000);
+      assignSession(next);
+    }
+    if (params.spin && /^\d+$/.test(params.spin) && sessionRef.current) await createSpinRepository(database).focus(Number(params.spin), sessionRef.current.id);
   });
   const saveCapture = (toChat: boolean) => void run(async () => {
     const text = thought.trim();
@@ -142,9 +150,9 @@ export default function FocusScreen() {
   const openHistory = () => { Keyboard.dismiss(); router.push('/focus-history'); };
 
   return <Screen edges={['top', 'left', 'right']}>
-    <AppHeader title={note?.title ?? tr('focus.title')} subtitle={tr('focus.title')}
+    <AppHeader actionWidth={88} title={note?.title ?? tr('focus.title')} subtitle={tr('focus.title')}
       leading={<IconButton label={tr('focus.exit')} disabled={busy} onPress={() => void run(() => leave(() => router.canGoBack() ? router.back() : router.replace('/')))}><HeaderIcon name="chevron-back" size={24} /></IconButton>}
-      trailing={<IconButton label={tr('focus.history')} onPress={openHistory}><HeaderIcon name="time-outline" size={22} /></IconButton>} />
+      trailing={<View style={[focusStyles.row,rowStyle,{ flexWrap: 'nowrap', gap: 0 }]}>{showSpin ? <SpinEntry header /> : null}<IconButton label={tr('focus.history')} onPress={openHistory}><HeaderIcon name="time-outline" size={22} /></IconButton></View>} />
     {error ? <AppText accessibilityRole="alert" style={[styles.error, { color: tokens.danger }]}>{error}</AppText> : null}
     {note === undefined ? <AppText style={styles.panel}>{tr('focus.loading')}</AppText> : !note ? <>
       <EmptyState title={tr('focus.unavailable')} description={tr('focus.historyKept')} />

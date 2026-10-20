@@ -17,7 +17,7 @@ test('compiler-transformed appearance settings refresh copy without remounting',
   const tokens = { textSecondary: '#444', textPrimary: '#111', borderSubtle: '#ddd', surfaceElevated: '#fff', textMuted: '#888' };
   const scope = {
     exports: {}, require: () => ({ jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) }),
-    useLocale: () => i18n.language, useTheme: () => ({ tokens }), useChatBackground: () => ({ background: null }),
+    useLocale: () => i18n.language, useDirection: () => ({rowStyle:{},isRTL:i18n.language==='ar'}), useTheme: () => ({ tokens }), useChatBackground: () => ({ background: null }),
     useLocalSearchParams: () => ({}), useState: value => [value, () => {}], useRef: value => ({ current: value }), useCallback: fn => fn, useFocusEffect: () => {},
     tr, styles: {}, View: 'View', AppText: 'AppText', Pressable: 'Pressable', Icon: 'Icon', Modal: 'Modal', SafeAreaProvider: 'SafeAreaProvider', AppDialogProvider: 'AppDialogProvider',
   };
