@@ -18,6 +18,7 @@ import { consumeResetNotice, subscribeToAppReset } from '@/services/app-reset';
 import { observeReminderNotifications, registerReminderDatabase, requestReminderSync } from '@/services/reminders';
 import { OnboardingLayer } from '@/features/onboarding/onboarding-layer';
 import { updateMascotAppState } from '@/services/mascot-session';
+import { FocusCoordinator } from '@/features/focus/focus-coordinator';
 
 // Shows the message a reset asked for (e.g. "Restore complete") once the fresh
 // tree — with its reopened database — has mounted.
@@ -75,6 +76,7 @@ function ThemedApp() {
       <View style={{ flex: 1, direction: 'ltr', backgroundColor: tokens.background }}>
         <ResetNotice />
         <ReminderCoordinator />
+        <FocusCoordinator />
         <AppDrawerProvider><StatusBar style={statusBarStyle} />
           <Stack screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: tokens.background } }}>
             <Stack.Screen name="(tabs)" />
@@ -85,6 +87,10 @@ function ThemedApp() {
             <Stack.Screen name="board/[id]" />
             <Stack.Screen name="card/[id]" />
             <Stack.Screen name="card/edit-content" />
+            <Stack.Screen name="focus" options={{ animation: 'fade', gestureEnabled: false }} />
+            <Stack.Screen name="focus-history" />
+            <Stack.Screen name="focus-settings" />
+            <Stack.Screen name="templates" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
             <Stack.Screen name="share-note" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
             <Stack.Screen name="spaces/pick" />
             <Stack.Screen name="spaces/share" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />

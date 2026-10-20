@@ -6,7 +6,10 @@ import { backupDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from 'exp
 import { listContents, NO_COMPRESSION, unzip, zip } from 'react-native-zip-archive';
 
 import { LATEST_SCHEMA_VERSION, migrateDatabase } from '@/db/migrations';
+import { TEMPLATE_COLUMNS } from '@/db/template-schema';
+import { normalizeTemplateDocument } from './note-templates';
 import { REVISIT_COLUMNS } from '@/db/revisit-schema';
+import { FOCUS_COLUMNS } from '@/db/focus-schema';
 import { ChitsFiles } from '../../modules/chits-attachments';
 import { archivePathForMedia, BACKUP_VERSION, BackupError, backupErrorMessage, invalidBackupMessage, parseBackupMetadata, portableMediaPath, validateArchiveEntries, type BackupFile, type BackupManifest, type MissingAttachment } from './backup-format';
 import { beginBackupOperation, type BackupProgress } from './backup-operation';
@@ -21,7 +24,7 @@ export type CreatedBackup = { uri: string; manifest: BackupManifest; size: numbe
 export type ValidatedBackup = { valid: true; workDir: string; extractedDir: string; preparedDir: string; manifest: BackupManifest; preparedDatabaseHash: string; size: number };
 export type BackupValidation = ValidatedBackup | { valid: false; reason: string };
 const requiredTables = ['messages', 'attachments', 'boards', 'board_columns', 'cards', 'card_messages'];
-const currentTables = [...requiredTables, 'timeline_events', 'app_settings', 'card_comments', 'card_attachments', 'card_reminders', 'space_placements', 'message_reminders', 'card_subtasks', 'calendar_entries', ...Object.keys(REVISIT_COLUMNS)];
+const currentTables = [...requiredTables, 'timeline_events', 'app_settings', 'card_comments', 'card_attachments', 'card_reminders', 'space_placements', 'message_reminders', 'card_subtasks', 'calendar_entries', ...Object.keys(REVISIT_COLUMNS), ...Object.keys(TEMPLATE_COLUMNS), ...Object.keys(FOCUS_COLUMNS)];
 const MARGIN = 16 * 1024 * 1024;
 function directory(value: string | null) {
   if (!value) throw new BackupError(tr("attachmentstorage.chitsCouldNotAccessPrivateDeviceStorage"));
@@ -56,10 +59,14 @@ async function validateDatabase(db: SQLiteDatabase, expectedSchema?: number, cur
   const schema = (await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version'))?.user_version ?? 0;
   if (schema < 1 || schema > LATEST_SCHEMA_VERSION || (expectedSchema !== undefined && schema !== expectedSchema)) throw new BackupError(tr("backupservice.theBackupDatabaseVersionDoesNotMatchIts"));
   const tables = current ? currentTables : [...requiredTables, ...(schema >= 4 ? ['timeline_events'] : []), ...(schema >= 8 ? ['app_settings'] : []), ...(schema >= 16 ? ['card_comments'] : []), ...(schema >= 17 ? ['card_attachments'] : []), ...(schema >= 20 ? ['card_reminders'] : []), ...(schema >= 21 ? ['space_placements'] : []), ...(schema >= 22 ? ['message_reminders'] : []), ...(schema >= 23 ? ['card_subtasks'] : []), ...(schema >= 26 ? ['calendar_entries'] : [])];
+  if (!current && schema >= 28) tables.push(...Object.keys(TEMPLATE_COLUMNS));
+  if (!current && schema >= 29) tables.push(...Object.keys(FOCUS_COLUMNS));
   if (!current && schema >= 27) tables.push(...Object.keys(REVISIT_COLUMNS));
   for (const table of tables) if (!await tableExists(db, table)) throw new BackupError(tr("backupservice.theBackupDatabaseIsIncompleteARequiredPart"));
   const columns: Record<string, string[]> = {
     ...REVISIT_COLUMNS,
+    ...TEMPLATE_COLUMNS,
+    ...FOCUS_COLUMNS,
     messages: ['id', 'text', 'type', 'created_at', 'updated_at', 'archived_at', 'pinned', 'deleted_at', ...(schema >= 18 ? ['is_hidden_content'] : []), ...(schema >= 24 ? ['content_json'] : [])],
     attachments: ['id', 'message_id', 'type', schema >= 19 ? 'storage_path' : 'local_uri', 'original_name', 'mime_type', 'size', 'duration', 'width', 'height', 'created_at'],
     boards: ['id', 'name', 'icon', 'accent', 'created_at', 'updated_at', 'archived_at', ...(schema >= 2 ? ['pinned'] : []), ...(schema >= 3 ? ['last_opened_at'] : []), ...(schema >= 6 ? ['show_next_column_peek'] : []), ...(schema >= 7 ? ['show_column_navigator'] : [])],
@@ -79,6 +86,18 @@ async function validateDatabase(db: SQLiteDatabase, expectedSchema?: number, cur
   for (const table of tables) {
     const actual = new Set((await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`)).map((row) => row.name));
     if (columns[table].some((column) => !actual.has(column))) throw new BackupError(tr("backupservice.theBackupDatabaseIsIncompleteOrHasAn"));
+  }
+  if (schema >= 29) {
+    const active = await db.getFirstAsync<{ count: number }>("SELECT count(*) AS count FROM focus_sessions WHERE status IN ('running','paused')");
+    if ((active?.count ?? 0) > 1) throw new BackupError(tr('backupservice.theBackupContainsBrokenDataRelationshipsAndCannot'));
+  }
+  if (schema >= 28) {
+    for (const row of await db.getAllAsync<{ document_json: string; document_version: number }>('SELECT document_json, document_version FROM note_templates')) {
+      try {
+        if (row.document_version !== 1) throw new Error();
+        normalizeTemplateDocument(JSON.parse(row.document_json));
+      } catch { throw new BackupError(invalidBackupMessage()); }
+    }
   }
   if (checkRelationships) {
     if ((await db.getAllAsync('PRAGMA foreign_key_check')).length) throw new BackupError(tr("backupservice.theBackupContainsBrokenDataRelationshipsAndCannot"));
@@ -376,6 +395,9 @@ export async function validateBackup(fileUri: string, progress?: Progress): Prom
       catch (cause) { console.warn('[backup] migration failed', cause); throw new BackupError(tr("backupservice.thisBackupCouldNotBeUpgradedToThe")); }
       // Check declared references before normalizing so omissions cannot be hidden by a migration.
       if (originalManifest) await checkManifestReferences(db, originalManifest);
+      // A restored timer must never start itself or count time since the
+      // backup was made. Keep the saved counters and require explicit resume.
+      await db.runAsync("UPDATE focus_sessions SET status = 'unfinished',ended_at = checkpoint_at WHERE status IN ('running','paused')");
       await normalizeSnapshot(db);
       await validateDatabase(db, LATEST_SCHEMA_VERSION, true);
       manifest = originalManifest ?? await legacyManifest(db, root, metadata.createdAt);

@@ -12,7 +12,7 @@ import { Icon } from '@/components/ui/icon';
 import { radii, spacing } from '@/constants/theme';
 import { createCardSubtaskRepository, type CardSubtask } from '@/db/repositories';
 
-export function CardSubtasks({ cardId, scrollRef }: { cardId: string; scrollRef: RefObject<ScrollView | null> }) {
+export function CardSubtasks({ cardId, scrollRef, showHeading = true, onInputFocus }: { cardId: string; scrollRef?: RefObject<ScrollView | null>; showHeading?: boolean; onInputFocus?: (input: RefObject<TextInput | null>) => void }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -30,13 +30,17 @@ export function CardSubtasks({ cardId, scrollRef }: { cardId: string; scrollRef:
   const listY = useRef(0);
   const rowY = useRef(new Map<string, number>());
   const addRef = useRef<TextInput>(null);
+  const editRef = useRef<TextInput>(null);
   const busyAdd = useRef(false);
   const busyEdit = useRef(false);
   const toggleQueue = useRef(Promise.resolve());
 
   const reload = useCallback(async () => { setItems(await repository.list(cardId)); }, [repository, cardId]);
   useFocusEffect(useCallback(() => { void reload().catch(() => setError(tr("cardsubtasks.couldNotLoadSubtasks"))); }, [reload]));
-  const scrollToRow = (id?: string) => setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, sectionY.current + listY.current + (id ? rowY.current.get(id) ?? 0 : 0) - 100), animated: true }), 90);
+  const scrollToRow = (id?: string) => {
+    if (onInputFocus) { onInputFocus(id === 'new' ? addRef : editRef); return; }
+    setTimeout(() => scrollRef?.current?.scrollTo({ y: Math.max(0, sectionY.current + listY.current + (id ? rowY.current.get(id) ?? 0 : 0) - 100), animated: true }), 90);
+  };
 
   const saveNew = async (keepOpen: boolean) => {
     if (busyAdd.current) return;
@@ -97,17 +101,17 @@ export function CardSubtasks({ cardId, scrollRef }: { cardId: string; scrollRef:
   const completed = items.filter((item) => item.isCompleted).length;
 
   return <View onLayout={(event) => { sectionY.current = event.nativeEvent.layout.y; }}>
-    <View style={styles.header}>
-      <AppText accessibilityRole="header" style={[styles.heading, { color: tokens.textMuted }]}>{tr("cardsubtasks.subtasks")}</AppText>
+    {showHeading || items.length ? <View style={[styles.header, !showHeading && styles.sheetProgress]}>
+      {showHeading ? <AppText accessibilityRole="header" style={[styles.heading, { color: tokens.textMuted }]}>{tr("cardsubtasks.subtasks")}</AppText> : null}
       {items.length ? <AppText style={[styles.progress, { color: tokens.textSecondary }]}>{completed} / {items.length}</AppText> : null}
-    </View>
-    <View onLayout={(event) => { listY.current = event.nativeEvent.layout.y; }} style={[styles.list, { borderColor: tokens.borderSubtle, backgroundColor: tokens.surface }]}>
+    </View> : null}
+    {items.length || adding ? <View onLayout={(event) => { listY.current = event.nativeEvent.layout.y; }} style={[styles.list, { borderColor: tokens.borderSubtle, backgroundColor: tokens.surface }]}>
       {items.map((item, index) => <View key={item.id} onLayout={(event) => { rowY.current.set(item.id, event.nativeEvent.layout.y); }} style={[styles.row, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: tokens.borderSubtle }]}>
         <Pressable accessibilityRole="checkbox" accessibilityLabel={item.title} accessibilityState={{ checked: item.isCompleted }} onPress={() => toggle(item)} style={styles.checkboxTarget}>
           <Icon name={item.isCompleted ? 'checkbox' : 'square-outline'} size={22} color={item.isCompleted ? tokens.accentStrong : tokens.textMuted} />
         </Pressable>
         {editingId === item.id ? <TextInput
-          autoFocus multiline accessibilityLabel={tr("cardsubtasks.editSubtask")} value={editDraft} onChangeText={setEditDraft}
+          ref={editRef} autoFocus multiline accessibilityLabel={tr("cardsubtasks.editSubtask")} value={editDraft} onChangeText={setEditDraft}
           onFocus={() => scrollToRow(item.id)} onBlur={() => void saveEdit()}
           onSubmitEditing={() => { void saveEdit(); Keyboard.dismiss(); }} returnKeyType="done" submitBehavior="submit"
           selectionColor={tokens.accent} style={[styles.input, { color: tokens.textPrimary }]}
@@ -125,7 +129,7 @@ export function CardSubtasks({ cardId, scrollRef }: { cardId: string; scrollRef:
           onSubmitEditing={() => void saveNew(true)} returnKeyType="done" submitBehavior="submit" selectionColor={tokens.accent}
           style={[styles.input, { color: tokens.textPrimary }]} />
       </View> : null}
-    </View>
+    </View> : null}
     {!adding ? <Pressable accessibilityRole="button" onPress={() => { setAdding(true); setError(null); }} style={styles.add}>
       <Icon name="add" size={18} color={tokens.accentStrong} />
       <AppText style={[styles.addText, { color: tokens.accentStrong }]}>{tr("cardsubtasks.addSubtask")}</AppText>
@@ -136,6 +140,7 @@ export function CardSubtasks({ cardId, scrollRef }: { cardId: string; scrollRef:
 
 const styles = StyleSheet.create({
   header: { minHeight: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.lg },
+  sheetProgress: { marginTop: 0, justifyContent: 'flex-end' },
   heading: { fontSize: 11, fontWeight: '700', letterSpacing: 0.9 },
   progress: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
   list: { marginTop: spacing.sm, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.control, overflow: 'hidden' },

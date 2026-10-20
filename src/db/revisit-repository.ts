@@ -88,6 +88,13 @@ export function createRevisitRepository(database: SQLiteDatabase) {
     async page(after = '', limit = 100) { return hydrate(database, await database.getAllAsync<SourceRow>(`${SOURCES} AND n.note_key > ? ORDER BY n.note_key LIMIT ?`, after, limit)); },
     async get(key: NoteKey) { return (await hydrate(database, await database.getAllAsync<SourceRow>(`${SOURCES} AND n.note_key = ?`, key)))[0] ?? null; },
     async relationships(key?: NoteKey) { return database.getAllAsync<Relationship>(`SELECT * FROM note_relationships${key ? ' WHERE note_a = ? OR note_b = ?' : ''} ORDER BY created_at,note_a,note_b`, ...(key ? [key, key] : [])); },
+    async relationshipCounts() {
+      return database.getAllAsync<{ noteKey: NoteKey; count: number }>(`
+        SELECT note_key AS noteKey,count(*) AS count FROM (
+          SELECT note_a AS note_key FROM note_relationships
+          UNION ALL SELECT note_b AS note_key FROM note_relationships
+        ) GROUP BY note_key`);
+    },
     async rejections() { return database.getAllAsync<{ note_a: NoteKey; note_b: NoteKey }>('SELECT note_a,note_b FROM revisit_rejections'); },
     async opened(key: NoteKey, now = Date.now()) { await database.runAsync('UPDATE revisit_notes SET last_opened_at = ? WHERE note_key = ?', now, key); },
     async review(key: NoteKey, action: 'revisit' | 'dismiss' | 'snooze' | 'exclude' | 'include', until?: number, now = Date.now()) {

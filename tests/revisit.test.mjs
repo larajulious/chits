@@ -88,7 +88,7 @@ test('migration is additive, repeatable and initializes existing content conserv
   await db.execAsync(REVISIT_SCHEMA);
   await migration.migrateDatabase(db);
   assert.deepEqual(await db.getFirstAsync('SELECT * FROM messages'), before);
-  assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 27);
+  assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, migration.LATEST_SCHEMA_VERSION);
   assert.equal((await db.getAllAsync('PRAGMA foreign_key_check')).length, 0);
 });
 test('a real schema-26 upgrade preserves checklist bytes and initializes its existing notes', async (t) => {

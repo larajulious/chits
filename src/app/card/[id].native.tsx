@@ -1,5 +1,5 @@
 import { tr } from '@/localization/runtime';
-import { useLocale } from '@/localization/provider';
+import { useDirection, useLocale } from '@/localization/provider';
 import { subscribeToNoteChanges } from '@/services/note-changes';
 import { ConnectedNotes } from '@/components/notes/connected-notes.native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -76,6 +76,7 @@ export default function CardDetailScreen() {
 
   useLocale();
   const database = useSQLiteContext();
+  const { rowStyle } = useDirection();
   const { id } = useLocalSearchParams<{ id: string }>();
   const repository = useMemo(() => createBoardRepository(database), [database]);
   const { tokens: theme, styleTokens, styleColors } = useTheme();
@@ -494,8 +495,12 @@ export default function CardDetailScreen() {
   return <Screen edges={['top', 'left', 'right']}>
     <AppHeader
       title={tr("id.cardDetails")}
+      actionWidth={covered ? 44 : 88}
       leading={<IconButton label={tr("search.goBack")} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>}
-      trailing={<IconButton label={tr("id.openInChat")} onPress={() => router.push(messages[0] ? `/chat?messageId=${messages[0].id}` : '/chat')}><HeaderIcon name="chatbubble-outline" size={22} /></IconButton>}
+      trailing={<View style={[styles.headerActions, rowStyle]}>
+        {!covered ? <IconButton label={tr('focus.action')} onPress={() => router.push({ pathname: '/focus', params: { note: `card:${id}` } })}><HeaderIcon name="timer-outline" size={22} /></IconButton> : null}
+        <IconButton label={tr("id.openInChat")} onPress={() => router.push(messages[0] ? `/chat?messageId=${messages[0].id}` : '/chat')}><HeaderIcon name="chatbubble-outline" size={22} /></IconButton>
+      </View>}
     />
     {viewingPhoto ? <PhotoAttachmentViewer attachment={viewingPhoto} onDismiss={() => setViewingPhoto(null)} /> : null}
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -521,6 +526,11 @@ export default function CardDetailScreen() {
         <View style={[styles.sectionHeader, styles.contentSectionHeader]}>
           <AppText accessibilityRole="header" style={styles.sectionTitle}>{tr("id.content")}</AppText>
           <View style={styles.contentHeaderActions}>
+            {!covered && messages.some((message) => message.text || message.content?.some((block) => block.type === 'text' && block.list)) ? <Pressable accessibilityRole="button" accessibilityLabel={tr('templates.saveAs')} hitSlop={8} onPress={() => {
+              const candidates = messages.filter((message) => message.text || message.content?.some((block) => block.type === 'text' && block.list));
+              if (candidates.length === 1) router.push({ pathname: '/templates', params: { sourceMessageId: candidates[0].id } });
+              else actionSheet({ title: tr('templates.saveAs'), options: candidates.map((message, index) => ({ label: tr('id.thought') + ' ' + (index + 1), icon: 'document-text-outline', onPress: () => router.push({ pathname: '/templates', params: { sourceMessageId: message.id } }) })) });
+            }} style={styles.inlineEdit}><Icon name="copy-outline" size={16} color={contentAccentStrong} /></Pressable> : null}
             {!covered ? <Pressable accessibilityRole="button" accessibilityLabel={tr("index.shareNote")} hitSlop={8} onPress={openShareNote} style={styles.inlineEdit}><Icon name="images-outline" size={16} color={contentAccentStrong} /></Pressable> : null}
             {contentHidden && !covered ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.hideAgain")} hitSlop={8} onPress={() => setTemporarilyRevealed(false)} style={styles.inlineEdit}><Icon name="eye-off-outline" size={16} color={theme.textMuted} /><AppText style={[styles.inlineEditText, { color: theme.textMuted }]}>{tr("id.hideAgain")}</AppText></Pressable> : null}
             {messages.length > 1 ? <View style={styles.countBadge}><AppText style={styles.countText}>{messages.length}</AppText></View> : null}
@@ -561,7 +571,7 @@ export default function CardDetailScreen() {
           <Icon name="chevron-forward" size={16} color={theme.textMuted} />
         </Pressable>
 
-        <ConnectedNotes noteKey={`card:${id}`} />
+        <ConnectedNotes noteKey={`card:${id}`} style={styles.connectedNotes} />
         <View style={styles.sectionHeader}><AppText accessibilityRole="header" style={styles.sectionTitle}>{tr("id.details")}</AppText></View>
         <View style={[styles.detailsCard, panel]}>
           <View style={styles.detailGroup}>
@@ -706,6 +716,7 @@ export default function CardDetailScreen() {
 }
 
 const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
+  headerActions: { alignItems: 'center' },
   flex: { flex: 1 },
   loading: { flex: 1, textAlign: 'center', textAlignVertical: 'center', color: tokens.textSecondary },
   cardLoader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -734,13 +745,13 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   // gap between a heading and its own content (they read as one unit).
   sectionHeader: { minHeight: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginTop: spacing.xl },
   sectionTitle: { color: tokens.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.9 },
+  connectedNotes: { paddingHorizontal: 0 },
   // Content follows directly under the title/hero, not a fresh "new section"
   // the way Details/Attachments/Comments/Card Actions do further down — a
   // tighter marginTop than the shared sectionHeader keeps it feeling like the
   // continuation of what the user is already reading rather than a jump.
   contentSectionHeader: { marginTop: spacing.md },
-  // The ruled page follows the existing index-card treatment in Spaces. The
-  // generous left inset places the writing after the margin rule.
+  // The shared note surface follows the active light/dark theme.
   contentBody: { marginTop: spacing.sm },
   contentHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   hiddenTitle: { color: tokens.textMuted },

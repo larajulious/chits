@@ -1,5 +1,8 @@
+import { AppDialogProvider } from '@/components/dialogs/app-dialog-provider';
+import { TemplateLibrary, type TemplateLibraryHandle } from '@/features/templates/template-library';
+import { createSingleFlight } from '@/services/note-templates';
 import { tr } from '@/localization/runtime';
-import { useLocale } from '@/localization/provider';
+import { useDirection, useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -8,6 +11,7 @@ import { useTheme } from '@/components/theme-provider';
 import { useStickyControls } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
+import { BottomSheetSurface, IconButton } from '@/components/ui/primitives';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { spacing } from '@/constants/theme';
 import { AttachmentDraftPreview } from '@/components/chat/attachment-draft-preview';
@@ -36,6 +40,7 @@ type Props = {
   extraSummary?: string;
   /** False while those fields aren't valid yet. */
   canSubmit?: boolean;
+  initialBlocks?: NoteDraftBlock[];
 };
 
 const ATTACH_OPTIONS = [
@@ -53,14 +58,18 @@ const MAX_NOTE_LENGTH = 10000;
 // text where the cursor was. Picking and storage are the same shared path Chat uses
 // (services/attachment-import), so media is optimized and stored identically; a
 // staged file is deleted again if the sheet is dismissed without adding.
-export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit, title = tr("id.addNote"), context, extra, extraSummary, canSubmit = true }: Props) {
+export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit, title = tr("id.addNote"), context, extra, extraSummary, canSubmit = true, initialBlocks }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
+  const { rowStyle, isRTL } = useDirection();
   const { tokens: theme } = useTheme();
   const controls = useStickyControls();
   const inputRef = useRef<NoteBlocksEditorControl>(null);
   const wasVisible = useRef(false);
+  const [stage, setStage] = useState<'choice' | 'templates' | 'editor'>('choice');
+  const libraryRef = useRef<TemplateLibraryHandle>(null);
+  const [runSubmit] = useState(createSingleFlight);
   const [blocks, setBlocks] = useState<NoteDraftBlock[]>(() => textDraft());
   const [saving, setSaving] = useState(false);
   const [staging, setStaging] = useState(false);
@@ -81,14 +90,15 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   useEffect(() => {
     if (visible && !wasVisible.current) {
       setFullscreen(false);
-      setBlocks(textDraft());
+      setBlocks(initialBlocks ?? textDraft());
+      setStage(initialBlocks ? 'editor' : 'choice');
       setSaving(false);
       setStaging(false);
       setDraft(null);
       setError(null);
     }
     wasVisible.current = visible;
-  }, [visible]);
+  }, [visible, initialBlocks]);
 
   const trimmed = noteBlocksText(blocks);
   const imageCount = draftImageCount(blocks);
@@ -189,19 +199,21 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
 
   const submit = async () => {
     if (!canAdd) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await onSubmit({ text: trimmed, attachment: draft?.attachment ?? null, blocks: draftHasRichContent(blocks) ? blocks : null });
-      // Saved: the file now belongs to the note, so it must not be removed.
-      setDraft(null);
-      setBlocks(textDraft());
-      onClose();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : tr("addnotesheet.couldnTAddThatNoteTryAgain"));
-    } finally {
-      setSaving(false);
-    }
+    await runSubmit(async () => {
+      setSaving(true);
+      setError(null);
+      try {
+        await onSubmit({ text: trimmed, attachment: draft?.attachment ?? null, blocks: draftHasRichContent(blocks) ? blocks : null });
+        // Saved: the file now belongs to the note, so it must not be removed.
+        setDraft(null);
+        setBlocks(textDraft());
+        onClose();
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : tr("addnotesheet.couldnTAddThatNoteTryAgain"));
+      } finally {
+        setSaving(false);
+      }
+    });
   };
 
   return (
@@ -209,12 +221,24 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
       visible={visible}
       transparent
       animationType="slide"
-      onRequestClose={close}
-      onShow={() => requestAnimationFrame(() => inputRef.current?.focus())}
+      onRequestClose={() => stage === 'templates' ? libraryRef.current?.back() : close()}
+      onShow={() => { if (initialBlocks) requestAnimationFrame(() => inputRef.current?.focus()); }}
     >
       <SafeAreaProvider>
       <KeyboardAvoidingView style={[styles.backdrop, fullscreen && { backgroundColor: theme.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        {fullscreen ? (
+        {stage === 'choice' ? <>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr('attachments.close')} onPress={close} style={StyleSheet.absoluteFill} />
+          <BottomSheetSurface style={styles.choiceSurface}>
+            <SafeAreaView edges={['bottom']} style={styles.choiceSafe}>
+              <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
+              <View style={[styles.choiceHeading, rowStyle]}><AppText accessibilityRole="header" variant="display" weight="600" style={[styles.choiceTitle, { color: theme.textPrimary }]}>{tr('templates.choose')}</AppText><IconButton label={tr('attachments.close')} onPress={close}><Icon name="close" size={22} color={theme.textPrimary} /></IconButton></View>
+              <View style={styles.choiceContext}>{contextLine}</View>
+              {(['blank', 'fromTemplate'] as const).map((kind) => <Pressable key={kind} accessibilityRole="button" onPress={() => { setStage(kind === 'blank' ? 'editor' : 'templates'); if (kind === 'blank') requestAnimationFrame(() => inputRef.current?.focus()); }} style={({ pressed }) => [styles.choiceRow, rowStyle, pressed && styles.pressed]}><Icon name={kind === 'blank' ? 'document-outline' : 'grid-outline'} size={22} color={theme.textPrimary} /><AppText style={[styles.choiceLabel, { color: theme.textPrimary }]}>{tr(`templates.${kind}`)}</AppText><Icon name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={theme.textMuted} /></Pressable>)}
+            </SafeAreaView>
+          </BottomSheetSurface>
+        </> : stage === 'templates' ? <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={[styles.fullScreen, { backgroundColor: theme.background }]}>
+          <AppDialogProvider><TemplateLibrary ref={libraryRef} onClose={() => setStage('choice')} onSelect={(next) => { setBlocks(next); setStage('editor'); setFullscreen(true); requestAnimationFrame(() => inputRef.current?.focus()); }} /></AppDialogProvider>
+        </SafeAreaView> : fullscreen ? (
           <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={styles.fullScreen}>
             {/* Same header pattern as Edit Note: exit on the left, Add (✓) on the right. */}
             <View style={[styles.fullHeader, { borderBottomColor: theme.borderSubtle }]}>
@@ -287,6 +311,13 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
 }
 
 const styles = StyleSheet.create({
+  choiceSafe: { width: '100%' },
+  choiceSurface: { paddingBottom: spacing.sm },
+  choiceHeading: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg },
+  choiceTitle: { flex: 1, fontSize: 18, lineHeight: 26 },
+  choiceContext: { paddingHorizontal: spacing.lg },
+  choiceRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
+  choiceLabel: { flex: 1, fontSize: 16, lineHeight: 24, fontWeight: '500' },
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,23,0.34)' },
   safeArea: { width: '100%', flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   sheet: { flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth },

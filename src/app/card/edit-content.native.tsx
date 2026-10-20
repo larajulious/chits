@@ -1,8 +1,10 @@
 import { tr } from '@/localization/runtime';
-import { useLocale } from '@/localization/provider';
+import { useDirection, useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ConnectedNotes } from '@/components/notes/connected-notes.native';
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { FocusEntry } from '@/features/focus/focus-entry';
+import { Keyboard, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { requestReminderSync } from '@/services/reminders';
@@ -34,6 +36,7 @@ export default function EditContentScreen() {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
+  const { rowStyle } = useDirection();
   const database = useSQLiteContext();
   const { messageId, autoFocus } = useLocalSearchParams<{ messageId: string; autoFocus?: string }>();
   const messageRepository = useMemo(() => createMessageRepository(database), [database]);
@@ -42,6 +45,12 @@ export default function EditContentScreen() {
   const { confirm } = useAppDialog();
   const navigation = useNavigation();
   const inputRef = useRef<NoteBlocksEditorControl>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(() => Keyboard.isVisible());
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
   // null while loading; an empty note body is a legitimate loaded state (an
   // attachment message with no caption yet), so it can't double as "not
   // loaded yet" the way it would for a plain string default.
@@ -122,7 +131,10 @@ export default function EditContentScreen() {
         leading={<IconButton label={tr("chat.cancel")} disabled={saving || pasteImage.pasting} onPress={() => router.back()}><HeaderIcon name="close" size={24} /></IconButton>}
         trailing={<IconButton label={tr("editcontent.save")} disabled={!canSave} onPress={() => void save()}><Icon name={saving ? 'ellipsis-horizontal' : 'checkmark'} size={24} color={canSave ? (headerInk.banded ? headerInk.ink : theme.accent) : headerInk.inkMuted} /></IconButton>}
       />
-      <ConnectedNotes noteKey={`thought:${messageId}`} compact />
+      <View style={[styles.noteActions, rowStyle]}>
+        <ConnectedNotes noteKey={`thought:${messageId}`} compact inline />
+        {!hasChanges && initialSignature !== null ? <FocusEntry noteKey={`thought:${messageId}`} compact /> : null}
+      </View>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { borderColor: theme.danger }]}><AppText style={[styles.errorText, { color: theme.danger }]}>{error}</AppText></View> : null}
         {/* The screen itself is the editing surface — no boxed field, no
@@ -144,11 +156,11 @@ export default function EditContentScreen() {
           blockContainerStyle={styles.blocks}
           blockInputStyle={[styles.blockInput, { color: theme.textPrimary }]}
         />
-        <View style={[styles.footer, { borderTopColor: theme.borderSubtle }]}>
+        <SafeAreaView edges={keyboardVisible ? [] : ['bottom']} style={[styles.footer, { borderTopColor: theme.borderSubtle }]}>
           <InsertImageButton disabled={saving} busy={pasteImage.pasting} onPress={() => void pasteImage.pick()} />
           <NoteListButtons editor={inputRef} disabled={saving || pasteImage.pasting} />
           <PasteImageButton visible={pasteImage.canPaste} pasting={pasteImage.pasting && !pasteImage.picking} disabled={saving || pasteImage.picking} onPress={() => void pasteImage.paste()} />
-        </View>
+        </SafeAreaView>
       </KeyboardAvoidingView>
     </Screen>
   );
@@ -156,6 +168,7 @@ export default function EditContentScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  noteActions: { alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md },
   input: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md, fontSize: 17, lineHeight: 27 },
   blocks: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   blockInput: { minHeight: 27, padding: 0, fontSize: 17, lineHeight: 27, textAlignVertical: 'top' },

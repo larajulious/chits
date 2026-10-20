@@ -34,7 +34,9 @@ import { type BoardIconName } from '@/constants/board-appearance';
 import { spacing } from '@/constants/theme';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
 import { GettingStartedCard } from '@/features/onboarding/components/checklist-card';
+import { FocusCardsBanner } from '@/features/focus/focus-cards-banner';
 import type { Board, CardListItem, MessageType } from '@/db/types';
+import { createRevisitRepository } from '@/db/revisit-repository';
 import { removeCardAttachmentFile } from '@/services/card-attachment-storage';
 import { spaceNoteAction } from '@/components/spaces/space-note-action';
 import { StickyGreeting } from '@/components/mascot/sticky-greeting.native';
@@ -90,6 +92,7 @@ export default function BoardsScreen() {
   const database = useSQLiteContext();
   const boardRepository = useMemo(() => createBoardRepository(database), [database]);
   const messageRepository = useMemo(() => createMessageRepository(database), [database]);
+  const revisitRepository = useMemo(() => createRevisitRepository(database), [database]);
   const { openDrawer } = useAppDrawer();
   const { actionSheet, confirm } = useAppDialog();
   const { tokens: theme, styleTokens, styleColors } = useTheme();
@@ -180,12 +183,14 @@ export default function BoardsScreen() {
   }, [boardRepository, database, messageRepository]);
 
   const loadCards = useCallback(async () => {
-    const [cardRows, thoughtRows, subtaskRows, checklistRows] = await Promise.all([
+    const [cardRows, thoughtRows, subtaskRows, checklistRows, connectionRows] = await Promise.all([
       boardRepository.listAllCardSummaries(),
       messageRepository.listUnorganizedSummaries(),
       boardRepository.listCardSubtaskPreviews(),
       messageRepository.listChecklistSummaries(),
+      revisitRepository.relationshipCounts(),
     ]);
+    const connectionsByKey = new Map<string, number>(connectionRows.map((row) => [row.noteKey, row.count]));
     const contentByCard = new Map<string, NoteBlock[]>();
     const contentByThought = new Map<string, NoteBlock[]>();
     for (const row of checklistRows) {
@@ -201,10 +206,10 @@ export default function BoardsScreen() {
     // A card whose thought is hidden in Chat is covered here too, the same as on its board.
     setCards(cardRows.map(({ isHidden, ...row }) => isHidden === 1
       ? { ...row, kind: 'card' as const, title: tr("index.hiddenChit"), preview: null, pinned: row.pinned === 1, hidden: true, previewMediaType: null, thumbnailPath: null, mediaDuration: null, mediaCount: 0 }
-      : { ...row, kind: 'card' as const, pinned: row.pinned === 1, hidden: false, mediaCount: row.mediaCount ?? 0, subtaskPreview: subtasksByCard.get(row.id) ?? [], checklistSummary: noteChecklistSummary(contentByCard.get(row.id) ?? []) }));
-    setUnorganizedThoughts(thoughtRows.map((row) => ({ ...unorganizedToCardListItem(row), checklistSummary: row.isHiddenContent ? null : noteChecklistSummary(contentByThought.get(row.id) ?? []) })));
+      : { ...row, kind: 'card' as const, pinned: row.pinned === 1, hidden: false, connectionCount: connectionsByKey.get(`card:${row.id}`) ?? 0, mediaCount: row.mediaCount ?? 0, subtaskPreview: subtasksByCard.get(row.id) ?? [], checklistSummary: noteChecklistSummary(contentByCard.get(row.id) ?? []) }));
+    setUnorganizedThoughts(thoughtRows.map((row) => ({ ...unorganizedToCardListItem(row), connectionCount: row.isHiddenContent ? 0 : connectionsByKey.get(`thought:${row.id}`) ?? 0, checklistSummary: row.isHiddenContent ? null : noteChecklistSummary(contentByThought.get(row.id) ?? []) })));
     setCardsReady(true);
-  }, [boardRepository, messageRepository]);
+  }, [boardRepository, messageRepository, revisitRepository]);
   // Card deletes/archives/hides go through loadCards afterwards, so reconciling
   // here cancels notifications for removed cards and refreshes hidden text;
   // reminder changes made elsewhere (set, removed, fired) reload the list.
@@ -319,6 +324,8 @@ export default function BoardsScreen() {
         title: item.title,
         options: [
           { label: tr("index.addToBoard"), icon: 'albums-outline', onPress: () => router.push({ pathname: '/unorganized', params: { messageId: item.id, openBoardPicker: '1' } }) },
+          ...(item.hidden ? [] : [{ label: tr('focus.action'), icon: 'timer-outline' as const, onPress: () => router.push({ pathname: '/focus', params: { note: `thought:${item.id}` } }) }]),
+          ...(item.hidden ? [] : [{ label: tr('templates.saveAs'), icon: 'copy-outline' as const, onPress: () => router.push({ pathname: '/templates', params: { sourceMessageId: item.id } }) }]),
           ...(item.hidden ? [] : [{ label: tr("index.shareNote"), icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ messageId: item.id })) }]),
           { label: item.pinned ? tr("index.unpin") : tr("index.pin"), icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void messageRepository.setPinned(item.id, !item.pinned).then(() => loadCards()) },
           ...spaceOption,
@@ -345,6 +352,7 @@ export default function BoardsScreen() {
     actionSheet({
       title: item.title,
       options: [
+        ...(item.hidden ? [] : [{ label: tr('focus.action'), icon: 'timer-outline' as const, onPress: () => router.push({ pathname: '/focus', params: { note: `card:${item.id}` } }) }]),
         ...(item.hidden ? [] : [{ label: tr("index.shareNote"), icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ cardId: item.id })) }]),
         { label: item.pinned ? tr("index.unpin") : tr("index.pin"), icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void boardRepository.setPinned('card', item.id, !item.pinned).then(() => loadCards()) },
         ...spaceOption,
@@ -453,6 +461,7 @@ export default function BoardsScreen() {
         )}
       />
 
+      <FocusCardsBanner />
       <GettingStartedCard onHome />
 
       {isLoading || showLoader ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : (

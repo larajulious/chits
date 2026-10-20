@@ -3,6 +3,7 @@ import { useLocale } from '@/localization/provider';
 import { getCalendars } from 'expo-localization';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, Keyboard, Pressable, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
@@ -17,6 +18,7 @@ import { MonthView } from '@/components/calendar/month-view';
 import { defaultStartMinute, destinationKey, ScheduleFields } from '@/components/calendar/schedule-fields';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useAppDrawer } from '@/components/navigation/app-drawer';
+import { floatingCompanionBottom } from '@/components/navigation/floating-chat-layout';
 import { showPermissionSettingsPrompt } from '@/components/permissions/permission-settings-prompt';
 import { ReminderSheet } from '@/components/reminders/reminder-sheet';
 import { useTheme } from '@/components/theme-provider';
@@ -93,6 +95,7 @@ export default function CalendarScreen() {
   const { tokens: theme, styleTokens } = useTheme();
   const { ink } = useHeaderInk();
   const tabBarHeight = useBottomTabBarHeight();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [weekStart] = useState(() => weekStartFromLocale(getCalendars()[0]?.firstWeekday));
 
@@ -414,7 +417,7 @@ export default function CalendarScreen() {
         accessibilityRole="button"
         accessibilityLabel={tr("calendar.addNoteOnValue", { value1: dateFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(view === 'agenda' ? today : selectedDate) })}
         onPress={() => chooseAdd(view === 'agenda' ? todayKey : selectedKey, view === 'day' ? defaultStartMinute(selectedKey) : null)}
-        style={({ pressed }) => [styles.fab, { bottom: tabBarHeight + spacing.md, backgroundColor: theme.accentStrong, shadowColor: theme.textPrimary }, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.fab, { bottom: floatingCompanionBottom(insets.bottom, styleTokens.chat.height, FAB_SIZE), right: Math.max(spacing.lg, insets.right + spacing.sm), backgroundColor: theme.accentStrong, shadowColor: theme.textPrimary }, pressed && styles.pressed]}
       >
         <Icon name="add" size={28} color={theme.background} />
       </Pressable>

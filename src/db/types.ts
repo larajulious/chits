@@ -73,6 +73,7 @@ export interface CardListItem {
   reminderAt: number | null;
   subtaskCount: number; completedSubtaskCount: number;
   checklistSummary?: ReturnType<typeof import('../services/note-content').noteChecklistSummary>;
+  connectionCount?: number;
   subtaskPreview?: { id: string; title: string; isCompleted: boolean }[];
   photoCount: number; videoCount: number; fileCount: number;
   // The single, deterministic media preview for this card/thought — resolved

@@ -3,7 +3,7 @@ import { useLocale } from '@/localization/provider';
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { AppDialogProvider, useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useChatBackground } from '@/components/chat/chat-background-context';
@@ -14,6 +14,7 @@ import { useAttachmentDeletion } from './use-attachment-deletion';
 import { exportActionLabel, shareAttachment } from '@/services/attachment-export';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
 import type { AttachmentLike } from '@/db/types';
+import { ZoomablePhoto } from './zoomable-photo';
 
 function PhotoContent({ attachment, onDismiss, previewOnly = false }: { attachment: AttachmentLike; onDismiss: () => void; previewOnly?: boolean }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
@@ -38,7 +39,7 @@ function PhotoContent({ attachment, onDismiss, previewOnly = false }: { attachme
   if (preview) return <ChatBackgroundPreview image={attachmentBackgroundImage(attachment)} onCancel={() => setPreview(false)} onApplied={onDismiss} />;
   const notice = deletion.status ?? (shareError ? tr("photoattachmentviewer.thisPhotoCouldNotBeShared") : download.status);
   return <SafeAreaView style={styles.screen}>
-    {deleted ? <Text style={styles.deleted}>{tr("photoattachmentviewer.photoRemoved")}</Text> : <Image source={resolveAttachmentUri(attachment.storagePath)} contentFit="contain" autoplay={false} style={StyleSheet.absoluteFill} />}
+    {deleted ? <Text style={styles.deleted}>{tr("photoattachmentviewer.photoRemoved")}</Text> : <ZoomablePhoto uri={resolveAttachmentUri(attachment.storagePath)} width={attachment.width} height={attachment.height} />}
     <View style={[styles.toolbar, { top: insets.top + 8 }]}>
       <Pressable accessibilityRole="button" accessibilityLabel={tr("photoattachmentviewer.closePhoto")} onPress={onDismiss} style={styles.icon}><Ionicons accessible={false} name="close" size={24} color="#FFFFFF" /></Pressable>
       {!deleted && !previewOnly ? <Pressable accessibilityRole="button" accessibilityLabel={tr("photoattachmentviewer.photoOptions")} onPress={more} style={styles.icon}><Ionicons accessible={false} name="ellipsis-horizontal" size={24} color="#FFFFFF" /></Pressable> : null}
@@ -53,6 +54,6 @@ export function PhotoAttachmentViewer({ attachment, onDismiss, previewOnly = fal
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  return <Modal visible animationType="fade" presentationStyle="fullScreen" onRequestClose={onDismiss}><SafeAreaProvider><AppDialogProvider><PhotoContent attachment={attachment} onDismiss={onDismiss} previewOnly={previewOnly} /></AppDialogProvider></SafeAreaProvider></Modal>;
+  return <Modal visible animationType="fade" presentationStyle="fullScreen" onRequestClose={onDismiss}><GestureHandlerRootView style={{ flex: 1 }}><SafeAreaProvider><AppDialogProvider><PhotoContent attachment={attachment} onDismiss={onDismiss} previewOnly={previewOnly} /></AppDialogProvider></SafeAreaProvider></GestureHandlerRootView></Modal>;
 }
 const styles = StyleSheet.create({ screen: { flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' }, toolbar: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' }, icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.6)' }, indicator: { position: 'absolute', alignSelf: 'center', borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 14, paddingVertical: 8 }, indicatorText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' }, notice: { position: 'absolute', maxWidth: '86%', alignSelf: 'center', backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12 }, noticeText: { color: '#111111', textAlign: 'center', fontSize: 14 }, deleted: { color: '#FFFFFF', fontSize: 18 } });

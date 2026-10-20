@@ -1,7 +1,7 @@
 import { countLabel, tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View, type LayoutRectangle, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View, type LayoutRectangle, type StyleProp, type ViewStyle } from 'react-native';
 import { Icon } from '@/components/ui/icon';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -15,6 +15,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DraggableSticky, RaisedSticky } from '@/components/spaces/draggable-sticky';
 import { LabelTape } from '@/components/spaces/label-tape';
 import { MagnetButton } from '@/components/spaces/magnet-button';
+import { AddNoteSheet } from '@/components/boards/add-note-sheet';
+import { textDraft } from '@/services/note-content';
+import { AppText } from '@/components/ui/app-text';
 import { NotePicker } from '@/components/spaces/note-picker';
 import { useSpaceFonts } from '@/components/spaces/space-fonts';
 import { spaceFullMessage } from '@/components/spaces/space-note-action';
@@ -85,6 +88,8 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
   const [reminderKey, setReminderKey] = useState(0);
   const focusedOnce = useRef(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const pendingCreate = useRef<SpaceId | null>(null);
+  const [createDestination, setCreateDestination] = useState<SpaceId | null>(null);
   const [guideState, setGuideState] = useState<'placement' | 'success' | null>(guided ? 'placement' : null);
   const [toast, setToast] = useState<string | null>(null);
   const space = SPACES[spaceId];
@@ -366,7 +371,8 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
         onReminder={() => openReminder(selected)}
       />
     </View> : null}
-    <NotePicker visible={pickerOpen} spaceName={space.name} onClose={() => setPickerOpen(false)} onPick={(candidate) => void stick(candidate)} />
+    <NotePicker visible={pickerOpen} spaceName={space.name} onClose={() => setPickerOpen(false)} onPick={(candidate) => void stick(candidate)} onCreate={() => { setPickerOpen(false); if (Platform.OS === 'ios') pendingCreate.current = spaceId; else setCreateDestination(spaceId); }} onClosed={() => { if (pendingCreate.current) { setCreateDestination(pendingCreate.current); pendingCreate.current = null; } }} />
+    <AddNoteSheet visible={createDestination !== null} title={tr('templates.choose')} context={<AppText style={{ color: theme.textSecondary }}>{createDestination ? SPACES[createDestination].name : ''}</AppText>} onClose={() => setCreateDestination(null)} onSubmit={async ({ text, attachment, blocks }) => { if (createDestination) await repository.createNote(createDestination, { blocks: blocks ?? textDraft(text), attachment }); }} />
     <ReminderSheet key={reminderKey} visible={reminderNote !== null} existing={reminderAt} accent={theme.accent} accentOn={theme.accentText} onClose={() => setReminderNote(null)} onSave={async (date) => {
       if (!reminderNote) return { ok: false, reason: 'failed' };
       const result = reminderNote.kind === 'card' ? await setCardReminder(database, reminderNote.noteId, date.getTime()) : await setMessageReminder(database, reminderNote.noteId, date.getTime());

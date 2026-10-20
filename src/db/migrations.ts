@@ -1,7 +1,9 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { normalizeStoredAttachmentPath } from '@/services/attachment-path';
+import { TEMPLATE_SCHEMA } from './template-schema';
 import { REVISIT_SCHEMA } from './revisit-schema';
+import { FOCUS_SCHEMA } from './focus-schema';
 
 type Migration = { version: number; up: (database: SQLiteDatabase) => Promise<void> };
 
@@ -275,6 +277,12 @@ const migrations: Migration[] = [{
 }, {
   version: 27,
   up: async (database) => { await database.execAsync(REVISIT_SCHEMA); },
+}, {
+  version: 28,
+  up: async (database) => { await database.execAsync(TEMPLATE_SCHEMA); },
+}, {
+  version: 29,
+  up: async (database) => { await database.execAsync(FOCUS_SCHEMA); },
 }];
 
 /** The schema version this build of Chits understands (the last migration). */

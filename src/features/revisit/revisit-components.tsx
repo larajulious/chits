@@ -132,7 +132,7 @@ export function RevisitFooter({ note, children }: PropsWithChildren<{ note?: Rev
   </View>{children}</View>;
 }
 
-export function RevisitNoteContent({ note, dates = false, moreRecent = false, previewLines }: { note: RevisitNote; dates?: boolean; moreRecent?: boolean; previewLines?: number }) {
+export function RevisitNoteContent({ note, dates = false, moreRecent = false, previewLines, titleFirst = false }: { note: RevisitNote; dates?: boolean; moreRecent?: boolean; previewLines?: number; titleFirst?: boolean }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -140,7 +140,7 @@ export function RevisitNoteContent({ note, dates = false, moreRecent = false, pr
   // A derived first-line title should not repeat as the first line of its body.
   const text = note.text.trim();
   const preview = text === note.title ? '' : text.startsWith(`${note.title}\n`) ? text.slice(note.title.length).trimStart() : text;
-  const thoughtPreview = !dates && note.key.startsWith('thought:') && text.startsWith(note.title);
+  const thoughtPreview = !titleFirst && !dates && note.key.startsWith('thought:') && text.startsWith(note.title);
   const date = (value: number) => new Date(value).toLocaleString(getFormattingLocale(), { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
   return <RevisitBody>
     {thoughtPreview ? <RevisitText variant="paragraph" numberOfLines={previewLines ?? 6} style={styles.thought}>{text.slice(0, 260)}{text.length > 260 ? '…' : ''}</RevisitText> : <RevisitTitle numberOfLines={dates ? 0 : 2}>{note.title}</RevisitTitle>}
@@ -152,12 +152,12 @@ export function RevisitNoteContent({ note, dates = false, moreRecent = false, pr
   </RevisitBody>;
 }
 
-export function RevisitEmpty({ children, icon = 'documents-outline' }: PropsWithChildren<{ icon?: ComponentProps<typeof Icon>['name'] }>) {
+export function RevisitEmpty({ children, icon = 'documents-outline', compact = false }: PropsWithChildren<{ icon?: ComponentProps<typeof Icon>['name']; compact?: boolean }>) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
   const { tokens } = useTheme();
-  return <View style={styles.empty}><View style={[styles.emptyIcon, { backgroundColor: tokens.surfaceElevated }]}><Icon name={icon} size={18} color={tokens.textMuted} /></View><Text variant="paragraph" style={[styles.emptyText, { color: tokens.textSecondary }]}>{children}</Text></View>;
+  return <View style={[styles.empty, compact && styles.emptyCompact]}><View style={[styles.emptyIcon, compact && styles.emptyIconCompact, { backgroundColor: tokens.surfaceElevated }]}><Icon name={icon} size={compact ? 16 : 18} color={tokens.textMuted} /></View><Text variant="paragraph" style={[styles.emptyText, { color: tokens.textSecondary }]}>{children}</Text></View>;
 }
 
 export function RevisitActions({ children }: { children: ReactNode }) {
@@ -184,4 +184,5 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12 },
   empty: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
   emptyIcon: { width: 36, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, emptyText: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 19 },
+  emptyCompact: { minHeight: 44, gap: 8, paddingVertical: 4 }, emptyIconCompact: { width: 26, height: 28, borderRadius: 6 },
 });

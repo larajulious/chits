@@ -173,6 +173,10 @@ type Props = {
   // scrolling column (`blockContainerStyle`) of auto-growing inputs (`blockInputStyle`).
   singleInputStyle: StyleProp<TextStyle>;
   blockContainerStyle?: StyleProp<ViewStyle>;
+  // Fullscreen hosts can bound the lone scrolling input to their viewport.
+  // Compact composers retain their intrinsic content height by default.
+  fillViewport?: boolean;
+  contentContainerStyle?: StyleProp<ViewStyle>;
   blockInputStyle: StyleProp<TextStyle>;
   maxImageHeight: number;
   accessibilityLabel: string;
@@ -192,7 +196,7 @@ type Props = {
  * text back together. The shared structural engine handles list/paragraph
  * boundaries; native inputs retain character editing and composition.
  */
-export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeholder, maxLength, singleInputStyle, blockContainerStyle, blockInputStyle, maxImageHeight, accessibilityLabel, onRemovePastedImage, onReplaceImage, onFocus, onBlur, singleInputProps }: Props) {
+export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeholder, maxLength, singleInputStyle, blockContainerStyle, blockInputStyle, maxImageHeight, accessibilityLabel, onRemovePastedImage, onReplaceImage, onFocus, onBlur, singleInputProps, fillViewport = false, contentContainerStyle }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   const locale = useLocale();
@@ -217,6 +221,7 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
   const positions = useRef(new Map<string, number>());
   const [width, setWidth] = useState(0);
   const richLayout = draftHasRichContent(blocks);
+  const fillPlainViewport = fillViewport && !richLayout;
   const emptyDocument = isEmptyNoteDraft(blocks);
   const singleLayout = StyleSheet.flatten(singleInputStyle);
   const singleContainer = !richLayout ? { flex: singleLayout?.flex, flexGrow: singleLayout?.flexGrow, flexShrink: 1 as const, maxHeight: singleLayout?.maxHeight } : undefined;
@@ -381,27 +386,32 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
   };
 
   const imageCount = draftImageCount(blocks);
+  // Normalization keeps an empty slot before a leading image. It is an editor
+  // boundary, not an authored paragraph: don't display an undeletable prompt.
+  // Keep the trailing input so text can still be added below the image.
+  const leadingImageSlot = blocks[0]?.type === 'text' && blocks[0].text === '' && !blocks[0].list && blocks[1]?.type === 'image';
   const imageNumbers = new Map(blocks.filter((block) => block.type === 'image').map((block, index) => [block.key, index + 1]));
-  return <ScrollView ref={scroll} style={richLayout ? blockContainerStyle : singleContainer} scrollEnabled={richLayout} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="none" onLayout={resetEmptyScroll} onContentSizeChange={resetEmptyScroll}>
-    <View style={[styles.blocks, !richLayout && styles.singleBlocks]} onLayout={({ nativeEvent }) => { const next = Math.floor(nativeEvent.layout.width); setWidth((current) => current === next ? current : next); }}>
+  return <ScrollView ref={scroll} style={richLayout ? blockContainerStyle : singleContainer} scrollEnabled={richLayout} contentContainerStyle={[styles.scrollContent, fillPlainViewport && styles.fillViewport, contentContainerStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="none" onLayout={resetEmptyScroll} onContentSizeChange={resetEmptyScroll}>
+    <View style={[styles.blocks, !richLayout && styles.singleBlocks, fillPlainViewport && styles.fillViewport]} onLayout={({ nativeEvent }) => { const next = Math.floor(nativeEvent.layout.width); setWidth((current) => current === next ? current : next); }}>
     {blocks.map((block, blockIndex) => {
+      if (blockIndex === 0 && leadingImageSlot) return null;
       // The final native input fills the unused editor space, so a tap anywhere
       // below the last image places the cursor after it, without storing blank lines.
       if (block.type === 'text') {
         const previous = blocks[blockIndex - 1];
         const consecutiveTasks = block.list?.kind === 'checklist' && previous?.type === 'text' && previous.list?.kind === 'checklist';
-        return <View key={block.key} style={[block.list && styles.listRow, block.list && { flexDirection: firstStrongDirection(block.text, languageDirection(locale)) === 'rtl' ? 'row-reverse' : 'row' }, block.key === lastTextKey && styles.trailingText, { marginTop: richLayout && blockIndex ? (consecutiveTasks ? spacing.xxs : spacing.xs) : 0 }]} onLayout={({ nativeEvent }) => positions.current.set(block.key, nativeEvent.layout.y)}>
+        return <View key={block.key} style={[block.list && styles.listRow, block.list && { flexDirection: firstStrongDirection(block.text, languageDirection(locale)) === 'rtl' ? 'row-reverse' : 'row' }, block.key === lastTextKey && styles.trailingText, fillPlainViewport && styles.fillViewport, { marginTop: richLayout && blockIndex ? (consecutiveTasks ? spacing.xxs : spacing.xs) : 0 }]} onLayout={({ nativeEvent }) => positions.current.set(block.key, nativeEvent.layout.y)}>
           {block.list?.kind === 'checklist'
             ? <NoteCheckbox checked={block.list.checked} label={block.text} disabled={!editable} onPress={() => commit(toggleNoteChecklist(liveBlocks.current, block.key))} />
             : block.list ? <AppText accessible={false} style={[blockInputStyle, styles.listMarker]}>{markers[blockIndex]}</AppText> : null}
-          <View style={styles.listBody}>{textInput(block, !richLayout)}</View>
+          <View style={[styles.listBody, fillPlainViewport && styles.fillViewport]}>{textInput(block, !richLayout)}</View>
         </View>;
       }
       const label = imageCount > 1 ? tr('noteblockseditor.imagePosition', { position: imageNumbers.get(block.key), total: imageCount }) : tr("sharenote.image");
       const available = width;
       const ratio = block.image.width && block.image.height ? block.image.width / block.image.height : 4 / 3;
       const height = Math.round(Math.min(maxImageHeight, block.image.height || Infinity, available / ratio));
-      return <View key={block.key} style={[styles.imageBlock, blockIndex > 0 && { marginTop: spacing.xs }]}>
+      return <View key={block.key} style={[styles.imageBlock, blockIndex > (leadingImageSlot ? 1 : 0) && { marginTop: spacing.xs }]}>
         {available ? <NoteImage
           key={block.image.storagePath}
           image={block.image}
@@ -511,6 +521,7 @@ const styles = StyleSheet.create({
   toolbar: { flexDirection: 'row', alignItems: 'center' },
   formattingAction: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
   scrollContent: { flexGrow: 1 },
+  fillViewport: { flex: 1, minHeight: 0 },
   blocks: { flexGrow: 1, paddingBottom: spacing.xs },
   singleBlocks: { paddingBottom: 0 },
   trailingText: { flexGrow: 1 },

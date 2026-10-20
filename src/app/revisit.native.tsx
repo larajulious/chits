@@ -1,4 +1,5 @@
 import { countLabel, tr } from '@/localization/runtime';
+import { FocusRevisit } from '@/features/focus/focus-revisit';
 import { useLocale } from '@/localization/provider';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, ScrollView, StyleSheet, Switch, View, useWindowDimensions } from 'react-native';
@@ -37,7 +38,6 @@ function RevisitExperience() {
   const { tokens, styleTokens, styleColors } = useTheme();
   const { width, fontScale } = useWindowDimensions();
   const columns = width < 350 || fontScale >= 1.3 ? 1 : 2;
-  const tileWidth = (width - spacing.md * 2 - (columns - 1) * 12) / columns;
   const { confirm, actionSheet } = useAppDialog();
   const params = useLocalSearchParams<{ note?: string; a?: string; b?: string; pick?: string; browse?: string }>();
   const noteKey = parseNoteKey(params.note), aKey = parseNoteKey(params.a), bKey = parseNoteKey(params.b), pickKey = parseNoteKey(params.pick);
@@ -58,6 +58,7 @@ function RevisitExperience() {
   }, [deferredSearch, params.browse, pickKey, report]);
   const mounted = useRef(true);
   const operationLock = useRef(false);
+  const reviewScroll = useRef<ScrollView>(null);
   const sessionRef = useRef<{ reviews: Set<string>; connections: Set<string> } | null>(null);
   const [session, setSession] = useState<{ reviews: Set<string>; connections: Set<string> } | null>(null);
   const request = useRef(0);
@@ -148,16 +149,13 @@ function RevisitExperience() {
   const connectionCard = (connection: ConnectionSuggestion) => (
     <Paper note={connection.a} id={pairKey(connection.a.key, connection.b.key)}>
       <CardBody>
-        <CardTitle>{connection.a.title}</CardTitle>
-        <Caption>{connection.a.boardName ?? tr("index.unorganized")}</Caption>
-        <View style={styles.connectionDivider}><Icon name="link-outline" size={15} color={tokens.textMuted} /><View style={[styles.divider, { backgroundColor: tokens.borderSubtle }]} /></View>
-        <CardTitle>{connection.b.title}</CardTitle>
-        <Caption>{connection.b.boardName ?? tr("index.unorganized")}</Caption>
-        <Caption>{tr("revisit.sharedTerms")}{' '}{connection.terms.join(', ')}</Caption>
+        <View style={styles.summaryRow}><Icon name="link-outline" size={18} color={tokens.textMuted} /><View style={[styles.flex, styles.connectionTitles]}><CardTitle numberOfLines={1}>{connection.a.title}</CardTitle><CardTitle numberOfLines={1}>{connection.b.title}</CardTitle></View></View>
+        <Caption numberOfLines={1}>{[...new Set([connection.a.boardName ?? tr('index.unorganized'), connection.b.boardName ?? tr('index.unorganized')])].join(' · ')}</Caption>
+        <Caption numberOfLines={2}>{tr("revisit.sharedTerms")}{' '}{connection.terms.join(', ')}</Caption>
       </CardBody>
       <CardActions>
         <Action primary disabled={busy} onPress={() => void run(() => repository.link(connection.a.key, connection.b.key))}>{tr("revisit.linkNotes")}</Action>
-        <Action disabled={busy} onPress={() => compare(connection.a.key, connection.b.key)}>{tr("revisit.compare")}</Action>
+        <Action quiet disabled={busy} onPress={() => compare(connection.a.key, connection.b.key)}>{tr("revisit.compare")}</Action>
         <More disabled={busy} label={tr("revisit.connectionActions")} onPress={() => actionSheet({ title: tr("revisit.possibleConnection"), options: [{ label: tr("revisit.notRelated"), icon: 'close-outline', onPress: () => { void run(() => repository.reject(connection.a.key, connection.b.key)); } }] })} />
       </CardActions>
     </Paper>
@@ -196,11 +194,21 @@ function RevisitExperience() {
   }
   const visibleReviews = report.reviews.filter((item) => session?.reviews.has(item.note.key));
   const visibleConnections = report.connections.filter((item) => session?.connections.has(pairKey(item.a.key, item.b.key)));
+  const pendingSuggestions = report.reviews.length - visibleReviews.length + report.connections.length - visibleConnections.length;
+  const startNewReview = () => {
+    const nextSession = {
+      reviews: new Set(report.reviews.map((item) => item.note.key)),
+      connections: new Set(report.connections.map((item) => pairKey(item.a.key, item.b.key))),
+    };
+    sessionRef.current = nextSession;
+    setSession(nextSession);
+    reviewScroll.current?.scrollTo({ y: 0 });
+  };
   const noteLinks = note ? links.filter((link) => link.note_a === note.key || link.note_b === note.key) : [];
   const focusedConnections = note ? noteConnections.filter((pair) => pair.a.key === note.key || pair.b.key === note.key) : [];
   const sharedTerms = a && b ? keywords(`${a.title}\n${a.text}`).filter((term) => keywords(`${b.title}\n${b.text}`).includes(term)).slice(0, 5) : [];
   return <Screen><ReviewHeader title={headerTitle} subtitle={note ? countLabel('link', noteLinks.length) : a && b ? undefined : countLabel('note', visibleReviews.length)} />
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScrollView ref={reviewScroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {errorBanner}
       {a && b ? <>
         <AppText variant="paragraph" style={[styles.helper, { color: tokens.textSecondary }]}>{tr("revisit.compareTheDatesAndWordsANewerUpdate")}</AppText>
@@ -215,52 +223,51 @@ function RevisitExperience() {
           <Action primary={!connected(a.key, b.key)} disabled={busy} onPress={() => void run(() => connected(a.key, b.key) ? repository.unlink(a.key, b.key) : repository.link(a.key, b.key))}>{connected(a.key, b.key) ? tr("revisit.removeConnection") : tr("revisit.linkNotes")}</Action>
         </Surface>
       </> : note ? <>
-        <Paper note={note}><NoteContent note={note} dates /><CardFooter note={note}><Action disabled={busy} onPress={() => openOriginal(note)}>{tr("revisit.openOriginal")}</Action></CardFooter></Paper>
+        <Paper note={note}><NoteContent note={note} titleFirst previewLines={3} /><CardFooter note={note}><Action disabled={busy} onPress={() => openOriginal(note)}>{tr("revisit.openOriginal")}</Action></CardFooter></Paper>
         <View style={styles.section}>
-          <Heading count={noteLinks.length}>{tr("revisit.connectedThoughts")}</Heading>
-          {noteLinks.length ? <View style={styles.grid}>
+          <View style={styles.connectedHeading}><View style={styles.flex}><Heading count={noteLinks.length}>{tr("connectednotes.connectedNotes")}</Heading></View><Action primary disabled={busy} onPress={() => router.push({ pathname: '/revisit', params: { pick: note.key } })}>{tr("revisit.linkANote")}</Action></View>
+          {noteLinks.length ? <View style={styles.connectedList}>
             {noteLinks.slice(0, connectedLimit).map((link) => {
               const target = byKey.get(link.note_a === note.key ? link.note_b : link.note_a);
-              return <View key={pairKey(link.note_a, link.note_b)} style={{ width: tileWidth }}><Paper note={target} id={pairKey(link.note_a, link.note_b)}>
-                {target ? <NoteContent note={target} previewLines={3} /> : <CardBody><CardTitle>{tr("revisit.archivedOrUnavailableNote")}</CardTitle></CardBody>}
-                <CardBody><Caption>{link.relationship_type === 'follow-up' ? tr("revisit.followUp") : link.relationship_type === 'reference' ? tr("revisit.reference") : tr("revisit.related")}</Caption></CardBody>
-                <CardActions>{target ? <Action disabled={busy} onPress={() => showNote(target.key, true)}>{tr("attachments.open")}</Action> : null}
+              return <Paper key={pairKey(link.note_a, link.note_b)} note={target} id={pairKey(link.note_a, link.note_b)}>
+                {target ? <NoteContent note={target} titleFirst previewLines={2} /> : <CardBody><CardTitle>{tr("revisit.archivedOrUnavailableNote")}</CardTitle></CardBody>}
+                <View style={styles.connectedFooter}><View style={styles.flex}><Caption>{link.relationship_type === 'follow-up' ? tr("revisit.followUp") : link.relationship_type === 'reference' ? tr("revisit.reference") : tr("revisit.related")}</Caption>{target ? <Caption numberOfLines={1}>{target.boardName ?? tr('index.unorganized')}</Caption> : null}</View>
+                  {target ? <Action disabled={busy} onPress={() => showNote(target.key, true)}>{tr("attachments.open")}</Action> : null}
                   <More disabled={busy} label={tr("revisit.connectionActionsForValue", { value1: target?.title ?? tr("revisit.unavailableNote") })} onPress={() => actionSheet({ title: target?.title ?? tr("revisit.connection"), options: [
                     ...(target ? [{ label: tr("revisit.compareNotes"), icon: 'documents-outline' as const, onPress: () => compare(note.key, target.key) }] : []),
                     { label: tr("revisit.changeType"), icon: 'link-outline', onPress: () => actionSheet({ title: tr("revisit.connectionType"), options: (['related', 'follow-up', 'reference'] as const).map((type) => ({ label: type === 'follow-up' ? 'Follow-up' : type === 'reference' ? tr("revisit.reference") : tr("revisit.related"), onPress: () => { void run(() => repository.link(link.note_a, link.note_b, type)); } })) }) },
                     { label: tr("revisit.removeLink"), icon: 'unlink-outline', onPress: () => { void run(() => repository.unlink(link.note_a, link.note_b)); } },
-                  ] })} /></CardActions>
-              </Paper></View>;
+                  ] })} /></View>
+              </Paper>;
             })}
           </View> : <InlineEmpty icon="link-outline">{tr("revisit.noConnectedNotesYet")}</InlineEmpty>}
           {noteLinks.length > connectedLimit ? <Action disabled={busy} onPress={() => setConnectedLimit((limit) => limit + 20)}>{tr("revisit.showMoreConnections")}</Action> : null}
-          <View style={styles.sectionActions}><Action primary disabled={busy} onPress={() => router.push({ pathname: '/revisit', params: { pick: note.key } })}>{tr("revisit.linkANote")}</Action></View>
         </View>
         {focusedConnections.length ? <View style={styles.section}><Heading count={focusedConnections.length}>{tr("revisit.possibleConnections")}</Heading>{focusedConnections.map((connection) => <View key={pairKey(connection.a.key, connection.b.key)} style={styles.connectionSpace}>{connectionCard(connection)}</View>)}</View> : null}
         <Action quiet disabled={busy} onPress={() => void run(() => repository.review(note.key, note.excluded ? 'include' : 'exclude'))}>{note.excluded ? tr("revisit.includeInSuggestions") : tr("revisit.excludeFromSuggestions")}</Action>
       </> : <>
-        <Surface fill={styleColors.controlFill} border={tokens.borderSubtle} radius={styleTokens.radius.control} outline={StyleSheet.hairlineWidth} edge={false} style={styles.panel}>
-          <View style={styles.preference}><View style={styles.flex}><AppText weight="600" style={styles.label}>{tr("revisit.revisitSuggestions")}</AppText><AppText style={[styles.helper, { color: tokens.textSecondary }]}>{tr("revisit.aFreshLookAtYourSavedThoughts")}</AppText></View>
+        <View style={[styles.reviewPreferences, { borderBottomColor: tokens.borderSubtle }]}>
+          <View style={styles.preference}><View style={styles.flex}><AppText weight="600" style={styles.label}>{tr("revisit.revisitSuggestions")}</AppText></View>
             <Switch hitSlop={8} accessibilityLabel={tr("revisit.enableRevisitSuggestions")} value={report.preferences.enabled} disabled={busy} onValueChange={(enabled) => { sessionRef.current = null; void run(() => repository.setPreferences({ ...report.preferences, enabled })); }} trackColor={{ true: tokens.accent, false: tokens.borderSubtle }} thumbColor={tokens.surface} />
           </View>
-          <View style={[styles.preference, styles.preferenceBottom, { borderTopColor: tokens.borderSubtle }]}><AppText style={[styles.helper, { color: tokens.textSecondary }]}>{tr("revisit.minimumInactivity")}</AppText><Action quiet disabled={busy} onPress={() => actionSheet({ title: tr("revisit.minimumInactivity"), options: [7, 14, 30].map((days) => ({ label: tr("revisit.valueDaysValue", { value1: days, value2: report.preferences.inactivityDays === days ? ' · ' + tr('customheadersettings.selected') : '' }), onPress: () => { sessionRef.current = null; void run(() => repository.setPreferences({ ...report.preferences, inactivityDays: days })); } })) })}>{report.preferences.inactivityDays} {' '}{tr("revisit.days")}</Action></View>
-        </Surface>
+          <View style={styles.preference}><AppText style={[styles.helper, { color: tokens.textSecondary }]}>{tr("revisit.minimumInactivity")}</AppText><Action quiet disabled={busy} onPress={() => actionSheet({ title: tr("revisit.minimumInactivity"), options: [7, 14, 30].map((days) => ({ label: tr("revisit.valueDaysValue", { value1: days, value2: report.preferences.inactivityDays === days ? ' · ' + tr('customheadersettings.selected') : '' }), onPress: () => { sessionRef.current = null; void run(() => repository.setPreferences({ ...report.preferences, inactivityDays: days })); } })) })}>{report.preferences.inactivityDays} {' '}{tr("revisit.days")}</Action></View>
+        </View>
+        <View style={styles.reviewActions}><Action primary disabled={busy} onPress={() => router.push({ pathname: '/revisit', params: { browse: 'all' } })}>{tr("revisit.browseNotes")}</Action>{report.preferences.enabled && pendingSuggestions > 0 ? <Action disabled={busy || refreshing} onPress={startNewReview}>{tr("revisit.newReview")} · {pendingSuggestions}</Action> : null}</View>
+        <FocusRevisit />
         {report.preferences.enabled ? <>
           {(['worth', 'progress'] as const).map((kind) => {
             const suggestions = visibleReviews.filter((item) => item.kind === kind);
             return <View key={kind} style={styles.section}><Heading count={suggestions.length}>{kind === 'worth' ? tr("revisit.worthRevisiting") : tr("revisit.stillInProgress")}</Heading>
-              {suggestions.length ? <View style={styles.grid}>{suggestions.map((item) => <View key={item.note.key} style={{ width: tileWidth }}><Paper note={item.note}>
-                <NoteContent note={item.note} previewLines={3} />
-                <CardBody><Caption>{item.kind === 'progress' ? item.reason.split(' · ').slice(1).join(' · ') : item.reason}</Caption></CardBody>
-                <CardActions><Action primary disabled={busy} label={`${kind === 'progress' ? tr("revisit.continue") : tr("revisit.revisit")} ${item.note.title}`} onPress={() => openOriginal(item.note, true)}>{kind === 'progress' ? tr("revisit.continue") : tr("revisit.revisit")}</Action><More disabled={busy} label={tr("revisit.reviewActionsForValue", { value1: item.note.title })} onPress={() => noteActions(item)} /></CardActions>
-              </Paper></View>)}</View> : <InlineEmpty icon={kind === 'worth' ? 'refresh-outline' : 'checkbox-outline'}>{kind === 'worth' ? tr("revisit.nothingNeedsARevisitRightNow") : tr("revisit.noStalledChecklistsRightNow")}</InlineEmpty>}
+              {suggestions.length ? <View style={styles.connectedList}>{suggestions.map((item) => <Paper key={item.note.key} note={item.note}>
+                <NoteContent note={item.note} titleFirst previewLines={2} />
+                <View style={styles.connectedFooter}><View style={styles.flex}><Caption>{item.kind === 'progress' ? item.reason.split(' · ').slice(1).join(' · ') : item.reason}</Caption></View><Action primary disabled={busy} label={`${kind === 'progress' ? tr("revisit.continue") : tr("revisit.revisit")} ${item.note.title}`} onPress={() => openOriginal(item.note, true)}>{kind === 'progress' ? tr("revisit.continue") : tr("revisit.revisit")}</Action><More disabled={busy} label={tr("revisit.reviewActionsForValue", { value1: item.note.title })} onPress={() => noteActions(item)} /></View>
+              </Paper>)}</View> : <InlineEmpty compact icon={kind === 'worth' ? 'refresh-outline' : 'checkbox-outline'}>{kind === 'worth' ? tr("revisit.nothingNeedsARevisitRightNow") : tr("revisit.noStalledChecklistsRightNow")}</InlineEmpty>}
             </View>;
           })}
           <View style={styles.section}><Heading count={visibleConnections.length}>{tr("revisit.possibleConnections")}</Heading>
-            {visibleConnections.length ? visibleConnections.map((connection) => <View key={pairKey(connection.a.key, connection.b.key)} style={styles.connectionSpace}>{connectionCard(connection)}</View>) : <InlineEmpty icon="link-outline">{tr("revisit.noStrongConnectionsToSuggestRightNow")}</InlineEmpty>}
+            {visibleConnections.length ? visibleConnections.map((connection) => <View key={pairKey(connection.a.key, connection.b.key)} style={styles.connectionSpace}>{connectionCard(connection)}</View>) : <InlineEmpty compact icon="link-outline">{tr("revisit.noStrongConnectionsToSuggestRightNow")}</InlineEmpty>}
           </View>
         </> : <EmptyState title={tr("revisit.suggestionsAreOff")} description={tr("revisit.yourNotesAndExistingConnectionsAreKeptEnable")} style={styles.disabledEmpty} />}
-        <View style={styles.sectionActions}><Action primary disabled={busy} onPress={() => router.push({ pathname: '/revisit', params: { browse: 'all' } })}>{tr("revisit.browseNotes")}</Action><Action disabled={busy || refreshing} onPress={() => { sessionRef.current = null; void load(); }}>{tr("revisit.newReview")}</Action></View>
         {report.notes.some((item) => item.excluded) ? <Action quiet disabled={busy} onPress={() => router.push({ pathname: '/revisit', params: { browse: 'excluded' } })}>{tr("revisit.manageExcludedNotes")}</Action> : null}
       </>}
     </ScrollView>
@@ -275,6 +282,9 @@ const styles = StyleSheet.create({
   loadingContent: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.md, gap: 12 },
   content: { padding: spacing.md, gap: 12, paddingBottom: 36 },
   section: { gap: 4 }, grid: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 12 },
+  connectedHeading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs },
+  connectedList: { gap: spacing.sm },
+  connectedFooter: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingLeft: 14, paddingRight: 6, paddingTop: spacing.xs, paddingBottom: spacing.xs },
   browseContent: { paddingHorizontal: spacing.md - 6, paddingTop: spacing.md, paddingBottom: 36 }, browseCell: { paddingHorizontal: 6, paddingBottom: 12 }, searchArea: { paddingHorizontal: spacing.md, marginBottom: spacing.xs },
   listEmpty: { minHeight: 240, width: '100%' }, disabledEmpty: { minHeight: 160, paddingVertical: 16 },
   panel: { paddingHorizontal: 12, paddingVertical: 10, gap: 10 },
@@ -282,6 +292,9 @@ const styles = StyleSheet.create({
   preference: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   preferenceBottom: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 4 }, flex: { flex: 1, minWidth: 0 },
   sectionActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  reviewActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  reviewPreferences: { paddingBottom: 4, borderBottomWidth: StyleSheet.hairlineWidth },
+  connectionTitles: { gap: 4 },
   connectionSpace: { marginBottom: 8 }, connectionDivider: { flexDirection: 'row', alignItems: 'center', gap: 8 }, divider: { height: StyleSheet.hairlineWidth, flex: 1 },
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 8 }, tileArrow: { minWidth: 32, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   error: { borderWidth: StyleSheet.hairlineWidth, padding: 12, borderRadius: 12 },

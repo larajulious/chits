@@ -1,4 +1,4 @@
-import { tr } from '@/localization/runtime';
+import { countLabel, tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { memo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -145,6 +145,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
   const content = noteContent(item, Boolean(media));
   const checklist = item.hidden ? null : item.checklistSummary;
   const showFileBadge = item.fileCount > 0 && content.kind !== 'file' && !item.hidden;
+  const connectionCount = item.hidden ? 0 : item.connectionCount ?? 0;
 
   const paper = paperColors(accent, dark, tokens);
   const cardFill = tinted ? note.cardTint : paper.paper;
@@ -166,7 +167,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
       border={frame}
       variant="collection"
       accessibilityRole="button"
-      accessibilityLabel={accessibleLabel}
+      accessibilityLabel={connectionCount ? `${accessibleLabel} ${tr('connectednotes.connectedNotes')}, ${countLabel('link', connectionCount)}.` : accessibleLabel}
       accessibilityHint={tr("cardlistrow.opensNote")}
       onPress={onPress}
       style={styles.card}
@@ -243,6 +244,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore }: 
             <AppText style={[styles.date, { color: theme.textMuted }]}>{formatCardDate(item.updatedAt)}</AppText>
             {item.pinned ? <Icon name="pin" size={10} color={theme.textMuted} /> : null}
             {showFileBadge ? <View style={styles.fileBadge}><Icon name="attach" size={11} color={theme.textMuted} /><AppText style={[styles.fileBadgeText, { color: theme.textMuted }]}>{item.fileCount}</AppText></View> : null}
+            {connectionCount > 0 ? <View style={styles.fileBadge}><Icon name="link-outline" size={13} color={theme.textSecondary} /><AppText style={[styles.fileBadgeText, { color: theme.textSecondary }]}>{connectionCount}</AppText></View> : null}
           </View>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel={tr("cardlistrow.cardActions")} onPress={(event) => { event.stopPropagation(); onMore(); }} style={({ pressed }) => [styles.more, pressed && { opacity: 0.5 }]}>

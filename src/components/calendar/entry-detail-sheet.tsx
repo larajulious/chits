@@ -101,7 +101,7 @@ export function EntryDetailSheet({ item, visible, now, onClose, onAction }: Prop
                 {item.attachmentCount > 0 ? <Fact icon="attach-outline" text={countLabel('attachment', item.attachmentCount)} /> : null}
               </View>
 
-              {/* The same ruled paper Card Details shows the note on, in its board's tint. */}
+              {/* The same theme-aware neutral surface used in Card Details. */}
               <NotePaper accent={item.boardAccent} minHeight={item.hasTitle ? 120 : 150} style={styles.note}>
                 {!loaded ? <ActivityIndicator accessibilityLabel={tr("entrydetailsheet.loadingNote")} color={theme.textMuted} /> : item.searchText === '' && item.title === "Hidden note"
                   ? <AppText style={[styles.muted, { color: theme.textSecondary }]}>{tr("entrydetailsheet.thisNoteIsHiddenInChat")}</AppText>
@@ -192,9 +192,9 @@ const styles = StyleSheet.create({
   fact: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   factText: { flex: 1, fontSize: 14, lineHeight: 20 },
   note: { gap: spacing.sm },
-  // Card Details' text on paper: sits on the ruled lines.
+  // Keep the existing reader typography on the shared neutral surface.
   body: { fontSize: 16, lineHeight: PAPER_LINE },
-  // The note when it has no title: it's what the sheet is about, so it reads first (still on the lines).
+  // The note when it has no title reads first, with stronger emphasis.
   bodyLead: { fontSize: 17, fontWeight: '700' },
   muted: { fontSize: 14 },
   actions: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm, gap: spacing.xs },

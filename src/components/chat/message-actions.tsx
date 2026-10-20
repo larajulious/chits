@@ -38,6 +38,8 @@ type Props = {
   onReminder?: (message: Message) => void;
   onDownload: (message: Message) => void;
   onShareNote: (message: Message) => void;
+  onSaveTemplate?: (message: Message) => void;
+  onFocusNote?: (message: Message) => void;
   onReveal: (message: Message) => void;
   onHideAgain: (message: Message) => void;
   onHideContent: (message: Message) => void;
@@ -58,7 +60,7 @@ function ActionRow({ icon, label, onPress, destructive = false }: { icon: Compon
   </Pressable>;
 }
 
-export function MessageActions({ message: current, temporarilyRevealed, onDismiss, onClosed, onCopy, onEdit, onPin, spaceAction, onSpaceAction, onAddToBoard, onReminder, onDownload, onShareNote, onReveal, onHideAgain, onHideContent, onShowContent, onArchive, onDelete }: Props) {
+export function MessageActions({ message: current, temporarilyRevealed, onDismiss, onClosed, onCopy, onEdit, onPin, spaceAction, onSpaceAction, onAddToBoard, onReminder, onDownload, onShareNote, onSaveTemplate, onFocusNote, onReveal, onHideAgain, onHideContent, onShowContent, onArchive, onDelete }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -95,6 +97,8 @@ export function MessageActions({ message: current, temporarilyRevealed, onDismis
             {!covered && copyable ? <ActionRow icon="copy-outline" label={tr("messageactions.copyChat")} onPress={() => onCopy(message)} /> : null}
             {!covered ? <ActionRow icon="pencil-outline" label={hasAttachment ? tr("messageactions.editDescription") : tr("id.edit")} onPress={onEdit} /> : null}
             {!covered && hasAttachment ? <ActionRow icon="download-outline" label={exportActionLabel(message.attachments[0])} onPress={() => onDownload(message)} /> : null}
+            {!covered && onSaveTemplate && (message.text || message.content?.some((block) => block.type === 'text' && block.list)) ? <ActionRow icon="copy-outline" label={tr('templates.saveAs')} onPress={() => onSaveTemplate(message)} /> : null}
+            {!covered && onFocusNote ? <ActionRow icon="timer-outline" label={tr('focus.action')} onPress={() => onFocusNote(message)} /> : null}
             {!covered ? <ActionRow icon="images-outline" label={tr("index.shareNote")} onPress={() => onShareNote(message)} /> : null}
             <ActionRow icon={message.organization ? 'grid' : 'grid-outline'} label={message.organization ? tr("messageactions.goToValue", { value1: message.organization.boardName }) : tr("chat.addToBoard")} onPress={onAddToBoard} />
             {onReminder ? <ActionRow icon="notifications-outline" label={tr("id.reminder")} onPress={() => onReminder(message)} /> : null}

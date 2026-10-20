@@ -1,3 +1,4 @@
+import { tr } from '@/localization/runtime';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { clearChatBackgroundForPaths, unreferencedAttachmentPaths } from './chat-background';
 import { isStoredAttachmentPath } from '../services/attachment-path';
@@ -351,14 +352,19 @@ export function createMessageRepository(database: SQLiteDatabase) {
     // out of `blocks` was removed by the user — its row goes, and its file too
     // once nothing else refers to it (returned for the caller to delete after
     // the write commits). Video, audio and files on the note are never touched.
-    async updateContent(id: string, blocks: NoteContentInput): Promise<{ updatedAt: number; removablePaths: string[] }> {
+    async updateContent(id: string, blocks: NoteContentInput, expected?: Pick<Message, 'updatedAt' | 'text' | 'content' | 'attachments'>): Promise<{ updatedAt: number; removablePaths: string[] }> {
       const now = Date.now();
       const removablePaths: string[] = [];
       let attachmentsChanged = false;
       await database.withExclusiveTransactionAsync(async (transaction) => {
         const row = await transaction.getFirstAsync<MessageRow>('SELECT * FROM messages WHERE id = ? AND deleted_at IS NULL', id);
         if (!row) throw new Error('That thought is no longer available.');
+        if (expected && (row.archived_at !== null || row.is_hidden_content || row.updated_at !== expected.updatedAt || row.text !== expected.text || serializeNoteContent(parseNoteContent(row.content_json) ?? []) !== serializeNoteContent(expected.content ?? []))) throw new Error(tr('focus.conflict'));
         const attachments = (await transaction.getAllAsync<AttachmentRow>('SELECT * FROM attachments WHERE message_id = ? ORDER BY created_at ASC', id)).map(attachmentFromRow);
+        if (expected) {
+          const identity = (items: AttachmentLike[]) => JSON.stringify(items.map((item) => [item.id, item.type, item.storagePath]).sort((a, b) => a[0].localeCompare(b[0])));
+          if (identity(attachments) !== identity(expected.attachments)) throw new Error(tr('focus.conflict'));
+        }
         const owned = new Map(attachments.map((attachment) => [attachment.id, attachment]));
         // Only this note's own photos can be kept; anything else is dropped rather than linked.
         if (blocks.some((block) => block.type === 'image' && block.attachmentId && owned.get(block.attachmentId)?.type !== 'photo')) throw new Error('An image is no longer available. Reopen the note before saving.');
@@ -834,7 +840,7 @@ export function createBoardRepository(database: SQLiteDatabase) {
       const attachment = input.attachment ?? null;
       const blocks = input.blocks ?? [{ type: 'text', text: trimmed }];
       const words = noteBlocksText(blocks) || null;
-      if (!words && !attachment && !blocks.some((block) => block.type === 'image')) throw new Error('Write something or attach a file before adding a note.');
+      if (!words && !attachment && !blocks.some((block) => block.type === 'image') && !noteHasChecklist(blocks)) throw new Error('Write something or attach a file before adding a note.');
       const now = Date.now();
       const messageId = newId();
       const cardId = newId();
@@ -1054,6 +1060,18 @@ export function createBoardRepository(database: SQLiteDatabase) {
       const grouped = new Map<string, Attachment[]>();
       for (const row of attachmentRows) grouped.set(row.message_id, [...(grouped.get(row.message_id) ?? []), attachmentFromRow(row)]);
       return messages.map((message) => ({ ...message, attachments: grouped.get(message.id) ?? [] }));
+    },
+    async addNoteToCard(cardId: string, blocks: NoteContentInput) {
+      const id = newId(), now = Date.now();
+      await database.withExclusiveTransactionAsync(async (tx) => {
+        const card = await tx.getFirstAsync('SELECT c.id FROM cards c JOIN boards b ON b.id = c.board_id WHERE c.id = ? AND c.archived_at IS NULL AND b.archived_at IS NULL', cardId);
+        if (!card) throw new Error(tr('focus.unavailable'));
+        await insertNoteMessage(tx, id, { blocks, attachment: null }, now);
+        const position = await tx.getFirstAsync<{ value: number }>('SELECT coalesce(max(position),-1) + 1 AS value FROM card_messages WHERE card_id = ?', cardId);
+        await tx.runAsync('INSERT INTO card_messages(card_id,message_id,position) VALUES (?,?,?)', cardId, id, position?.value ?? 0);
+        await tx.runAsync('UPDATE cards SET updated_at = ? WHERE id = ?', now, cardId);
+      });
+      notifyNoteChanged(id); return id;
     },
     async removeMessageFromCard(cardId: string, messageId: string) { const result = await database.runAsync('DELETE FROM card_messages WHERE card_id = ? AND message_id = ?', cardId, messageId); if (result.changes !== 1) throw new Error('That thought is no longer linked to this card.'); },
     async addMessagesToCard(cardId: string, messageIds: string[]) {
@@ -1303,6 +1321,21 @@ export function createSpaceRepository(database: SQLiteDatabase) {
   };
   return {
     stick,
+    // Creation and destination placement commit together; a full Space writes nothing.
+    async createNote(spaceId: SpaceId, input: { blocks: NoteContentInput; attachment?: StagedAttachment | null }) {
+      const messageId = newId();
+      await database.withExclusiveTransactionAsync(async (tx) => {
+        const taken = await tx.getAllAsync<SpacePoint>(`SELECT p.x, p.y ${LIVE_PLACEMENTS_SQL} AND p.space_id = ?`, spaceId);
+        if (taken.length >= SPACE_CAPACITY) throw new Error(tr('spacenoteaction.thisSpaceIsFullRemoveANoteTo'));
+        const now = Date.now();
+        await insertNoteMessage(tx, messageId, { blocks: input.blocks, attachment: input.attachment ?? null }, now);
+        const { x, y } = autoPlace(taken, Math.random);
+        const z = ((await tx.getFirstAsync<{ z: number | null }>('SELECT MAX(z_index) AS z FROM space_placements WHERE space_id = ?', spaceId))?.z ?? 0) + 1;
+        await tx.runAsync('INSERT INTO space_placements (id, message_id, space_id, x, y, rotation, color, z_index, pinned_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', newId(), messageId, spaceId, x, y, randomRotation(Math.random), DEFAULT_STICKY_COLOR, z, now, now);
+      });
+      notifyAttachmentsChanged(); notifySpacesChanged();
+      return messageId;
+    },
     /** The space Spaces opens on; null until the user has picked one. */
     async getSelectedSpace() {
       const row = await database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', SELECTED_SPACE_SETTING_KEY);

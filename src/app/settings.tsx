@@ -108,6 +108,10 @@ export default function SettingsScreen() {
       <Section title={tr('settings.language')}>
         <SettingsRow label={tr('settings.language')} value={preference === 'system' ? tr('settings.systemDefault') : LANGUAGE_NAMES[preference]} onPress={() => setSheet('language')} />
       </Section>
+      <Section title={tr('focus.title')}>
+        <SettingsRow label={tr('focus.settings')} onPress={() => router.push('/focus-settings')} />
+        <SettingsRow label={tr('focus.history')} onPress={() => router.push('/focus-history')} />
+      </Section>
       <Section title="NOTESPACE">
         <SettingsRow label={tr("settings.editNotespaceName")} description={tr("settings.changeTheNameShownAcrossYourNotespace")} onPress={() => setEditNameOpen(true)} />
       </Section>

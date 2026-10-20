@@ -18,7 +18,7 @@ import { useSpaceStyles, useSpaceUI, type SpaceUI } from '@/components/spaces/in
  * yet, newest first, searchable. Hidden notes are listed as Hidden Chit and
  * never found by their words.
  */
-export function NotePicker({ visible, spaceName, onClose, onPick }: { visible: boolean; spaceName: string; onClose: () => void; onPick: (candidate: SpaceCandidate) => void }) {
+export function NotePicker({ visible, spaceName, onClose, onPick, onCreate, onClosed }: { visible: boolean; spaceName: string; onClose: () => void; onPick: (candidate: SpaceCandidate) => void; onCreate?: () => void; onClosed?: () => void }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -39,7 +39,7 @@ export function NotePicker({ visible, spaceName, onClose, onPick }: { visible: b
   const close = () => { setQuery(''); setItems(null); onClose(); };
   const pick = (candidate: SpaceCandidate) => { setQuery(''); setItems(null); onPick(candidate); };
 
-  return <Modal visible={visible} animationType="slide" presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : undefined} onRequestClose={close}>
+  return <Modal visible={visible} animationType="slide" presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : undefined} onRequestClose={close} onDismiss={onClosed}>
     <SafeAreaView edges={Platform.OS === 'ios' ? ['bottom'] : ['top', 'bottom']} style={styles.screen}>
       <View style={styles.header}>
         <Text accessibilityRole="header" style={[fonts.uiHeavy, styles.title]}>{tr("notepicker.stickOnYour")}{' '}{spaceName}</Text>
@@ -50,6 +50,7 @@ export function NotePicker({ visible, spaceName, onClose, onPick }: { visible: b
         <TextInput accessibilityLabel={tr("calendarnotepicker.searchNotes")} value={query} onChangeText={setQuery} placeholder={tr("notepicker.searchNotes")} placeholderTextColor={ui.textMuted} selectionColor={ui.accent} cursorColor={ui.accent} returnKeyType="search" autoCorrect={false} style={[fonts.ui, styles.input]} />
         {query ? <Pressable accessibilityRole="button" accessibilityLabel={tr("unorganized.clearSearch")} hitSlop={12} onPress={() => setQuery('')}><Icon name="close-circle" size={16} color={ui.textMuted} /></Pressable> : null}
       </View>
+      {onCreate ? <Pressable accessibilityRole="button" onPress={() => { setQuery(''); setItems(null); onCreate(); }} style={[styles.search, { paddingVertical: spacing.sm }]}><Icon name="add-circle-outline" size={22} color={ui.paper} /><Text style={[fonts.uiSemi, { color: ui.paper }]}>{tr('templates.choose')}</Text></Pressable> : null}
       <FlatList
         data={items ?? []}
         keyExtractor={(item) => `${item.kind}:${item.id}`}
