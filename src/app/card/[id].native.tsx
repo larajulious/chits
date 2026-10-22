@@ -534,14 +534,14 @@ export default function CardDetailScreen() {
               const candidates = messages.filter((message) => message.text || message.content?.some((block) => block.type === 'text' && block.list));
               if (candidates.length === 1) router.push({ pathname: '/templates', params: { sourceMessageId: candidates[0].id } });
               else actionSheet({ title: tr('templates.saveAs'), options: candidates.map((message, index) => ({ label: tr('id.thought') + ' ' + (index + 1), icon: 'document-text-outline', onPress: () => router.push({ pathname: '/templates', params: { sourceMessageId: message.id } }) })) });
-            }} style={styles.inlineEdit}><Icon name="copy-outline" size={16} color={contentAccentStrong} /></Pressable> : null}
-            {!covered ? <Pressable accessibilityRole="button" accessibilityLabel={tr("index.shareNote")} hitSlop={8} onPress={openShareNote} style={styles.inlineEdit}><Icon name="images-outline" size={16} color={contentAccentStrong} /></Pressable> : null}
+            }} style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}><Icon name="copy-outline" size={17} color={contentAccentStrong} /></Pressable> : null}
+            {!covered ? <Pressable accessibilityRole="button" accessibilityLabel={tr("index.shareNote")} hitSlop={8} onPress={openShareNote} style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}><Icon name="images-outline" size={17} color={contentAccentStrong} /></Pressable> : null}
             {contentHidden && !covered ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.hideAgain")} hitSlop={8} onPress={() => setTemporarilyRevealed(false)} style={styles.inlineEdit}><Icon name="eye-off-outline" size={16} color={theme.textMuted} /><AppText style={[styles.inlineEditText, { color: theme.textMuted }]}>{tr("id.hideAgain")}</AppText></Pressable> : null}
             {messages.length > 1 ? <View style={styles.countBadge}><AppText style={styles.countText}>{messages.length}</AppText></View> : null}
           </View>
         </View>
 
-        <NotePaper accent={detail.boardAccent} style={styles.contentBody}>
+        <NotePaper accent={detail.boardAccent} minHeight={96} style={[styles.contentBody, styleTokens.elevation !== 'edge' && styles.contentBodyFlat]}>
           {covered ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.hiddenContentDoubleTapToReveal")} onPress={() => setTemporarilyRevealed(true)} style={({ pressed }) => [styles.hiddenCover, pressed && styles.pressed]}>
             <Icon name="eye-off-outline" size={24} color={theme.textMuted} />
             <AppText style={styles.hiddenCoverTitle}>{tr("id.contentHidden")}</AppText>
@@ -756,8 +756,12 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   // continuation of what the user is already reading rather than a jump.
   contentSectionHeader: { marginTop: spacing.md },
   // The shared note surface follows the active light/dark theme.
-  contentBody: { marginTop: spacing.sm },
-  contentHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  // Sized to the note (a one-liner shouldn't float in an empty box); under
+  // Classic it sits flat on a hairline like the Subtasks panel below it.
+  contentBody: { marginTop: spacing.sm, paddingTop: spacing.md, paddingBottom: spacing.md },
+  contentBodyFlat: { shadowOpacity: 0, elevation: 0 },
+  contentHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  headerAction: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: tokens.surfaceElevated },
   hiddenTitle: { color: tokens.textMuted },
   hiddenCover: { minHeight: 132, alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: radii.contentCard, backgroundColor: tokens.surfaceElevated },
   hiddenCoverTitle: { marginTop: spacing.xxs, color: tokens.textSecondary, fontSize: 15, fontWeight: '700' },

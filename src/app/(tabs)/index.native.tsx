@@ -472,7 +472,6 @@ export default function BoardsScreen() {
               pose="no-notes"
               title={tr("index.yourThoughtsWillShowUpHere")}
               description={tr("index.sendYourselfSomethingInChatAndItBecomes")}
-              action={{ label: tr("index.startAChit"), onPress: () => router.push('/chat?focusInput=1') }}
             />
           ) : (
             <CardsCollection

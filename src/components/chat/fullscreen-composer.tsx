@@ -6,8 +6,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
 import { AppText, useFontStyle } from '@/components/ui/app-text';
-import { AppHeader, Button, IconButton } from '@/components/ui/primitives';
-import { Icon } from '@/components/ui/icon';
+import { AppHeader, Button, HeaderIcon, IconButton } from '@/components/ui/primitives';
 import { spacing } from '@/constants/theme';
 import { NoteBlocksEditor, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
 import { draftContentForStorage, draftHasUnsavedImages, draftPlainText, type NoteDraftBlock } from '@/services/note-content';
@@ -47,7 +46,7 @@ export function FullscreenComposer({ blocks, onChangeBlocks, editorRef, onClose,
   return <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { if (!saving) onClose(); }} onShow={() => editorRef.current?.focus()}>
     <SafeAreaProvider>
       <SafeAreaView edges={['top', 'left', 'right']} style={[styles.screen, { backgroundColor: tokens.background }]}>
-        <AppHeader title={tr("fullscreencomposer.editThought")} leading={<IconButton label={tr("fullscreencomposer.returnToChatWithDraft")} disabled={saving} onPress={onClose}><Icon name="contract-outline" size={22} color={tokens.textPrimary} /></IconButton>} />
+        <AppHeader title={tr("fullscreencomposer.editThought")} leading={<IconButton label={tr("fullscreencomposer.returnToChatWithDraft")} disabled={saving} onPress={onClose}><HeaderIcon name="contract-outline" size={22} /></IconButton>} />
         <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           {attachmentLabel ? <AppText style={[styles.attachment, { color: tokens.textSecondary }]}>{attachmentLabel}</AppText> : null}
           <NoteBlocksEditor

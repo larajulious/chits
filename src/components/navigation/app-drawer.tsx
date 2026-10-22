@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/components/theme-provider';
 import { spacing } from '@/constants/theme';
 import { CHITS_REVISIT_ENABLED } from '@/constants/revisit';
+import { DrawerBackground } from './drawer-background';
 
 type DrawerContextValue = { openDrawer: () => void; closeDrawer: () => void };
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -69,6 +70,7 @@ function DrawerContent({ close }: { close: () => void }) {
   const { tokens } = useTheme();
   return (
     <SafeAreaView accessibilityViewIsModal style={[styles.drawer, { backgroundColor: tokens.surface, borderColor: tokens.borderSubtle }]}>
+      <DrawerBackground />
       <View style={styles.top}>
         <Text accessibilityRole="header" style={[styles.title, { color: tokens.textPrimary }]}>Chits</Text>
       </View>

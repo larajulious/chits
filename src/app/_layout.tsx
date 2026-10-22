@@ -64,14 +64,14 @@ function ThemedApp() {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   const { direction } = useDirection();
-  const { scheme, tokens, topBar, customHeader, headerPhotoFailed } = useTheme();
+  const { scheme, tokens, topBar, headerPhoto } = useTheme();
   const pathname = usePathname();
   useEffect(() => {
     const subscription = AppState.addEventListener('change', updateMascotAppState);
     return () => subscription.remove();
   }, []);
   // Chat's status area and header share a fade in the page's light/dark palette.
-  const statusBarStyle = customHeader && !headerPhotoFailed && pathname !== '/chat' ? 'light' : topBar && pathname !== '/chat' ? (topBar.dark ? 'light' : 'dark') : scheme === 'dark' ? 'light' : 'dark';
+  const statusBarStyle = headerPhoto && pathname !== '/chat' ? (headerPhoto.ink ? 'dark' : 'light') : topBar && pathname !== '/chat' ? (topBar.dark ? 'light' : 'dark') : scheme === 'dark' ? 'light' : 'dark';
   return (
     <LocaleProvider direction={direction}><AppDialogProvider>
       <View style={{ flex: 1, direction: 'ltr', backgroundColor: tokens.background }}>

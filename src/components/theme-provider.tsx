@@ -10,11 +10,14 @@ import { attachmentExists, deleteAttachment } from '@/services/attachment-storag
 import { HEADER_PHOTO_KEY, parseHeaderPhoto, type HeaderPhoto } from '@/services/header-photo';
 import { headerPhotoCanDelete, writeHeaderPhoto } from '@/db/header-photo';
 import { STICKY_FONTS } from '@/constants/style-fonts';
+import { DEFAULT_HEADER_PHOTO } from '@/constants/theme-images';
 
 export type AppAppearance = 'system' | 'light' | 'dark';
 type ThemeContextValue = {
   customHeader: HeaderPhoto | null; setCustomHeader: (photo: HeaderPhoto | null) => Promise<void>;
   headerPhotoFailed: boolean; failHeaderPhoto: () => void;
+  /** What every screen header shows: the custom photo, else Default's built-in mascot, else null (the theme's band). */
+  headerPhoto: HeaderPhoto | null;
   appearance: AppAppearance; setAppearance: (value: AppAppearance) => Promise<void>; scheme: 'light' | 'dark';
   /** The app's personality (Settings → Appearance → Theme). */
   identity: ChitsThemeIdentity; setIdentity: (identity: ChitsThemeIdentity) => Promise<void>;
@@ -114,8 +117,9 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     const tokens = getThemeTokens(identity, themeKey, scheme);
     const preset = STYLE_PRESETS[style];
     const styleTokens = preset.font.display && !stickyFontsReady ? { ...preset, font: STYLE_PRESETS.classic.font } : preset;
+    const headerPhoto = customHeader && !headerPhotoFailed ? customHeader : identity === 'default' ? DEFAULT_HEADER_PHOTO[scheme] : null;
     return {
-      customHeader, setCustomHeader, headerPhotoFailed, failHeaderPhoto,
+      customHeader, setCustomHeader, headerPhotoFailed, failHeaderPhoto, headerPhoto,
       appearance, setAppearance, scheme, identity, setIdentity, themeKey, setThemeKey,
       tokens, look: CHITS_THEMES[identity].look, themes: chatThemes, topBar: topBarForIdentity(identity),
       style, setStyle, styleTokens, styleColors: styleColors(tokens),

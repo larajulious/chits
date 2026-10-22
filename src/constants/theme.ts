@@ -3,10 +3,12 @@ import { Platform, type ColorSchemeName } from 'react-native';
 
 import { CHITS_THEMES, type AppPalette, type ChitsThemeIdentity, type HeadingFont } from '@/constants/chits-themes';
 
+// Warm sunlit cream, matched to Default's header picture and the side panel's
+// wallpaper so the page continues them instead of turning cool grey.
 const lightTokens = {
-  background: '#F7F8F6', surface: '#FFFFFF', surfaceElevated: '#F0F1EE',
+  background: '#FBF6EE', surface: '#FFFDF9', surfaceElevated: '#F5EEE3',
   textPrimary: '#24231F', textSecondary: '#5F5C52', textMuted: '#6E6A60',
-  borderSubtle: '#E5E4DE', accent: '#FBE47E', danger: '#B53A35', success: '#36785B',
+  borderSubtle: '#EAE2D5', accent: '#FBE47E', danger: '#B53A35', success: '#36785B',
 } as const;
 const darkTokens = {
   background: '#171612', surface: '#211F19', surfaceElevated: '#2D2A22',

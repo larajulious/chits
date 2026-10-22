@@ -23,7 +23,7 @@ import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { LabelTape } from '@/components/spaces/label-tape';
 import { SegmentedControl, Toast } from '@/components/ui/primitives';
-import { OnboardingMascot } from '@/features/onboarding/components/onboarding-mascot';
+import { DrawerBackground } from './drawer-background';
 import { APP_STYLE_NAMES, APP_STYLES, type AppStyle } from '@/constants/style-tokens';
 import { spacing } from '@/constants/theme';
 import { CHITS_REVISIT_ENABLED } from '@/constants/revisit';
@@ -31,6 +31,7 @@ import { createBoardRepository, createSpaceRepository } from '@/db/repositories'
 import { getCalendarItems } from '@/features/calendar/calendar-data';
 import { subscribeToReminderChanges } from '@/services/reminders';
 import { subscribeToSpaceChanges } from '@/services/space-changes';
+import { dateFormat } from '@/services/reminder-time';
 
 // Short, restrained transition for a row's fade and collapse on unpin.
 const PINNED_TRANSITION = LayoutAnimation.create(180, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity);
@@ -50,6 +51,8 @@ type Destination = { label: string; path: '/' | '/spaces/pick' | '/attachments' 
 const styleOptions = () => APP_STYLES.map((key: AppStyle) => ({ key, label: APP_STYLE_NAMES[key], accessibilityLabel: tr("settings.valueStyle", { value1: APP_STYLE_NAMES[key] }) }));
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
+// True for rows on a Classic card, which supplies their side margin.
+const InCardContext = createContext(false);
 // Main destinations live in the side panel; Chat remains a floating button.
 const spacesDestination: Destination = { get label() { return tr("pick.spaces"); }, path: '/spaces/pick', icon: 'magnet-outline' };
 const notesDestination: Destination = { get label() { return tr('index.notes'); }, path: '/', icon: 'reader-outline' };
@@ -93,6 +96,7 @@ function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'n
   const router = useRouter();
   const { tokens, styleTokens, styleColors } = useTheme();
   const sticky = useStickySurface();
+  const inCard = useContext(InCardContext);
   const active = isDestinationActive(pathname, destination);
   // Sticky: the current screen is an outlined accent tile, like the nav's active pill.
   const tile = active && styleTokens.outline.width > 0;
@@ -106,7 +110,7 @@ function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'n
         router.navigate(destination.path);
       }}
       style={({ pressed }) => [
-        styles.item, rowStyle,
+        styles.item, rowStyle, inCard && styles.inCard,
         active && { backgroundColor: tokens.accentSoft },
         { borderRadius: styleTokens.radius.control - 2 },
         active && sticky({ fill: styleColors.accentFill, radius: styleTokens.radius.control, edge: false }),
@@ -129,6 +133,7 @@ function ShortcutRow({ item, close, onUnpin }: { item: ContextItem; close: () =>
   const router = useRouter();
   const { tokens, styleTokens, styleColors } = useTheme();
   const sticky = useStickySurface();
+  const inCard = useContext(InCardContext);
   const isBoard = item.kind === 'board';
   const accessibilityLabel = isBoard
     ? tr('appdrawer.boardShortcut', { title: item.title })
@@ -142,7 +147,7 @@ function ShortcutRow({ item, close, onUnpin }: { item: ContextItem; close: () =>
         if (isBoard) router.push({ pathname: '/board/[id]', params: { id: item.id } });
         else router.push({ pathname: '/card/[id]', params: { id: item.id } });
       }}
-      style={({ pressed }) => [styles.contextRow, { borderRadius: styleTokens.radius.control - 2 }, onUnpin && styles.pinnedRow, pressed && styles.pressed]}>
+      style={({ pressed }) => [styles.contextRow, inCard && styles.inCard, { borderRadius: styleTokens.radius.control - 2 }, onUnpin && styles.pinnedRow, pressed && styles.pressed]}>
       <View accessible={false} style={[styles.contextIcon, { borderRadius: styleTokens.radius.control - 3, backgroundColor: isBoard ? tokens.accentSoft : tokens.surfaceElevated, borderColor: isBoard ? tokens.accentBorder : tokens.borderSubtle }, sticky({ fill: isBoard ? styleColors.cardTint : styleColors.controlFill, radius: styleTokens.radius.control - 4, edge: false })]}>
         <Icon name={isBoard ? 'grid-outline' : 'document-text-outline'} size={17} color={styleTokens.outline.width ? (isBoard ? styleColors.cardInk : tokens.textSecondary) : isBoard ? tokens.accentStrong : tokens.textSecondary} />
       </View>
@@ -165,6 +170,38 @@ function ShortcutRow({ item, close, onUnpin }: { item: ContextItem; close: () =>
       ) : null}
     </Pressable>
   );
+}
+
+// Classic groups each part of the panel on its own card; Sticky keeps its
+// flat list, so there this renders just the rows.
+function DrawerCard({ children }: PropsWithChildren) {
+  const { tokens, scheme, style, styleTokens } = useTheme();
+  if (style !== 'classic') return <>{children}</>;
+  return (
+    <InCardContext.Provider value>
+      <View style={[styles.card, { backgroundColor: scheme === 'dark' ? tokens.surfaceElevated : tokens.surface, borderColor: tokens.borderSubtle, borderRadius: styleTokens.radius.panel }]}>{children}</View>
+    </InCardContext.Provider>
+  );
+}
+
+const MINUTE = 60_000;
+// Today's date and time under the title, in the user's language and clock;
+// it ticks over on each new minute while the panel is open.
+function TodayLine() {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
+  const { tokens } = useTheme();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => { setNow(Date.now()); timer = setTimeout(tick, MINUTE - (Date.now() % MINUTE)); };
+    timer = setTimeout(tick, MINUTE - (Date.now() % MINUTE));
+    return () => clearTimeout(timer);
+  }, []);
+  const day = dateFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(now);
+  const time = dateFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(now);
+  return <AppText numberOfLines={1} style={[styles.today, { color: tokens.textSecondary }]}>{`${day} · ${time}`}</AppText>;
 }
 
 // Shared header row for every drawer section.
@@ -196,7 +233,7 @@ function RecentSection({ items, close }: { items: ContextItem[]; close: () => vo
   return (
     <View style={styles.section}>
       <SectionHeader label={tr("unorganized.recent")} />
-      {items.map((item) => <ShortcutRow key={`${item.kind}-${item.id}`} item={item} close={close} />)}
+      <DrawerCard>{items.map((item) => <ShortcutRow key={`${item.kind}-${item.id}`} item={item} close={close} />)}</DrawerCard>
     </View>
   );
 }
@@ -209,7 +246,7 @@ function PinnedSection({ items, close, onUnpin }: { items: ContextItem[]; close:
   return (
     <View style={styles.section}>
       <SectionHeader label={tr("appdrawer.pinned")} />
-      {items.map((item) => <ShortcutRow key={`${item.kind}-${item.id}`} item={item} close={close} onUnpin={() => onUnpin(item)} />)}
+      <DrawerCard>{items.map((item) => <ShortcutRow key={`${item.kind}-${item.id}`} item={item} close={close} onUnpin={() => onUnpin(item)} />)}</DrawerCard>
     </View>
   );
 }
@@ -291,32 +328,44 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   const pinnedKeys = new Set(pinned.map((item) => `${item.kind}-${item.id}`));
   const recentUnpinned = recent.filter((item) => !pinnedKeys.has(`${item.kind}-${item.id}`));
   const hasShortcuts = pinned.length > 0 || recentUnpinned.length > 0;
+  const classic = style === 'classic';
+  const footer = <>
+    <View accessibilityRole="radiogroup" accessibilityLabel={tr("settings.style")} style={[styles.styleToggle, classic && styles.styleToggleClassic]}>
+      <SegmentedControl options={styleOptions()} value={style} onChange={changeStyle} />
+    </View>
+    <DrawerCard>
+      <NavigationRow destination={gettingStartedDestination} pathname={pathname} close={close} />
+      <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
+    </DrawerCard>
+  </>;
   return (
     <SafeAreaView accessibilityViewIsModal style={[styles.drawer, { backgroundColor: tokens.surface, borderColor: tokens.borderSubtle }, styleTokens.outline.width ? [{ borderRightWidth: styleTokens.outline.width, borderColor: styleColors.outline }, sticky({ edge: styleTokens.nav.edge, edgeSide: 'right', outline: false })] : null]}>
+      <DrawerBackground />
       <View style={styles.top}>
-        <OnboardingMascot size={36} accessible={false} />
-        <AppText accessibilityRole="header" variant="display" style={[styles.title, { color: tokens.textPrimary }]}>{appTitle}</AppText>
+        <View style={styles.titleBlock}>
+          <AppText accessibilityRole="header" variant="display" style={[styles.title, { color: tokens.textPrimary }]}>{appTitle}</AppText>
+          <TodayLine />
+        </View>
       </View>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
-        <NavigationRow destination={notesDestination} pathname={pathname} close={close} />
-        <NavigationRow destination={spacesDestination} pathname={pathname} close={close} badge={stuckCount} />
-        <NavigationRow destination={calendarDestination} pathname={pathname} close={close} badge={incomingReminderCount} badgeNoun="reminder" />
-        <NavigationRow destination={attachmentsDestination} pathname={pathname} close={close} />
-        <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
-        {CHITS_REVISIT_ENABLED ? <NavigationRow destination={revisitDestination} pathname={pathname} close={close} /> : null}
-        {hasShortcuts ? <View style={[styles.divider, { backgroundColor: tokens.borderSubtle }, styleTokens.outline.width ? { height: styleTokens.outline.width, backgroundColor: styleColors.outline } : null]} /> : null}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.drawerContent, classic && styles.drawerContentClassic]}>
+        <DrawerCard>
+          <NavigationRow destination={notesDestination} pathname={pathname} close={close} />
+          <NavigationRow destination={spacesDestination} pathname={pathname} close={close} badge={stuckCount} />
+          <NavigationRow destination={calendarDestination} pathname={pathname} close={close} badge={incomingReminderCount} badgeNoun="reminder" />
+          <NavigationRow destination={attachmentsDestination} pathname={pathname} close={close} />
+          <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
+          {CHITS_REVISIT_ENABLED ? <NavigationRow destination={revisitDestination} pathname={pathname} close={close} /> : null}
+        </DrawerCard>
+        {hasShortcuts && !classic ? <View style={[styles.divider, { backgroundColor: tokens.borderSubtle }, styleTokens.outline.width ? { height: styleTokens.outline.width, backgroundColor: styleColors.outline } : null]} /> : null}
         <PinnedSection items={pinned} close={close} onUnpin={unpinItem} />
         <RecentSection items={recentUnpinned.slice(0, 5)} close={close} />
+        {/* Classic scrolls as one page, with Settings and the rest at its
+            foot (pushed to the bottom when the list is short). */}
+        {classic ? <View style={styles.footerClassic}>{footer}</View> : null}
       </ScrollView>
       {/* Settings is app chrome, not a place your notes live — it stays pinned
           to the bottom instead of sitting in the list of destinations. */}
-      <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }, styleTokens.outline.width ? { borderTopWidth: styleTokens.outline.width, borderTopColor: styleColors.outline } : null]}>
-        <View accessibilityRole="radiogroup" accessibilityLabel={tr("settings.style")} style={styles.styleToggle}>
-          <SegmentedControl options={styleOptions()} value={style} onChange={changeStyle} />
-        </View>
-        <NavigationRow destination={gettingStartedDestination} pathname={pathname} close={close} />
-        <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
-      </View>
+      {classic ? null : <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }, styleTokens.outline.width ? { borderTopWidth: styleTokens.outline.width, borderTopColor: styleColors.outline } : null]}>{footer}</View>}
       <Toast message={toast} />
     </SafeAreaView>
   );
@@ -402,7 +451,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   title: { fontSize: 21, fontWeight: '600' },
+  titleBlock: { flex: 1, minWidth: 0 },
+  today: { fontSize: 13, marginTop: 1 },
   drawerContent: { paddingTop: spacing.sm, paddingBottom: spacing.lg },
+  drawerContentClassic: { flexGrow: 1, paddingBottom: spacing.md },
+  card: { marginHorizontal: spacing.sm, paddingVertical: spacing.xxs, borderWidth: StyleSheet.hairlineWidth },
+  inCard: { marginHorizontal: spacing.xxs },
+  footerClassic: { marginTop: 'auto', paddingTop: spacing.lg },
   item: {
     minHeight: 52,
     flexDirection: 'row',
@@ -419,6 +474,7 @@ const styles = StyleSheet.create({
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.lg, marginTop: spacing.sm },
   footer: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: spacing.xs },
   styleToggle: { marginHorizontal: spacing.md, marginTop: spacing.xs, marginBottom: spacing.xxs },
+  styleToggleClassic: { marginHorizontal: spacing.sm, marginTop: 0, marginBottom: spacing.sm },
   section: { paddingTop: spacing.sm },
   sectionHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg },
   sectionLabel: { flex: 1, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },

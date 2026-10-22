@@ -47,7 +47,7 @@ test('Default uses the logo palette while honoring the user’s accent color', (
       assert.equal(tokens.cardBase, scheme === 'dark' ? tokens.surface : '#FFFFFF');
     }
   }
-  assert.equal(getThemeTokens('default', 'logo', 'light').background, '#F7F8F6');
+  assert.equal(getThemeTokens('default', 'logo', 'light').background, '#FBF6EE');
   assert.equal(getThemeTokens('default', 'logo', 'dark').background, '#171612');
   assert.equal(CHITS_THEMES.default.shareNote.colors.decoration, '#FBE47E');
 });

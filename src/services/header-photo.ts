@@ -1,7 +1,12 @@
 import { normalizeStoredAttachmentPath } from './attachment-path';
 
 export const HEADER_PHOTO_KEY = 'custom_header_photo';
-export type HeaderPhoto = { storagePath: string; width: number; height: number; x: number; y: number; zoom: number; overlay: number };
+/**
+ * `asset` is a bundled picture (Default's built-in header) drawn in place of
+ * `storagePath`, and `ink` the dark header ink a light bundled picture wears
+ * instead of white; stored photos never have either.
+ */
+export type HeaderPhoto = { storagePath: string; width: number; height: number; x: number; y: number; zoom: number; overlay: number; asset?: number; ink?: { text: string; muted: string } };
 export const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const finite = (value: unknown, fallback: number) => typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 

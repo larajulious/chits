@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
@@ -10,9 +10,10 @@ import { useTheme } from '@/components/theme-provider';
 import { AppHeader, Chip, EmptyState, HeaderIcon, Icon, IconButton, Screen, Surface } from '@/components/ui/primitives';
 import { ConnectedNotes } from '@/components/notes/connected-notes.native';
 import { createRevisitRepository } from '@/db/revisit-repository';
-import { createBoardRepository, createMessageRepository } from '@/db/repositories';
+import { createMessageRepository } from '@/db/repositories';
 import { subscribeToFocusChanges } from '@/db/focus-repository';
 import { subscribeToNoteChanges } from '@/services/note-changes';
+import { loadFocusAttachments } from '@/services/focus-attachments';
 import { parseNoteKey } from '@/services/revisit-service';
 import { focusClock, isFocusActive, type FocusSession } from '@/services/focus-timer';
 import type { RevisitNote } from '@/services/revisit-engine';
@@ -38,7 +39,6 @@ export default function FocusScreen() {
   const { repository, preferences, active } = useFocusState();
   const database = useSQLiteContext();
   const showSpin = useSpinVisibility();
-  const boards = useMemo(() => createBoardRepository(database), [database]);
   const { tokens } = useTheme();
   const navigation = useNavigation();
   const { height } = useWindowDimensions();
@@ -80,18 +80,16 @@ export default function FocusScreen() {
       const key = await repository.resolveKey(inputKey);
       const next = await createRevisitRepository(database).get(key);
       const current = selectedId.current ? await repository.get(selectedId.current) : await repository.continuity(key);
-      const sourceMessages = key.startsWith('card:') ? await boards.listCardMessages(key.slice(5)) : [await createMessageRepository(database).getActiveById(key.slice(8))];
-      const cardAttachments = key.startsWith('card:') ? await boards.listCardAttachmentItems(key.slice(5)) : [];
-      const otherMedia = sourceMessages.flatMap((message) => message && !message.deletedAt && !message.archivedAt && !message.isHiddenContent ? message.attachments.filter((attachment) => attachment.type !== 'photo') : []);
+      const sourceAttachments = next ? await loadFocusAttachments(database, key) : [];
       if (!mounted.current || generation !== loadGeneration.current) return;
       // A removed/hidden source must not unmount an unsaved working draft.
       setNote((previous) => next ?? previous ?? null);
-      setAttachments(next ? [...cardAttachments, ...otherMedia] : []);
+      setAttachments(sourceAttachments);
       if (!next) setError(tr('focus.unavailable'));
       if (current && current.note_key === key) assignSession(current);
       if (!initialized.current) { setMinutes(params.spin && [5,15,30,60].includes(Number(params.minutes)) ? Number(params.minutes) : (await repository.preferences()).durationMinutes); initialized.current = true; }
     } catch { if (mounted.current) setError(tr('focus.error')); }
-  }, [assignSession, boards, database, inputKey, repository, params.spin, params.minutes]);
+  }, [assignSession, database, inputKey, repository, params.spin, params.minutes]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   useEffect(() => subscribeToFocusChanges(() => void load()), [load]);
   useEffect(() => subscribeToNoteChanges(() => void load()), [load]);

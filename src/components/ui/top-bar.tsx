@@ -24,7 +24,7 @@ import { SHARE_NOTE_DESIGN_WIDTH } from '@/services/share-note';
 export function useHeaderInk() {
   const { tokens, topBar } = useTheme();
   const { photo } = useHeaderPhoto();
-  if (photo) return { ink: '#ffffff', inkMuted: '#ffffff', border: 'transparent', banded: true };
+  if (photo) return { ink: photo.ink?.text ?? '#ffffff', inkMuted: photo.ink?.muted ?? '#ffffff', border: 'transparent', banded: true };
   return topBar
     ? { ink: topBar.ink, inkMuted: topBar.inkMuted, border: 'transparent', banded: true }
     : { ink: tokens.textPrimary, inkMuted: tokens.textMuted, border: tokens.borderSubtle, banded: false };

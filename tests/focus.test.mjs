@@ -8,6 +8,7 @@ const { advanceFocus, focusPreferences, focusClock } = await loadModule('src/ser
 const { observeFocusClock, correctedFocusElapsed, focusNow, resetFocusClocks } = await loadModule('src/services/focus-clock');
 const { appendFocusThought } = await loadModule('src/services/focus-content');
 const { draftFromNote } = await loadModule('src/services/note-content');
+const { loadFocusAttachments } = await loadModule('src/services/focus-attachments');
 const { loadCardsFocus } = await loadModule('src/services/focus-cards');
 const session = (changes = {}) => ({ id:'s',note_key:'thought:a',started_at:1000,ended_at:null,planned_ms:60000,focused_ms:0,paused_ms:0,checkpoint_at:1000,status:'running',completed_at:null,dismissed_at:null,clock_adjusted:0,...changes });
 async function fixture(t) {
@@ -208,4 +209,26 @@ test('backup validation rejects multiple active timers even if an external datab
   await repo.start('thought:a',null,1000);
   await db.execAsync("DROP INDEX idx_focus_single_active; INSERT INTO focus_sessions(id,note_key,started_at,checkpoint_at,status) VALUES ('second','thought:b',1000,1000,'running');");
   await assert.rejects(()=>service.createBackup(db));
+});
+
+
+test('Focus card attachments include linked files, audio and video once, followed by direct card attachments', async t => {
+  const {db} = await fixture(t);
+  await db.execAsync("INSERT INTO boards(id,name,created_at,updated_at) VALUES ('board','Board',1,1); INSERT INTO board_columns(id,board_id,name,position,created_at,updated_at) VALUES ('column','board','Notes',0,1,1); INSERT INTO cards(id,board_id,column_id,title,position,created_at,updated_at) VALUES ('card','board','column','Card',0,1,1); INSERT INTO card_messages(card_id,message_id,position) VALUES ('card','a',0);");
+  for(const [index,type] of ['file','audio','video','photo'].entries()) await db.runAsync('INSERT INTO attachments(id,message_id,type,storage_path,created_at) VALUES (?,?,?,?,?)',`linked-${type}`,'a',type,`attachments/${type}`,index+1);
+  await db.runAsync("INSERT INTO card_attachments(id,card_id,type,storage_path,created_at,updated_at) VALUES ('direct-file','card','file','attachments/direct-file',10,10)");
+  const before = await db.getAllAsync('SELECT * FROM attachments');
+  const items = await loadFocusAttachments(db,'card:card');
+  assert.deepEqual(items.map(item=>item.id),['linked-file','linked-audio','linked-video','linked-photo','direct-file']);
+  assert.equal(new Set(items.map(item=>item.id)).size,items.length);
+  assert.deepEqual(await db.getAllAsync('SELECT * FROM attachments'),before);
+});
+test('Focus chat attachment loading retains non-photo media and leaves inline photos in the editor', async t => {
+  const {db} = await fixture(t);
+  for(const [index,type] of ['photo','file','audio','video'].entries()) await db.runAsync('INSERT INTO attachments(id,message_id,type,storage_path,created_at) VALUES (?,?,?,?,?)',`media-${type}`,'a',type,`attachments/${type}`,index+1);
+  assert.deepEqual((await loadFocusAttachments(db,'thought:a')).map(item=>item.id),['media-file','media-audio','media-video']);
+  await db.runAsync("UPDATE messages SET is_hidden_content=1 WHERE id='a'");
+  assert.deepEqual(await loadFocusAttachments(db,'thought:a'),[]);
+  await db.runAsync("UPDATE messages SET is_hidden_content=0,archived_at=2 WHERE id='a'");
+  assert.deepEqual(await loadFocusAttachments(db,'thought:a'),[]);
 });

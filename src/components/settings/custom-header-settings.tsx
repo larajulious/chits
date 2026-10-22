@@ -38,8 +38,8 @@ function HeaderEditor({ presentationReady, onClose, onBusyChange }: { presentati
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const { tokens, scheme, topBar, customHeader, headerPhotoFailed, setCustomHeader } = useTheme();
-  const statusStyle = customHeader && !headerPhotoFailed ? 'light' : topBar ? (topBar.dark ? 'light' : 'dark') : scheme === 'dark' ? 'light' : 'dark';
+  const { tokens, scheme, topBar, customHeader, headerPhoto, setCustomHeader } = useTheme();
+  const statusStyle = headerPhoto ? (headerPhoto.ink ? 'dark' : 'light') : topBar ? (topBar.dark ? 'light' : 'dark') : scheme === 'dark' ? 'light' : 'dark';
   const [photo, setPhoto] = useState<HeaderPhoto | null>(customHeader);
   const [operation, setOperation] = useState<'selecting' | 'processing' | 'saving' | null>(null);
   const busy = operation !== null;
