@@ -10,6 +10,7 @@ import { Icon, IconButton, Surface } from '@/components/ui/primitives';
 import { useTheme } from '@/components/theme-provider';
 import { focusClock, type FocusSession } from '@/services/focus-timer';
 import type { NoteKey } from '@/services/revisit-engine';
+import { preloadHandwriting } from '@/components/desk/paper-desk';
 import { FocusText as AppText, FocusAction, FocusCompanion, focusStyles } from './focus-ui';
 
 export function FocusEntry({ noteKey, continuityOnly = false, compact = false }: { noteKey: NoteKey; continuityOnly?: boolean; compact?: boolean }) {
@@ -22,6 +23,8 @@ export function FocusEntry({ noteKey, continuityOnly = false, compact = false }:
   const [continuity, setContinuity] = useState<{ session: FocusSession; title: string; remaining: number; companion: boolean } | null>(null);
   const generation = useRef(0);
   const [available, setAvailable] = useState(false);
+  // Warm Focus's handwriting while the app is idle, before anyone taps.
+  useEffect(() => { const id = requestIdleCallback(preloadHandwriting); return () => cancelIdleCallback(id); }, []);
   const [error, setError] = useState(false);
   const load = useCallback(async () => {
     const request = ++generation.current;

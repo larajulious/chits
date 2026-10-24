@@ -2,7 +2,7 @@
   "expo": {
     "name": "Chits",
     "slug": "Chits",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "orientation": "portrait",
     "icon": "./assets/images/app_icon.png",
     "scheme": "chits",
@@ -10,8 +10,8 @@
     "ios": {
       "icon": "./assets/images/app_icon.png",
       "bundleIdentifier": "com.larajulious.chitsapp",
-      "version": "1.0.7",
-      "buildNumber": "20",
+      "version": "1.0.8",
+      "buildNumber": "21",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryAddUsageDescription": "Chits saves a copy of a photo, video or Share Note image to your photo library only when you choose to save it.",
@@ -89,7 +89,8 @@
         "expo-build-properties",
         {
           "ios": {
-            "enableSceneSupport": true
+            "enableSceneSupport": true,
+            "usePrecompiledModules": false
           },
           "android": {
             "enableMinifyInReleaseBuilds": true,

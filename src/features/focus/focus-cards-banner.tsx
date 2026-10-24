@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -9,6 +9,7 @@ import { Icon, PressableSurface } from '@/components/ui/primitives';
 import { createFocusRepository, subscribeToFocusChanges } from '@/db/focus-repository';
 import { subscribeToNoteChanges } from '@/services/note-changes';
 import { loadCardsFocus, type CardsFocus } from '@/services/focus-cards';
+import { preloadHandwriting } from '@/components/desk/paper-desk';
 import { FocusText } from './focus-ui';
 import { FocusTimer } from './focus-timer-view';
 import { useSpinVisibility } from '@/features/spin/use-spin-visibility';
@@ -23,6 +24,8 @@ export function FocusCardsBanner() {
   const { tokens } = useTheme();
   const { rowStyle, isRTL } = useDirection();
   const [current, setCurrent] = useState<CardsFocus | null>(null);
+  // Warm Focus's handwriting while the app is idle, before anyone taps.
+  useEffect(() => { const id = requestIdleCallback(preloadHandwriting); return () => cancelIdleCallback(id); }, []);
   const generation = useRef(0);
   const focused = useRef(false);
   const load = useCallback(async () => {

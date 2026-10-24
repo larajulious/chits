@@ -1778,6 +1778,7 @@
   "spin.skip": "今はスキップ",
   "spin.addBoard": "ボードに追加",
   "spin.again": "もう一度回す",
+  "spin.hub": "回す！",
   "spin.adjust": "条件を変える",
   "spin.metadata": "所要時間と優先度",
   "spin.requiredEnergy": "必要なエネルギー・再タップで解除",

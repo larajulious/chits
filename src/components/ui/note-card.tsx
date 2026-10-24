@@ -19,7 +19,7 @@ export function useNoteColors(accent: string | null | undefined): NoteColors {
  * a folded corner. `tilt` lets boards set the note itself slightly askew;
  * lists keep notes straight.
  */
-export function NoteCard({ id, accent, paper, border, tilt = false, variant = 'paper', children, style, ...props }: Omit<PressableProps, 'style' | 'children'> & {
+export function NoteCard({ id, accent, paper, border, tilt = false, variant = 'paper', children, style, pressedStyle, ...props }: Omit<PressableProps, 'style' | 'children'> & {
   id: string;
   /** The note's board color, if any. */
   accent?: string | null;
@@ -30,6 +30,8 @@ export function NoteCard({ id, accent, paper, border, tilt = false, variant = 'p
   variant?: 'paper' | 'collection';
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
+  /** Classic's pressed look, for callers that animate the press themselves. */
+  pressedStyle?: StyleProp<ViewStyle>;
 }) {
   const { styleTokens: t, styleColors, scheme, look, tokens } = useTheme();
   const colors = useNoteColors(accent);
@@ -46,7 +48,7 @@ export function NoteCard({ id, accent, paper, border, tilt = false, variant = 'p
     shadow={scheme === 'dark' ? false : { ...t.shadow.card, opacity: collection ? Math.min(0.045, look.cardShadowOpacity) : look.cardShadowOpacity }}
     edge={t.noteCard.edge || false}
     edgeColor={colors.cardEdge}
-    pressedStyle={styles.classicPressed}
+    pressedStyle={pressedStyle ?? styles.classicPressed}
     style={[styles.note, padding, collection && { borderWidth: StyleSheet.hairlineWidth, borderColor: border }, style]}
   >
     {children}

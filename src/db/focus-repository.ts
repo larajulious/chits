@@ -23,6 +23,8 @@ export function createFocusRepository(database: SQLiteDatabase) {
   const get = async (id: string) => { const result = await database.getFirstAsync<FocusSession>('SELECT * FROM focus_sessions WHERE id = ?', id); if (result) observeFocusClock(database, result); return result; };
   const active = async () => { const result = await database.getFirstAsync<FocusSession>("SELECT * FROM focus_sessions WHERE status IN ('running','paused') LIMIT 1"); if (result) observeFocusClock(database, result); return result; };
   const preferences = async () => focusPreferences((await database.getFirstAsync<{ value: string }>("SELECT value FROM app_settings WHERE key = 'focus_preferences'"))?.value);
+  /** The same one-row read, synchronously, so Focus screens open with the right settings in their first frame. */
+  const preferencesSync = () => focusPreferences(database.getFirstSync<{ value: string }>("SELECT value FROM app_settings WHERE key = 'focus_preferences'")?.value);
   const resolveKey = async (key: NoteKey): Promise<NoteKey> => {
     if (!key.startsWith('thought:')) return key;
     const card = await database.getFirstAsync<{ card_id: string }>('SELECT card_id FROM card_messages WHERE message_id = ? ORDER BY card_id LIMIT 1', key.slice(8));
@@ -50,7 +52,7 @@ export function createFocusRepository(database: SQLiteDatabase) {
     observeFocusClock(database, result!); emit(); return result!;
   });
   return {
-    get, active, resolveKey, preferences, update,
+    get, active, resolveKey, preferences, preferencesSync, update,
     async setPreferences(value: FocusPreferences) {
       const normalized = focusPreferences(JSON.stringify(value));
       await database.runAsync("INSERT INTO app_settings(key,value,updated_at) VALUES ('focus_preferences',?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value,updated_at = excluded.updated_at", JSON.stringify(normalized), Date.now());

@@ -23,6 +23,13 @@ export function createCustomSpinRepository(db: SQLiteDatabase) {
       const row = await db.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', SPIN_MODE_KEY);
       return row?.value === 'custom' ? 'custom' : 'notes';
     },
+    /** The same two one-row reads, synchronously, so Spin opens on the right wheel in its first frame. */
+    modeSync(): 'notes' | 'custom' {
+      return db.getFirstSync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', SPIN_MODE_KEY)?.value === 'custom' ? 'custom' : 'notes';
+    },
+    itemsSync() {
+      return parseCustomSpinItems(db.getFirstSync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', CUSTOM_SPIN_KEY)?.value ?? null);
+    },
     async setMode(mode: 'notes' | 'custom') {
       await db.runAsync('INSERT INTO app_settings(key,value,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at', SPIN_MODE_KEY, mode, Date.now());
       notifySpinChanged();

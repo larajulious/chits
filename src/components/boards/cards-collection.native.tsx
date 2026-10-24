@@ -21,6 +21,7 @@ type Props = {
   onFilter: (key: string) => void;
   onOpen: (item: CardListItem) => void;
   onMore: (item: CardListItem) => void;
+  onToggleSubtask: (item: CardListItem, subtaskId: string) => void;
   onSectionChange: (section: CardSection | null) => void;
   bottomInset: number;
 };
@@ -40,7 +41,7 @@ function SectionHeading({ section }: { section: CardSection }) {
 }
 
 /** Real cards remain recycled; only the active date label changes while scrolling. */
-export function CardsCollection({ sections, chips, filter, onFilter, onOpen, onMore, onSectionChange, bottomInset }: Props) {
+export function CardsCollection({ sections, chips, filter, onFilter, onOpen, onMore, onToggleSubtask, onSectionChange, bottomInset }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -92,7 +93,7 @@ export function CardsCollection({ sections, chips, filter, onFilter, onOpen, onM
           <View style={balanced
             ? { paddingHorizontal: columns === 1 ? spacing.md : columnGap / 2, paddingBottom: rowGap }
             : { paddingLeft: columns === 1 || cell.column === 0 ? spacing.md : columnGap / 2, paddingRight: columns === 1 || cell.column === 1 ? spacing.md : columnGap / 2, paddingBottom: rowGap }}>
-            <CardListRow item={cell.item} onPress={() => onOpen(cell.item)} onMore={() => onMore(cell.item)} />
+            <CardListRow item={cell.item} onPress={() => onOpen(cell.item)} onMore={() => onMore(cell.item)} onToggleSubtask={cell.item.kind === 'card' ? (subtaskId) => onToggleSubtask(cell.item, subtaskId) : undefined} />
           </View>
         )}
         contentContainerStyle={{ paddingTop: filterHeight, paddingHorizontal: balanced && columns > 1 ? listInset : 0, paddingBottom: bottomInset + spacing.md }}

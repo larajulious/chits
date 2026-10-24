@@ -19,15 +19,18 @@ export default function SpinScreen() {
   const repo = useMemo(() => createCustomSpinRepository(db), [db]);
   const { tokens } = useTheme();
   const { actionSheet } = useAppDialog();
-  const [mode, setMode] = useState<'notes' | 'custom' | null>(null);
+  // Read before the first frame (one tiny settings row), so Spin never shows a
+  // stand-in screen and then swaps in a second header.
+  const [mode, setMode] = useState<'notes' | 'custom' | null>(() => { try { return repo.modeSync(); } catch { return null; } });
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
   useEffect(() => {
+    if (mode !== null) return;
     let active = true;
     void repo.mode().then(value => { if (active) setMode(value); }).catch(() => { if (active) setError(true); });
     return () => { active = false; };
-  }, [repo]);
+  }, [mode, repo]);
   const changeMode = async (next: 'notes' | 'custom') => {
     if (busy || saving || mode === next) return;
     setSaving(true); setError(false);

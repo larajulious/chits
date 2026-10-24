@@ -10,13 +10,14 @@ import { attachmentExists, deleteAttachment } from '@/services/attachment-storag
 import { HEADER_PHOTO_KEY, parseHeaderPhoto, type HeaderPhoto } from '@/services/header-photo';
 import { headerPhotoCanDelete, writeHeaderPhoto } from '@/db/header-photo';
 import { STICKY_FONTS } from '@/constants/style-fonts';
-import { DEFAULT_HEADER_PHOTO } from '@/constants/theme-images';
+import { HEADER_SCENE_PHOTO } from '@/constants/theme-images';
+import { useSceneInk } from '@/hooks/use-scene-clock';
 
 export type AppAppearance = 'system' | 'light' | 'dark';
 type ThemeContextValue = {
   customHeader: HeaderPhoto | null; setCustomHeader: (photo: HeaderPhoto | null) => Promise<void>;
   headerPhotoFailed: boolean; failHeaderPhoto: () => void;
-  /** What every screen header shows: the custom photo, else Default's built-in mascot, else null (the theme's band). */
+  /** What every screen header shows: the custom photo, else Default's time-of-day scene, else null (the theme's band). */
   headerPhoto: HeaderPhoto | null;
   appearance: AppAppearance; setAppearance: (value: AppAppearance) => Promise<void>; scheme: 'light' | 'dark';
   /** The app's personality (Settings → Appearance → Theme). */
@@ -97,6 +98,8 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   }, [style, stickyFontsReady]);
   const systemScheme = useColorScheme();
   const scheme = appearance === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : appearance;
+  const showsScene = identity === 'default' && !(customHeader && !headerPhotoFailed);
+  const sceneInk = useSceneInk(scheme, showsScene);
   useEffect(() => { Appearance.setColorScheme(appearance === 'system' ? 'unspecified' : appearance); }, [appearance]);
   // Applied first, saved second: the whole app re-themes in place (no remount,
   // no lost scroll position), and a failed write rolls it back.
@@ -117,14 +120,14 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     const tokens = getThemeTokens(identity, themeKey, scheme);
     const preset = STYLE_PRESETS[style];
     const styleTokens = preset.font.display && !stickyFontsReady ? { ...preset, font: STYLE_PRESETS.classic.font } : preset;
-    const headerPhoto = customHeader && !headerPhotoFailed ? customHeader : identity === 'default' ? DEFAULT_HEADER_PHOTO[scheme] : null;
+    const headerPhoto = customHeader && !headerPhotoFailed ? customHeader : showsScene ? HEADER_SCENE_PHOTO[sceneInk] : null;
     return {
       customHeader, setCustomHeader, headerPhotoFailed, failHeaderPhoto, headerPhoto,
       appearance, setAppearance, scheme, identity, setIdentity, themeKey, setThemeKey,
       tokens, look: CHITS_THEMES[identity].look, themes: chatThemes, topBar: topBarForIdentity(identity),
       style, setStyle, styleTokens, styleColors: styleColors(tokens),
     };
-  }, [customHeader, setCustomHeader, headerPhotoFailed, failHeaderPhoto, appearance, setAppearance, scheme, identity, setIdentity, setThemeKey, themeKey, style, setStyle, stickyFontsReady]);
+  }, [customHeader, setCustomHeader, headerPhotoFailed, failHeaderPhoto, showsScene, sceneInk, appearance, setAppearance, scheme, identity, setIdentity, setThemeKey, themeKey, style, setStyle, stickyFontsReady]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 export function useTheme() {

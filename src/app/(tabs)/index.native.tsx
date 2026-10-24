@@ -5,6 +5,7 @@ import { subscribeToNoteChanges } from '@/services/note-changes';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
+import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Keyboard,
@@ -32,7 +33,7 @@ import { CardsCollection, type CardSection } from '@/components/boards/cards-col
 import { shareNoteHref } from '@/services/share-note-source';
 import { type BoardIconName } from '@/constants/board-appearance';
 import { spacing } from '@/constants/theme';
-import { createBoardRepository, createMessageRepository } from '@/db/repositories';
+import { createBoardRepository, createCardSubtaskRepository, createMessageRepository } from '@/db/repositories';
 import { GettingStartedCard } from '@/features/onboarding/components/checklist-card';
 import { FocusCardsBanner } from '@/features/focus/focus-cards-banner';
 import type { Board, CardListItem, MessageType } from '@/db/types';
@@ -93,6 +94,7 @@ export default function BoardsScreen() {
   const boardRepository = useMemo(() => createBoardRepository(database), [database]);
   const messageRepository = useMemo(() => createMessageRepository(database), [database]);
   const revisitRepository = useMemo(() => createRevisitRepository(database), [database]);
+  const subtaskRepository = useMemo(() => createCardSubtaskRepository(database), [database]);
   const { openDrawer } = useAppDrawer();
   const { actionSheet, confirm } = useAppDialog();
   const { tokens: theme, styleTokens, styleColors } = useTheme();
@@ -315,6 +317,21 @@ export default function BoardsScreen() {
     });
   }, [boardRepository, confirm, loadCards]);
 
+  // Ticking a subtask on a card shows at once and saves in order; a failed
+  // save reloads the list so the card shows what was actually stored.
+  const subtaskQueue = useRef(Promise.resolve());
+  const toggleCardSubtask = useCallback((item: CardListItem, subtaskId: string) => {
+    void Haptics.selectionAsync();
+    setCards((current) => current.map((card) => {
+      if (card.kind !== 'card' || card.id !== item.id) return card;
+      const done = card.subtaskPreview?.find((subtask) => subtask.id === subtaskId)?.isCompleted;
+      return { ...card, completedSubtaskCount: card.completedSubtaskCount + (done ? -1 : 1), subtaskPreview: card.subtaskPreview?.map((subtask) => subtask.id === subtaskId ? { ...subtask, isCompleted: !done } : subtask) };
+    }));
+    subtaskQueue.current = subtaskQueue.current
+      .then(() => subtaskRepository.toggle(item.id, subtaskId))
+      .then(() => {}, () => { setCardToast(tr("cardsubtasks.couldNotUpdateThatSubtask")); void loadCards(); });
+  }, [loadCards, subtaskRepository]);
+
   const openCardActions = useCallback(async (item: CardListItem) => {
     // "Stick to Fridge" / "Remove from Fridge", looked up as the menu opens.
     const space = await spaceNoteAction(database, item.kind, item.id).catch(() => null);
@@ -481,6 +498,7 @@ export default function BoardsScreen() {
               onFilter={setCardFilter}
               onOpen={openCardNote}
               onMore={openCardActions}
+              onToggleSubtask={toggleCardSubtask}
               onSectionChange={updateHeaderSection}
               bottomInset={tabBarHeight}
             />

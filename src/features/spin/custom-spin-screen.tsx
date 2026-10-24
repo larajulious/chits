@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, Animated, AppState, Easing, Keyboard, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AccessibilityInfo, Animated, AppState, Keyboard, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useAudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
-import { useReducedMotion } from 'react-native-reanimated';
+import Reanimated, { FadeIn, FadeInDown, FadeOutDown, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
 import { AppHeader, HeaderIcon, Icon, IconButton, Screen, Surface } from '@/components/ui/primitives';
 import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
 import { useTheme } from '@/components/theme-provider';
-import { FocusAction, FocusCompanion, FocusText as AppText } from '@/features/focus/focus-ui';
+import { FocusAction, FocusText as AppText } from '@/features/focus/focus-ui';
 import { useDirection, useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
 import { createCustomSpinRepository } from '@/db/spin-custom-repository';
@@ -16,7 +16,9 @@ import { createSpinRepository } from '@/db/spin-repository';
 import { CUSTOM_SPIN_LABEL_LIMIT, CUSTOM_SPIN_LIMIT, selectCustomSpin, validCustomSpinLabel, type CustomSpinItem } from '@/services/spin-custom';
 import { spinLanding } from '@/services/spin-engine';
 import { subscribeToSpinChanges } from '@/services/spin-changes';
-import { SpinWheel } from './spin-wheel';
+import { SPIN_DURATION, SPIN_EASING, SpinWheel } from './spin-wheel';
+import { PAPER_INK, PAPER_INK_MUTED, PaperAction, PaperNote, PaperTab, PaperDesk, DeskMessage, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { spinPaper } from './spin-paper';
 import { SpinCelebration } from './spin-celebration';
 
 export function CustomSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeAction: ReactNode; modeNotice: ReactNode; onBusyChange: (busy: boolean) => void }) {
@@ -25,11 +27,15 @@ export function CustomSpinScreen({ modeAction, modeNotice, onBusyChange }: { mod
   const db = useSQLiteContext();
   const repo = useMemo(() => createCustomSpinRepository(db), [db]);
   const { tokens, styleTokens } = useTheme();
+  const desk = useDesk();
+  const { handBold } = useHandwriting();
   const { rowStyle } = useDirection();
   const reduced = useReducedMotion();
   const sound = useAudioPlayer(require('../../../assets/sounds/spin-land.wav'));
-  const [items, setItems] = useState<CustomSpinItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // The wheel's items are one settings row: read them before the first frame.
+  const [initial] = useState(() => { try { return repo.itemsSync(); } catch { return null; } });
+  const [items, setItems] = useState<CustomSpinItem[]>(initial ?? []);
+  const [loading, setLoading] = useState(initial === null);
   const [busy, setBusy] = useState(false);
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<CustomSpinItem | null>(null);
@@ -80,7 +86,7 @@ export function CustomSpinScreen({ modeAction, modeNotice, onBusyChange }: { mod
     setSpinning(true);
     const target = spinLanding(angle.current, fresh.findIndex(item => item.id === chosen.id), fresh.length);
     if (!reduced) await new Promise<void>(resolve => {
-      animation.current = Animated.timing(rotation, { toValue: target, duration: 3400, easing: Easing.bezier(0.4,0,0.12,1), useNativeDriver: true });
+      animation.current = Animated.timing(rotation, { toValue: target, duration: SPIN_DURATION, easing: SPIN_EASING, useNativeDriver: true });
       animation.current.start(() => resolve());
     });
     animation.current = null;
@@ -108,29 +114,61 @@ export function CustomSpinScreen({ modeAction, modeNotice, onBusyChange }: { mod
     setPendingDelete(null); await load();
   });
   const manage = () => { setEditing(true); setEditId(undefined); setLabel(''); setPendingDelete(null); };
-  return <Screen edges={['top','left','right','bottom']}>
+  const landed = result ? items.findIndex(item => item.id === result.id) : -1;
+  // One fixed layout: on a result the wheel springs smaller and the result
+  // slides in over the faded controls, as transforms and opacity only.
+  const wheelSize = Math.max(48, Math.min(360, bounds.width - 16, bounds.height - 16));
+  const compactSize = Math.min(200, wheelSize);
+  const compact = useSharedValue(0);
+  useEffect(() => { const to = result ? 1 : 0; compact.set(reduced ? to : withSpring(to, { damping: 22, stiffness: 150, mass: 1 })); }, [compact, reduced, result]);
+  const wheelMotion = useAnimatedStyle(() => ({ transform: [
+    { translateY: (compactSize / 2 - (bounds.height - 10) / 2) * compact.get() },
+    { scale: 1 + (compactSize / wheelSize - 1) * compact.get() },
+  ] }));
+  const controlsMotion = useAnimatedStyle(() => ({ opacity: 1 - compact.get(), transform: [{ translateY: 28 * compact.get() }] }));
+  const labelsKey = items.map(item => item.label).join('\n');
+  const wheelLabels = useMemo(() => labelsKey ? labelsKey.split('\n') : [], [labelsKey]);
+  const wheelPapers = useMemo(() => wheelLabels.map((_, index) => spinPaper(index)), [wheelLabels]);
+  const spinRef = useRef(spin);
+  useLayoutEffect(() => { spinRef.current = spin; });
+  const spinFromWheel = useCallback(() => spinRef.current(), []);
+  // A fresh result drops onto the desk.
+  const drop = reduced ? undefined : FadeInDown.springify().damping(14).mass(0.8);
+  return <Screen edges={['top','left','right','bottom']} style={{ backgroundColor: desk.desk }}>
     <AppHeader actionWidth={88} title={tr('spin.title')} subtitle={tr('spin.mode.custom')} leading={<IconButton label={tr('search.goBack')} disabled={busy} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} trailing={<View style={[styles.headerActions,rowStyle]}>{modeAction}<IconButton label={tr('spin.custom.items')} disabled={busy} onPress={manage}><HeaderIcon name="create-outline" size={22} /></IconButton></View>} />
+    <PaperDesk>
     <View style={styles.viewport}>
       {modeNotice}
-      <FocusCompanion small message={tr(spinning ? 'spin.mascot.spinning' : result ? 'spin.mascot.result' : 'spin.custom.help')} />
-      {error && !editing ? <AppText accessibilityRole="alert" style={{ color: tokens.danger }}>{tr('spin.error')}</AppText> : null}
-      {!result ? <>
-        <View style={styles.wheel} onLayout={({ nativeEvent }) => setBounds({ width: nativeEvent.layout.width, height: nativeEvent.layout.height })}>
-          {bounds.height > 0 ? <SpinWheel size={Math.max(48,Math.min(340,bounds.width-8,bounds.height-8))} rotation={rotation} categories={items.map(item => item.id)} labels={items.map(item => item.label)} spinning={spinning} /> : null}
+      <DeskMessage message={tr(spinning ? 'spin.mascot.spinning' : result ? 'spin.mascot.result' : !loading && !items.length ? 'spin.custom.empty' : 'spin.custom.help')} />
+      {error && !editing ? <AppText accessibilityRole="alert" weight="600" style={[styles.deskText,{ color: desk.danger }]}>{tr('spin.error')}</AppText> : null}
+      <View style={styles.workspace}>
+        <View style={styles.wheel} onLayout={({ nativeEvent }) => { const { width, height } = nativeEvent.layout; setBounds(old => old.width === width && old.height === height ? old : { width, height }); }}>
+          {bounds.height > 0 ? <Reanimated.View style={wheelMotion}><SpinWheel size={wheelSize} rotation={rotation} labels={wheelLabels} papers={wheelPapers} spinning={spinning} highlight={!spinning && landed >= 0 ? landed : null} onSpin={spinFromWheel} spinDisabled={busy || loading || !items.length} /></Reanimated.View> : null}
         </View>
-        <Surface fill={tokens.surface} border={tokens.borderSubtle} radius={styleTokens.radius.panel} shadow={false} edge={false} style={styles.panel}>
-          {items.length ? <ScrollView style={styles.legend} contentContainerStyle={styles.legendContent}>{items.map((item,index) => <AppText key={item.id} style={styles.body}>{index+1} · {item.label}</AppText>)}</ScrollView> : <AppText style={styles.body}>{tr('spin.custom.empty')}</AppText>}
-          <FocusAction disabled={busy || loading} onPress={manage}>{tr('spin.custom.items')} · {items.length}</FocusAction>
-          <FocusAction primary disabled={busy || loading || !items.length} onPress={spin}>{tr(spinning ? 'spin.spinning' : 'spin.spin')}</FocusAction>
-        </Surface>
-      </> : <Surface fill={tokens.surface} border={tokens.borderSubtle} radius={styleTokens.radius.panel} shadow={false} edge={false} style={styles.panel}>
-        <AppText style={[styles.body,{ color: tokens.accentStrong }]}>{tr('spin.mode.custom')}</AppText>
-        <ScrollView style={styles.resultScroll}><AppText accessibilityRole="header" weight="700" style={styles.title}>{result.label}</AppText></ScrollView>
-        <FocusAction primary disabled={busy} onPress={spin}>{tr('spin.again')}</FocusAction>
-        <FocusAction disabled={busy} onPress={() => { setResult(null); setCelebration(0); manage(); }}>{tr('spin.custom.items')}</FocusAction>
-      </Surface>}
+        <Reanimated.View style={[styles.panel, controlsMotion]} pointerEvents={result ? 'none' : 'auto'} accessibilityElementsHidden={!!result} importantForAccessibility={result ? 'no-hide-descendants' : 'auto'}>
+          <View style={[styles.tabs,rowStyle]}>
+            <PaperTab paper={spinPaper(1)} tilt={-1.5} icon="create-outline" label={`${tr('spin.custom.items')} · ${items.length}`} accessibilityRole="button" disabled={busy || loading} onPress={manage} />
+          </View>
+          <PaperAction primary label={tr(spinning ? 'spin.spinning' : 'spin.spin')} accessibilityState={{ disabled: busy || loading || !items.length, busy: spinning }} disabled={busy || loading || !items.length} onPress={spin} />
+        </Reanimated.View>
+        {result ? <Reanimated.View entering={reduced ? undefined : FadeIn.duration(240)} exiting={reduced ? undefined : FadeOutDown.duration(220)} style={[styles.resultOverlay, { top: compactSize + 28 }]}>
+          <ScrollView style={styles.flexShrink} contentContainerStyle={styles.resultContent}>
+            <Reanimated.View entering={drop}>
+              <PaperNote paper={spinPaper(Math.max(0, landed))} tilt={-1} pin style={styles.resultNote}>
+                <AppText weight="700" style={styles.resultCategory}>{tr('spin.mode.custom')}</AppText>
+                <AppText accessibilityRole="header" style={[handBold, styles.resultTitle]}>{result.label}</AppText>
+              </PaperNote>
+            </Reanimated.View>
+          </ScrollView>
+          <View style={styles.actions}>
+            <PaperAction primary label={tr('spin.again')} disabled={busy} onPress={spin} />
+            <PaperAction label={tr('spin.custom.items')} disabled={busy} onPress={() => { setResult(null); setCelebration(0); manage(); }} />
+          </View>
+        </Reanimated.View> : null}
+      </View>
       {celebration > 0 && result && !reduced ? <SpinCelebration key={celebration} /> : null}
     </View>
+    </PaperDesk>
     <FormSheet ref={sheet} visible={editing} maxHeightPercent={85} accessibilityViewIsModal onRequestClose={() => { if (!busy) { Keyboard.dismiss(); setEditing(false); } }} closeAccessibilityLabel={tr('attachments.close')}
       contentContainerStyle={styles.editor} header={<View style={[styles.sheetHeader,rowStyle]}><AppText weight="700" style={styles.flex}>{tr('spin.custom.items')}</AppText><IconButton label={tr('attachments.close')} disabled={busy} onPress={() => { Keyboard.dismiss(); setEditing(false); }}><Icon name="close" size={22} color={tokens.textPrimary} /></IconButton></View>}>
       <AppText style={styles.body}>{tr('spin.custom.help')}</AppText>
@@ -157,12 +195,20 @@ export function CustomSpinScreen({ modeAction, modeNotice, onBusyChange }: { mod
 }
 const styles = StyleSheet.create({
   headerActions: { alignItems: 'center', flexWrap: 'nowrap' },
-  viewport: { flex: 1, minHeight: 0, width: '100%', maxWidth: 620, alignSelf: 'center', padding: 16, paddingTop: 8, gap: 10 },
-  wheel: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center' },
-  panel: { flexShrink: 1, minHeight: 0, padding: 12, gap: 8 },
-  legend: { maxHeight: 110, flexGrow: 0, flexShrink: 1 }, legendContent: { gap: 4 },
-  body: { fontSize: 13, lineHeight: 19 }, title: { fontSize: 21, lineHeight: 28 },
-  resultScroll: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
+  viewport: { flex: 1, minHeight: 0, width: '100%', maxWidth: 620, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 12 },
+  deskText: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  wheel: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center', paddingTop: 10 },
+  workspace: { flex: 1, minHeight: 0, gap: 14 },
+  resultOverlay: { position: 'absolute', left: 0, right: 0, bottom: 0, gap: 14 },
+  panel: { gap: 18 },
+  tabs: { flexWrap: 'wrap', justifyContent: 'center', gap: 10, paddingTop: 6 },
+  flexShrink: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
+  resultContent: { paddingTop: 14, paddingBottom: 8, paddingHorizontal: 4 },
+  resultNote: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18, gap: 4 },
+  resultCategory: { color: PAPER_INK_MUTED, fontSize: 12, lineHeight: 16, letterSpacing: 0.6, textTransform: 'uppercase' },
+  resultTitle: { color: PAPER_INK, fontSize: 30, lineHeight: 38 },
+  actions: { gap: 12, paddingBottom: 4 },
+  body: { fontSize: 13, lineHeight: 19 },
   sheetHeader: { alignItems: 'center', paddingHorizontal: 16, paddingTop: 8 },
   editor: { padding: 16, gap: 10 }, flex: { flex: 1 },
   confirmBox: { padding: 12, gap: 8 },

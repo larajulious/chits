@@ -6,18 +6,21 @@ import { useDirection, useLocale } from '@/localization/provider';
 import { localizedDate, localizedNumber, tr } from '@/localization/runtime';
 import { createFocusRepository, subscribeToFocusChanges } from '@/db/focus-repository';
 import { createRevisitRepository } from '@/db/revisit-repository';
-import { AppHeader, EmptyState, HeaderIcon, IconButton, Screen, Surface } from '@/components/ui/primitives';
-import { useTheme } from '@/components/theme-provider';
+import { AppHeader, EmptyState, HeaderIcon, IconButton, Screen } from '@/components/ui/primitives';
+import { PAPERS, PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW, PaperAction, PaperDesk, PaperNote, PaperTab, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import Reanimated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { type FocusSession } from '@/services/focus-timer';
 import type { NoteKey } from '@/services/revisit-engine';
-import { FocusText as AppText, FocusAction } from './focus-ui';
+import { FocusText as AppText } from './focus-ui';
 
 export default function FocusHistoryScreen() {
   'use no memo'; useLocale();
   const { rowStyle } = useDirection();
   const database = useSQLiteContext();
   const repository = useMemo(() => createFocusRepository(database), [database]);
-  const { tokens, styleTokens } = useTheme();
+  const desk = useDesk();
+  const { handBold } = useHandwriting();
+  const reduced = useReducedMotion();
   const durationLabel = (ms: number) => {
     const total = Math.floor(ms / 1000), h = Math.floor(total / 3600), m = Math.floor(total / 60) % 60, s = total % 60;
     return [h ? tr('focus.hours', { hours: localizedNumber(h) }) : '', m ? tr('focus.minutes', { minutes: localizedNumber(m) }) : '', s || !total ? tr('focus.seconds', { seconds: localizedNumber(s) }) : ''].filter(Boolean).join(' ');
@@ -51,57 +54,76 @@ export default function FocusHistoryScreen() {
     return () => { generation.current++; };
   }, [load, repository]));
   useEffect(() => subscribeToFocusChanges(() => void load()), [load]);
-  return <Screen><AppHeader title={tr('focus.history')} leading={<IconButton label={tr('search.goBack')} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} trailing={<IconButton label={tr('focus.settings')} onPress={() => router.push('/focus-settings')}><HeaderIcon name="settings-outline" size={22} /></IconButton>} />
+  const enter = reduced ? undefined : FadeIn.duration(220);
+  return <Screen style={{ backgroundColor: desk.desk }}><AppHeader title={tr('focus.history')} leading={<IconButton label={tr('search.goBack')} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} trailing={<IconButton label={tr('focus.settings')} onPress={() => router.push('/focus-settings')}><HeaderIcon name="settings-outline" size={22} /></IconButton>} />
+    <PaperDesk>
     <ScrollView contentContainerStyle={styles.content}>
-      {error ? <><AppText accessibilityRole="alert" style={{ color: tokens.danger }}>{tr('focus.error')}</AppText><FocusAction onPress={() => void load()}>{tr('focus.reload')}</FocusAction></> : null}
-      {!ready ? <AppText>{tr('focus.loading')}</AppText> : <>
-        <Surface fill={tokens.surface} border={tokens.borderSubtle} radius={styleTokens.radius.panel} outline={StyleSheet.hairlineWidth} edge={false} style={styles.summary}>
-          <AppText style={[styles.metadata, { color: tokens.textSecondary }]}>{tr('focus.totalTime')}</AppText>
-          <AppText weight="700" style={styles.total}>{durationLabel(totals.focusedMs)}</AppText>
-          <AppText style={styles.summaryCount}>{tr('focus.completedCount', { count: totals.completed })}</AppText>
-        </Surface>
+      {error ? <View style={styles.errorBox}><AppText accessibilityRole="alert" weight="600" style={[styles.deskText, { color: desk.danger }]}>{tr('focus.error')}</AppText><PaperAction label={tr('focus.reload')} onPress={() => void load()} /></View> : null}
+      {ready ? <Reanimated.View entering={enter} style={styles.sections}>
+        <PaperNote paper={PAPER_YELLOW} tilt={-1} pin style={styles.summary}>
+          <AppText weight="700" style={styles.kicker}>{tr('focus.totalTime')}</AppText>
+          <AppText numberOfLines={1} adjustsFontSizeToFit style={[handBold, styles.total]}>{durationLabel(totals.focusedMs)}</AppText>
+          <AppText style={styles.body}>{tr('focus.completedCount', { count: totals.completed })}</AppText>
+        </PaperNote>
         {!sessions.length ? <EmptyState title={tr('focus.emptyHistory')} description={tr('focus.historyHelp')} /> : <>
           <View style={styles.section}>
-          <AppText accessibilityRole="header" weight="700" style={styles.sectionTitle}>{tr('focus.byNote')}</AppText>
-          {notes.map((note) => <View key={note.key} style={[styles.noteRow, rowStyle, { borderBottomColor: tokens.borderSubtle }]}><AppText weight="600" style={styles.noteTitle}>{note.title ?? tr('focus.unavailable')}</AppText><AppText style={[styles.noteTime, { color: tokens.textPrimary }]}>{durationLabel(note.focusedMs)}</AppText></View>)}
+            <AppText accessibilityRole="header" style={[handBold, styles.sectionTitle, { color: desk.ink }]}>{tr('focus.byNote')}</AppText>
+            <PaperNote paper={PAPER_WHITE} style={styles.sheet}>
+              {notes.map((note, index) => <View key={note.key} style={[styles.noteRow, rowStyle, index > 0 && styles.ruled]}>
+                <AppText weight="600" style={styles.noteTitle}>{note.title ?? tr('focus.unavailable')}</AppText>
+                <AppText style={styles.noteTime}>{durationLabel(note.focusedMs)}</AppText>
+              </View>)}
+            </PaperNote>
           </View>
           <View style={styles.section}>
-          <AppText accessibilityRole="header" weight="700" style={styles.sectionTitle}>{tr('focus.recent')}</AppText>
-          {sessions.map((session) => <Surface key={session.id} fill={tokens.surface} border={tokens.borderSubtle} radius={styleTokens.radius.panel} outline={StyleSheet.hairlineWidth} edge={false} style={styles.session}>
-            <AppText weight="600" style={styles.sessionTitle}>{titles.get(session.note_key) ?? tr('focus.unavailable')}</AppText>
-            <View style={[styles.sessionMeta, rowStyle]}>
-              <AppText style={[styles.date, { color: tokens.textSecondary }]}>{localizedDate(session.started_at, { dateStyle: 'medium', timeStyle: 'short' })}</AppText>
-              <View style={[styles.status, { backgroundColor: session.status === 'completed' ? tokens.accentSoft : tokens.surfaceElevated }]}><AppText weight="600" style={styles.statusText}>{tr(`focus.state.${session.status}`)}</AppText></View>
-            </View>
-            <View style={[styles.sessionDetails, { borderTopColor: tokens.borderSubtle }]}>
-              <AppText weight="600" style={styles.focusedTime}>{tr('focus.timeSpent', { time: durationLabel(session.focused_ms) })}</AppText>
-              <AppText style={[styles.metadata, { color: tokens.textSecondary }]}>{session.planned_ms === null ? tr('focus.untimed') : tr('focus.plannedTime', { time: durationLabel(session.planned_ms) })}</AppText>
-              <AppText style={[styles.metadata, { color: tokens.textSecondary }]}>{tr('focus.pausedTime', { time: durationLabel(session.paused_ms) })}</AppText>
-            </View>
-            {titles.has(session.note_key) ? <View style={styles.sessionAction}><FocusAction quiet onPress={() => router.push({ pathname: '/focus', params: { note: session.note_key, session: session.id } })}>{tr(session.status === 'completed' ? 'focus.viewSession' : 'focus.resume')}</FocusAction></View> : null}
-          </Surface>)}
-          {sessions.length >= limit ? <FocusAction onPress={() => setLimit((current) => current + 50)}>{tr('focus.more')}</FocusAction> : null}
+            <AppText accessibilityRole="header" style={[handBold, styles.sectionTitle, { color: desk.ink }]}>{tr('focus.recent')}</AppText>
+            {sessions.map((session, index) => <PaperNote key={session.id} paper={PAPER_WHITE} tilt={index % 2 ? 0.5 : -0.5} style={styles.session}>
+              <View style={[styles.sessionHead, rowStyle]}>
+                <AppText weight="600" style={styles.sessionTitle}>{titles.get(session.note_key) ?? tr('focus.unavailable')}</AppText>
+                <View style={[styles.stamp, { backgroundColor: STAMP[session.status] ?? PAPERS[6] }]}><AppText weight="700" style={styles.stampText}>{tr(`focus.state.${session.status}`)}</AppText></View>
+              </View>
+              <AppText style={styles.caption}>{localizedDate(session.started_at, { dateStyle: 'medium', timeStyle: 'short' })}</AppText>
+              <View style={styles.sessionDetails}>
+                <AppText style={[handBold, styles.focusedTime]}>{tr('focus.timeSpent', { time: durationLabel(session.focused_ms) })}</AppText>
+                <AppText style={styles.caption}>{session.planned_ms === null ? tr('focus.untimed') : tr('focus.plannedTime', { time: durationLabel(session.planned_ms) })}</AppText>
+                <AppText style={styles.caption}>{tr('focus.pausedTime', { time: durationLabel(session.paused_ms) })}</AppText>
+              </View>
+              {titles.has(session.note_key) ? <View style={[styles.sessionAction, rowStyle]}><PaperTab paper={PAPERS[3]} tilt={1} icon={session.status === 'completed' ? 'eye-outline' : 'play'} label={tr(session.status === 'completed' ? 'focus.viewSession' : 'focus.resume')} accessibilityRole="button" onPress={() => router.push({ pathname: '/focus', params: { note: session.note_key, session: session.id } })} /></View> : null}
+            </PaperNote>)}
+            {sessions.length >= limit ? <PaperAction label={tr('focus.more')} onPress={() => setLimit((current) => current + 50)} /> : null}
           </View>
         </>}
-      </>}
+      </Reanimated.View> : null}
     </ScrollView>
+    </PaperDesk>
   </Screen>;
 }
 
+// A session's status, stamped in its paper color.
+const STAMP: Record<string, string> = { completed: PAPERS[2], running: PAPERS[0], paused: PAPERS[3], unfinished: PAPERS[1] };
 const styles = StyleSheet.create({
-  content: { padding: 20, paddingBottom: 32, gap: 20 },
-  summary: { padding: 16, gap: 8 },
-  total: { fontSize: 30, lineHeight: 38, fontVariant: ['tabular-nums'] },
-  summaryCount: { fontSize: 15, lineHeight: 22 },
-  section: { gap: 12 }, sectionTitle: { fontSize: 17, lineHeight: 24 },
-  noteRow: { alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  noteTitle: { flexGrow: 1, flexBasis: 180, fontSize: 15, lineHeight: 22 },
-  noteTime: { fontSize: 15, lineHeight: 22, fontVariant: ['tabular-nums'] },
-  session: { padding: 16, gap: 10 }, sessionTitle: { fontSize: 17, lineHeight: 24 },
-  sessionMeta: { alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-  date: { flexGrow: 1, fontSize: 13, lineHeight: 20 },
-  status: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }, statusText: { fontSize: 12, lineHeight: 18 },
-  sessionDetails: { paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, gap: 6 },
-  focusedTime: { fontSize: 17, lineHeight: 24, fontVariant: ['tabular-nums'] },
-  metadata: { fontSize: 14, lineHeight: 21 }, sessionAction: { alignSelf: 'flex-end' },
+  content: { padding: 16, paddingTop: 18, paddingBottom: 32 },
+  sections: { gap: 24 },
+  errorBox: { gap: 10, marginBottom: 16 },
+  deskText: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  summary: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 16, gap: 2, marginHorizontal: 4 },
+  kicker: { color: PAPER_INK_MUTED, fontSize: 12, lineHeight: 16, letterSpacing: 0.6, textTransform: 'uppercase' },
+  total: { color: PAPER_INK, fontSize: 36, lineHeight: 46 },
+  body: { color: PAPER_INK, fontSize: 15, lineHeight: 22 },
+  section: { gap: 12 },
+  sectionTitle: { fontSize: 24, lineHeight: 30, paddingHorizontal: 4 },
+  sheet: { paddingHorizontal: 14, paddingVertical: 4 },
+  noteRow: { alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingVertical: 12 },
+  ruled: { borderTopWidth: 1, borderStyle: 'dashed', borderTopColor: 'rgba(43,38,32,0.2)' },
+  noteTitle: { flexGrow: 1, flexBasis: 160, color: PAPER_INK, fontSize: 15, lineHeight: 22 },
+  noteTime: { color: PAPER_INK, fontSize: 15, lineHeight: 22, fontVariant: ['tabular-nums'] },
+  session: { padding: 14, gap: 6 },
+  sessionHead: { alignItems: 'flex-start', gap: 8 },
+  sessionTitle: { flex: 1, color: PAPER_INK, fontSize: 16, lineHeight: 23 },
+  stamp: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 3, transform: [{ rotate: '2deg' }] },
+  stampText: { color: PAPER_INK, fontSize: 11.5, lineHeight: 16 },
+  caption: { color: PAPER_INK_MUTED, fontSize: 13, lineHeight: 19 },
+  sessionDetails: { marginTop: 4, paddingTop: 8, gap: 2, borderTopWidth: 1, borderStyle: 'dashed', borderTopColor: 'rgba(43,38,32,0.2)' },
+  focusedTime: { color: PAPER_INK, fontSize: 20, lineHeight: 27 },
+  sessionAction: { justifyContent: 'flex-end', marginTop: 4 },
 });

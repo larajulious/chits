@@ -8,7 +8,7 @@ import { tr } from '@/localization/runtime';
 export function useFocusState() {
   const database = useSQLiteContext();
   const repository = useMemo(() => createFocusRepository(database), [database]);
-  const [preferences, setPreferences] = useState<FocusPreferences>(FOCUS_DEFAULTS);
+  const [preferences, setPreferences] = useState<FocusPreferences>(() => { try { return repository.preferencesSync(); } catch { return FOCUS_DEFAULTS; } });
   const [active, setActive] = useState<FocusSession | null>(null);
   const [error, setError] = useState<string | null>(null);
   const generation = useRef(0);

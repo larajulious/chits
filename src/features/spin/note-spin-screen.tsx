@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Animated, AppState, Easing, ScrollView, StyleSheet, Switch, View, useWindowDimensions } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useAudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
-import { useReducedMotion } from 'react-native-reanimated';
-import { AppHeader, Chip, EmptyState, HeaderIcon, Icon, IconButton, PressableSurface, Screen, Surface } from '@/components/ui/primitives';
+import Reanimated, { FadeIn, FadeInDown, FadeOut, FadeOutDown, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
+import { AppHeader, Chip, EmptyState, HeaderIcon, Icon, IconButton, Screen } from '@/components/ui/primitives';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
 import { useDirection, useLocale } from '@/localization/provider';
@@ -17,25 +17,29 @@ import { createMessageRepository, createBoardRepository } from '@/db/repositorie
 import { subscribeToNoteChanges } from '@/services/note-changes';
 import { SPIN_CATEGORIES, SPIN_WHEEL_CATEGORIES, SPIN_DEFAULTS, spinOptions, spinOptionKey, selectSpin, spinLanding, spinSourceRoute, type SpinCandidate, type SpinPreferences, type SpinEnergy, type SpinWheelCategory } from '@/services/spin-engine';
 import type { RevisitNote } from '@/services/revisit-engine';
-import { FocusAction, FocusCompanion, FocusReveal, FocusText as AppText, focusStyles } from '@/features/focus/focus-ui';
-import { SpinWheel } from './spin-wheel';
+import { FocusText as AppText, focusStyles } from '@/features/focus/focus-ui';
+import { SPIN_DURATION, SPIN_EASING, SpinWheel } from './spin-wheel';
+import { PAPER_INK, PAPER_INK_MUTED, PaperAction, PaperNote, PaperTab, PaperDesk, DeskMessage, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { SPIN_CATEGORY_PAPER } from './spin-paper';
 import { SpinCelebration } from './spin-celebration';
 import { FormSheet } from '@/components/ui/form-sheet';
 import { SPACES, resolveSpaceId } from '@/constants/spaces';
 
 type Result = { candidate: SpinCandidate; id: number; done: boolean; challenge?: boolean };
+let lastWheel: SpinWheelCategory[] = SPIN_WHEEL_CATEGORIES.filter(c => c !== 'suggestions' && SPIN_DEFAULTS.categories.includes(c));
 export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeAction: ReactNode; modeNotice: ReactNode; onBusyChange: (busy: boolean) => void }) {
   'use no memo';
   useLocale();
   const db = useSQLiteContext();
   const repo = useMemo(() => createSpinRepository(db), [db]);
   const revisit = useMemo(() => createRevisitRepository(db), [db]);
-  const { tokens, styleTokens } = useTheme();
+  const { tokens } = useTheme();
+  const desk = useDesk();
+  const { handBold } = useHandwriting();
   const { rowStyle } = useDirection();
   const { confirm, actionSheet } = useAppDialog();
   const { width, height, fontScale } = useWindowDimensions();
   const [wheelBounds, setWheelBounds] = useState({ width: 0, height: 0 });
-  const [legendHeight, setLegendHeight] = useState(0);
   const landscape = width > height;
   const accessibleLayout = fontScale > 1.3;
   const reduced = useReducedMotion();
@@ -82,10 +86,12 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
     if (!focused.current) return;
     const request = ++generation.current;
     try {
-      const data = await repo.candidates({ ...preferencesRef.current, categories: [...SPIN_CATEGORIES] }, challengeRef.current);
-      const earned = await repo.achievements();
       const previous = resultRef.current;
-      const record = previous ? await repo.history(previous.id) : null;
+      const [data, earned, record] = await Promise.all([
+        repo.candidates({ ...preferencesRef.current, categories: [...SPIN_CATEGORIES] }, challengeRef.current),
+        repo.achievements(),
+        previous ? repo.history(previous.id) : null,
+      ]);
       const fresh = record ? await revisit.get(record.note_key) : null;
       if (!mounted.current || request !== generation.current) return;
       setCandidates(data.candidates); setOverdue(data.overdue); setAchievements(earned.map(a => a.id));
@@ -99,12 +105,10 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; animation.current?.stop(); rotation.removeAllListeners(); }; }, [rotation]);
   useFocusEffect(useCallback(() => {
     focused.current = true;
-    void repo.preferences().then(async value => {
+    void Promise.all([repo.preferences(), restored.current ? null : repo.latest()]).then(([value, latest]) => {
       if (!focused.current) return;
       preferencesRef.current = value; setPreferences(value);
       if (!restored.current) {
-        const latest = await repo.latest();
-        if (!focused.current) return;
         restored.current = true; assignResult(latest);
         if (latest) previousSelection.current = spinOptionKey(latest.candidate);
         if (latest) {
@@ -175,7 +179,7 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
         if (boundary !== lastBoundary && now - lastTick > 90 && AppState.currentState === 'active') { lastBoundary = boundary; lastTick = now; void Haptics.selectionAsync().catch(() => undefined); }
       });
       await new Promise<void>(resolve => {
-        animation.current = Animated.timing(rotation, { toValue: target, duration: 3400, easing: Easing.bezier(0.4,0,0.12,1), useNativeDriver: true });
+        animation.current = Animated.timing(rotation, { toValue: target, duration: SPIN_DURATION, easing: SPIN_EASING, useNativeDriver: true });
         animation.current.start(() => resolve());
       });
       rotation.removeListener(listener);
@@ -266,108 +270,147 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
     ] });
   };
   const mascotMessage = loading ? 'before' : !eligible.length && !hasResult && message === 'welcome' ? 'empty' : message;
-  const displayedCategories = hasResult || spinning ? frozenCategories : categories;
+  // While the wheel's notes load, it shows the last wheel this session (or the
+  // default categories) rather than a blank paper.
+  const displayedCategories = hasResult || spinning ? frozenCategories : loading ? lastWheel : categories;
+  useEffect(() => { if (!loading && !hasResult && !spinning) lastWheel = categories; });
   const note = result?.candidate.note;
-  const Reveal = preferences.celebrations && !reduced ? FocusReveal : View;
-  return <Screen edges={['top','left','right','bottom']}>
+  // A fresh result drops onto the desk; a restored one is simply there.
+  const drop = preferences.celebrations && !reduced ? FadeInDown.springify().damping(14).mass(0.8) : undefined;
+  const landed = spinning ? null : result ? displayedCategories.indexOf(result.candidate.category) : suggestion ? displayedCategories.indexOf('suggestions') : null;
+  // Portrait keeps one fixed layout: on a result the wheel springs smaller and
+  // the result slides in over the faded controls, all as transforms and
+  // opacity, so nothing re-lays out mid-animation. Landscape and large text
+  // have room side by side or stacked, and crossfade instead.
+  const stacked = !landscape && !accessibleLayout;
+  const wheelSize = Math.max(48, Math.min(360, wheelBounds.width - 16, wheelBounds.height - 16));
+  const compactSize = Math.min(200, wheelSize);
+  const compact = useSharedValue(0);
+  useEffect(() => { const to = hasResult && stacked ? 1 : 0; compact.set(reduced ? to : withSpring(to, { damping: 22, stiffness: 150, mass: 1 })); }, [compact, hasResult, reduced, stacked]);
+  const wheelMotion = useAnimatedStyle(() => ({ transform: [
+    { translateY: (compactSize / 2 - (wheelBounds.height - 10) / 2) * compact.get() },
+    { scale: 1 + (compactSize / wheelSize - 1) * compact.get() },
+  ] }));
+  const controlsMotion = useAnimatedStyle(() => ({ opacity: 1 - compact.get(), transform: [{ translateY: 28 * compact.get() }] }));
+  const labelsKey = displayedCategories.map(c => tr(`spin.category.${c}`)).join('\n');
+  const wheelLabels = useMemo(() => labelsKey ? labelsKey.split('\n') : [], [labelsKey]);
+  const papersKey = displayedCategories.map(c => SPIN_CATEGORY_PAPER[c]).join(',');
+  const wheelPapers = useMemo(() => papersKey ? papersKey.split(',') : [], [papersKey]);
+  const spinRef = useRef(spin);
+  useLayoutEffect(() => { spinRef.current = spin; });
+  const spinFromWheel = useCallback(() => spinRef.current(), []);
+  const timeLabel = preferences.minutes === null ? tr('spin.surprise') : tr('focus.minutes', { minutes: preferences.minutes });
+  const chooseTime = () => actionSheet({ title: tr('spin.time'), options: ([5, 15, 30, 60, null] as const).map(minutes => ({
+    label: minutes === null ? tr('spin.surprise') : tr('focus.minutes', { minutes }),
+    icon: preferences.minutes === minutes ? 'checkmark-circle-outline' : 'time-outline',
+    onPress: () => updatePreferences({ ...preferences, minutes }),
+  })) });
+  const chooseEnergy = () => actionSheet({ title: tr('spin.energy'), options: (['low', 'medium', 'high'] as const).map(energy => ({
+    label: tr(`spin.energyHelp.${energy}`),
+    icon: preferences.energy === energy ? 'checkmark-circle-outline' : 'flash-outline',
+    onPress: () => updatePreferences({ ...preferences, energy }),
+  })) });
+  const toggleChallenge = () => { const value = !challengeRef.current; challengeRef.current = value; setChallenge(value); setLoading(true); void load(); };
+  const resultBody = note && result ? <>
+          <ScrollView style={styles.flexShrink} contentContainerStyle={styles.resultContent}>
+            <Reanimated.View entering={drop}>
+              <PaperNote paper={SPIN_CATEGORY_PAPER[result.candidate.category]} tilt={-1} pin style={styles.resultNote}>
+                <View style={[styles.resultHeading,rowStyle]}>
+                  <AppText weight="700" style={styles.resultCategory}>{tr(`spin.category.${result.candidate.category}`)}</AppText>
+                  <IconButton label={tr('attachments.moreActions')} disabled={busy} onPress={moreResultActions}><Icon name="ellipsis-horizontal" size={21} color={PAPER_INK} /></IconButton>
+                </View>
+                <AppText accessibilityRole="header" style={[handBold, styles.resultTitle]}>{note.title}</AppText>
+                <View style={[styles.resultLine,rowStyle]}>
+                  <Icon name={note.boardId ? 'albums-outline' : 'document-text-outline'} size={14} color={PAPER_INK_MUTED} />
+                  <AppText style={styles.resultCaption}>{tr(note.boardId ? 'spin.source.card' : 'spin.source.note')} · {note.boardName ?? tr('index.unorganized')}{resolveSpaceId(result.candidate.space) ? ` · ${SPACES[resolveSpaceId(result.candidate.space)!].name}` : ''}</AppText>
+                </View>
+                <View style={[styles.resultMeta,rowStyle]}>
+                  <View style={[styles.resultLine,rowStyle]}><Icon name="time-outline" size={14} color={PAPER_INK_MUTED} /><AppText style={styles.resultCaption}>{result.candidate.minutes === null ? tr('spin.unestimated') : tr('focus.minutes', { minutes: result.candidate.minutes })}</AppText></View>
+                  <View style={[styles.resultLine,rowStyle]}><Icon name="flag-outline" size={14} color={PAPER_INK_MUTED} /><AppText style={styles.resultCaption}>{tr(`spin.priority.${result.candidate.priority}`)}</AppText></View>
+                </View>
+                {result.candidate.plannedAt ? <AppText style={styles.resultCaption}>{tr('spin.planned', { date: localizedDate(result.candidate.plannedAt, { dateStyle: 'medium' }) })}</AppText> : null}
+                {note.reminderAt ? <AppText style={styles.resultCaption}>{tr('spin.reminder', { date: localizedDate(note.reminderAt, { dateStyle: 'medium', timeStyle: 'short' }) })}</AppText> : null}
+                <View style={styles.resultReason}>
+                  <AppText style={styles.resultBody}>{tr(`spin.reason.${result.candidate.reason}`)}</AppText>
+                  {result.candidate.kind !== 'task' ? <AppText weight="600" style={styles.resultBody}>{tr(result.candidate.category === 'unorganized' ? 'spin.prompt.unorganized' : result.candidate.kind === 'creative' ? result.candidate.related ? 'spin.prompt.connect' : 'spin.prompt.write' : 'spin.prompt.review')}</AppText> : null}
+                </View>
+                {result.done ? <View style={[styles.resultLine,rowStyle]}><Icon name="checkmark-circle" size={20} color={PAPER_INK} /><AppText accessibilityLiveRegion="polite" style={[handBold, styles.doneText]}>{tr('spin.mascot.completed')}</AppText></View> : null}
+              </PaperNote>
+            </Reanimated.View>
+          </ScrollView>
+          <View style={styles.actions}>
+            {!result.done ? <>
+              <PaperAction primary label={tr('focus.start')} disabled={busy} onPress={() => open(true)} />
+              <View style={[styles.actionRow,rowStyle]}>
+                <PaperAction label={tr('spin.open')} disabled={busy} onPress={() => open()} containerStyle={styles.flex} />
+                <PaperAction label={tr('spin.again')} disabled={busy} onPress={spin} containerStyle={styles.flex} />
+              </View>
+            </> : <>
+              <PaperAction primary label={tr('spin.again')} disabled={busy} onPress={spin} />
+              <PaperAction label={tr('spin.adjust')} disabled={busy} onPress={() => { assignResult(null); setMessage('before'); void load(); }} />
+            </>}
+          </View>
+  </> : suggestion ? <>
+          <ScrollView style={styles.flexShrink} contentContainerStyle={styles.resultContent}>
+            <Reanimated.View entering={drop}>
+              <PaperNote paper={SPIN_CATEGORY_PAPER.suggestions} tilt={-1} pin style={styles.resultNote}>
+                <AppText weight="700" style={styles.resultCategory}>{tr('spin.category.suggestions')}</AppText>
+                <AppText accessibilityRole="header" style={[handBold, styles.resultTitle]}>{tr('spin.newNote')}</AppText>
+                <AppText style={styles.resultBody}>{tr(suggestion === 'saved' ? 'calendar.noteAdded' : 'spin.newNotePrompt')}</AppText>
+              </PaperNote>
+            </Reanimated.View>
+          </ScrollView>
+          <View style={styles.actions}>
+            {suggestion !== 'saved' ? <PaperAction primary label={tr('id.addNote')} disabled={busy} onPress={() => setAddNoteOpen(true)} /> : null}
+            <View style={[styles.actionRow,rowStyle]}>
+              <PaperAction primary={suggestion === 'saved'} label={tr('spin.again')} disabled={busy} onPress={spin} containerStyle={styles.flex} />
+              <PaperAction label={tr(suggestion === 'saved' ? 'spin.adjust' : 'spin.skip')} disabled={busy} containerStyle={styles.flex} onPress={() => { if (suggestion !== 'saved') setSuggestionSkippedAt(Date.now()); setSuggestion(null); setMessage(suggestion === 'saved' ? 'before' : 'skipped'); void load(); }} />
+            </View>
+          </View>
+  </> : null;
+  return <Screen edges={['top','left','right','bottom']} style={{ backgroundColor: desk.desk }}>
     <AppHeader actionWidth={88} title={tr('spin.title')} subtitle={tr('spin.subtitle')} leading={<IconButton label={tr('search.goBack')} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} trailing={<View style={[styles.headerActions,rowStyle]}>{modeAction}<IconButton label={tr('spin.preferences')} onPress={() => setAdvanced(true)}><HeaderIcon name="options-outline" size={22} /></IconButton></View>} />
+    <PaperDesk>
     <View style={[styles.viewport, landscape && styles.wideViewport]}>
       {modeNotice}
-      <Animated.View style={{ transform: [{ translateY: mascotOffset }] }}><FocusCompanion small message={tr(`spin.mascot.${mascotMessage}`)} /></Animated.View>
-      {error ? <AppText accessibilityRole="alert" style={{ color: tokens.danger }}>{error}</AppText> : null}
-      {overdue.length ? <FocusAction quiet disabled={busy} onPress={() => actionSheet({ title: tr('spin.overdue', { count: overdue.length }), options: overdue.map(n => ({ label: n.title, onPress: () => void run(async () => { if (!await revisit.get(n.key)) throw new Error(tr('spin.unavailable')); router.push(spinSourceRoute(n.key)); }) })) })}>{tr('spin.overdue', { count: overdue.length })} · {tr('spin.addressOverdue')}</FocusAction> : null}
-      <View style={[styles.workspace, landscape && !hasResult && styles.landscape]}>
-        {!hasResult ? <View style={[styles.wheelColumn, accessibleLayout && styles.accessibleWheel]} onLayout={({ nativeEvent }) => { const { width: nextWidth, height: nextHeight } = nativeEvent.layout; setWheelBounds(previous => previous.width === nextWidth && previous.height === nextHeight ? previous : { width: nextWidth, height: nextHeight }); }}>
-          <View style={[styles.wheelSpace, !loading && !eligible.length && !hasResult && styles.emptySpace]}>
-            {!loading && !eligible.length && !hasResult ? <ScrollView style={styles.flex} contentContainerStyle={styles.empty}><EmptyState title={tr('spin.mascot.empty')} description={tr('spin.emptyHelp')} /></ScrollView> : wheelBounds.height > 0 ? <SpinWheel size={Math.max(48,Math.min(340,wheelBounds.width-8,wheelBounds.height-legendHeight-12))} rotation={rotation} categories={displayedCategories} spinning={spinning} /> : null}
-          </View>
-          {!hasResult ? <View onLayout={({ nativeEvent }) => setLegendHeight(nativeEvent.layout.height)} style={[styles.legendRow, rowStyle]} accessibilityLabel={tr('spin.categories')}>
-            {displayedCategories.map((category,index) => <AppText key={category} style={styles.legend}>{index+1} · {tr(`spin.category.${category}`)}</AppText>)}
-          </View> : null}
-        </View> : null}
-      {!hasResult ? <Surface fill={tokens.surface} border={tokens.borderSubtle} radius={styleTokens.radius.panel} shadow={false} edge={false} style={[styles.decisionPanel,(landscape || accessibleLayout) && styles.flex]}>
-        <ScrollView style={[styles.controlsScroll, !landscape && !accessibleLayout && styles.fixedControls]} contentContainerStyle={styles.controls} showsVerticalScrollIndicator={accessibleLayout || landscape}>
-          <View pointerEvents={busy ? 'none' : 'auto'} accessibilityElementsHidden={spinning} importantForAccessibility={spinning ? 'no-hide-descendants' : 'auto'} style={styles.controls}>
-            <View style={styles.choiceGroup}>
-              <AppText weight="700" style={styles.controlLabel}>{tr('spin.time')}</AppText>
-              <Surface fill={tokens.surfaceElevated} radius={styleTokens.button.radius} outline={false} edge={false} shadow={false} style={[styles.choiceRow,rowStyle]}>
-                {[5,15,30,60,null].map(minutes => { const label = minutes === null ? tr('spin.surprise') : tr('focus.minutes', { minutes }); return <SpinChoice key={minutes ?? 'any'} label={label} selected={preferences.minutes === minutes} disabled={busy} wide={minutes === null} onPress={() => updatePreferences({ ...preferences, minutes })} />; })}
-              </Surface>
-            </View>
-            <View style={styles.choiceGroup}>
-              <AppText weight="700" style={styles.controlLabel}>{tr('spin.energy')}</AppText>
-              <Surface fill={tokens.surfaceElevated} radius={styleTokens.button.radius} outline={false} edge={false} shadow={false} style={[styles.choiceRow,rowStyle]}>
-                {(['low','medium','high'] as const).map(energy => <SpinChoice key={energy} label={tr(`spin.energyShort.${energy}`)} accessibilityLabel={tr(`spin.energyHelp.${energy}`)} selected={preferences.energy === energy} disabled={busy} onPress={() => updatePreferences({ ...preferences, energy })} />)}
-              </Surface>
-            </View>
-            <View style={[styles.challengeRow,rowStyle,{ borderTopColor: tokens.borderSubtle }]}>
-              <Icon name="timer-outline" size={18} color={tokens.textSecondary} />
-              <AppText style={[styles.flex,styles.challengeLabel]}>{tr('spin.challenge')}</AppText>
-              <Switch accessibilityLabel={tr('spin.challenge')} value={challenge} disabled={busy} onValueChange={value => { challengeRef.current = value; setChallenge(value); setLoading(true); void load(); }} />
-            </View>
-          </View>
-        </ScrollView>
-        <FocusAction primary disabled={busy || loading || !eligible.length} onPress={spin}>{tr(spinning ? 'spin.spinning' : 'spin.spin')}</FocusAction>
-      </Surface> : note ? <Surface fill={tokens.surface} border={tokens.borderSubtle} radius={styleTokens.radius.panel} shadow={false} edge={false} style={styles.resultPanel}>
-        <ScrollView style={styles.resultScroll} contentContainerStyle={styles.resultContent}>
-          <Reveal>
-            <View style={styles.resultSummary}>
-              <View style={[styles.resultHeading,rowStyle]}>
-                <AppText weight="700" style={[styles.resultCategory,{ color: tokens.accentStrong }]}>{tr(`spin.category.${result.candidate.category}`)}</AppText>
-                <IconButton label={tr('attachments.moreActions')} disabled={busy} onPress={moreResultActions}><Icon name="ellipsis-horizontal" size={21} color={tokens.textSecondary} /></IconButton>
-              </View>
-              <AppText accessibilityRole="header" weight="700" style={styles.resultTitle}>{note.title}</AppText>
-              <View style={[styles.resultSource,rowStyle]}>
-                <Icon name={note.boardId ? 'albums-outline' : 'document-text-outline'} size={14} color={tokens.textSecondary} />
-                <AppText style={[styles.resultCaption,{ color: tokens.textSecondary }]}>{tr(note.boardId ? 'spin.source.card' : 'spin.source.note')} · {note.boardName ?? tr('index.unorganized')}{resolveSpaceId(result.candidate.space) ? ` · ${SPACES[resolveSpaceId(result.candidate.space)!].name}` : ''}</AppText>
-              </View>
-              <View style={[styles.resultMetadata,rowStyle,{ borderTopColor: tokens.borderSubtle }]}>
-                <View style={[styles.resultSource,rowStyle]}><Icon name="time-outline" size={14} color={tokens.textSecondary} /><AppText style={styles.resultCaption}>{result.candidate.minutes === null ? tr('spin.unestimated') : tr('focus.minutes', { minutes: result.candidate.minutes })}</AppText></View>
-                <View style={[styles.resultSource,rowStyle]}><Icon name="flag-outline" size={14} color={tokens.textSecondary} /><AppText style={styles.resultCaption}>{tr(`spin.priority.${result.candidate.priority}`)}</AppText></View>
-              </View>
-              {result.candidate.plannedAt ? <AppText style={[styles.resultCaption,{ color: tokens.textSecondary }]}>{tr('spin.planned', { date: localizedDate(result.candidate.plannedAt, { dateStyle: 'medium' }) })}</AppText> : null}
-              {note.reminderAt ? <AppText style={[styles.resultCaption,{ color: tokens.textSecondary }]}>{tr('spin.reminder', { date: localizedDate(note.reminderAt, { dateStyle: 'medium', timeStyle: 'short' }) })}</AppText> : null}
-              <Surface fill={tokens.surfaceElevated} radius={styleTokens.button.radius} outline={false} edge={false} shadow={false} style={styles.resultReason}>
-                <AppText style={[styles.resultBody,{ color: tokens.textSecondary }]}>{tr(`spin.reason.${result.candidate.reason}`)}</AppText>
-                {result.candidate.kind !== 'task' ? <AppText style={styles.resultBody}>{tr(result.candidate.category === 'unorganized' ? 'spin.prompt.unorganized' : result.candidate.kind === 'creative' ? result.candidate.related ? 'spin.prompt.connect' : 'spin.prompt.write' : 'spin.prompt.review')}</AppText> : null}
-              </Surface>
-              {result.done ? <View style={[styles.resultSource,rowStyle]}><Icon name="checkmark-circle-outline" size={18} color={tokens.accentStrong} /><AppText accessibilityLiveRegion="polite" weight="700" style={[styles.resultBody,{ color: tokens.accentStrong }]}>{tr('spin.mascot.completed')}</AppText></View> : null}
-            </View>
-          </Reveal>
-        </ScrollView>
-        <View style={[styles.resultActions,{ borderTopColor: tokens.borderSubtle }]}>
-          {!result.done ? <>
-            <FocusAction primary disabled={busy} onPress={() => open(true)}>{tr('focus.start')}</FocusAction>
-            <View style={[styles.resultActionRow,rowStyle]}>
-              <View style={styles.flex}><FocusAction disabled={busy} onPress={() => open()}>{tr('spin.open')}</FocusAction></View>
-              <View style={styles.flex}><FocusAction disabled={busy} onPress={spin}>{tr('spin.again')}</FocusAction></View>
-            </View>
-          </> : <>
-            <FocusAction primary disabled={busy} onPress={spin}>{tr('spin.again')}</FocusAction>
-            <FocusAction quiet disabled={busy} onPress={() => { assignResult(null); setMessage('before'); void load(); }}>{tr('spin.adjust')}</FocusAction>
-          </>}
+      <Animated.View style={{ transform: [{ translateY: mascotOffset }] }}><DeskMessage message={tr(`spin.mascot.${mascotMessage}`)} /></Animated.View>
+      {error ? <AppText accessibilityRole="alert" weight="600" style={[styles.deskText,{ color: desk.danger }]}>{error}</AppText> : null}
+      {overdue.length ? <View style={styles.overdue}><PaperTab paper={SPIN_CATEGORY_PAPER.unfinished} tilt={1} icon="alert-circle-outline" label={tr('spin.overdue', { count: overdue.length })} accessibilityRole="button" accessibilityHint={tr('spin.addressOverdue')} disabled={busy} onPress={() => actionSheet({ title: tr('spin.overdue', { count: overdue.length }), options: overdue.map(n => ({ label: n.title, onPress: () => void run(async () => { if (!await revisit.get(n.key)) throw new Error(tr('spin.unavailable')); router.push(spinSourceRoute(n.key)); }) })) })} /></View> : null}
+      <View style={[styles.workspace, landscape && styles.landscape]}>
+        <View style={[styles.wheelColumn, accessibleLayout && styles.accessibleWheel]} onLayout={({ nativeEvent }) => { const { width: nextWidth, height: nextHeight } = nativeEvent.layout; setWheelBounds(previous => previous.width === nextWidth && previous.height === nextHeight ? previous : { width: nextWidth, height: nextHeight }); }}>
+          {!loading && !eligible.length && !hasResult ? <ScrollView style={styles.flex} contentContainerStyle={styles.empty}><EmptyState title={tr('spin.mascot.empty')} description={tr('spin.emptyHelp')} /></ScrollView>
+            : wheelBounds.height > 0 ? <Reanimated.View style={wheelMotion}><SpinWheel size={wheelSize} rotation={rotation} labels={wheelLabels} papers={wheelPapers} spinning={spinning} highlight={landed !== null && landed >= 0 ? landed : null} onSpin={spinFromWheel} spinDisabled={busy || loading || !eligible.length} /></Reanimated.View> : null}
         </View>
-      </Surface> : suggestion ? <Surface fill={tokens.surface} border={tokens.borderSubtle} radius={styleTokens.radius.panel} shadow={false} edge={false} style={styles.resultPanel}>
-        <ScrollView style={styles.resultScroll} contentContainerStyle={styles.resultContent}>
-          <View style={styles.resultSummary}>
-            <AppText weight="700" style={[styles.resultCategory,{ color: tokens.accentStrong }]}>{tr('spin.category.suggestions')}</AppText>
-            <AppText accessibilityRole="header" weight="700" style={styles.resultTitle}>{tr('spin.newNote')}</AppText>
-            <AppText style={[styles.resultBody,{ color: tokens.textSecondary }]}>{tr(suggestion === 'saved' ? 'calendar.noteAdded' : 'spin.newNotePrompt')}</AppText>
-          </View>
-        </ScrollView>
-        <View style={[styles.resultActions,{ borderTopColor: tokens.borderSubtle }]}>
-          {suggestion !== 'saved' ? <FocusAction primary disabled={busy} onPress={() => setAddNoteOpen(true)}>{tr('id.addNote')}</FocusAction> : null}
-          <FocusAction primary={suggestion === 'saved'} disabled={busy} onPress={spin}>{tr('spin.again')}</FocusAction>
-          <FocusAction quiet disabled={busy} onPress={() => { if (suggestion !== 'saved') setSuggestionSkippedAt(Date.now()); setSuggestion(null); setMessage(suggestion === 'saved' ? 'before' : 'skipped'); void load(); }}>{tr(suggestion === 'saved' ? 'spin.adjust' : 'spin.skip')}</FocusAction>
-        </View>
-      </Surface> : null}
+        {stacked ? <>
+          <Reanimated.View style={[styles.panel, controlsMotion]} pointerEvents={hasResult ? 'none' : 'auto'} accessibilityElementsHidden={hasResult} importantForAccessibility={hasResult ? 'no-hide-descendants' : 'auto'}>
+          <ScrollView style={[styles.flexShrink, !landscape && !accessibleLayout && styles.fixedControls]} contentContainerStyle={styles.controlsContent} showsVerticalScrollIndicator={accessibleLayout || landscape}>
+            <View pointerEvents={busy ? 'none' : 'auto'} accessibilityElementsHidden={spinning} importantForAccessibility={spinning ? 'no-hide-descendants' : 'auto'} style={[styles.tabs,rowStyle]}>
+              <PaperTab paper={SPIN_CATEGORY_PAPER.unfinished} tilt={-2} icon="time-outline" label={timeLabel} accessibilityRole="button" accessibilityLabel={`${tr('spin.time')}: ${timeLabel}`} disabled={busy} onPress={chooseTime} />
+              <PaperTab paper={SPIN_CATEGORY_PAPER.revisit} tilt={1.5} icon="flash-outline" label={tr(`spin.energyShort.${preferences.energy}`)} accessibilityRole="button" accessibilityLabel={`${tr('spin.energy')}: ${tr(`spin.energyHelp.${preferences.energy}`)}`} disabled={busy} onPress={chooseEnergy} />
+              <PaperTab paper={challenge ? SPIN_CATEGORY_PAPER.tasks : SPIN_CATEGORY_PAPER.boards} tilt={-1} icon={challenge ? 'checkmark-circle' : 'timer-outline'} label={tr('spin.challenge')} accessibilityRole="switch" accessibilityState={{ checked: challenge, disabled: busy }} disabled={busy} onPress={toggleChallenge} />
+            </View>
+          </ScrollView>
+          <PaperAction primary label={tr(spinning ? 'spin.spinning' : 'spin.spin')} accessibilityState={{ disabled: busy || loading || !eligible.length, busy: spinning }} disabled={busy || loading || !eligible.length} onPress={spin} />
+          </Reanimated.View>
+          {hasResult && resultBody ? <Reanimated.View entering={reduced ? undefined : FadeIn.duration(240)} exiting={reduced ? undefined : FadeOutDown.duration(220)} style={[styles.resultOverlay, { top: compactSize + 28 }]}>{resultBody}</Reanimated.View> : null}
+        </> : !hasResult ? <Reanimated.View key="controls" entering={reduced ? undefined : FadeIn.duration(240)} exiting={reduced ? undefined : FadeOut.duration(160)} style={[styles.panel, styles.flex]}>
+          <ScrollView style={[styles.flexShrink, !landscape && !accessibleLayout && styles.fixedControls]} contentContainerStyle={styles.controlsContent} showsVerticalScrollIndicator={accessibleLayout || landscape}>
+            <View pointerEvents={busy ? 'none' : 'auto'} accessibilityElementsHidden={spinning} importantForAccessibility={spinning ? 'no-hide-descendants' : 'auto'} style={[styles.tabs,rowStyle]}>
+              <PaperTab paper={SPIN_CATEGORY_PAPER.unfinished} tilt={-2} icon="time-outline" label={timeLabel} accessibilityRole="button" accessibilityLabel={`${tr('spin.time')}: ${timeLabel}`} disabled={busy} onPress={chooseTime} />
+              <PaperTab paper={SPIN_CATEGORY_PAPER.revisit} tilt={1.5} icon="flash-outline" label={tr(`spin.energyShort.${preferences.energy}`)} accessibilityRole="button" accessibilityLabel={`${tr('spin.energy')}: ${tr(`spin.energyHelp.${preferences.energy}`)}`} disabled={busy} onPress={chooseEnergy} />
+              <PaperTab paper={challenge ? SPIN_CATEGORY_PAPER.tasks : SPIN_CATEGORY_PAPER.boards} tilt={-1} icon={challenge ? 'checkmark-circle' : 'timer-outline'} label={tr('spin.challenge')} accessibilityRole="switch" accessibilityState={{ checked: challenge, disabled: busy }} disabled={busy} onPress={toggleChallenge} />
+            </View>
+          </ScrollView>
+          <PaperAction primary label={tr(spinning ? 'spin.spinning' : 'spin.spin')} accessibilityState={{ disabled: busy || loading || !eligible.length, busy: spinning }} disabled={busy || loading || !eligible.length} onPress={spin} />
+        </Reanimated.View> : resultBody ? <Reanimated.View key="result" entering={reduced ? undefined : FadeIn.duration(240)} exiting={reduced ? undefined : FadeOut.duration(160)} style={[styles.flex, styles.resultPanel]}>{resultBody}</Reanimated.View> : null}
       </View>
       {celebration > 0 && hasResult && preferences.celebrations && !reduced ? <SpinCelebration key={celebration} /> : null}
     </View>
+    </PaperDesk>
     <AddNoteSheet visible={addNoteOpen} onClose={() => setAddNoteOpen(false)} onSubmit={saveSuggestedNote} />
     <FormSheet visible={details && !!result} onRequestClose={() => setDetails(false)} closeAccessibilityLabel={tr('attachments.close')} maxHeightPercent={85} accessibilityViewIsModal header={<View style={[styles.sheetHeader,rowStyle]}><AppText weight="700" style={styles.flex}>{tr('spin.metadata')}</AppText><IconButton label={tr('attachments.close')} onPress={() => setDetails(false)}><Icon name="close" size={22} color={tokens.textPrimary} /></IconButton></View>}>
       {result ? <>
-        <View style={[focusStyles.panel,styles.controls]} pointerEvents={busy ? 'none' : 'auto'}>
+        <View style={[focusStyles.panel,styles.sheetControls]} pointerEvents={busy ? 'none' : 'auto'}>
           <AppText>{tr('spin.estimatesHelp')}</AppText><View style={[focusStyles.row,rowStyle]}>{[null,5,15,30,60].map(minutes => { const label = minutes === null ? tr('spin.unestimated') : tr('focus.minutes', { minutes }); return <Chip key={minutes ?? 'none'} label={label} accessibilityLabel={label} selected={(result.candidate.metadata?.duration_minutes ?? null) === minutes} onPress={() => setMetadata(minutes,result.candidate.priority,result.candidate.metadata?.energy ?? null)} />; })}</View>
           <View style={[focusStyles.row,rowStyle]}>{[0,1,2].map(priority => <Chip key={priority} label={tr(`spin.priority.${priority}`)} accessibilityLabel={tr(`spin.priority.${priority}`)} selected={result.candidate.priority === priority} onPress={() => setMetadata(result.candidate.metadata?.duration_minutes ?? null,priority,result.candidate.metadata?.energy ?? null)} />)}</View>
           <AppText>{tr('spin.requiredEnergy')}</AppText><View style={[focusStyles.row,rowStyle]}>{(['low','medium','high'] as const).map(energy => <Chip key={energy} label={tr(`spin.energyShort.${energy}`)} accessibilityLabel={tr(`spin.energyHelp.${energy}`)} selected={result.candidate.metadata?.energy === energy} onPress={() => setMetadata(result.candidate.metadata?.duration_minutes ?? null,result.candidate.priority,result.candidate.metadata?.energy === energy ? null : energy)} />)}</View>
@@ -386,54 +429,39 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
     </FormSheet>
   </Screen>;
 }
-function SpinChoice({ label, accessibilityLabel, selected, disabled, wide = false, onPress }: { label: string; accessibilityLabel?: string; selected: boolean; disabled: boolean; wide?: boolean; onPress: () => void }) {
-  const { tokens, styleTokens } = useTheme();
-  return <PressableSurface accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label} accessibilityState={{ selected, disabled }} disabled={disabled} onPress={onPress}
-    fill={selected ? tokens.accentSoft : undefined} border={selected ? tokens.accentBorder : undefined} radius={styleTokens.button.radius} edge={false} outline={false} shadow={false}
-    style={[styles.choice,wide && styles.wideChoice]}>
-    <AppText weight="600" style={[styles.choiceLabel,{ color: selected ? tokens.accentStrong : tokens.textSecondary }]}>{label}</AppText>
-  </PressableSurface>;
-}
 const styles = StyleSheet.create({
   headerActions: { alignItems: 'center', flexWrap: 'nowrap' },
-  viewport: { flex: 1, minHeight: 0, width: '100%', maxWidth: 620, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, gap: 6 },
+  viewport: { flex: 1, minHeight: 0, width: '100%', maxWidth: 620, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 10 },
   wideViewport: { maxWidth: 980 },
-  workspace: { flex: 1, minHeight: 0, gap: 8 },
-  landscape: { flexDirection: 'row', gap: 16 },
-  wheelColumn: { flex: 1, minHeight: 0, minWidth: 0, gap: 8, alignItems: 'center', justifyContent: 'center' },
-  wheelSpace: { alignItems: 'center', justifyContent: 'center', width: '100%' },
-  accessibleWheel: { flex: 0, height: 132 },
-  legendRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 12, rowGap: 4 },
-  legend: { fontSize: 12, lineHeight: 16, flexShrink: 1 },
-  emptySpace: { flex: 1, minHeight: 0 },
+  deskText: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  overdue: { alignItems: 'center' },
+  workspace: { flex: 1, minHeight: 0, gap: 14 },
+  landscape: { flexDirection: 'row', gap: 20 },
+  wheelColumn: { flex: 1, minHeight: 0, minWidth: 0, alignItems: 'center', justifyContent: 'center', paddingTop: 10 },
+  resultOverlay: { position: 'absolute', left: 0, right: 0, bottom: 0, gap: 14 },
+  accessibleWheel: { flex: 0, height: 150 },
   empty: { flexGrow: 1, justifyContent: 'center' },
-  decisionPanel: { padding: 10, gap: 8 },
-  controlsScroll: { flex: 1, minHeight: 0 },
-  fixedControls: { flex: 0, flexGrow: 0, flexShrink: 0 },
-  controls: { gap: 8 },
-  choiceGroup: { gap: 4 },
-  controlLabel: { fontSize: 12, lineHeight: 18 },
-  choiceRow: { flexDirection: 'row', padding: 2, gap: 2 },
-  choice: { flex: 1, minWidth: 0, minHeight: 44, justifyContent: 'center', paddingHorizontal: 3, paddingVertical: 4 },
-  wideChoice: { flex: 1.7 },
-  choiceLabel: { textAlign: 'center', fontSize: 13, lineHeight: 17 },
-  challengeRow: { alignItems: 'center', gap: 8, minHeight: 44, paddingTop: 4, borderTopWidth: StyleSheet.hairlineWidth },
-  challengeLabel: { fontSize: 13, lineHeight: 19 },
+  panel: { gap: 18 },
+  flexShrink: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
+  fixedControls: { flexShrink: 0 },
+  controlsContent: { paddingTop: 10, paddingBottom: 4 },
+  tabs: { flexWrap: 'wrap', justifyContent: 'center', gap: 10 },
   toggle: { alignItems: 'center', gap: 12, minHeight: 44 },
   flex: { flex: 1 },
-  resultScroll: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
-  resultPanel: { flexShrink: 1, minHeight: 0, padding: 12 },
-  resultContent: { paddingBottom: 12 },
-  resultSummary: { gap: 8 },
-  resultHeading: { alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  resultCategory: { flex: 1, fontSize: 12, lineHeight: 18 },
-  resultTitle: { fontSize: 21, lineHeight: 28 },
-  resultSource: { alignItems: 'center', flexWrap: 'wrap', gap: 6 },
-  resultCaption: { fontSize: 12, lineHeight: 18, flexShrink: 1 },
-  resultMetadata: { flexWrap: 'wrap', alignItems: 'center', columnGap: 16, rowGap: 6, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10, marginTop: 2 },
-  resultReason: { padding: 10, gap: 6, marginTop: 2 },
-  resultBody: { fontSize: 13, lineHeight: 19 },
-  resultActions: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10, gap: 8 },
-  resultActionRow: { gap: 8, alignItems: 'stretch' },
+  sheetControls: { gap: 8 },
+  resultPanel: { minHeight: 0, gap: 14 },
+  resultContent: { paddingTop: 14, paddingBottom: 8, paddingHorizontal: 4 },
+  resultNote: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, gap: 8 },
+  resultHeading: { alignItems: 'center', justifyContent: 'space-between', gap: 8, marginRight: -8 },
+  resultCategory: { flex: 1, color: PAPER_INK_MUTED, fontSize: 12, lineHeight: 16, letterSpacing: 0.6, textTransform: 'uppercase' },
+  resultTitle: { color: PAPER_INK, fontSize: 28, lineHeight: 36, marginTop: -6 },
+  resultLine: { alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  resultMeta: { flexWrap: 'wrap', alignItems: 'center', columnGap: 16, rowGap: 6 },
+  resultCaption: { color: PAPER_INK_MUTED, fontSize: 13, lineHeight: 18, flexShrink: 1 },
+  resultReason: { gap: 6, marginTop: 4, paddingTop: 10, borderTopWidth: 1, borderStyle: 'dashed', borderTopColor: 'rgba(43,38,32,0.25)' },
+  resultBody: { color: PAPER_INK, fontSize: 14, lineHeight: 20 },
+  doneText: { color: PAPER_INK, fontSize: 20, lineHeight: 26 },
+  actions: { gap: 12, paddingBottom: 4 },
+  actionRow: { gap: 12, alignItems: 'stretch' },
   sheetHeader: { alignItems: 'center', paddingHorizontal: 16, paddingTop: 8 },
 });

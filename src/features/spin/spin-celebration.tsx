@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Animated, AppState, Easing, StyleSheet, View } from 'react-native';
-import { useTheme } from '@/components/theme-provider';
+import { PAPER_CONFETTI } from '@/components/desk/paper-desk';
 
 // Mounted for each successful landing/completion, never when restoring a result.
 // One native-driver timeline keeps the burst independent of list/data refreshes.
 export function SpinCelebration() {
-  const { tokens } = useTheme();
   const [progress] = useState(() => new Animated.Value(0));
   useEffect(() => {
     const animation = Animated.timing(progress, { toValue: 1, duration: 1500, easing: Easing.linear, useNativeDriver: true });
@@ -15,7 +14,7 @@ export function SpinCelebration() {
     animation.start();
     return () => { animation.stop(); subscription.remove(); };
   }, [progress]);
-  const colors = [tokens.accentStrong, tokens.accent, tokens.textSecondary];
+  const colors = PAPER_CONFETTI;
   return <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.overlay}>
     {Array.from({ length: 20 }, (_, index) => {
       const direction = index % 2 ? 1 : -1;
