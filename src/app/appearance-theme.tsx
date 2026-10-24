@@ -10,6 +10,7 @@ import * as Haptics from 'expo-haptics';
 
 import { CustomHeaderSettings } from '@/components/settings/custom-header-settings';
 import { useTheme } from '@/components/theme-provider';
+import { PaperDesk, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { AppHeader, IconButton, Screen, Toast, HeaderIcon } from '@/components/ui/primitives';
 import { CHITS_THEME_COLLECTIONS, TOP_BAR_IMAGE_SCRIM, topBarForIdentity, type ChitsTheme } from '@/constants/chits-themes';
 import { THEME_IMAGES } from '@/constants/theme-images';
@@ -80,7 +81,9 @@ export default function AppearanceThemeScreen() {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const { tokens, identity, setIdentity } = useTheme();
+  const { identity, setIdentity } = useTheme();
+  const desk = useDesk();
+  const { handBold } = useHandwriting();
   const { width } = useWindowDimensions();
   const [toast, setToast] = useState<string | null>(null);
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 2200); return () => clearTimeout(timer); }, [toast]);
@@ -90,21 +93,24 @@ export default function AppearanceThemeScreen() {
     void Haptics.selectionAsync();
     void setIdentity(theme.id).catch(() => setToast(tr("appearancetheme.thatThemeCouldnTBeSavedPleaseTry")));
   };
-  return <Screen edges={['top', 'left', 'right']}>
+  // The theme previews keep their own colors; only the page around them is the desk.
+  return <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: desk.desk }}>
     <AppHeader title={tr("appearancetheme.theme")} leading={<IconButton label={tr("search.goBack")} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
+    <PaperDesk>
     <ScrollView contentContainerStyle={styles.content}>
-      <Text style={[styles.intro, { color: tokens.textSecondary }]}>{tr("appearancetheme.chooseThePersonalityChitsWearsYourNotesBoards")}</Text>
+      <Text style={[styles.intro, { color: desk.inkMuted }]}>{tr("appearancetheme.chooseThePersonalityChitsWearsYourNotesBoards")}</Text>
       <CustomHeaderSettings />
       {CHITS_THEME_COLLECTIONS.filter((collection) => collection.shown).map((collection) => <View key={collection.id} style={styles.collection}>
-        <Text accessibilityRole="header" style={[styles.collectionTitle, { color: tokens.textPrimary }]}>{collection.name}</Text>
-        {collection.id === 'generations' ? <Text style={[styles.collectionDetail, { color: tokens.textMuted }]}>{tr("appearancetheme.fiveDesignErasToldThroughTypeColorAnd")}</Text> : null}
-        {collection.id === 'limited-edition' ? <Text style={[styles.collectionDetail, { color: tokens.textMuted }]}>{tr("appearancetheme.specialThemesWithTheirOwnArtworkAcrossThe")}</Text> : null}
+        <Text accessibilityRole="header" style={[handBold, styles.collectionTitle, { color: desk.ink }]}>{collection.name}</Text>
+        {collection.id === 'generations' ? <Text style={[styles.collectionDetail, { color: desk.inkMuted }]}>{tr("appearancetheme.fiveDesignErasToldThroughTypeColorAnd")}</Text> : null}
+        {collection.id === 'limited-edition' ? <Text style={[styles.collectionDetail, { color: desk.inkMuted }]}>{tr("appearancetheme.specialThemesWithTheirOwnArtworkAcrossThe")}</Text> : null}
         <View accessibilityRole="radiogroup" accessibilityLabel={tr("appearancetheme.valueThemes", { value1: collection.name })} style={styles.grid}>
           {collection.themes.map((theme) => <ThemePreviewCard key={theme.id} theme={theme} selected={theme.id === identity} width={cardWidth} onPress={() => choose(theme)} />)}
         </View>
       </View>)}
-      <Text style={[styles.footnote, { color: tokens.textMuted }]}>{tr("appearancetheme.lightAndDarkFollowAppAppearanceYourCustom")}</Text>
+      <Text style={[styles.footnote, { color: desk.inkMuted }]}>{tr("appearancetheme.lightAndDarkFollowAppAppearanceYourCustom")}</Text>
     </ScrollView>
+    </PaperDesk>
     <Toast message={toast} />
   </Screen>;
 }
@@ -113,7 +119,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.xl, alignSelf: 'center', width: '100%', maxWidth: 720 },
   intro: { fontSize: 14, lineHeight: 20 },
   collection: { marginTop: spacing.lg },
-  collectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: spacing.xs },
+  collectionTitle: { fontSize: 24, lineHeight: 31, marginBottom: spacing.xs },
   collectionDetail: { fontSize: 12, lineHeight: 17, marginTop: -2, marginBottom: spacing.sm },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   card: { overflow: 'hidden', borderRadius: radii.compactCard },

@@ -9,6 +9,8 @@ export const HEADER_SCENE_PANES = [
   { x: 1204, y: 295, w: 198, h: 191 },
   { x: 1418, y: 295, w: 198, h: 191 },
 ];
+/** The open sky above the far hills, as an SVG path in picture pixels. */
+export const HEADER_SCENE_SKY = 'M1196 64 L1196 410 C1260 385 1320 398 1380 392 C1450 385 1520 360 1624 395 L1624 64 Z';
 /** Each picture's average color: what the header shows for the instant before it decodes. */
 export const HEADER_SCENE_TONE = {
   dawn: '#E3C2AD',

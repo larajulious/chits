@@ -25,7 +25,8 @@ import { useTheme } from '@/components/theme-provider';
 import { HeaderChromeContext, IconButton, TileInkContext } from '@/components/ui/controls';
 import { Icon } from '@/components/ui/icon';
 import { AppText, HeaderIcon, MenuIcon, Screen, Toast, TopBarBackground, useHeaderInk } from '@/components/ui/primitives';
-import { radii, spacing } from '@/constants/theme';
+import { PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW, PaperDesk, PaperRound, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { spacing } from '@/constants/theme';
 import { SPACE_LIST } from '@/constants/spaces';
 import type { SpaceCandidate } from '@/db/types';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
@@ -93,6 +94,9 @@ export default function CalendarScreen() {
   const { openDrawer } = useAppDrawer();
   const { actionSheet, confirm } = useAppDialog();
   const { tokens: theme, styleTokens } = useTheme();
+  const desk = useDesk();
+  // Entries are handwritten: hold the body for the moment the bundled face takes, so lists never reflow.
+  const handwriting = useHandwriting();
   const { ink } = useHeaderInk();
   const tabBarHeight = useBottomTabBarHeight();
   const insets = useSafeAreaInsets();
@@ -377,8 +381,10 @@ export default function CalendarScreen() {
   const listInset = tabBarHeight + FAB_SIZE + spacing.lg;
   const handlers = { now, onOpen: showDetail, onActions: showDetail };
   let body: React.ReactNode;
-  if (error && !items.length) {
-    body = <Pressable accessibilityRole="button" onPress={() => void reload()} style={styles.center}><AppText style={{ color: theme.danger }}>{tr("calendar.couldNotLoadTheCalendarTapToRetry")}</AppText></Pressable>;
+  if (!handwriting.ready) {
+    body = null;
+  } else if (error && !items.length) {
+    body = <Pressable accessibilityRole="button" onPress={() => void reload()} style={styles.center}><AppText style={{ color: desk.danger }}>{tr("calendar.couldNotLoadTheCalendarTapToRetry")}</AppText></Pressable>;
   } else if (searchOpen) {
     body = <SearchResults items={query.trim() ? visibleItems : []} query={query} bottomInset={listInset} {...handlers} onOpen={(item) => { setSearchOpen(false); setQuery(''); setView('month'); pressDay(item.dateKey); }} />;
   } else if (view === 'month') {
@@ -403,25 +409,28 @@ export default function CalendarScreen() {
   }
   const showFab = !(view === 'month' && panelOpen) && !searchOpen;
 
-  return <Screen edges={['top', 'left', 'right']}>
+  return <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: desk.desk }}>
     {header}
+    <PaperDesk>
     {searchOpen ? (
-      <View style={[styles.search, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
-        <Icon name="search-outline" size={17} color={theme.textMuted} />
-        <TextInput autoFocus accessibilityLabel={tr("calendar.searchNotesAndReminders")} value={query} onChangeText={setQuery} placeholder={tr("calendar.searchNotesAndReminders")} placeholderTextColor={theme.textMuted} returnKeyType="search" onSubmitEditing={Keyboard.dismiss} style={[styles.searchInput, { color: theme.textPrimary }]} />
+      <View style={[styles.search, { boxShadow: `0px 4px 10px ${desk.shadow}` }]}>
+        <Icon name="search-outline" size={17} color={PAPER_INK_MUTED} />
+        <TextInput autoFocus accessibilityLabel={tr("calendar.searchNotesAndReminders")} value={query} onChangeText={setQuery} placeholder={tr("calendar.searchNotesAndReminders")} placeholderTextColor={PAPER_INK_MUTED} returnKeyType="search" onSubmitEditing={Keyboard.dismiss} selectionColor={PAPER_INK} style={[styles.searchInput, { color: PAPER_INK }]} />
       </View>
     ) : null}
     <View style={styles.flex}>{body}</View>
     {showFab ? (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={tr("calendar.addNoteOnValue", { value1: dateFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(view === 'agenda' ? today : selectedDate) })}
-        onPress={() => chooseAdd(view === 'agenda' ? todayKey : selectedKey, view === 'day' ? defaultStartMinute(selectedKey) : null)}
-        style={({ pressed }) => [styles.fab, { bottom: floatingCompanionBottom(insets.bottom, styleTokens.chat.height, FAB_SIZE), right: Math.max(spacing.lg, insets.right + spacing.sm), backgroundColor: theme.accentStrong, shadowColor: theme.textPrimary }, pressed && styles.pressed]}
-      >
-        <Icon name="add" size={28} color={theme.background} />
-      </Pressable>
+      <View style={[styles.fab, { bottom: floatingCompanionBottom(insets.bottom, styleTokens.chat.height, FAB_SIZE), right: Math.max(spacing.lg, insets.right + spacing.sm) }]}>
+        <PaperRound
+          paper={PAPER_YELLOW}
+          size={FAB_SIZE}
+          icon="add"
+          accessibilityLabel={tr("calendar.addNoteOnValue", { value1: dateFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(view === 'agenda' ? today : selectedDate) })}
+          onPress={() => chooseAdd(view === 'agenda' ? todayKey : selectedKey, view === 'day' ? defaultStartMinute(selectedKey) : null)}
+        />
+      </View>
     ) : null}
+    </PaperDesk>
 
     {composer ? (
       <AddNoteSheet
@@ -531,10 +540,10 @@ const styles = StyleSheet.create({
   chevron: { width: 34, height: 44, alignItems: 'center', justifyContent: 'center' },
   todayBadge: { width: 22, height: 22, borderWidth: 1.5, borderRadius: 5, alignItems: 'center', justifyContent: 'center' },
   todayBadgeText: { fontSize: 11, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  search: { minHeight: 44, marginHorizontal: spacing.md, marginBottom: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.control, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm },
+  search: { minHeight: 44, marginHorizontal: spacing.md, marginTop: spacing.sm, marginBottom: spacing.xs, borderRadius: 3, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm, backgroundColor: PAPER_WHITE },
   searchInput: { flex: 1, fontSize: 15, minHeight: 42 },
   gridWithPanel: { flex: 55 },
   panel: { flex: 45 },
-  fab: { position: 'absolute', right: spacing.md, width: FAB_SIZE, height: FAB_SIZE, borderRadius: FAB_SIZE / 2, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.22, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 5 },
+  fab: { position: 'absolute', right: spacing.md },
   context: { marginTop: spacing.xxs, marginBottom: spacing.sm, fontSize: 13, lineHeight: 18 },
 });

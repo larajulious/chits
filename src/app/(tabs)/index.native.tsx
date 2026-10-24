@@ -1,5 +1,5 @@
 import { countLabel, tr } from '@/localization/runtime';
-import { useLocale } from '@/localization/provider';
+import { useDirection, useLocale } from '@/localization/provider';
 import { noteChecklistSummary, type NoteBlock } from '@/services/note-content';
 import { subscribeToNoteChanges } from '@/services/note-changes';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -22,7 +22,7 @@ import { useTheme } from '@/components/theme-provider';
 import { useStickyControls } from '@/components/ui/surface';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
-import { AppHeader, AppText, EmptyState, Icon, IconButton, PressableSurface, Screen, Surface, Toast, HeaderIcon, MenuIcon, useFontStyle } from '@/components/ui/primitives';
+import { AppHeader, AppText, EmptyState, Icon, IconButton, PressableSurface, Screen, Toast, HeaderIcon, MenuIcon, useFontStyle } from '@/components/ui/primitives';
 import { AddNoteSheet, type NoteSubmission } from '@/components/boards/add-note-sheet';
 import { groupRecentNotes } from '@/services/card-grouping';
 import { detachConfirmationMessage } from '@/services/detach-card';
@@ -38,9 +38,12 @@ import { GettingStartedCard } from '@/features/onboarding/components/checklist-c
 import { FocusCardsBanner } from '@/features/focus/focus-cards-banner';
 import type { Board, CardListItem, MessageType } from '@/db/types';
 import { createRevisitRepository } from '@/db/revisit-repository';
+import { createNoteOrderRepository } from '@/db/note-order-repository';
+import { arrangeNotes, moveNote, noteKey, type NoteOrderMode } from '@/services/note-order';
 import { removeCardAttachmentFile } from '@/services/card-attachment-storage';
 import { spaceNoteAction } from '@/components/spaces/space-note-action';
 import { StickyGreeting } from '@/components/mascot/sticky-greeting.native';
+import { DeskHeading, PAPER_INK, PAPER_INK_MUTED, PAPER_YELLOW, PaperButton, PaperDesk, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 type ViewMode = 'boards' | 'cards';
@@ -94,10 +97,13 @@ export default function BoardsScreen() {
   const boardRepository = useMemo(() => createBoardRepository(database), [database]);
   const messageRepository = useMemo(() => createMessageRepository(database), [database]);
   const revisitRepository = useMemo(() => createRevisitRepository(database), [database]);
+  const noteOrderRepository = useMemo(() => createNoteOrderRepository(database), [database]);
   const subtaskRepository = useMemo(() => createCardSubtaskRepository(database), [database]);
   const { openDrawer } = useAppDrawer();
   const { actionSheet, confirm } = useAppDialog();
   const { tokens: theme, styleTokens, styleColors } = useTheme();
+  // Room for a header side's buttons; both sides share one width so the title stays centered.
+  const headerActionsWidth = (count: number) => count * styleTokens.header.iconButton.size + (styleTokens.header.iconButton.filled ? (count - 1) * spacing.xs : 0);
   const controls = useStickyControls();
   const inputFont = useFontStyle('body');
   // The floating bottom nav is absolutely positioned over this screen (see
@@ -123,7 +129,12 @@ export default function BoardsScreen() {
   // Board metadata can finish before the card queries. Keep empty states hidden
   // until both have loaded and the loader's minimum visible duration has ended.
   const [cardsReady, setCardsReady] = useState(false);
-  const isLoading = !ready || !cardsReady;
+  // The notes are written in Kalam: it joins the loader's wait (it is bundled,
+  // so this is a moment) and the grid never reflows when the face arrives.
+  const handwriting = useHandwriting();
+  const desk = useDesk();
+  const { rowStyle, isRTL } = useDirection();
+  const isLoading = !ready || !cardsReady || !handwriting.ready;
   const showLoader = useChitsLoading(isLoading);
   const isNameValid = Boolean(name.trim());
 
@@ -148,6 +159,10 @@ export default function BoardsScreen() {
   // 'unorganized', or a specific board id. Like viewMode, it's a lightweight,
   // session-local refinement rather than a standing preference.
   const [cardFilter, setCardFilter] = useState<CardFilter>('all');
+  // Recent groups notes by date; My order is the user's own arrangement,
+  // which they drag into place. Both are saved preferences.
+  const [orderMode, setOrderMode] = useState<NoteOrderMode>('recent');
+  const [noteOrder, setNoteOrder] = useState<string[]>([]);
   const [cardToast, setCardToast] = useState<string | null>(null);
   const openingNote = useRef(false);
 
@@ -170,7 +185,8 @@ export default function BoardsScreen() {
     }
   };
 
-  useEffect(() => { if (!cardToast) return; const timer = setTimeout(() => setCardToast(null), 1800); return () => clearTimeout(timer); }, [cardToast]);
+  // Longer toasts (like My order's how-to) stay long enough to read.
+  useEffect(() => { if (!cardToast) return; const timer = setTimeout(() => setCardToast(null), cardToast.length > 40 ? 3200 : 1800); return () => clearTimeout(timer); }, [cardToast]);
 
   const load = useCallback(async () => {
     const [nextBoards, nextCount, titleRow] = await Promise.all([
@@ -185,13 +201,16 @@ export default function BoardsScreen() {
   }, [boardRepository, database, messageRepository]);
 
   const loadCards = useCallback(async () => {
-    const [cardRows, thoughtRows, subtaskRows, checklistRows, connectionRows] = await Promise.all([
+    const [cardRows, thoughtRows, subtaskRows, checklistRows, connectionRows, arrangement] = await Promise.all([
       boardRepository.listAllCardSummaries(),
       messageRepository.listUnorganizedSummaries(),
       boardRepository.listCardSubtaskPreviews(),
       messageRepository.listChecklistSummaries(),
       revisitRepository.relationshipCounts(),
+      noteOrderRepository.load(),
     ]);
+    setOrderMode(arrangement.mode);
+    setNoteOrder(arrangement.order);
     const connectionsByKey = new Map<string, number>(connectionRows.map((row) => [row.noteKey, row.count]));
     const contentByCard = new Map<string, NoteBlock[]>();
     const contentByThought = new Map<string, NoteBlock[]>();
@@ -211,7 +230,7 @@ export default function BoardsScreen() {
       : { ...row, kind: 'card' as const, pinned: row.pinned === 1, hidden: false, connectionCount: connectionsByKey.get(`card:${row.id}`) ?? 0, mediaCount: row.mediaCount ?? 0, subtaskPreview: subtasksByCard.get(row.id) ?? [], checklistSummary: noteChecklistSummary(contentByCard.get(row.id) ?? []) }));
     setUnorganizedThoughts(thoughtRows.map((row) => ({ ...unorganizedToCardListItem(row), connectionCount: row.isHiddenContent ? 0 : connectionsByKey.get(`thought:${row.id}`) ?? 0, checklistSummary: row.isHiddenContent ? null : noteChecklistSummary(contentByThought.get(row.id) ?? []) })));
     setCardsReady(true);
-  }, [boardRepository, messageRepository, revisitRepository]);
+  }, [boardRepository, messageRepository, noteOrderRepository, revisitRepository]);
   // Card deletes/archives/hides go through loadCards afterwards, so reconciling
   // here cancels notifications for removed cards and refreshes hidden text;
   // reminder changes made elsewhere (set, removed, fired) reload the list.
@@ -268,6 +287,17 @@ export default function BoardsScreen() {
     const all = cardFilter === 'unorganized' ? unorganizedThoughts
       : cardFilter === 'all' ? [...cards, ...unorganizedThoughts]
       : cards.filter((card) => card.boardId === cardFilter);
+    if (orderMode === 'custom') {
+      // Pinned still leads; everything else is one arranged run, headed only
+      // when Pinned is there to tell the two apart.
+      const arranged = arrangeNotes(all, noteOrder);
+      const pinned = arranged.filter((item) => item.pinned);
+      const rest = arranged.filter((item) => !item.pinned);
+      return [
+        ...(pinned.length ? [{ key: 'pinned', title: tr("index.pinned"), pinned: true, count: pinned.length, data: pinned }] : []),
+        ...(rest.length ? [{ key: 'arranged', title: pinned.length ? tr('index.notes') : '', count: rest.length, data: rest }] : []),
+      ];
+    }
     const pinned = all.filter((item) => item.pinned).sort((a, b) => b.updatedAt - a.updatedAt);
     const rest = all.filter((item) => !item.pinned).sort((a, b) => b.updatedAt - a.updatedAt);
     // Pinned stays on top; recent notes use familiar calendar headings.
@@ -276,7 +306,26 @@ export default function BoardsScreen() {
       ...(pinned.length ? [{ key: 'pinned', title: tr("index.pinned"), pinned: true, count: pinned.length, data: pinned }] : []),
       ...groups.map((group) => ({ key: group.key, title: group.title, count: group.items.length, data: group.items })),
     ];
-  }, [cards, unorganizedThoughts, cardFilter, localeVersion]);
+  }, [cards, unorganizedThoughts, cardFilter, orderMode, noteOrder, localeVersion]);
+
+  const changeOrderMode = useCallback((next: NoteOrderMode) => {
+    if (next === orderMode) return;
+    void Haptics.selectionAsync();
+    setOrderMode(next);
+    setHeaderSection(null);
+    setCardToast(next === 'custom' ? tr('cardscollection.showingMyOrder') : tr('cardscollection.showingRecent'));
+    noteOrderRepository.setMode(next).catch(() => { setOrderMode(orderMode); setCardToast(tr('cardscollection.orderNotSaved')); });
+  }, [noteOrderRepository, orderMode]);
+
+  // A drag rearranges one section, maybe under a filter; the saved order is
+  // every note's, so the move is placed among all of them (see moveNote).
+  const arrangeNotesAfterDrag = useCallback((_section: CardSection, keys: string[], moved: CardListItem) => {
+    const previous = noteOrder;
+    const everything = arrangeNotes([...cards, ...unorganizedThoughts], noteOrder).map(noteKey);
+    const next = moveNote(everything, keys, noteKey(moved));
+    setNoteOrder(next);
+    noteOrderRepository.save(next).catch(() => { setNoteOrder(previous); setCardToast(tr('cardscollection.orderNotSaved')); });
+  }, [cards, noteOrder, noteOrderRepository, unorganizedThoughts]);
 
   const updateHeaderSection = useCallback((section: CardSection | null) => {
     setHeaderSection((previous) => {
@@ -445,7 +494,7 @@ export default function BoardsScreen() {
     <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: theme.background }}>
       <AppHeader
         title={activeHeaderSection?.title ?? appTitle}
-        actionWidth={88}
+        actionWidth={viewMode === 'cards' ? headerActionsWidth(3) : headerActionsWidth(2)}
         subtitle={viewMode === 'boards' ? pluralize(boards.length, 'board') : pluralize(activeHeaderSection?.count ?? cards.length + unorganizedThoughts.length, 'card')}
         leading={(
           <View style={[styles.headerActions, styleTokens.header.iconButton.filled && styles.headerActionsTiled]}>
@@ -463,6 +512,10 @@ export default function BoardsScreen() {
         )}
         trailing={(
           <View style={[styles.headerActions, styleTokens.header.iconButton.filled && styles.headerActionsTiled]}>
+            {viewMode === 'cards' ? <IconButton label={orderMode === 'custom' ? tr('cardscollection.switchToRecent') : tr('cardscollection.switchToMyOrder')} disabled={isLoading || showLoader} onPress={() => changeOrderMode(orderMode === 'custom' ? 'recent' : 'custom')}>
+              {/* The icon names the order showing now: newest first, or your own arrangement. */}
+              <HeaderIcon name={orderMode === 'custom' ? 'swap-vertical-outline' : 'time-outline'} size={22} />
+            </IconButton> : null}
             <IconButton label={viewMode === 'cards' && cardFilter !== 'all' && cardFilter !== 'unorganized' ? tr("index.searchInValue", { value1: boards.find((board) => board.id === cardFilter)?.name ?? 'board' }) : tr("search.search")} onPress={() => {
               const selectedBoard = viewMode === 'cards' ? boards.find((board) => board.id === cardFilter) : undefined;
               router.push(selectedBoard
@@ -496,6 +549,8 @@ export default function BoardsScreen() {
               chips={cardFilterChips}
               filter={cardFilter}
               onFilter={setCardFilter}
+              orderMode={orderMode}
+              onArrange={arrangeNotesAfterDrag}
               onOpen={openCardNote}
               onMore={openCardActions}
               onToggleSubtask={toggleCardSubtask}
@@ -504,39 +559,33 @@ export default function BoardsScreen() {
             />
           )
         ) : (
+      <PaperDesk>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.md }]}>
-        <AppText style={[styles.intro, { color: styleTokens.mascotEmptyStates ? styleColors.textSecondary : theme.textSecondary }]}>
+        <AppText style={[styles.intro, { color: desk.inkMuted }]}>
           {tr("index.keepRelatedThoughtsTogetherAndEasyToFind")}</AppText>
 
-        <PressableSurface
+        <PaperButton
+          paper={PAPER_YELLOW}
+          tilt={-0.8}
+          tape
           accessibilityRole="button"
           accessibilityLabel={tr("index.valueOpenUnorganized", { value1: pluralize(unorganizedCount, 'unorganized thought') })}
           onPress={() => router.push('/unorganized')}
-          fill={styleTokens.card.tinted ? styleColors.cardTint : theme.accentSoft}
-          border={theme.accentBorder}
-          radius={styleTokens.radius.panel}
-          edge={styleTokens.noteCard.edge || false}
-          pressedStyle={styles.pressed}
-          style={styles.unorganized}
+          style={[styles.unorganized, rowStyle]}
         >
-          <Surface fill={styleTokens.card.tinted ? styleColors.controlFill : theme.surface} radius={styleTokens.radius.control} edge={false} style={styles.unorganizedMark}>
-            <Icon name="file-tray-outline" size={20} color={styleTokens.card.tinted ? theme.textPrimary : theme.accentStrong} />
-          </Surface>
+          <View style={styles.unorganizedMark}>
+            <Icon name="file-tray-outline" size={20} color={PAPER_INK} />
+          </View>
           <View style={styles.rowCopy}>
-            <AppText variant="display" weight="700" style={[styles.unorganizedTitle, { color: styleTokens.card.tinted ? styleColors.cardInk : theme.textPrimary }]}>{tr("index.unorganized")}</AppText>
-            <AppText style={[styles.rowDetail, { color: styleTokens.card.tinted ? styleColors.cardInkMuted : theme.textSecondary }]}>
+            <AppText style={[handwriting.handBold, styles.unorganizedTitle]}>{tr("index.unorganized")}</AppText>
+            <AppText style={styles.rowDetail}>
               {unorganizedCount === 0 ? tr("index.allCaughtUp") : tr("index.valueWaiting", { value1: pluralize(unorganizedCount, 'thought') })}
             </AppText>
           </View>
-          <Icon name="chevron-forward" size={20} color={styleTokens.card.tinted ? styleColors.cardInk : theme.textMuted} />
-        </PressableSurface>
+          <Icon name={isRTL ? 'chevron-back' : 'chevron-forward'} size={20} color={PAPER_INK_MUTED} />
+        </PaperButton>
 
-        <View style={styles.sectionHeader}>
-          <AppText accessibilityRole="header" variant="display" weight="700" style={[styles.sectionTitle, { color: theme.textPrimary }]}>{tr("index.yourBoards")}</AppText>
-          {boards.length > 0 ? (
-            <View style={[styles.boardCount, { backgroundColor: theme.surfaceElevated }]}><AppText weight="600" style={[styles.sectionCount, { color: theme.textSecondary }]}>{boards.length}</AppText></View>
-          ) : null}
-        </View>
+        <DeskHeading title={tr("index.yourBoards")} count={boards.length > 0 ? boards.length : undefined} style={styles.sectionHeader} />
 
         {boards.length > 0 ? (
           <View style={styles.boardList}>
@@ -546,6 +595,7 @@ export default function BoardsScreen() {
           <EmptyState pose="empty-board" title={tr("index.noBoardsYet")} description={tr("index.organizeYourChitsWhenYouReReady")} action={{ label: tr("index.createBoard"), onPress: openCreate }} />
         )}
       </ScrollView>
+      </PaperDesk>
         )}
       </View>
       )}
@@ -618,17 +668,15 @@ const styles = StyleSheet.create({
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
   headerActionsTiled: { gap: spacing.xs },
-  intro: { fontSize: 14, lineHeight: 20, marginBottom: spacing.md },
-  unorganized: { minHeight: 76, flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: spacing.sm },
-  unorganizedMark: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  intro: { fontSize: 14, lineHeight: 20, marginBottom: 22, textAlign: 'center' },
+  unorganized: { minHeight: 76, alignItems: 'center', justifyContent: 'flex-start', paddingHorizontal: spacing.md, paddingVertical: 12, gap: spacing.sm },
+  unorganizedMark: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.6)' },
   rowCopy: { flex: 1, minWidth: 0 },
-  unorganizedTitle: { fontSize: 16 },
-  rowDetail: { marginTop: 3, fontSize: 13, lineHeight: 18 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, marginBottom: spacing.xs, paddingHorizontal: spacing.xxs },
-  sectionTitle: { fontSize: 18, lineHeight: 24 },
-  boardCount: { minWidth: 28, minHeight: 24, borderRadius: 12, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' },
-  sectionCount: { fontSize: 12, fontVariant: ['tabular-nums'] },
-  boardList: { gap: 8 },
+  unorganizedTitle: { color: PAPER_INK, fontSize: 22, lineHeight: 28 },
+  rowDetail: { color: PAPER_INK_MUTED, marginTop: 1, fontSize: 13, lineHeight: 18 },
+  sectionHeader: { marginTop: 26, marginBottom: 10, paddingHorizontal: spacing.xxs },
+  // Room between boards for their tape and the sheet peeking out behind.
+  boardList: { gap: 20, paddingHorizontal: 2 },
   pressed: { opacity: 0.58 },
   sheetContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.md, gap: spacing.xs },
   handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 4 / 2, marginBottom: spacing.xs },

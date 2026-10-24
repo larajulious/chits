@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
+import { PAPERS, PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PaperAction, PaperDesk, PaperNote, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { headingFontFamily } from '@/constants/theme';
 import { ChitsLoaderOverlay } from '@/components/ui/chits-loader';
 import { HeaderIcon, IconButton, TopBarBackground, useHeaderInk } from '@/components/ui/primitives';
@@ -26,7 +27,9 @@ export default function BackupScreen() {
 
   useLocale();
   const database = useSQLiteContext();
-  const { tokens, look } = useTheme();
+  const { look } = useTheme();
+  const desk = useDesk();
+  const { handBold } = useHandwriting();
   const headerInk = useHeaderInk();
   const { confirm } = useAppDialog();
   const [progress, setProgress] = useState<BackupProgress | null>(null);
@@ -140,35 +143,41 @@ export default function BackupScreen() {
     });
   };
   const disabled = progress !== null || pending !== null;
-  return <SafeAreaView style={[styles.screen, { backgroundColor: tokens.background }]}>
+  return <SafeAreaView style={[styles.screen, { backgroundColor: desk.desk }]}>
     <View style={styles.header}><TopBarBackground /><IconButton label={tr("backup.backToSettings")} disabled={disabled} onPress={() => router.back()}><HeaderIcon name="arrow-back-outline" size={23} /></IconButton><Text accessibilityRole="header" style={[styles.title, { color: headerInk.ink, fontFamily: headingFontFamily(look.headingFont) }]}>{tr("backup.backupRestore")}</Text><View style={{ width: 44 }} /></View>
+    <PaperDesk>
     <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.section}>
-        <Text accessibilityRole="header" style={[styles.heading, { color: tokens.textPrimary }]}>{tr("backup.backupYourChits")}</Text>
-        <Text style={[styles.body, { color: tokens.textSecondary }]}>{tr("backup.createACopyOfYourChatsBoardsSettings")}</Text>
-        <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => void create()} style={[styles.button, { backgroundColor: tokens.accent }, disabled && styles.disabled]}><Text style={[styles.buttonText, { color: tokens.accentText }]}>{tr("backup.createBackup")}</Text></Pressable>
-        {created ? <View accessibilityLiveRegion="polite" style={[styles.result, { backgroundColor: tokens.surface }]}>
-          <Text style={[styles.resultTitle, { color: tokens.textPrimary }]}>{created.manifest.missingAttachments.length ? tr('backup.missing', { count: created.manifest.missingAttachments.length }) : tr("backup.backupCreated")}</Text>
-          <Text style={[styles.body, { color: tokens.textSecondary }]}>{created.manifest.missingAttachments.length ? tr("backup.allAvailableFilesAreIncludedFilesAlreadyMissing") : tr("backup.yourChitsDataAndAttachmentsAreSafelyIncluded")}</Text>
-          <Text style={[styles.detail, { color: tokens.textSecondary }]}>{sizeLabel(created.size)} · {quantity(created.manifest.attachmentCount, 'attachment')} · {new Date(created.manifest.createdAt).toLocaleString(getFormattingLocale())}</Text>
-          {needsSave ? <Pressable accessibilityRole="button" disabled={disabled} onPress={() => void saveAgain()} style={styles.save}><Text style={{ color: tokens.accent, fontWeight: '600' }}>{tr("backup.saveBackupFile")}</Text></Pressable> : null}
+      <PaperNote paper={PAPER_WHITE} tilt={-0.6} tape style={styles.section}>
+        <Text accessibilityRole="header" style={[handBold, styles.heading]}>{tr("backup.backupYourChits")}</Text>
+        <Text style={styles.body}>{tr("backup.createACopyOfYourChatsBoardsSettings")}</Text>
+        <PaperAction primary label={tr("backup.createBackup")} accessibilityState={{ disabled }} disabled={disabled} onPress={() => void create()} containerStyle={styles.action} />
+        {created ? <View accessibilityLiveRegion="polite" style={styles.result}>
+          <Text style={[handBold, styles.resultTitle]}>{created.manifest.missingAttachments.length ? tr('backup.missing', { count: created.manifest.missingAttachments.length }) : tr("backup.backupCreated")}</Text>
+          <Text style={styles.body}>{created.manifest.missingAttachments.length ? tr("backup.allAvailableFilesAreIncludedFilesAlreadyMissing") : tr("backup.yourChitsDataAndAttachmentsAreSafelyIncluded")}</Text>
+          <Text style={styles.detail}>{sizeLabel(created.size)} · {quantity(created.manifest.attachmentCount, 'attachment')} · {new Date(created.manifest.createdAt).toLocaleString(getFormattingLocale())}</Text>
+          {needsSave ? <Pressable accessibilityRole="button" disabled={disabled} onPress={() => void saveAgain()} style={styles.save}><Text style={[handBold, styles.saveText]}>{tr("backup.saveBackupFile")}</Text></Pressable> : null}
         </View> : null}
-      </View>
-      <View style={[styles.section, styles.restoreSection, { borderTopColor: tokens.borderSubtle }]}>
-        <Text accessibilityRole="header" style={[styles.heading, { color: tokens.textPrimary }]}>{tr("backup.restoreFromBackup")}</Text>
-        <Text style={[styles.body, { color: tokens.textSecondary }]}>{tr("backup.restoreChitsFromAPreviouslyCreatedBackupFile")}</Text>
-        <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={() => void choose()} style={[styles.button, { backgroundColor: tokens.surface, borderWidth: 1, borderColor: tokens.borderSubtle }, disabled && styles.disabled]}><Text style={[styles.buttonText, { color: tokens.textPrimary }]}>{tr("backup.chooseBackupFile")}</Text></Pressable>
-        <Text style={[styles.detail, { color: tokens.textSecondary }]}>{tr("backup.restoringABackupReplacesTheDataCurrentlyStored")}</Text>
-      </View>
-      {notice ? <Text accessibilityLiveRegion="polite" style={[styles.body, { color: tokens.textPrimary }]}>{notice}</Text> : null}
-      {error ? <Text accessibilityRole="alert" style={[styles.body, { color: tokens.danger }]}>{error}</Text> : null}
+      </PaperNote>
+      <PaperNote paper={PAPERS[3]} tilt={0.5} style={styles.section}>
+        <Text accessibilityRole="header" style={[handBold, styles.heading]}>{tr("backup.restoreFromBackup")}</Text>
+        <Text style={styles.body}>{tr("backup.restoreChitsFromAPreviouslyCreatedBackupFile")}</Text>
+        <PaperAction label={tr("backup.chooseBackupFile")} accessibilityState={{ disabled }} disabled={disabled} onPress={() => void choose()} containerStyle={styles.action} />
+        <Text style={styles.detail}>{tr("backup.restoringABackupReplacesTheDataCurrentlyStored")}</Text>
+      </PaperNote>
+      {notice ? <Text accessibilityLiveRegion="polite" style={[styles.deskText, { color: desk.ink }]}>{notice}</Text> : null}
+      {error ? <Text accessibilityRole="alert" style={[styles.deskText, { color: desk.danger }]}>{error}</Text> : null}
     </ScrollView>
+    </PaperDesk>
     {progress ? <ChitsLoaderOverlay label={progress.total ? tr("backup.valueValueOfValue", { value1: progress.label, value2: progress.completed ?? 0, value3: progress.total }) : progress.label} /> : null}
   </SafeAreaView>;
 }
 const styles = StyleSheet.create({
   screen: { flex: 1 }, header: { minHeight: 52, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center' }, title: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600' },
-  content: { paddingHorizontal: 24, paddingBottom: 32, gap: 20 }, section: { gap: 12, paddingTop: 26 }, restoreSection: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 12, paddingTop: 28 },
-  heading: { fontSize: 21, fontWeight: '600' }, body: { fontSize: 15, lineHeight: 23 }, detail: { fontSize: 12, lineHeight: 19 }, button: { minHeight: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', padding: 12, marginTop: 8 }, buttonText: { fontSize: 16, fontWeight: '600' }, disabled: { opacity: 0.5 },
-  result: { borderRadius: 14, padding: 16, gap: 8, marginTop: 4 }, resultTitle: { fontSize: 15, fontWeight: '600' }, save: { minHeight: 44, justifyContent: 'center' },
+  content: { paddingHorizontal: 20, paddingTop: 28, paddingBottom: 32, gap: 24 },
+  section: { gap: 10, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 18 },
+  heading: { color: PAPER_INK, fontSize: 26, lineHeight: 33 }, body: { color: PAPER_INK_MUTED, fontSize: 15, lineHeight: 23 }, detail: { color: PAPER_INK_MUTED, fontSize: 12, lineHeight: 19 },
+  action: { marginTop: 6 },
+  result: { gap: 6, marginTop: 6, paddingTop: 12, borderTopWidth: 1, borderStyle: 'dashed', borderTopColor: 'rgba(43,38,32,0.2)' }, resultTitle: { color: PAPER_INK, fontSize: 21, lineHeight: 27 },
+  save: { minHeight: 44, justifyContent: 'center' }, saveText: { color: PAPER_INK, fontSize: 18, lineHeight: 24, textDecorationLine: 'underline' },
+  deskText: { fontSize: 15, lineHeight: 23, textAlign: 'center' },
 });

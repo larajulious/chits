@@ -24,6 +24,8 @@ import { useTheme } from '@/components/theme-provider';
 import { useStickySheet, useStickySurface } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
+import { PAPERS, PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW, PaperDesk, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { mix, noteColors } from '@/constants/style-tokens';
 import type { Attachment, Board } from '@/db/types';
 
 type Column = { id: string; name: string; position: number };
@@ -94,19 +96,20 @@ function AddColumnPlaceholder({ variant, width, marginHorizontal, onPress }: { v
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const { tokens: theme } = useTheme();
+  const desk = useDesk();
+  const { handBold } = useHandwriting();
   const description = variant === 'empty' ? tr("id.createYourFirstColumnToStartOrganizingThis") : tr("id.createAnotherSpaceForYourNotes");
-  return <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addColumn")} accessibilityHint={description} onPress={onPress} style={({ pressed }) => [styles.addColumnFrame, variant === 'empty' ? styles.addColumnFrameEmpty : { width, marginHorizontal }, { borderColor: theme.borderSubtle }, pressed && styles.addColumnPressed]}>
-    <View style={[styles.addColumnIcon, { borderColor: theme.borderSubtle }]}><Icon name="add" size={26} color={theme.textMuted} /></View>
-    <AppText variant="display" style={[styles.addColumnTitle, { color: theme.textPrimary }]}>{tr("id.addColumn")}</AppText>
-    <AppText style={[styles.addColumnCopy, { color: theme.textSecondary }]}>{description}</AppText>
+  return <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addColumn")} accessibilityHint={description} onPress={onPress} style={({ pressed }) => [styles.addColumnFrame, variant === 'empty' ? styles.addColumnFrameEmpty : { width, marginHorizontal }, { borderColor: desk.inkMuted }, pressed && styles.addColumnPressed]}>
+    <View style={[styles.addColumnIcon, { borderColor: desk.inkMuted }]}><Icon name="add" size={26} color={desk.inkMuted} /></View>
+    <AppText style={[handBold, styles.addColumnTitle, { color: desk.ink }]}>{tr("id.addColumn")}</AppText>
+    <AppText style={[styles.addColumnCopy, { color: desk.inkMuted }]}>{description}</AppText>
   </Pressable>;
 }
 
 function DragDots() {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
-  useLocale(); const { tokens: theme } = useTheme(); return <View accessible={false} style={styles.dotGrid}>{Array.from({ length: 6 }, (_, index) => <View key={index} style={[styles.dot, { backgroundColor: theme.textMuted }]} />)}</View>; }
+  useLocale(); return <View accessible={false} style={styles.dotGrid}>{Array.from({ length: 6 }, (_, index) => <View key={index} style={[styles.dot, { backgroundColor: PAPER_INK_MUTED }]} />)}</View>; }
 
 // RNGH's own (non-exported) GestureRef type models an external-component ref
 // as RefObject<React.ComponentType> — i.e. the component's definition — but a
@@ -128,9 +131,8 @@ function ColumnSkeleton() {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const { tokens: theme, styleTokens, styleColors } = useTheme();
-  const sticky = useStickySurface();
-  return <View accessible={false} importantForAccessibility="no-hide-descendants" style={styles.skeletonStack}>{[0, 1, 2].map((index) => <View key={index} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.borderSubtle, opacity: 1 - index * 0.24 }, sticky({ fill: styleColors.controlFill, radius: styleTokens.noteCard.radius, edge: false })]}>
+  const theme = SKELETON;
+  return <View accessible={false} importantForAccessibility="no-hide-descendants" style={styles.skeletonStack}>{[0, 1, 2].map((index) => <View key={index} style={[styles.card, { backgroundColor: PAPER_WHITE, opacity: 1 - index * 0.24 }]}>
     <View style={styles.cardBody}>
       <View style={styles.cardTop}>
         <View style={styles.cardOpen}>
@@ -139,7 +141,7 @@ function ColumnSkeleton() {
         </View>
         <View style={[styles.skeletonHandle, { backgroundColor: theme.surfaceElevated }]} />
       </View>
-      <View style={[styles.cardDivider, { backgroundColor: theme.borderSubtle }]} />
+      <View style={[styles.cardDivider, { backgroundColor: RULE }]} />
       <View style={[styles.skeletonBar, styles.skeletonFooterBar, { backgroundColor: theme.surfaceElevated }]} />
     </View>
   </View>)}</View>;
@@ -194,12 +196,11 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
   // gesture alive) must run exactly as written, not be reinterpreted by the
   // compiler's own memoization pass.
 
-  const { tokens: theme, styleTokens, styleColors } = useTheme();
-  const sticky = useStickySurface();
+  const { tokens: theme } = useTheme();
+  const { handBold } = useHandwriting();
   // The board's own accent, resolved by the caller — see the equivalent constants
   // in BoardScreen — falling back to the generic theme tokens when not passed
   // (e.g. any future standalone usage) so this component stays safe on its own.
-  const resolvedAccent = accent ?? theme.accent;
   const resolvedAccentTint = accentTint ?? theme.accentSoft;
   const resolvedAccentBorder = accentBorderColor ?? theme.accentBorder;
   const handleRef = useAnimatedRef<View>();
@@ -301,32 +302,32 @@ const CardSurface = memo(function CardSurface({ card, index, total, translationY
       .onEnd(() => { runOnJS(onDragEnd)(); })
       .onFinalize((_, success) => { if (!success) runOnJS(onDragCancel)(); });
   }, [cardRef, footerRef, handleRef, interactive, onBeginDrag, onDragCancel, onDragEnd, onDragMove, onReorder, pagerRef, scrollRef, translationY]);
-  const cardSurface = <Pressable ref={cardRef} disabled={!interactive} accessibilityRole="button" accessibilityLabel={tr("id.openValueValue", { value1: hidden ? tr("index.hiddenChit") : card.title || card.preview || tr("id.untitledThought2"), value2: accessibleMetadata ? `, ${accessibleMetadata}` : '' })} accessibilityHint={tr("id.opensCardDetails")} onPress={() => router.push(`/card/${card.id}`)} style={({ pressed }) => [styles.card, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }, dragging && styles.cardDragging, sticky({ fill: styleColors.controlFill, radius: styleTokens.noteCard.radius, edge: styleTokens.noteCard.edge, edgeColor: accent ?? styleColors.outline, clip: true }), pressed && interactive && styles.cardPressed]}>
+  const cardSurface = <Pressable ref={cardRef} disabled={!interactive} accessibilityRole="button" accessibilityLabel={tr("id.openValueValue", { value1: hidden ? tr("index.hiddenChit") : card.title || card.preview || tr("id.untitledThought2"), value2: accessibleMetadata ? `, ${accessibleMetadata}` : '' })} accessibilityHint={tr("id.opensCardDetails")} onPress={() => router.push(`/card/${card.id}`)} style={({ pressed }) => [styles.card, { backgroundColor: PAPER_WHITE }, dragging && styles.cardDragging, pressed && interactive && styles.cardPressed]}>
     <Animated.View pointerEvents="none" accessible={false} style={[StyleSheet.absoluteFill, styles.cardHighlight, { backgroundColor: resolvedAccentTint, borderColor: resolvedAccentBorder }, highlightStyle]} />
-    {media ? <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.cardMedia, { borderBottomColor: theme.borderSubtle }]}><AttachmentContent attachment={media} variant="board" /></View> : null}
+    {media ? <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.cardMedia, { borderBottomColor: RULE }]}><AttachmentContent attachment={media} variant="board" /></View> : null}
     <View style={styles.cardBody}>
       <View style={styles.cardTop}>
         <View style={styles.cardOpen}>
-          {hidden ? <View style={styles.hiddenTitle}><Icon name="eye-off-outline" size={17} color={theme.textMuted} /><AppText variant="display" numberOfLines={1} style={[styles.title, styles.hiddenTitleText, { color: theme.textMuted }]}>{tr("index.hiddenChit")}</AppText>{onShowContent ? <Pressable disabled={!interactive} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr("id.showContent")} accessibilityHint={tr("id.makesThisCardAndItsThoughtsInChat")} onPress={(event) => { event.stopPropagation(); onShowContent(); }} style={({ pressed }) => [styles.showContent, { backgroundColor: theme.surfaceElevated }, pressed && styles.controlPressed]}><Icon name="eye-outline" size={15} color={resolvedAccent} /><AppText style={[styles.moveText, { color: resolvedAccent }]}>{tr("id.show")}</AppText></Pressable> : null}</View> : <AppText variant="display" numberOfLines={2} style={[styles.title, { color: theme.textPrimary }]}>{card.title || card.preview || tr("id.untitledThought")}</AppText>}
-          {!hidden && card.preview && card.preview !== card.title ? <AppText numberOfLines={2} style={[styles.preview, { color: theme.textSecondary }]}>{card.preview}</AppText> : null}
+          {hidden ? <View style={styles.hiddenTitle}><Icon name="eye-off-outline" size={17} color={PAPER_INK_MUTED} /><AppText numberOfLines={1} style={[handBold, styles.title, styles.hiddenTitleText, { color: PAPER_INK_MUTED }]}>{tr("index.hiddenChit")}</AppText>{onShowContent ? <Pressable disabled={!interactive} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr("id.showContent")} accessibilityHint={tr("id.makesThisCardAndItsThoughtsInChat")} onPress={(event) => { event.stopPropagation(); onShowContent(); }} style={({ pressed }) => [styles.showContent, { backgroundColor: CONTROL }, pressed && styles.controlPressed]}><Icon name="eye-outline" size={15} color={PAPER_INK} /><AppText style={[styles.moveText, { color: PAPER_INK }]}>{tr("id.show")}</AppText></Pressable> : null}</View> : <AppText numberOfLines={2} style={[handBold, styles.title, { color: PAPER_INK }]}>{card.title || card.preview || tr("id.untitledThought")}</AppText>}
+          {!hidden && card.preview && card.preview !== card.title ? <AppText numberOfLines={2} style={[styles.preview, { color: PAPER_INK_MUTED }]}>{card.preview}</AppText> : null}
         </View>
         {interactive && translationY && onBeginDrag && onDragMove && onDragEnd && onDragCancel && onReorder && onMoveColumn ? <DragHandle index={index} total={total} translationY={translationY} handleRef={handleRef} columnName={columnName} canMovePrevColumn={canMovePrevColumn} canMoveNextColumn={canMoveNextColumn} onBegin={onBeginDrag} onMove={onDragMove} onEnd={onDragEnd} onCancel={onDragCancel} onReorder={onReorder} onMoveColumn={onMoveColumn} scrollRef={scrollRef} pagerRef={pagerRef} /> : <View style={styles.dragHandle}><DragDots /></View>}
       </View>
 
       {hasMetadata ? <View style={styles.meta}>
-        {reminderLabel ? <View style={styles.metaItem}><Icon name="notifications-outline" size={13} color={theme.textMuted} /><AppText style={[styles.metaText, { color: theme.textMuted }]}>{reminderLabel}</AppText></View> : null}
-        {card.messageCount > 1 ? <View style={styles.metaItem}><Icon name="layers-outline" size={14} color={theme.textMuted} /><AppText style={[styles.metaText, { color: theme.textMuted }]}>{card.messageCount} {' '}{tr("id.thoughts")}</AppText></View> : null}
-        {card.attachmentCount ? <View style={styles.metaItem}><Icon name="attach-outline" size={14} color={theme.textMuted} /><AppText style={[styles.metaText, { color: theme.textMuted }]}>{card.attachmentCount} {card.attachmentCount === 1 ? tr("id.attachment") : tr("id.attachments")}</AppText></View> : null}
-        {!hidden && card.subtaskCount ? <View style={styles.metaItem}><Icon name="checkbox-outline" size={14} color={theme.textMuted} /><AppText style={[styles.metaText, { color: theme.textMuted }]}>{card.completedSubtaskCount}/{card.subtaskCount}</AppText></View> : null}
+        {reminderLabel ? <View style={styles.metaItem}><Icon name="notifications-outline" size={13} color={PAPER_INK_MUTED} /><AppText style={[styles.metaText, { color: PAPER_INK_MUTED }]}>{reminderLabel}</AppText></View> : null}
+        {card.messageCount > 1 ? <View style={styles.metaItem}><Icon name="layers-outline" size={14} color={PAPER_INK_MUTED} /><AppText style={[styles.metaText, { color: PAPER_INK_MUTED }]}>{card.messageCount} {' '}{tr("id.thoughts")}</AppText></View> : null}
+        {card.attachmentCount ? <View style={styles.metaItem}><Icon name="attach-outline" size={14} color={PAPER_INK_MUTED} /><AppText style={[styles.metaText, { color: PAPER_INK_MUTED }]}>{card.attachmentCount} {card.attachmentCount === 1 ? tr("id.attachment") : tr("id.attachments")}</AppText></View> : null}
+        {!hidden && card.subtaskCount ? <View style={styles.metaItem}><Icon name="checkbox-outline" size={14} color={PAPER_INK_MUTED} /><AppText style={[styles.metaText, { color: PAPER_INK_MUTED }]}>{card.completedSubtaskCount}/{card.subtaskCount}</AppText></View> : null}
       </View> : null}
 
-      <View style={[styles.cardDivider, { backgroundColor: theme.borderSubtle }]} />
+      <View style={[styles.cardDivider, { backgroundColor: RULE }]} />
       <View ref={footerRef} collapsable={false} style={styles.cardControls}>
-        <Pressable disabled={!interactive} hitSlop={{ top: 6, bottom: 6 }} accessibilityRole="button" accessibilityLabel={tr("id.moveToAnotherColumn")} onPress={(event) => { event.stopPropagation(); onOpenMove?.(); }} style={({ pressed }) => [styles.move, { backgroundColor: theme.surfaceElevated }, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.control, edge: false }), !interactive && styles.reorderButtonDisabled, pressed && styles.controlPressed]}><Icon name="swap-horizontal-outline" size={15} color={resolvedAccent} /><AppText style={[styles.moveText, { color: resolvedAccent }]}>{tr("index.move")}</AppText></Pressable>
-        <View style={[styles.reorderGroup, { backgroundColor: theme.surfaceElevated }, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.control, edge: false })]}>
-          <Pressable disabled={!interactive || index === 0} hitSlop={{ top: 6, bottom: 6 }} accessibilityRole="button" accessibilityLabel={tr("id.moveCardUp")} accessibilityState={{ disabled: !interactive || index === 0 }} onPress={(event) => { event.stopPropagation(); onReorder?.(-1); }} style={({ pressed }) => [styles.reorderButton, (index === 0 || !interactive) && styles.reorderButtonDisabled, pressed && styles.reorderButtonPressed]}><Icon name="arrow-up-outline" size={15} color={resolvedAccent} /></Pressable>
-          <View style={[styles.reorderDivider, { backgroundColor: theme.borderSubtle }]} />
-          <Pressable disabled={!interactive || index === total - 1} hitSlop={{ top: 6, bottom: 6 }} accessibilityRole="button" accessibilityLabel={tr("id.moveCardDown")} accessibilityState={{ disabled: !interactive || index === total - 1 }} onPress={(event) => { event.stopPropagation(); onReorder?.(1); }} style={({ pressed }) => [styles.reorderButton, (index === total - 1 || !interactive) && styles.reorderButtonDisabled, pressed && styles.reorderButtonPressed]}><Icon name="arrow-down-outline" size={15} color={resolvedAccent} /></Pressable>
+        <Pressable disabled={!interactive} hitSlop={{ top: 6, bottom: 6 }} accessibilityRole="button" accessibilityLabel={tr("id.moveToAnotherColumn")} onPress={(event) => { event.stopPropagation(); onOpenMove?.(); }} style={({ pressed }) => [styles.move, { backgroundColor: CONTROL }, !interactive && styles.reorderButtonDisabled, pressed && styles.controlPressed]}><Icon name="swap-horizontal-outline" size={15} color={PAPER_INK} /><AppText style={[styles.moveText, { color: PAPER_INK }]}>{tr("index.move")}</AppText></Pressable>
+        <View style={[styles.reorderGroup, { backgroundColor: CONTROL }]}>
+          <Pressable disabled={!interactive || index === 0} hitSlop={{ top: 6, bottom: 6 }} accessibilityRole="button" accessibilityLabel={tr("id.moveCardUp")} accessibilityState={{ disabled: !interactive || index === 0 }} onPress={(event) => { event.stopPropagation(); onReorder?.(-1); }} style={({ pressed }) => [styles.reorderButton, (index === 0 || !interactive) && styles.reorderButtonDisabled, pressed && styles.reorderButtonPressed]}><Icon name="arrow-up-outline" size={15} color={PAPER_INK} /></Pressable>
+          <View style={[styles.reorderDivider, { backgroundColor: RULE }]} />
+          <Pressable disabled={!interactive || index === total - 1} hitSlop={{ top: 6, bottom: 6 }} accessibilityRole="button" accessibilityLabel={tr("id.moveCardDown")} accessibilityState={{ disabled: !interactive || index === total - 1 }} onPress={(event) => { event.stopPropagation(); onReorder?.(1); }} style={({ pressed }) => [styles.reorderButton, (index === total - 1 || !interactive) && styles.reorderButtonDisabled, pressed && styles.reorderButtonPressed]}><Icon name="arrow-down-outline" size={15} color={PAPER_INK} /></Pressable>
         </View>
       </View>
     </View>
@@ -377,7 +378,10 @@ export default function BoardScreen() {
   const columnInterval = columnWidth + columnGap;
   const carouselInset = Math.max(spacing.md, (screenWidth - columnWidth) / 2 - columnGap / 2);
   const [board, setBoard] = useState<Board | null | undefined>();
-  const showBoardLoader = useChitsLoading(board === undefined);
+  const desk = useDesk();
+  // Cards are handwritten: the loader covers the moment the face takes, so columns never reflow.
+  const handwriting = useHandwriting();
+  const showBoardLoader = useChitsLoading(board === undefined || !handwriting.ready);
   const [columns, setColumns] = useState<Column[]>([]); const [cards, setCards] = useState<Card[]>([]); const [columnIndex, setColumnIndex] = useState(0); const [moveCard, setMoveCard] = useState<Card | null>(null); const [settingsOpen, setSettingsOpen] = useState(false); const [addColumnOrigin, setAddColumnOrigin] = useState<'menu' | 'placeholder'>('menu'); const [renameOpen, setRenameOpen] = useState(false); const [error, setError] = useState<string | null>(null); const [drag, setDrag] = useState<DragState | null>(null); const [navigatorDockHeight, setNavigatorDockHeight] = useState(0); const [reduceMotion, setReduceMotion] = useState(false);
   // Contextual capture ("+ Add note"): the target column for the open composer
   // sheet, the id of the card it just created (so only that one card plays an
@@ -700,7 +704,7 @@ export default function BoardScreen() {
   // there's no board/columns/cards to show at all, so there's nothing column-specific
   // to localize the error to.
   if (boardStatus === 'error') return <Screen><AppHeader title={tr("id.board")} leading={<IconButton label={tr("search.goBack")} onPress={() => router.back()}><HeaderGlyph style={styles.back}>‹</HeaderGlyph></IconButton>} /><EmptyState title={tr("id.couldnTLoadThisBoard")} description={tr("id.somethingWentWrongLoadingIt")} /><Pressable accessibilityRole="button" accessibilityLabel={tr("id.tryAgain")} onPress={() => void load()} style={({ pressed }) => [styles.retryButton, { backgroundColor: theme.accent }, pressed && styles.addPressed]}><AppText style={[styles.retryButtonText, { color: theme.accentText }]}>{tr("id.tryAgain")}</AppText></Pressable></Screen>;
-  if (board === undefined) return <Screen>{showBoardLoader ? <View style={styles.boardLoader}><ChitsLoader label={tr("id.loadingBoard")} /></View> : null}</Screen>;
+  if (board === undefined || !handwriting.ready) return <Screen style={{ backgroundColor: desk.desk }}>{showBoardLoader ? <View style={styles.boardLoader}><ChitsLoader label={tr("id.loadingBoard")} /></View> : null}</Screen>;
   if (!board) return <Screen><AppHeader title={tr("id.board")} leading={<IconButton label={tr("search.goBack")} onPress={() => router.back()}><HeaderGlyph style={styles.back}>‹</HeaderGlyph></IconButton>} /><EmptyState title={tr("id.boardUnavailable")} description={tr("id.itMayHaveBeenArchived")} /></Screen>;
   // Instant count for a column: prefer the live loaded array once it's actually been
   // fetched, otherwise the lightweight board-open summary — never waits on card
@@ -715,9 +719,10 @@ export default function BoardScreen() {
   // itself for borders/highlights, all falling back to the theme's tokens when the
   // board has no accent set.
   const accent = board.accent ?? theme.accent;
-  const accentOn = board.accent ? '#FFFFFF' : theme.accentText;
   const accentTint = board.accent ? tintWithAccent(theme.background, board.accent, 0.08) : theme.accentSoft;
   const accentBorderColor = board.accent ?? theme.accentBorder;
+  // Each column is a sheet in a pastel of the board's color, its cards white notes on it.
+  const columnPaper = board.accent ? noteColors(board.accent).cardTint : PAPERS[6];
   const reservedNavigatorHeight = board.showColumnNavigator ? navigatorDockHeight : 0;
   const addButtonBottom = board.showColumnNavigator && navigatorDockHeight
     ? navigatorDockHeight - spacing.md
@@ -774,7 +779,7 @@ export default function BoardScreen() {
     if (isDestination && placeholderIndex === displayCards.length) rows.push(placeholder);
     return rows;
   };
-  return <Screen edges={['top', 'left', 'right']}><View style={[styles.header, { minHeight: styleTokens.header.minHeight }]}>
+  return <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: desk.desk }}><View style={[styles.header, { minHeight: styleTokens.header.minHeight }]}>
       <TopBarBackground />
       <Pressable accessibilityRole="button" accessibilityLabel={tr("search.goBack")} onPress={() => router.back()} style={({ pressed }) => [styles.headerButton, { backgroundColor: theme.surfaceElevated }, headerTile(pressed), pressed && styles.headerButtonPressed]}><Icon name="chevron-back" size={24} color={theme.textPrimary} /></Pressable>
       <View accessible={false} style={[styles.boardMark, { backgroundColor: board.accent ?? theme.accentSoft }]}><Icon name={resolveBoardIcon(board.icon)} size={19} color={board.accent ? '#FFFFFF' : theme.accentStrong} /></View>
@@ -782,7 +787,7 @@ export default function BoardScreen() {
       <Pressable accessibilityRole="button" accessibilityLabel={tr("index.searchInValue", { value1: board.name })} onPress={() => router.push({ pathname: '/search', params: { source: 'board', boardId: id, boardName: board.name } })} style={({ pressed }) => [styles.headerButton, { backgroundColor: theme.surfaceElevated }, headerTile(pressed), pressed && styles.headerButtonPressed]}><Icon name="search-outline" size={21} color={theme.textPrimary} /></Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel={tr("id.editBoard")} onPress={() => setRenameOpen(true)} style={({ pressed }) => [styles.headerButton, { backgroundColor: theme.surfaceElevated }, headerTile(pressed), pressed && styles.headerButtonPressed]}><Icon name="pencil-outline" size={21} color={theme.textPrimary} /></Pressable>
     </View>
-    <View style={styles.pager} accessibilityLabel={tr("id.valueBoardColumnValueOfValueValueValue", { value1: board.name, value2: columnIndex + 1, value3: columns.length, value4: countLabel('card', activeCardCount), value5: '' })}>{columns.length ? <View style={styles.carousel} onLayout={(event) => { const height = event.nativeEvent.layout.height; event.currentTarget.measureInWindow((_, y) => { viewportRef.current = { top: y, height }; }); }}>
+    <PaperDesk><View style={styles.pager} accessibilityLabel={tr("id.valueBoardColumnValueOfValueValueValue", { value1: board.name, value2: columnIndex + 1, value3: columns.length, value4: countLabel('card', activeCardCount), value5: '' })}>{columns.length ? <View style={styles.carousel} onLayout={(event) => { const height = event.nativeEvent.layout.height; event.currentTarget.measureInWindow((_, y) => { viewportRef.current = { top: y, height }; }); }}>
       <FlatList
         ref={boardListRef}
         style={styles.boardList}
@@ -810,13 +815,6 @@ export default function BoardScreen() {
           const isSource = drag?.sourceColumnId === column.id;
           const isDestination = drag?.destinationColumnId === column.id;
           const dropTarget = Boolean(isDestination && !isSource);
-          // Every column's border stays in the board's own accent family, not just
-          // the active one — otherwise an inactive column falls back to plain grey
-          // right next to an active one tinted by the accent, which reads as a bug
-          // rather than a resting state.
-          const columnBorder = active || dropTarget
-            ? accentBorderColor
-            : board.accent ? `${board.accent}40` : theme.borderSubtle;
           // `columnIndex` only commits on momentum-end (or immediately on a navigator
           // tap, before its animated scroll even visually arrives) — never mid-swipe.
           // A column one swipe away is the only one that can be exposed by the
@@ -836,24 +834,24 @@ export default function BoardScreen() {
           // here yet" while a prefetch is still in flight.
           const notYetLoaded = !showList && status !== 'loaded' && status !== 'error';
           const loadFailed = !showList && status === 'error';
-          return <View style={[styles.columnFrame, { width: columnWidth, marginHorizontal: columnGap / 2, backgroundColor: accentTint, borderColor: columnBorder }, active && styles.activeColumn, dropTarget && styles.dropTargetColumn, sticky({ radius: styleTokens.radius.panel, outlineColor: dropTarget ? accent : undefined, edge: styleTokens.edgeDepth, clip: true })]}>
+          return <View style={[styles.columnFrame, { width: columnWidth, marginHorizontal: columnGap / 2, backgroundColor: columnPaper, borderColor: dropTarget ? PAPER_INK : 'transparent', boxShadow: `0px ${active ? 10 : 6}px ${active ? 20 : 12}px ${desk.shadow}` }, dropTarget && styles.dropTargetColumn]}>
             <View style={styles.columnHeader}>
-              <View style={[styles.columnIcon, { backgroundColor: theme.surface }, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.control, edge: false })]}><Icon name="albums-outline" size={19} color={accent} /></View>
-              <View style={styles.columnHeaderCopy}><AppText variant="display" numberOfLines={1} style={[styles.columnTitle, { color: theme.textPrimary }]}>{column.name}</AppText><AppText style={[styles.columnCount, { color: theme.textSecondary }]}>{columnCardCount(column, laneCards.length)} {columnCardCount(column, laneCards.length) === 1 ? tr("id.card") : tr("index.cards")}</AppText></View>
-              <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addNoteToValue", { value1: column.name })} onPress={() => openAddNote(column)} style={({ pressed }) => [styles.columnMenu, pressed && styles.headerButtonPressed]}><Icon name="add" size={22} color={theme.textSecondary} /></Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel={tr("id.manageValueColumn", { value1: column.name })} onPress={() => { if (!active) goToColumn(index); setSettingsOpen(true); }} style={({ pressed }) => [styles.columnMenu, pressed && styles.headerButtonPressed]}><Icon name="ellipsis-horizontal" size={20} color={theme.textSecondary} /></Pressable>
+              <View style={[styles.columnIcon, { backgroundColor: PAPER_WHITE }]}><Icon name="albums-outline" size={19} color={mix(accent, PAPER_INK, 0.4)} /></View>
+              <View style={styles.columnHeaderCopy}><AppText numberOfLines={1} style={[handwriting.handBold, styles.columnTitle, { color: PAPER_INK }]}>{column.name}</AppText><AppText style={[styles.columnCount, { color: PAPER_INK_MUTED }]}>{columnCardCount(column, laneCards.length)} {columnCardCount(column, laneCards.length) === 1 ? tr("id.card") : tr("index.cards")}</AppText></View>
+              <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addNoteToValue", { value1: column.name })} onPress={() => openAddNote(column)} style={({ pressed }) => [styles.columnMenu, pressed && styles.headerButtonPressed]}><Icon name="add" size={22} color={PAPER_INK_MUTED} /></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={tr("id.manageValueColumn", { value1: column.name })} onPress={() => { if (!active) goToColumn(index); setSettingsOpen(true); }} style={({ pressed }) => [styles.columnMenu, pressed && styles.headerButtonPressed]}><Icon name="ellipsis-horizontal" size={20} color={PAPER_INK_MUTED} /></Pressable>
             </View>
             {showFullLane ? <ScrollView ref={active ? scrollRef : undefined} style={styles.activeLane} contentContainerStyle={[styles.cards, { paddingBottom: reservedNavigatorHeight ? reservedNavigatorHeight + spacing.md : spacing.lg }]} scrollEventThrottle={16} onScroll={active ? handleScroll : undefined} scrollEnabled={active} showsVerticalScrollIndicator={false}>{showList ? <View style={styles.cardList}>
               {buildLaneRows(column, laneCards)}
               <Animated.View key="add-note-row" layout={cardLayoutTransition}>
-                <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addNoteToValue", { value1: column.name })} onPress={() => openAddNote(column)} style={({ pressed }) => [styles.addNoteRow, { borderColor: theme.borderSubtle, backgroundColor: theme.surface }, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.control, edge: false }), pressed && styles.emptyDropPressed]}>
-                  <Icon name="add" size={18} color={accent} />
-                  <AppText style={[styles.addNoteText, { color: accent }]}>{tr("id.addNote")}</AppText>
+                <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addNoteToValue", { value1: column.name })} onPress={() => openAddNote(column)} style={({ pressed }) => [styles.addNoteRow, { borderColor: 'rgba(43,38,32,0.3)' }, pressed && styles.emptyDropPressed]}>
+                  <Icon name="add" size={18} color={PAPER_INK} />
+                  <AppText style={[handwriting.handBold, styles.addNoteText, { color: PAPER_INK }]}>{tr("id.addNote")}</AppText>
                 </Pressable>
               </Animated.View>
             </View> : notYetLoaded ? <ColumnSkeleton />
-            : loadFailed ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.retryLoadingValue", { value1: column.name })} onPress={() => fetchColumn(column.id, { force: true })} style={({ pressed }) => [styles.emptyDrop, { borderColor: accentBorderColor, backgroundColor: theme.surface }, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.panel, edge: false }), pressed && styles.emptyDropPressed]}><View style={[styles.emptyIcon, { backgroundColor: theme.surfaceElevated }]}><Icon name="refresh" size={24} color={theme.textMuted} /></View><AppText variant="display" style={[styles.emptyTitle, { color: theme.textPrimary }]}>{tr("id.couldnTLoadThisColumn")}</AppText><AppText style={[styles.emptyCopy, { color: theme.textSecondary }]}>{tr("id.tapToRetry")}</AppText></Pressable>
-            : <View style={[styles.emptyDrop, { borderColor: accentBorderColor, backgroundColor: theme.surface }, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.panel, edge: false })]}><View style={[styles.emptyIcon, { backgroundColor: theme.surfaceElevated }]}><Icon name="document-text-outline" size={24} color={theme.textMuted} /></View><AppText variant="display" style={[styles.emptyTitle, { color: theme.textPrimary }]}>{tr("id.noNotesHereYet")}</AppText><AppText style={[styles.emptyCopy, { color: theme.textSecondary }]}>{tr("id.addSomethingDirectlyOrMoveANoteHere")}</AppText><Pressable accessibilityRole="button" accessibilityLabel={tr("id.addNoteToValue", { value1: column.name })} onPress={() => openAddNote(column)} style={({ pressed }) => [styles.emptyAddButton, { backgroundColor: accent }, pressed && styles.emptyDropPressed]}><Icon name="add" size={16} color={accentOn} /><AppText style={[styles.emptyAddText, { color: accentOn }]}>{tr("id.addNote")}</AppText></Pressable></View>}</ScrollView> : <View pointerEvents="none" style={styles.neighborCards}>{status === "loaded" || laneCards.length ? <>{laneCards.slice(0, 3).map((card) => <View key={card.id} style={[styles.neighborCard, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}><AppText variant="display" numberOfLines={2} style={[styles.neighborCardTitle, { color: card.isHidden === 1 ? theme.textMuted : theme.textPrimary }]}>{card.isHidden === 1 ? tr("index.hiddenChit") : card.title || card.preview || tr("id.untitledThought")}</AppText></View>)}{!laneCards.length ? <View style={[styles.neighborEmpty, { borderColor: accentBorderColor }]}><Icon name="add" size={20} color={theme.textMuted} /><AppText style={[styles.neighborEmptyText, { color: theme.textMuted }]}>{tr("id.addACard")}</AppText></View> : null}</> : [0, 1].map((key) => <View key={key} style={[styles.neighborCard, styles.neighborCardSkeleton, { backgroundColor: theme.surfaceElevated }]} />)}</View>}
+            : loadFailed ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.retryLoadingValue", { value1: column.name })} onPress={() => fetchColumn(column.id, { force: true })} style={({ pressed }) => [styles.emptyDrop, { borderColor: 'rgba(43,38,32,0.3)' }, pressed && styles.emptyDropPressed]}><View style={[styles.emptyIcon, { backgroundColor: PAPER_WHITE }]}><Icon name="refresh" size={24} color={PAPER_INK} /></View><AppText style={[handwriting.handBold, styles.emptyTitle, { color: PAPER_INK }]}>{tr("id.couldnTLoadThisColumn")}</AppText><AppText style={[styles.emptyCopy, { color: PAPER_INK_MUTED }]}>{tr("id.tapToRetry")}</AppText></Pressable>
+            : <View style={[styles.emptyDrop, { borderColor: 'rgba(43,38,32,0.3)' }]}><View style={[styles.emptyIcon, { backgroundColor: PAPER_WHITE }]}><Icon name="document-text-outline" size={24} color={PAPER_INK} /></View><AppText style={[handwriting.handBold, styles.emptyTitle, { color: PAPER_INK }]}>{tr("id.noNotesHereYet")}</AppText><AppText style={[styles.emptyCopy, { color: PAPER_INK_MUTED }]}>{tr("id.addSomethingDirectlyOrMoveANoteHere")}</AppText><Pressable accessibilityRole="button" accessibilityLabel={tr("id.addNoteToValue", { value1: column.name })} onPress={() => openAddNote(column)} style={({ pressed }) => [styles.emptyAddButton, { backgroundColor: PAPER_YELLOW, boxShadow: `0px 4px 8px ${desk.shadow}` }, pressed && styles.emptyDropPressed]}><Icon name="add" size={16} color={PAPER_INK} /><AppText style={[handwriting.handBold, styles.emptyAddText, { color: PAPER_INK }]}>{tr("id.addNote")}</AppText></Pressable></View>}</ScrollView> : <View pointerEvents="none" style={styles.neighborCards}>{status === "loaded" || laneCards.length ? <>{laneCards.slice(0, 3).map((card) => <View key={card.id} style={[styles.neighborCard, { backgroundColor: PAPER_WHITE }]}><AppText numberOfLines={2} style={[handwriting.handBold, styles.neighborCardTitle, { color: card.isHidden === 1 ? PAPER_INK_MUTED : PAPER_INK }]}>{card.isHidden === 1 ? tr("index.hiddenChit") : card.title || card.preview || tr("id.untitledThought")}</AppText></View>)}{!laneCards.length ? <View style={[styles.neighborEmpty, { borderColor: 'rgba(43,38,32,0.3)' }]}><Icon name="add" size={20} color={PAPER_INK_MUTED} /><AppText style={[styles.neighborEmptyText, { color: PAPER_INK_MUTED }]}>{tr("id.addACard")}</AppText></View> : null}</> : [0, 1].map((key) => <View key={key} style={[styles.neighborCard, styles.neighborCardSkeleton, { backgroundColor: PAPER_WHITE }]} />)}</View>}
           </View>;
         }}
       />
@@ -861,8 +859,8 @@ export default function BoardScreen() {
       {drag ? <Animated.View pointerEvents="none" style={[styles.edgeGlow, styles.edgeGlowLeft, { backgroundColor: accentTint }, edgeGlowLeftStyle]} /> : null}
       {drag ? <Animated.View pointerEvents="none" style={[styles.edgeGlow, styles.edgeGlowRight, { backgroundColor: accentTint }, edgeGlowRightStyle]} /> : null}
       {board.showColumnNavigator ? <View onLayout={(event) => setNavigatorDockHeight(Math.ceil(event.nativeEvent.layout.height))} style={[styles.navigatorDock, { paddingBottom: Math.min(insets.bottom, spacing.sm) || spacing.sm }]}><ColumnNavigator columns={columns} cards={cards} columnStatus={columnStatus} columnCounts={columnCounts} columnIndex={columnIndex} reduceMotion={reduceMotion} accent={accent} onSelect={goToColumn} onAddColumn={openAddColumnSheet} /></View> : null}
-      <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addFromUnorganized")} accessibilityHint={tr("id.opensUnorganizedThoughtsToAddToThisBoard")} onPress={() => router.push(`/unorganized?boardId=${id}`)} style={({ pressed }) => [styles.add, { bottom: addButtonBottom, backgroundColor: accent }, sticky({ fill: accent, radius: styleTokens.radius.panel, edge: styleTokens.emptyState.button.edge }, pressed), pressed && styles.addPressed]}><Icon name="add-outline" size={28} color={accentOn} /></Pressable>
-    </View> : <View style={styles.carousel}><AddColumnPlaceholder variant="empty" onPress={openAddColumnSheet} /></View>}</View>{error ? <AppText accessibilityRole="alert" style={[styles.error, { backgroundColor: theme.danger }]}>{error}</AppText> : null}
+      <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addFromUnorganized")} accessibilityHint={tr("id.opensUnorganizedThoughtsToAddToThisBoard")} onPress={() => router.push(`/unorganized?boardId=${id}`)} style={({ pressed }) => [styles.add, { bottom: addButtonBottom, backgroundColor: PAPER_YELLOW, boxShadow: `0px ${pressed ? 3 : 8}px ${pressed ? 6 : 16}px ${desk.shadow}` }, pressed && styles.addPressed]}><Icon name="add-outline" size={28} color={PAPER_INK} /></Pressable>
+    </View> : <View style={styles.carousel}><AddColumnPlaceholder variant="empty" onPress={openAddColumnSheet} /></View>}</View></PaperDesk>{error ? <AppText accessibilityRole="alert" style={[styles.error, { backgroundColor: theme.danger }]}>{error}</AppText> : null}
     <Modal visible={!!moveCard} transparent animationType="fade" onRequestClose={() => setMoveCard(null)}><View style={styles.backdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setMoveCard(null)} /><View style={[styles.modal, { backgroundColor: theme.surface }, stickySheet()]}><AppText variant="display" style={[styles.modalTitle, { color: theme.textPrimary }]}>{tr("id.moveTo")}</AppText><AppText style={[styles.modalCopy, { color: theme.textSecondary }]}>{tr("id.chooseADestinationColumn")}</AppText>{columns.map((column) => <Pressable key={column.id} onPress={() => void move(column)} style={[styles.option, { borderTopColor: theme.borderSubtle }]}><AppText style={[styles.optionText, { color: theme.textPrimary }]}>{column.name}</AppText><AppText style={[styles.optionArrow, { color: theme.textMuted }]}>›</AppText></Pressable>)}</View></View></Modal>
     <ColumnManagementSheet
       visible={settingsOpen}
@@ -883,6 +881,10 @@ export default function BoardScreen() {
   </Screen>;
 }
 
+// Paper tones for the board's notes and their small controls.
+const RULE = 'rgba(43,38,32,0.14)';
+const CONTROL = 'rgba(43,38,32,0.06)';
+const SKELETON = { surfaceElevated: 'rgba(43,38,32,0.08)' };
 const styles = StyleSheet.create({
   loading: { flex: 1, textAlign: 'center', textAlignVertical: 'center' }, boardLoader: { flex: 1, alignItems: 'center', justifyContent: 'center' }, back: { fontSize: 30, lineHeight: 30 },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md },
@@ -890,17 +892,17 @@ const styles = StyleSheet.create({
   headerCopy: { flex: 1, minWidth: 0, paddingHorizontal: spacing.xxs }, boardTitle: { fontSize: 23, lineHeight: 28, fontWeight: '800' }, boardSubtitle: { marginTop: 2, fontSize: 13, lineHeight: 18, fontWeight: '500' },
   headerButton: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 23 }, headerButtonPressed: { opacity: 0.58, transform: [{ scale: 0.96 }] },
   pager: { flex: 1 }, carousel: { flex: 1 }, boardList: { flex: 1 }, boardTrack: { flexGrow: 1, alignItems: 'stretch', paddingTop: spacing.xs },
-  columnFrame: { flex: 1, overflow: 'hidden', borderRadius: 26, borderWidth: StyleSheet.hairlineWidth }, activeColumn: { shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2 }, dropTargetColumn: { borderWidth: 2 },
-  columnHeader: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, columnIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 13 }, columnHeaderCopy: { flex: 1, minWidth: 0 }, columnTitle: { fontSize: 20, lineHeight: 25, fontWeight: '800' }, columnCount: { marginTop: 2, fontSize: 13, lineHeight: 17, fontWeight: '500' }, columnMenu: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
-  activeLane: { flex: 1 }, cards: { flexGrow: 1, paddingHorizontal: spacing.md, paddingBottom: spacing.lg }, cardList: { position: 'relative', gap: spacing.xs },
-  emptyDrop: { minHeight: 320, alignItems: 'center', justifyContent: 'center', marginHorizontal: spacing.md, marginBottom: spacing.lg, padding: spacing.lg, borderWidth: 1, borderStyle: 'dashed', borderRadius: 22 }, emptyDropPressed: { opacity: 0.7 }, emptyIcon: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 26, marginBottom: spacing.sm }, emptyTitle: { fontSize: 17, fontWeight: '700' }, emptyCopy: { marginTop: spacing.xs, fontSize: 14, lineHeight: 20, textAlign: 'center' },
-  emptyAddButton: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: spacing.md, borderRadius: 20, marginTop: spacing.md },
-  emptyAddText: { fontWeight: '700', fontSize: 14 },
+  columnFrame: { flex: 1, overflow: 'hidden', borderRadius: 4, borderWidth: StyleSheet.hairlineWidth, marginTop: spacing.xs, marginBottom: spacing.xs }, dropTargetColumn: { borderWidth: 2, borderStyle: 'dashed' },
+  columnHeader: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, columnIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 }, columnHeaderCopy: { flex: 1, minWidth: 0 }, columnTitle: { fontSize: 25, lineHeight: 32 }, columnCount: { marginTop: 2, fontSize: 13, lineHeight: 17, fontWeight: '500' }, columnMenu: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
+  activeLane: { flex: 1 }, cards: { flexGrow: 1, paddingHorizontal: spacing.md, paddingBottom: spacing.lg }, cardList: { position: 'relative', gap: 12 },
+  emptyDrop: { minHeight: 320, alignItems: 'center', justifyContent: 'center', marginHorizontal: spacing.md, marginBottom: spacing.lg, padding: spacing.lg, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 4 }, emptyDropPressed: { opacity: 0.7 }, emptyIcon: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 26, marginBottom: spacing.sm }, emptyTitle: { fontSize: 22, lineHeight: 29 }, emptyCopy: { marginTop: spacing.xs, fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  emptyAddButton: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: spacing.md, borderRadius: 3, marginTop: spacing.md, transform: [{ rotate: '-1.5deg' }] },
+  emptyAddText: { fontSize: 18, lineHeight: 24 },
   // Ghost/secondary treatment — a ~52pt dashed row, same horizontal bounds as a
   // card, deliberately quieter than the solid card surfaces above it.
-  addNoteRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: 16, borderWidth: 1, borderStyle: 'dashed' },
-  addNoteText: { fontSize: 14, fontWeight: '700' },
-  neighborCards: { flex: 1, gap: spacing.sm, paddingHorizontal: spacing.md, paddingBottom: spacing.lg }, neighborCard: { minHeight: 112, justifyContent: 'center', padding: spacing.md, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth }, neighborCardTitle: { fontSize: 17, lineHeight: 23, fontWeight: '700' }, neighborCardSkeleton: { borderWidth: 0, opacity: 0.5 }, neighborEmpty: { flex: 1, minHeight: 220, alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderWidth: 1, borderStyle: 'dashed', borderRadius: 22 }, neighborEmptyText: { fontSize: 14, fontWeight: '600' },
+  addNoteRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: 4, borderWidth: 1.5, borderStyle: 'dashed' },
+  addNoteText: { fontSize: 18, lineHeight: 24 },
+  neighborCards: { flex: 1, gap: spacing.sm, paddingHorizontal: spacing.md, paddingBottom: spacing.lg }, neighborCard: { minHeight: 112, justifyContent: 'center', padding: spacing.md, borderRadius: 3, boxShadow: '0px 4px 10px rgba(80,60,30,0.16)' }, neighborCardTitle: { fontSize: 19, lineHeight: 25 }, neighborCardSkeleton: { borderWidth: 0, opacity: 0.5 }, neighborEmpty: { flex: 1, minHeight: 220, alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 4 }, neighborEmptyText: { fontSize: 14, fontWeight: '600' },
   skeletonStack: { gap: spacing.xs, paddingHorizontal: spacing.md, paddingTop: spacing.xs }, skeletonBar: { borderRadius: 6 }, skeletonTitleBar: { width: '68%', height: 16 }, skeletonPreviewBar: { width: '92%', height: 13, marginTop: spacing.xxs }, skeletonHandle: { width: 44, height: 44, borderRadius: 12, marginTop: -spacing.xs, marginRight: -spacing.xs }, skeletonFooterBar: { height: 32, borderRadius: 10 },
   // Purely a positioning/spacing wrapper — no background of its own, so the
   // card carousel stays visible scrolling behind/around the floating dock (its
@@ -909,8 +911,9 @@ const styles = StyleSheet.create({
   // this dock's bottom clearance — Screen intentionally excludes the bottom
   // edge so the two can't stack into an oversized gap.
   navigatorDock: { position: 'absolute', right: 0, bottom: 0, left: 0, zIndex: 10, backgroundColor: 'transparent', paddingHorizontal: spacing.md, paddingTop: spacing.lg }, navigatorSurface: { borderRadius: 20, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 4 }, navigator: { height: 44 }, navigatorContent: { position: 'relative', minHeight: 44, paddingHorizontal: spacing.md, alignItems: 'center', gap: spacing.xs }, navigatorIndicator: { position: 'absolute', bottom: 2, left: 0, width: 24, height: 2, borderRadius: 1 }, navigatorItem: { maxWidth: 176, minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.sm }, navigatorItemPressed: { opacity: 0.58 }, navigatorNameFrame: { maxWidth: 152, minHeight: 20, justifyContent: 'center' }, navigatorName: { maxWidth: 152, flexShrink: 1, fontSize: 14, lineHeight: 20 }, navigatorNameMeasure: { opacity: 0, fontWeight: '800' }, navigatorNameVisible: { position: 'absolute', right: 0, left: 0, fontWeight: '500', textAlign: 'center' }, navigatorNameSelected: { fontWeight: '800' }, navigatorPosition: { height: 16, fontSize: 10, lineHeight: 13, fontWeight: '600', textAlign: 'center', letterSpacing: 0.2 }, navigatorAddItem: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 15, borderWidth: 1, borderStyle: 'dashed' },
-  addColumnFrame: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.xxs, borderRadius: 26, borderWidth: 1.5, borderStyle: 'dashed', paddingHorizontal: spacing.lg }, addColumnFrameEmpty: { marginHorizontal: spacing.md, marginVertical: spacing.md }, addColumnPressed: { opacity: 0.6 }, addColumnIcon: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 26, borderWidth: 1.5, borderStyle: 'dashed', marginBottom: spacing.xs }, addColumnTitle: { fontSize: 17, fontWeight: '700' }, addColumnCopy: { fontSize: 13, lineHeight: 18, textAlign: 'center', maxWidth: 200 },
-  card: { overflow: 'hidden', borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 }, cardHighlight: { zIndex: 1, borderRadius: 22, borderWidth: 2 }, cardMedia: { width: '100%', borderBottomWidth: StyleSheet.hairlineWidth },
+  addColumnFrame: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.xxs, borderRadius: 4, borderWidth: 1.5, borderStyle: 'dashed', paddingHorizontal: spacing.lg, marginVertical: spacing.xs }, addColumnFrameEmpty: { marginHorizontal: spacing.md, marginVertical: spacing.md }, addColumnPressed: { opacity: 0.6 }, addColumnIcon: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 26, borderWidth: 1.5, borderStyle: 'dashed', marginBottom: spacing.xs }, addColumnTitle: { fontSize: 22, lineHeight: 29 }, addColumnCopy: { fontSize: 13, lineHeight: 18, textAlign: 'center', maxWidth: 200 },
+  // A white note on the column's sheet: square-cornered, with a paper's shadow.
+  card: { overflow: 'hidden', borderRadius: 3, boxShadow: '0px 4px 10px rgba(80,60,30,0.18)' }, cardHighlight: { zIndex: 1, borderRadius: 3, borderWidth: 2 }, cardMedia: { width: '100%', borderBottomWidth: StyleSheet.hairlineWidth },
   // Horizontal trimmed slightly, vertical cut substantially — vertical padding
   // (top+bottom, applied twice per card) is what was making every card read as
   // oversized, far more than the horizontal margins. `gap` is between cardTop,
@@ -918,11 +921,11 @@ const styles = StyleSheet.create({
   // flex `gap` applies uniformly between direct children, so tightening it here
   // is what closes up the space around the divider on both sides at once.
   cardBody: { paddingHorizontal: 16, paddingVertical: 12, gap: spacing.xs },
-  cardPressed: { opacity: 0.78 }, cardDragging: { zIndex: 30, elevation: 12, shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 14, shadowOffset: { width: 0, height: 7 } },
+  cardPressed: { opacity: 0.78 }, cardDragging: { zIndex: 30, boxShadow: '0px 14px 24px rgba(60,40,20,0.3)' },
   // No minHeight: a short single-line title should make the card short, not be
   // padded out to a fixed row height — the row already sizes to its tallest
   // child (the drag handle's touch target) via flexbox without one.
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs }, cardOpen: { flex: 1, minWidth: 0, justifyContent: 'center' }, hiddenTitle: { flexDirection: 'row', alignItems: 'center', gap: 6 }, hiddenTitleText: { flexShrink: 1 }, showContent: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto', paddingHorizontal: spacing.sm, borderRadius: 10 }, title: { fontSize: 17, fontWeight: '600', lineHeight: 22 },
+  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs }, cardOpen: { flex: 1, minWidth: 0, justifyContent: 'center' }, hiddenTitle: { flexDirection: 'row', alignItems: 'center', gap: 6 }, hiddenTitleText: { flexShrink: 1 }, showContent: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto', paddingHorizontal: spacing.sm, borderRadius: 10 }, title: { fontSize: 19, lineHeight: 25 },
   // The Pressable hit target stays 44x44 (accessible minimum) — only the DragDots
   // glyph inside it (dotGrid/dot below) shrinks, so the handle reads as smaller
   // without losing any tappable/draggable area.
@@ -931,8 +934,8 @@ const styles = StyleSheet.create({
   // approach as the drag handle — minHeight/height drop from 44/40 to 32, and
   // the Pressables below add vertical hitSlop to recover a ~44pt effective
   // touch target despite the smaller visible pill.
-  cardControls: { minHeight: 32, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }, move: { minHeight: 32, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: spacing.sm, borderRadius: 10 }, moveText: { fontSize: 12, fontWeight: '700' }, reorderGroup: { height: 32, flexDirection: 'row', alignItems: 'center', overflow: 'hidden', borderRadius: 10 }, reorderButton: { width: 36, height: 32, alignItems: 'center', justifyContent: 'center' }, reorderDivider: { width: StyleSheet.hairlineWidth, height: 16 }, reorderButtonDisabled: { opacity: 0.26 }, reorderButtonPressed: { opacity: 0.55 }, controlPressed: { opacity: 0.62 }, placeholder: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 22 }, dragLayer: { position: 'absolute', zIndex: 50, elevation: 14 }, edgeGlow: { position: 'absolute', top: 0, bottom: 0, width: 28, zIndex: 40 }, edgeGlowLeft: { left: 0, borderTopRightRadius: 26, borderBottomRightRadius: 26 }, edgeGlowRight: { right: 0, borderTopLeftRadius: 26, borderBottomLeftRadius: 26 },
-  add: { position: 'absolute', left: '50%', marginLeft: -30, width: 60, height: 60, alignItems: 'center', justifyContent: 'center', borderRadius: 30, zIndex: 20, elevation: 8, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } }, addPressed: { opacity: 0.76, transform: [{ scale: 0.96 }] },
+  cardControls: { minHeight: 32, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }, move: { minHeight: 32, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: spacing.sm, borderRadius: 10 }, moveText: { fontSize: 12, fontWeight: '700' }, reorderGroup: { height: 32, flexDirection: 'row', alignItems: 'center', overflow: 'hidden', borderRadius: 10 }, reorderButton: { width: 36, height: 32, alignItems: 'center', justifyContent: 'center' }, reorderDivider: { width: StyleSheet.hairlineWidth, height: 16 }, reorderButtonDisabled: { opacity: 0.26 }, reorderButtonPressed: { opacity: 0.55 }, controlPressed: { opacity: 0.62 }, placeholder: { borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 3 }, dragLayer: { position: 'absolute', zIndex: 50, elevation: 14 }, edgeGlow: { position: 'absolute', top: 0, bottom: 0, width: 28, zIndex: 40 }, edgeGlowLeft: { left: 0, borderTopRightRadius: 26, borderBottomRightRadius: 26 }, edgeGlowRight: { right: 0, borderTopLeftRadius: 26, borderBottomLeftRadius: 26 },
+  add: { position: 'absolute', left: '50%', marginLeft: -30, width: 60, height: 60, alignItems: 'center', justifyContent: 'center', borderRadius: 30, zIndex: 20 }, addPressed: { opacity: 0.76, transform: [{ scale: 0.96 }] },
   retryButton: { alignSelf: 'center', minHeight: 44, paddingHorizontal: spacing.lg, alignItems: 'center', justifyContent: 'center', borderRadius: 12 }, retryButtonText: { fontWeight: '700', fontSize: 15 }, error: { color: '#fff', textAlign: 'center', padding: spacing.sm }, backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,23,0.3)' }, modal: { padding: spacing.lg, borderTopLeftRadius: 22, borderTopRightRadius: 22, gap: spacing.sm }, modalTitle: { fontSize: 20, fontWeight: '700' }, modalCopy: { marginBottom: spacing.sm }, option: { minHeight: 50, flexDirection: 'row', alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth }, optionText: { fontSize: 16, flex: 1 }, optionArrow: { fontSize: 25 },
   toastWrap: { position: 'absolute', right: 0, bottom: 96, left: 0, alignItems: 'center' }, toast: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 }, toastText: { fontSize: 14, fontWeight: '600' },
 });

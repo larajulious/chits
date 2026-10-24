@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { HEADER_SCENE_IDS, localMinute, sceneLook, sceneMixAt, sceneSky, sceneTone } from '../src/constants/header-scenes.ts';
+import { HEADER_SCENE_IDS, HEADER_SCENE_SUN_RADIUS, localMinute, sceneLook, sceneMixAt, sceneSky, sceneTone, sunAt } from '../src/constants/header-scenes.ts';
 import { HEADER_SCENE_LUMINANCE, HEADER_SCENE_PANES, HEADER_SCENE_SIZE, HEADER_SCENE_TONE } from '../src/constants/header-scenes.generated.ts';
 
 const DAY = 24 * 60;
@@ -66,6 +66,26 @@ test('clouds by day, stars and moon by night', () => {
   assert.ok(noon.clouds > 0.5 && noon.stars === 0 && noon.motes > 0);
   assert.ok(midnight.stars === 1 && midnight.clouds === 0 && midnight.motes === 0);
   assert.match(sceneSky(sceneMixAt(hm(18, 30))).cloudColor, /^#[0-9a-f]{6}$/);
+});
+
+test('birds fly by day and stars fall by night', () => {
+  const noon = sceneSky(sceneMixAt(hm(12)));
+  const midnight = sceneSky(sceneMixAt(0));
+  assert.ok(noon.birds > 0.5 && noon.meteors === 0);
+  assert.ok(midnight.birds === 0 && midnight.meteors === 1);
+  assert.match(sceneSky(sceneMixAt(hm(18, 30))).sunColor, /^#[0-9a-f]{6}$/);
+});
+
+test('the sun crosses the window with the clock and sets behind the hills', () => {
+  for (const minute of [0, hm(3), hm(6), hm(19), hm(23)]) assert.equal(sunAt(minute), null, String(minute));
+  const [top] = HEADER_SCENE_PANES;
+  const morning = sunAt(hm(9));
+  const noon = sunAt(hm(12, 30));
+  const evening = sunAt(hm(17, 30));
+  assert.ok(morning.x < noon.x && noon.x < evening.x, 'east to west');
+  assert.ok(noon.y - HEADER_SCENE_SUN_RADIUS >= top.y && noon.y < top.y + top.h, 'high in the top panes at midday');
+  // Just after rising and just before setting, the disc is still under the hills' lowest crest.
+  for (const minute of [hm(6, 16), hm(18, 49)]) assert.ok(sunAt(minute).y - HEADER_SCENE_SUN_RADIUS > 385, String(minute));
 });
 
 test('the clock reads the local minute', () => {

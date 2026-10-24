@@ -31,6 +31,9 @@ const PANES = [
   { x: 1204, y: 295, w: 198, h: 191 }, { x: 1418, y: 295, w: 198, h: 191 },
 ];
 const LAMP_MOUTH = { x: 1775, y: 477 };
+// The far hills' crest, left to right across the glass: the sun rises and
+// sets behind it.
+const RIDGE = 'L1196 410 C1260 385 1320 398 1380 392 C1450 385 1520 360 1624 395';
 
 const NOTE_COLORS = { yellow: '#FBE27A', pink: '#F7A9B6', mint: '#B8E2C8', blue: '#B9D3F2' };
 const NOTES = [
@@ -159,7 +162,7 @@ function scene(s) {
     <rect x="${FRAME.x}" y="${FRAME.y}" width="${FRAME.w}" height="${FRAME.h}" fill="url(#sky)"/>
     ${s.glow ? `<circle cx="${s.glow.x}" cy="${s.glow.y}" r="${s.glow.r}" fill="url(#glow)" opacity="${s.glow.o}"/>` : ''}
     ${s.sun ? `<circle cx="${s.sun.x}" cy="${s.sun.y}" r="${s.sun.r}" fill="${s.sun.color}"/>` : ''}
-    <path d="M1196 490 L1196 410 C1260 385 1320 398 1380 392 C1450 385 1520 360 1624 395 L1624 490 Z" fill="${s.farHill}"/>
+    <path d="M1196 490 ${RIDGE} L1624 490 Z" fill="${s.farHill}"/>
     <path d="M1196 490 L1196 448 C1290 425 1370 446 1440 440 C1520 434 1570 418 1624 436 L1624 490 Z" fill="${s.nearHill}"/>
     <g fill="${s.tree}">
       <ellipse cx="1296" cy="430" rx="9" ry="15"/><ellipse cx="1314" cy="434" rx="7" ry="11"/>
@@ -289,6 +292,8 @@ export const HEADER_SCENE_SIZE = { width: ${W}, height: ${H} };
 export const HEADER_SCENE_PANES = [
 ${PANES.map((p) => `  { x: ${p.x}, y: ${p.y}, w: ${p.w}, h: ${p.h} },`).join('\n')}
 ];
+/** The open sky above the far hills, as an SVG path in picture pixels. */
+export const HEADER_SCENE_SKY = 'M1196 ${FRAME.y} ${RIDGE} L1624 ${FRAME.y} Z';
 /** Each picture's average color: what the header shows for the instant before it decodes. */
 export const HEADER_SCENE_TONE = {
 ${Object.entries(luminance).map(([id, l]) => `  ${id}: '${l.tone}',`).join('\n')}

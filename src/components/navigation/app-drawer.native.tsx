@@ -124,6 +124,24 @@ function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'n
   );
 }
 
+// The Style setting (same as Settings → Appearance → Style) as one of the
+// panel's rows: icon and label like the rest, a compact switch at the end.
+function StyleRow({ value, onChange }: { value: AppStyle; onChange: (next: AppStyle) => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
+  const { rowStyle } = useDirection();
+  const { tokens } = useTheme();
+  const inCard = useContext(InCardContext);
+  return (
+    <View accessibilityRole="radiogroup" accessibilityLabel={tr("settings.style")} style={[styles.item, rowStyle, inCard && styles.inCard]}>
+      <DrawerIcon name="color-palette-outline" color={tokens.textPrimary} />
+      <AppText numberOfLines={1} style={[styles.itemText, styles.styleLabel, { color: tokens.textPrimary }]}>{tr("settings.style")}</AppText>
+      <View style={styles.styleSwitch}><SegmentedControl options={styleOptions()} value={value} onChange={onChange} /></View>
+    </View>
+  );
+}
+
 // One row shape for both Pinned and Recent so the two lists read as the same
 // kind of thing; only Pinned rows get the trailing unpin button.
 function ShortcutRow({ item, close, onUnpin }: { item: ContextItem; close: () => void; onUnpin?: () => void }) {
@@ -329,15 +347,11 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   const recentUnpinned = recent.filter((item) => !pinnedKeys.has(`${item.kind}-${item.id}`));
   const hasShortcuts = pinned.length > 0 || recentUnpinned.length > 0;
   const classic = style === 'classic';
-  const footer = <>
-    <View accessibilityRole="radiogroup" accessibilityLabel={tr("settings.style")} style={[styles.styleToggle, classic && styles.styleToggleClassic]}>
-      <SegmentedControl options={styleOptions()} value={style} onChange={changeStyle} />
-    </View>
-    <DrawerCard>
-      <NavigationRow destination={gettingStartedDestination} pathname={pathname} close={close} />
-      <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
-    </DrawerCard>
-  </>;
+  const footer = <DrawerCard>
+    <StyleRow value={style} onChange={changeStyle} />
+    <NavigationRow destination={gettingStartedDestination} pathname={pathname} close={close} />
+    <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
+  </DrawerCard>;
   return (
     <SafeAreaView accessibilityViewIsModal style={[styles.drawer, { backgroundColor: tokens.surface, borderColor: tokens.borderSubtle }, styleTokens.outline.width ? [{ borderRightWidth: styleTokens.outline.width, borderColor: styleColors.outline }, sticky({ edge: styleTokens.nav.edge, edgeSide: 'right', outline: false })] : null]}>
       <DrawerBackground />
@@ -473,8 +487,8 @@ const styles = StyleSheet.create({
   iconSlot: { width: 30, alignItems: 'center', justifyContent: 'center' },
   divider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.lg, marginTop: spacing.sm },
   footer: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: spacing.xs },
-  styleToggle: { marginHorizontal: spacing.md, marginTop: spacing.xs, marginBottom: spacing.xxs },
-  styleToggleClassic: { marginHorizontal: spacing.sm, marginTop: 0, marginBottom: spacing.sm },
+  styleLabel: { flex: 1, minWidth: 0 },
+  styleSwitch: { width: 148 },
   section: { paddingTop: spacing.sm },
   sectionHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg },
   sectionLabel: { flex: 1, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },

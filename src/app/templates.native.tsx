@@ -3,6 +3,7 @@ import { ActivityIndicator, BackHandler } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Screen, EmptyState } from '@/components/ui/primitives';
+import { useDesk } from '@/components/desk/paper-desk';
 import { AddNoteSheet } from '@/components/boards/add-note-sheet';
 import { TemplateLibrary, type TemplateLibraryHandle } from '@/features/templates/template-library';
 import { createMessageRepository } from '@/db/repositories';
@@ -22,6 +23,7 @@ export default function TemplatesScreen() {
   const [draft, setDraft] = useState<NoteDraftBlock[] | undefined>();
   const library = useRef<TemplateLibraryHandle>(null);
   const navigation = useNavigation();
+  const desk = useDesk();
   const leaving = useRef(false);
   const close = () => { leaving.current = true; router.back(); };
   useEffect(() => {
@@ -42,7 +44,7 @@ export default function TemplatesScreen() {
     });
     return () => { sub.remove(); stop(); };
   }, [navigation]);
-  return <Screen edges={['top','left','right','bottom']}>
+  return <Screen edges={['top','left','right','bottom']} style={{ backgroundColor: desk.desk }}>
     {loading ? <ActivityIndicator accessibilityLabel={tr('templates.loading')} /> : source !== undefined || !sourceMessageId ? <TemplateLibrary ref={library} initialDocument={source?.document} initialTitle={source?.title} onClose={close} onSelect={setDraft} /> : <EmptyState title={tr('templates.unavailable')} description={tr('templates.error')} action={{ label: tr('templates.back'), onPress: close }} />}
     <AddNoteSheet visible={Boolean(draft)} initialBlocks={draft} onClose={() => setDraft(undefined)} onSubmit={async ({ text, attachment, blocks }) => { if (blocks) await repository.createNote({ blocks, attachment }); else await repository.createText(text); }} />
   </Screen>;

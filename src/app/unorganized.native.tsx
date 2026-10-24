@@ -10,10 +10,12 @@ import { Image } from 'expo-image';
 import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
 
 import { AppHeader, EmptyState, HeaderGlyph, IconButton, Screen } from '@/components/ui/primitives';
+import { PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW, PaperButton, PaperCard, PaperDesk, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { stableTilt } from '@/constants/style-tokens';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { useTheme } from '@/components/theme-provider';
-import { PressableSurface, useStickySheet } from '@/components/ui/surface';
+import { useStickySheet } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { useVideoThumbnail } from '@/components/chat/message-row';
@@ -427,8 +429,9 @@ export default function UnorganizedScreen() {
 
   useLocale();
   const database = useSQLiteContext();
-  const { tokens: theme, styleTokens, styleColors } = useTheme();
-  const sticky = styleTokens.elevation === 'edge';
+  const { tokens: theme } = useTheme();
+  const desk = useDesk();
+  const handwriting = useHandwriting();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { addToCard, messageId, boardId, openBoardPicker, chitsGuided } = useLocalSearchParams<{ addToCard?: string; messageId?: string; boardId?: string; openBoardPicker?: string; chitsGuided?: string }>();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -453,7 +456,8 @@ export default function UnorganizedScreen() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectionMode = selected.length > 0;
   const [ready, setReady] = useState(false);
-  const showLoader = useChitsLoading(!ready);
+  // The loader also covers the moment the handwriting takes, so the list never reflows.
+  const showLoader = useChitsLoading(!ready || !handwriting.ready);
 
   const showToast = useCallback((message: string, onUndo?: () => void) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -565,45 +569,48 @@ export default function UnorganizedScreen() {
     finally { setWorking(false); }
   };
 
-  return <Screen>
+  return <Screen style={{ backgroundColor: desk.desk }}>
     <AppHeader title={tr("index.unorganized")} leading={<IconButton label={tr("search.goBack")} onPress={() => router.back()}><HeaderGlyph style={styles.back}>‹</HeaderGlyph></IconButton>} />
+    <PaperDesk>
     {selectionMode ? (
-      <View style={[styles.header, { borderBottomColor: theme.borderSubtle }]}>
-        <IconButton label={tr("unorganized.exitSelection")} onPress={() => setSelected([])}><Icon name="close" size={22} color={theme.textPrimary} /></IconButton>
-        <AppText style={styles.selectionTitle}>{selected.length} {' '}{tr("unorganized.selected")}</AppText>
-        <Pressable accessibilityRole="button" hitSlop={8} onPress={toggleSelectAll} style={styles.selectAllHit}><AppText style={styles.selectAllText}>{selected.length === messages.length ? tr("unorganized.deselectAll") : tr("unorganized.selectAll")}</AppText></Pressable>
+      <View style={[styles.header, { borderBottomColor: desk.rule }]}>
+        <IconButton label={tr("unorganized.exitSelection")} onPress={() => setSelected([])}><Icon name="close" size={22} color={desk.ink} /></IconButton>
+        <AppText style={[handwriting.handBold, styles.selectionTitle, { color: desk.ink }]}>{selected.length} {' '}{tr("unorganized.selected")}</AppText>
+        <Pressable accessibilityRole="button" hitSlop={8} onPress={toggleSelectAll} style={styles.selectAllHit}><AppText style={[handwriting.handBold, styles.selectAllText, { color: desk.ink }]}>{selected.length === messages.length ? tr("unorganized.deselectAll") : tr("unorganized.selectAll")}</AppText></Pressable>
       </View>
     ) : null}
-    {!ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : messages.length ? <>
+    {!ready || !handwriting.ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : messages.length ? <>
       <ScrollView contentContainerStyle={styles.list}>
-        {!selectionMode ? <AppText style={styles.intro}>{addToCard ? tr("unorganized.selectThoughtsToAttachToThisCardYour") : tr("unorganized.notesThatHavenTBeenAddedToA")}</AppText> : null}
+        {!selectionMode ? <AppText style={[styles.intro, { color: desk.inkMuted }]}>{addToCard ? tr("unorganized.selectThoughtsToAttachToThisCardYour") : tr("unorganized.notesThatHavenTBeenAddedToA")}</AppText> : null}
         {messages.map((message) => {
           const isSelected = selected.includes(message.id);
           const messagePreview = preview(message);
           const dateLabel = formatDateTime(message.createdAt);
-          return <Pressable key={message.id} accessibilityRole="checkbox" accessibilityLabel={`${messagePreview}. ${dateLabel}`} accessibilityState={{ checked: isSelected }} onPress={() => toggle(message.id)} style={({ pressed }) => [styles.message, isSelected && styles.messageSelected, pressed && styles.messagePressed]}>
-            {isSelected ? <Icon name="checkmark-circle" size={22} color={theme.accent} /> : <Icon name="ellipse-outline" size={22} color={theme.textMuted} />}
+          // Loose thoughts on cream paper; a picked one turns yellow, like a highlighted note.
+          return <PaperCard key={message.id} paper={isSelected ? PAPER_YELLOW : PAPER_WHITE} tilt={stableTilt(`unorganized:${message.id}`, 0.8)} tape={stableTilt(`unorganized:${message.id}:tape`, 1) > 0.5} accessibilityRole="checkbox" accessibilityLabel={`${messagePreview}. ${dateLabel}`} accessibilityState={{ checked: isSelected }} onPress={() => toggle(message.id)} style={styles.message}>
+            <Icon name={isSelected ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={isSelected ? PAPER_INK : PAPER_INK_MUTED} />
             <Thumbnail message={message} />
             <View style={styles.messageCopy}>
-              <AppText numberOfLines={2} ellipsizeMode="tail" style={styles.messageText}>{messagePreview}</AppText>
+              <AppText numberOfLines={2} ellipsizeMode="tail" style={[handwriting.hand, styles.messageText]}>{messagePreview}</AppText>
               <AppText numberOfLines={1} style={styles.messageMeta}>{message.pinned ? tr("unorganized.pinned") : ''}{dateLabel}</AppText>
             </View>
-          </Pressable>;
+          </PaperCard>;
         })}
       </ScrollView>
       {selectionMode ? (
-        <Animated.View entering={SlideInDown.springify().damping(20).mass(0.6)} exiting={SlideOutDown.duration(160)} style={[styles.actionBar, { borderTopColor: theme.borderSubtle, backgroundColor: theme.surface }]}>
+        <Animated.View entering={SlideInDown.springify().damping(20).mass(0.6)} exiting={SlideOutDown.duration(160)} style={[styles.actionBar, { boxShadow: `0px -6px 14px ${desk.shadow}` }]}>
           <AppText style={styles.selectedCount}>{selected.length} {' '}{tr("unorganized.selected")}</AppText>
           <View style={styles.actionButtons}>
-            {!addToCard ? <Pressable disabled={selected.length < 2 || working} accessibilityRole="button" onPress={() => { setError(null); setMergeOpen(true); }} style={styles.textAction}><AppText style={[styles.mergeText, (selected.length < 2 || working) && styles.disabledText]}>{tr("unorganized.merge")}</AppText></Pressable> : null}
-            <Pressable disabled={working} onPress={() => void archive()} style={styles.textAction}><AppText style={[styles.archiveText, working && styles.disabledText]}>{tr("archive.archive")}</AppText></Pressable>
-            <PressableSurface accessibilityRole="button" disabled={working} onPress={() => { if (addToCard) void addToExistingCard(); else openAddToBoardSheet(); }} fill={sticky ? styleColors.accentFill : theme.accent} radius={sticky ? styleTokens.button.radius : 20} edge={sticky ? styleTokens.button.edge : false} pressedStyle={null} style={[styles.primaryPill, working && styles.disabled]}>
-              <AppText weight={sticky ? '800' : '700'} style={[styles.primaryPillText, { color: sticky ? styleColors.onAccent : theme.accentText }]}>{addToCard ? tr("unorganized.addToCard") : tr("index.addToBoard")}</AppText>
-            </PressableSurface>
+            {!addToCard ? <Pressable disabled={selected.length < 2 || working} accessibilityRole="button" onPress={() => { setError(null); setMergeOpen(true); }} style={styles.textAction}><AppText style={[handwriting.handBold, styles.mergeText, (selected.length < 2 || working) && styles.disabledText]}>{tr("unorganized.merge")}</AppText></Pressable> : null}
+            <Pressable disabled={working} onPress={() => void archive()} style={styles.textAction}><AppText style={[handwriting.handBold, styles.archiveText, working && styles.disabledText]}>{tr("archive.archive")}</AppText></Pressable>
+            <PaperButton paper={PAPER_YELLOW} tilt={-1.5} accessibilityRole="button" disabled={working} onPress={() => { if (addToCard) void addToExistingCard(); else openAddToBoardSheet(); }} style={styles.primaryPill}>
+              <AppText style={[handwriting.handBold, styles.primaryPillText]}>{addToCard ? tr("unorganized.addToCard") : tr("index.addToBoard")}</AppText>
+            </PaperButton>
           </View>
         </Animated.View>
       ) : null}
     </> : <EmptyState title={tr("unorganized.youReAllOrganized")} description={tr("unorganized.notesThatHavenTBeenAddedToA2")} />}
+    </PaperDesk>
     {error ? <AppText accessibilityRole="alert" style={styles.error}>{error}</AppText> : null}
     {toast ? <View pointerEvents="box-none" accessibilityLiveRegion="polite" style={styles.toastWrap}>
       <View style={[styles.toast, { backgroundColor: theme.textPrimary }]}>
@@ -648,27 +655,26 @@ export default function UnorganizedScreen() {
 
 const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   back: { color: tokens.textPrimary, fontSize: 30, lineHeight: 30 },
-  header: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth },
-  selectionTitle: { flex: 1, color: tokens.textPrimary, fontSize: 16, fontWeight: '700' },
+  header: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderStyle: 'dashed' },
+  selectionTitle: { flex: 1, fontSize: 20, lineHeight: 26 },
   selectAllHit: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.xxs },
-  selectAllText: { color: tokens.accent, fontWeight: '600', fontSize: 14 },
-  list: { padding: spacing.md, gap: spacing.xs },
+  selectAllText: { fontSize: 17, lineHeight: 23, textDecorationLine: 'underline' },
+  list: { padding: spacing.md, paddingTop: spacing.lg, gap: 16 },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  intro: { color: tokens.textSecondary, fontSize: 14, lineHeight: 20, marginBottom: spacing.sm },
-  message: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: 13, borderWidth: 1, borderColor: 'transparent', borderRadius: 14, backgroundColor: tokens.surface },
-  messageSelected: { borderColor: tokens.accentBorder, backgroundColor: tokens.accentSoft },
-  messagePressed: { opacity: 0.68 },
+  intro: { fontSize: 14, lineHeight: 20, marginBottom: spacing.xs, textAlign: 'center' },
+  message: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: 12 },
   messageCopy: { flex: 1, minWidth: 0, justifyContent: 'center' },
-  messageText: { color: tokens.textPrimary, fontSize: 15, lineHeight: 20 },
-  messageMeta: { color: tokens.textMuted, fontSize: 12, lineHeight: 16, marginTop: 3 },
-  actionBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth },
-  selectedCount: { flex: 1, color: tokens.textSecondary, fontSize: 13 },
+  messageText: { color: PAPER_INK, fontSize: 17, lineHeight: 23 },
+  messageMeta: { color: PAPER_INK_MUTED, fontSize: 12, lineHeight: 16, marginTop: 2 },
+  // The selection's actions on a paper strip along the bottom of the desk.
+  actionBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: PAPER_WHITE },
+  selectedCount: { flex: 1, color: PAPER_INK_MUTED, fontSize: 13 },
   actionButtons: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   textAction: { minHeight: 40, justifyContent: 'center', paddingHorizontal: spacing.xxs },
-  mergeText: { color: tokens.textSecondary, fontWeight: '600', fontSize: 13 },
-  archiveText: { color: tokens.danger, fontWeight: '600', fontSize: 13 },
-  primaryPill: { minHeight: 40, justifyContent: 'center', paddingHorizontal: spacing.md },
-  primaryPillText: { fontSize: 13 },
+  mergeText: { color: PAPER_INK, fontSize: 17, lineHeight: 23 },
+  archiveText: { color: '#B8372E', fontSize: 17, lineHeight: 23 },
+  primaryPill: { minHeight: 40, paddingHorizontal: spacing.md },
+  primaryPillText: { color: PAPER_INK, fontSize: 17, lineHeight: 23 },
   disabled: { opacity: 0.42 },
   disabledText: { opacity: 0.42 },
   error: { color: '#fff', backgroundColor: tokens.danger, padding: spacing.sm, textAlign: 'center' },

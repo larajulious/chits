@@ -6,6 +6,7 @@ import { getFormattingLocale, LANGUAGE_NAMES, tr } from '@/localization/runtime'
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { useTheme, type AppAppearance } from '@/components/theme-provider';
 import { AppText, HeaderIcon, Icon, IconButton, SegmentedControl, Surface, TopBarBackground, useHeaderInk, useStickySheet, MenuIcon } from '@/components/ui/primitives';
+import { DeskPage, PaperDesk, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { HeaderChromeContext } from '@/components/ui/controls';
 import { EditNoteSpaceNameSheet } from '@/components/settings/edit-notespace-name-sheet';
 import { ChatAppearanceSettings } from '@/components/settings/chat-appearance-settings';
@@ -39,13 +40,17 @@ function Section({ title, children, padded = false }: { title: string; children:
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const { tokens, styleTokens } = useTheme();
+  const { tokens } = useTheme();
+  const desk = useDesk();
+  const { handBold } = useHandwriting();
   const rows = Children.toArray(children);
+  // A section is a handwritten heading on the desk over a page of the theme's
+  // own paper, so every setting control keeps its theme ink.
   return <View style={styles.section}>
-    <AppText accessibilityRole="header" weight="600" style={[styles.sectionLabel, { color: tokens.textSecondary }]}>{title}</AppText>
-    <Surface fill={tokens.surface} border={tokens.borderSubtle} radius={styleTokens.radius.panel} outline={false} edge={false} shadow={false}>
+    <AppText accessibilityRole="header" style={[handBold, styles.sectionLabel, { color: desk.ink }]}>{title}</AppText>
+    <DeskPage>
       {padded ? <View style={styles.sectionPadding}>{children}</View> : rows.map((child,index) => <View key={index} style={[styles.sectionRow,index < rows.length-1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: tokens.borderSubtle }]}>{child}</View>)}
-    </Surface>
+    </DeskPage>
   </View>;
 }
 
@@ -57,6 +62,7 @@ export default function SettingsScreen() {
   const { openDrawer } = useAppDrawer();
   const { appearance, setAppearance, identity, themeKey, setThemeKey, themes, tokens, style, setStyle, styleTokens } = useTheme();
   const leftTitle = styleTokens.header.align === 'left';
+  const desk = useDesk();
   const stickySheet = useStickySheet();
   const headerInk = useHeaderInk();
   const database = useSQLiteContext();
@@ -112,10 +118,11 @@ export default function SettingsScreen() {
     finally { setBusy(false); }
   };
 
-  return <SafeAreaView style={[styles.screen, { backgroundColor: tokens.background }]}>
+  return <SafeAreaView style={[styles.screen, { backgroundColor: desk.desk }]}>
     <HeaderChromeContext.Provider value={leftTitle}>
       <View style={[styles.header, rowStyle, { minHeight: styleTokens.header.minHeight }, leftTitle && styles.headerLeft]}><TopBarBackground /><IconButton label={tr("archive.openNavigation")} onPress={openDrawer}><MenuIcon /></IconButton><AppText accessibilityRole="header" variant="title" numberOfLines={1} style={[styles.headerTitle, { color: headerInk.ink, fontSize: styleTokens.header.titleSize, lineHeight: styleTokens.header.titleLineHeight }, leftTitle && styles.headerTitleLeft]}>{tr("settings.settings")}</AppText><IconButton label={tr("settings.closeSettings")} onPress={() => router.canGoBack() ? router.back() : router.navigate('/')}><HeaderIcon name="close" size={24} /></IconButton></View>
     </HeaderChromeContext.Provider>
+    <PaperDesk>
     <ScrollView contentContainerStyle={styles.content}>
       {error && !sheet ? <AppText accessibilityRole="alert" style={{ color: tokens.danger }}>{error}</AppText> : null}
       <Section title={tr('settings.general')}>
@@ -146,6 +153,7 @@ export default function SettingsScreen() {
       <Section title={tr('settings.data')}><SettingsRow label={tr('backup.backupRestore')} description={lastBackup && !Number.isNaN(new Date(Number(lastBackup)).getTime()) ? tr('settings.lastBackup', { date: new Date(Number(lastBackup)).toLocaleDateString(getFormattingLocale()) }) : tr('settings.noBackup')} onPress={() => router.push('/backup')} /></Section>
 
     </ScrollView>
+    </PaperDesk>
     <Modal visible={sheet !== null} transparent animationType="slide" onRequestClose={closeSheet}>
       <KeyboardAvoidingView behavior="padding" style={styles.backdrop}>
         <Pressable accessible={false} style={StyleSheet.absoluteFill} onPress={closeSheet} />
@@ -186,9 +194,9 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 }, header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 }, headerLeft: { gap: 10 },
   headerTitle: { flex: 1, textAlign: 'center' }, headerTitleLeft: { textAlign: 'left' },
-  content: { width: '100%', maxWidth: 680, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 28, gap: 18 }, section: { gap: 6 },
+  content: { width: '100%', maxWidth: 680, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 28, gap: 22 }, section: { gap: 8 },
   sectionRow: { paddingHorizontal: 12 }, sectionPadding: { padding: 12 },
-  sectionLabel: { fontSize: 12, lineHeight: 18, letterSpacing: 0.5, paddingHorizontal: 4 },
+  sectionLabel: { fontSize: 22, lineHeight: 29, paddingHorizontal: 4 },
   row: { minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 },
   rowCopy: { flex: 1, minWidth: 0 }, label: { fontSize: 15, lineHeight: 21 }, description: { fontSize: 12, lineHeight: 17, marginTop: 3 },
   value: { fontSize: 14, flexShrink: 1, maxWidth: '45%', textAlign: 'auto' },

@@ -8,7 +8,8 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
-import { AppHeader, EmptyState, HeaderIcon, Icon, IconButton, Screen, Surface } from '@/components/ui/primitives';
+import { AppHeader, EmptyState, HeaderIcon, Icon, IconButton, Screen } from '@/components/ui/primitives';
+import { PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PaperDesk, PaperNote, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { SearchField } from '@/components/ui/search-field';
 import { ChitsLoader } from '@/components/ui/chits-loader';
 import { spacing } from '@/constants/theme';
@@ -35,7 +36,10 @@ function RevisitExperience() {
   useLocale();
   const database = useSQLiteContext();
   const repository = useMemo(() => createRevisitRepository(database), [database]);
-  const { tokens, styleTokens, styleColors } = useTheme();
+  const { styleTokens } = useTheme();
+  const desk = useDesk();
+  // Notes here are handwritten: the loader covers the moment the face takes, so nothing reflows.
+  const handwriting = useHandwriting();
   const { width, fontScale } = useWindowDimensions();
   const columns = width < 350 || fontScale >= 1.3 ? 1 : 2;
   const { confirm, actionSheet } = useAppDialog();
@@ -149,7 +153,7 @@ function RevisitExperience() {
   const connectionCard = (connection: ConnectionSuggestion) => (
     <Paper note={connection.a} id={pairKey(connection.a.key, connection.b.key)}>
       <CardBody>
-        <View style={styles.summaryRow}><Icon name="link-outline" size={18} color={tokens.textMuted} /><View style={[styles.flex, styles.connectionTitles]}><CardTitle numberOfLines={1}>{connection.a.title}</CardTitle><CardTitle numberOfLines={1}>{connection.b.title}</CardTitle></View></View>
+        <View style={styles.summaryRow}><Icon name="link-outline" size={18} color={PAPER_INK_MUTED} /><View style={[styles.flex, styles.connectionTitles]}><CardTitle numberOfLines={1}>{connection.a.title}</CardTitle><CardTitle numberOfLines={1}>{connection.b.title}</CardTitle></View></View>
         <Caption numberOfLines={1}>{[...new Set([connection.a.boardName ?? tr('index.unorganized'), connection.b.boardName ?? tr('index.unorganized')])].join(' · ')}</Caption>
         <Caption numberOfLines={2}>{tr("revisit.sharedTerms")}{' '}{connection.terms.join(', ')}</Caption>
       </CardBody>
@@ -165,15 +169,17 @@ function RevisitExperience() {
   // Reserve the subtitle row used by the loaded screen without announcing a
   // count before it is known. Compare has no subtitle in either state.
   const loadingSubtitle = aKey && bKey ? undefined : '\u00a0';
-  if (!report) return <Screen><ReviewHeader title={headerTitle} subtitle={loadingSubtitle} /><View style={styles.loadingContent}>{error ? <><AppText accessibilityRole="alert">{error}</AppText><Action onPress={() => void load()}>{tr("id.tryAgain")}</Action></> : <ChitsLoader label={tr("revisit.findingNotesToRevisit")} />}</View></Screen>;
+  const deskScreen = { backgroundColor: desk.desk };
+  if (!report || !handwriting.ready) return <Screen style={deskScreen}><ReviewHeader title={headerTitle} subtitle={loadingSubtitle} /><PaperDesk><View style={styles.loadingContent}>{error ? <><AppText accessibilityRole="alert" style={{ color: desk.danger }}>{error}</AppText><Action onPress={() => void load()}>{tr("id.tryAgain")}</Action></> : <ChitsLoader label={tr("revisit.findingNotesToRevisit")} />}</View></PaperDesk></Screen>;
   const note = noteKey ? byKey.get(noteKey) : null;
   const a = aKey ? byKey.get(aKey) : null, b = bKey ? byKey.get(bKey) : null;
   const unavailable = (noteKey && !note) || (aKey && bKey && (!a || !b)) || (pickKey && !byKey.has(pickKey));
-  const errorBanner = error ? <View style={[styles.error, { borderColor: tokens.danger }]}><AppText accessibilityRole="alert" style={[styles.helper, { color: tokens.danger }]}>{error}</AppText></View> : null;
-  if (unavailable) return <Screen><ReviewHeader title={headerTitle} /><EmptyState title={tr("revisit.noteUnavailable")} description={tr("revisit.itMayHaveBeenArchivedHiddenOrganizedOr")} /></Screen>;
+  const errorBanner = error ? <PaperNote paper={ALERT_PAPER} tilt={-0.6} style={styles.error}><AppText accessibilityRole="alert" weight="600" style={[styles.helper, { color: PAPER_INK }]}>{error}</AppText></PaperNote> : null;
+  if (unavailable) return <Screen style={deskScreen}><ReviewHeader title={headerTitle} /><PaperDesk><EmptyState title={tr("revisit.noteUnavailable")} description={tr("revisit.itMayHaveBeenArchivedHiddenOrganizedOr")} /></PaperDesk></Screen>;
   if (pickKey || params.browse) {
-    return <Screen>
+    return <Screen style={deskScreen}>
       <ReviewHeader title={headerTitle} subtitle={countLabel('note', candidates.length)} />
+      <PaperDesk>
       <View style={styles.searchArea}>
         {errorBanner}
         <SearchField accessibilityLabel={pickKey ? tr("revisit.searchNotesToLink") : tr("calendarnotepicker.searchNotes")} placeholder={tr("revisit.searchYourNotes")} value={search} onChangeText={setSearch} />
@@ -187,9 +193,10 @@ function RevisitExperience() {
           return <View style={styles.browseCell}><Paper note={item} onPress={busy || alreadyLinked ? undefined : open}
             label={`${pickKey ? alreadyLinked ? tr("revisit.alreadyConnected") : tr("revisit.linkNote") : tr("revisit.openConnections")}. ${item.title}${item.total ? `. ${tr('onboarding.checklist.progress', { done: item.completed, total: item.total })}` : ''}`}>
             <NoteContent note={item} previewLines={3} />
-            <CardFooter note={item}>{alreadyLinked ? <Icon name="checkmark-circle-outline" size={18} color={tokens.textMuted} /> : <View style={styles.tileArrow}><Icon name={pickKey ? 'add-outline' : 'chevron-forward'} size={17} color={tokens.textMuted} /></View>}</CardFooter>
+            <CardFooter note={item}>{alreadyLinked ? <Icon name="checkmark-circle-outline" size={18} color={PAPER_INK_MUTED} /> : <View style={styles.tileArrow}><Icon name={pickKey ? 'add-outline' : 'chevron-forward'} size={17} color={PAPER_INK_MUTED} /></View>}</CardFooter>
           </Paper></View>;
         }} />
+      </PaperDesk>
     </Screen>;
   }
   const visibleReviews = report.reviews.filter((item) => session?.reviews.has(item.note.key));
@@ -207,21 +214,22 @@ function RevisitExperience() {
   const noteLinks = note ? links.filter((link) => link.note_a === note.key || link.note_b === note.key) : [];
   const focusedConnections = note ? noteConnections.filter((pair) => pair.a.key === note.key || pair.b.key === note.key) : [];
   const sharedTerms = a && b ? keywords(`${a.title}\n${a.text}`).filter((term) => keywords(`${b.title}\n${b.text}`).includes(term)).slice(0, 5) : [];
-  return <Screen><ReviewHeader title={headerTitle} subtitle={note ? countLabel('link', noteLinks.length) : a && b ? undefined : countLabel('note', visibleReviews.length)} />
+  return <Screen style={deskScreen}><ReviewHeader title={headerTitle} subtitle={note ? countLabel('link', noteLinks.length) : a && b ? undefined : countLabel('note', visibleReviews.length)} />
+    <PaperDesk>
     <ScrollView ref={reviewScroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {errorBanner}
       {a && b ? <>
-        <AppText variant="paragraph" style={[styles.helper, { color: tokens.textSecondary }]}>{tr("revisit.compareTheDatesAndWordsANewerUpdate")}</AppText>
+        <AppText variant="paragraph" style={[styles.helper, { color: desk.inkMuted }]}>{tr("revisit.compareTheDatesAndWordsANewerUpdate")}</AppText>
         {[a, b].map((source) => <Paper key={source.key} note={source}>
           <NoteContent note={source} dates moreRecent={source.updatedAt > (source === a ? b : a).updatedAt} />
           <CardFooter note={source}><Action disabled={busy} label={tr("revisit.openValue", { value1: source.title })} onPress={() => openOriginal(source)}>{tr("revisit.openNote")}</Action></CardFooter>
         </Paper>)}
         <Heading>{tr("revisit.connection")}</Heading>
-        <Surface fill={styleColors.controlFill} border={tokens.borderSubtle} radius={styleTokens.radius.control} outline={StyleSheet.hairlineWidth} edge={false} style={styles.panel}>
-          <View style={styles.summaryRow}><Icon name="link-outline" size={18} color={tokens.textSecondary} /><AppText weight="600" style={styles.label}>{connected(a.key, b.key) ? tr("revisit.connectedValue", { value1: connected(a.key, b.key)!.relationship_type }) : tr("revisit.theseNotesAreNotLinked")}</AppText></View>
-          <AppText style={[styles.helper, { color: tokens.textSecondary }]}>{sharedTerms.length ? tr("revisit.sharedTermsValue", { value1: sharedTerms.join(', ') }) : tr("revisit.noDistinctiveOverlapFound")}</AppText>
+        <PaperNote paper={PAPER_WHITE} tilt={-0.5} style={styles.panel}>
+          <View style={styles.summaryRow}><Icon name="link-outline" size={18} color={PAPER_INK_MUTED} /><AppText weight="600" style={[styles.label, { color: PAPER_INK }]}>{connected(a.key, b.key) ? tr("revisit.connectedValue", { value1: connected(a.key, b.key)!.relationship_type }) : tr("revisit.theseNotesAreNotLinked")}</AppText></View>
+          <AppText style={[styles.helper, { color: PAPER_INK_MUTED }]}>{sharedTerms.length ? tr("revisit.sharedTermsValue", { value1: sharedTerms.join(', ') }) : tr("revisit.noDistinctiveOverlapFound")}</AppText>
           <Action primary={!connected(a.key, b.key)} disabled={busy} onPress={() => void run(() => connected(a.key, b.key) ? repository.unlink(a.key, b.key) : repository.link(a.key, b.key))}>{connected(a.key, b.key) ? tr("revisit.removeConnection") : tr("revisit.linkNotes")}</Action>
-        </Surface>
+        </PaperNote>
       </> : note ? <>
         <Paper note={note}><NoteContent note={note} titleFirst previewLines={3} /><CardFooter note={note}><Action disabled={busy} onPress={() => openOriginal(note)}>{tr("revisit.openOriginal")}</Action></CardFooter></Paper>
         <View style={styles.section}>
@@ -246,12 +254,12 @@ function RevisitExperience() {
         {focusedConnections.length ? <View style={styles.section}><Heading count={focusedConnections.length}>{tr("revisit.possibleConnections")}</Heading>{focusedConnections.map((connection) => <View key={pairKey(connection.a.key, connection.b.key)} style={styles.connectionSpace}>{connectionCard(connection)}</View>)}</View> : null}
         <Action quiet disabled={busy} onPress={() => void run(() => repository.review(note.key, note.excluded ? 'include' : 'exclude'))}>{note.excluded ? tr("revisit.includeInSuggestions") : tr("revisit.excludeFromSuggestions")}</Action>
       </> : <>
-        <View style={[styles.reviewPreferences, { borderBottomColor: tokens.borderSubtle }]}>
-          <View style={styles.preference}><View style={styles.flex}><AppText weight="600" style={styles.label}>{tr("revisit.revisitSuggestions")}</AppText></View>
-            <Switch hitSlop={8} accessibilityLabel={tr("revisit.enableRevisitSuggestions")} value={report.preferences.enabled} disabled={busy} onValueChange={(enabled) => { sessionRef.current = null; void run(() => repository.setPreferences({ ...report.preferences, enabled })); }} trackColor={{ true: tokens.accent, false: tokens.borderSubtle }} thumbColor={tokens.surface} />
+        <PaperNote paper={PAPER_WHITE} style={styles.reviewPreferences}>
+          <View style={styles.preference}><View style={styles.flex}><AppText weight="600" style={[styles.label, { color: PAPER_INK }]}>{tr("revisit.revisitSuggestions")}</AppText></View>
+            <Switch hitSlop={8} accessibilityLabel={tr("revisit.enableRevisitSuggestions")} value={report.preferences.enabled} disabled={busy} onValueChange={(enabled) => { sessionRef.current = null; void run(() => repository.setPreferences({ ...report.preferences, enabled })); }} trackColor={{ true: SWITCH_ON, false: 'rgba(43,38,32,0.18)' }} thumbColor={PAPER_WHITE} ios_backgroundColor="rgba(43,38,32,0.18)" />
           </View>
-          <View style={styles.preference}><AppText style={[styles.helper, { color: tokens.textSecondary }]}>{tr("revisit.minimumInactivity")}</AppText><Action quiet disabled={busy} onPress={() => actionSheet({ title: tr("revisit.minimumInactivity"), options: [7, 14, 30].map((days) => ({ label: tr("revisit.valueDaysValue", { value1: days, value2: report.preferences.inactivityDays === days ? ' · ' + tr('customheadersettings.selected') : '' }), onPress: () => { sessionRef.current = null; void run(() => repository.setPreferences({ ...report.preferences, inactivityDays: days })); } })) })}>{report.preferences.inactivityDays} {' '}{tr("revisit.days")}</Action></View>
-        </View>
+          <View style={[styles.preference, styles.preferenceRule]}><AppText style={[styles.helper, { color: PAPER_INK_MUTED }]}>{tr("revisit.minimumInactivity")}</AppText><Action quiet disabled={busy} onPress={() => actionSheet({ title: tr("revisit.minimumInactivity"), options: [7, 14, 30].map((days) => ({ label: tr("revisit.valueDaysValue", { value1: days, value2: report.preferences.inactivityDays === days ? ' · ' + tr('customheadersettings.selected') : '' }), onPress: () => { sessionRef.current = null; void run(() => repository.setPreferences({ ...report.preferences, inactivityDays: days })); } })) })}>{report.preferences.inactivityDays} {' '}{tr("revisit.days")}</Action></View>
+        </PaperNote>
         <View style={styles.reviewActions}><Action primary disabled={busy} onPress={() => router.push({ pathname: '/revisit', params: { browse: 'all' } })}>{tr("revisit.browseNotes")}</Action>{report.preferences.enabled && pendingSuggestions > 0 ? <Action disabled={busy || refreshing} onPress={startNewReview}>{tr("revisit.newReview")} · {pendingSuggestions}</Action> : null}</View>
         <FocusRevisit />
         {report.preferences.enabled ? <>
@@ -271,8 +279,13 @@ function RevisitExperience() {
         {report.notes.some((item) => item.excluded) ? <Action quiet disabled={busy} onPress={() => router.push({ pathname: '/revisit', params: { browse: 'excluded' } })}>{tr("revisit.manageExcludedNotes")}</Action> : null}
       </>}
     </ScrollView>
+    </PaperDesk>
   </Screen>;
 }
+
+// A pink slip for errors on the desk, and a deeper yellow so an "on" switch still reads on white paper.
+const ALERT_PAPER = '#F6C9C2';
+const SWITCH_ON = '#E2B52C';
 
 export default function RevisitScreen() {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
@@ -280,12 +293,12 @@ export default function RevisitScreen() {
   useLocale(); return CHITS_REVISIT_ENABLED ? <RevisitExperience /> : <RevisitUnavailable />; }
 const styles = StyleSheet.create({
   loadingContent: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.md, gap: 12 },
-  content: { padding: spacing.md, gap: 12, paddingBottom: 36 },
+  content: { padding: spacing.md, paddingTop: spacing.lg, gap: 16, paddingBottom: 36 },
   section: { gap: 4 }, grid: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 12 },
   connectedHeading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs },
-  connectedList: { gap: spacing.sm },
+  connectedList: { gap: 18 },
   connectedFooter: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingLeft: 14, paddingRight: 6, paddingTop: spacing.xs, paddingBottom: spacing.xs },
-  browseContent: { paddingHorizontal: spacing.md - 6, paddingTop: spacing.md, paddingBottom: 36 }, browseCell: { paddingHorizontal: 6, paddingBottom: 12 }, searchArea: { paddingHorizontal: spacing.md, marginBottom: spacing.xs },
+  browseContent: { paddingHorizontal: spacing.md - 7, paddingTop: spacing.md, paddingBottom: 36 }, browseCell: { paddingHorizontal: 7, paddingBottom: 18 }, searchArea: { paddingHorizontal: spacing.md, marginBottom: spacing.xs },
   listEmpty: { minHeight: 240, width: '100%' }, disabledEmpty: { minHeight: 160, paddingVertical: 16 },
   panel: { paddingHorizontal: 12, paddingVertical: 10, gap: 10 },
   label: { fontSize: 14, lineHeight: 20, flexShrink: 1 }, helper: { fontSize: 12, lineHeight: 18 },
@@ -293,9 +306,10 @@ const styles = StyleSheet.create({
   preferenceBottom: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 4 }, flex: { flex: 1, minWidth: 0 },
   sectionActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   reviewActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  reviewPreferences: { paddingBottom: 4, borderBottomWidth: StyleSheet.hairlineWidth },
+  reviewPreferences: { paddingHorizontal: 14, paddingVertical: 4 },
+  preferenceRule: { borderTopWidth: 1, borderStyle: 'dashed', borderTopColor: 'rgba(43,38,32,0.18)' },
   connectionTitles: { gap: 4 },
-  connectionSpace: { marginBottom: 8 }, connectionDivider: { flexDirection: 'row', alignItems: 'center', gap: 8 }, divider: { height: StyleSheet.hairlineWidth, flex: 1 },
+  connectionSpace: { marginBottom: 18 }, connectionDivider: { flexDirection: 'row', alignItems: 'center', gap: 8 }, divider: { height: StyleSheet.hairlineWidth, flex: 1 },
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 8 }, tileArrow: { minWidth: 32, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  error: { borderWidth: StyleSheet.hairlineWidth, padding: 12, borderRadius: 12 },
+  error: { padding: 12 },
 });

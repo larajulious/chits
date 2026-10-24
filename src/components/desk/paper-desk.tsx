@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import { Image as RNImage, Pressable, StyleSheet, View, type PressableProps, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
 import { loadAsync, useFonts } from 'expo-font';
@@ -27,33 +27,40 @@ export const PAPERS = ['#FBE47E', '#F9C6CF', '#C7EAD3', '#C9DCF5', '#FFD9B5', '#
 export const PAPER_CONFETTI = ['#F2C230', '#EE7F97', '#4DBE8C', '#5B9BEA', '#F29A55', '#A98BE8'];
 
 const DESKS = {
-  light: { desk: '#EADFCB', dot: '#785A32', dotOpacity: 0.16, ink: '#2B2620', inkMuted: '#5E5444', danger: '#9E2B25', rim: '#C9A27A', shadow: 'rgba(80,60,30,0.2)' },
-  dark: { desk: '#221E18', dot: '#FFF0D2', dotOpacity: 0.08, ink: '#F1E9DA', inkMuted: '#C9BEAA', danger: '#F19A90', rim: '#8A6A48', shadow: 'rgba(0,0,0,0.45)' },
+  light: { desk: '#EADFCB', dot: '#785A32', dotOpacity: 0.16, rule: 'rgba(43,38,32,0.14)', ink: '#2B2620', inkMuted: '#5E5444', danger: '#9E2B25', rim: '#C9A27A', shadow: 'rgba(80,60,30,0.2)' },
+  dark: { desk: '#221E18', dot: '#FFF0D2', dotOpacity: 0.08, rule: 'rgba(241,233,218,0.14)', ink: '#F1E9DA', inkMuted: '#C9BEAA', danger: '#F19A90', rim: '#8A6A48', shadow: 'rgba(0,0,0,0.45)' },
 };
 export function useDesk() {
   return DESKS[useTheme().scheme];
 }
 
 /** Kalam, the handwriting Spaces writes notes in; system faces stand in while it registers. */
-export function useHandwriting(): { hand: TextStyle; handBold: TextStyle } {
-  const [loaded] = useFonts({ Kalam_400Regular, Kalam_700Bold });
-  return loaded ? HAND : HAND_FALLBACK;
+export function useHandwriting(): { hand: TextStyle; handBold: TextStyle; ready: boolean } {
+  const [loaded, error] = useFonts({ Kalam_400Regular, Kalam_700Bold });
+  // A face that cannot load settles on the system faces, so nothing waiting on `ready` waits forever.
+  return loaded ? HAND : error ? HAND_FAILED : HAND_FALLBACK;
 }
 /** Loads Kalam ahead of time (once; repeat calls share the load), so desk screens open already in handwriting. */
 export function preloadHandwriting() {
   void loadAsync({ Kalam_400Regular, Kalam_700Bold }).catch(() => undefined);
 }
-const HAND = { hand: { fontFamily: 'Kalam_400Regular' }, handBold: { fontFamily: 'Kalam_700Bold' } };
-const HAND_FALLBACK = { hand: {}, handBold: { fontWeight: '700' as const } };
+const HAND = { hand: { fontFamily: 'Kalam_400Regular' }, handBold: { fontFamily: 'Kalam_700Bold' }, ready: true };
+const HAND_FALLBACK = { hand: {}, handBold: { fontWeight: '700' as const }, ready: false };
+const HAND_FAILED = { ...HAND_FALLBACK, ready: true };
 
 /** The dotted desk: one small dot tile, repeated. */
 export function PaperDesk({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const desk = useDesk();
   return <View style={[styles.flex, { backgroundColor: desk.desk }, style]}>
     <RNImage accessible={false} source={DESK_DOT} resizeMode="repeat" tintColor={desk.dot} style={[StyleSheet.absoluteFill, { opacity: desk.dotOpacity }]} />
-    {children}
+    <OnDesk.Provider value>{children}</OnDesk.Provider>
   </View>;
 }
+
+// Whether something is drawn on the desk (rather than on a theme page, sheet
+// or screen), so shared controls can dress as paper only where paper belongs.
+const OnDesk = createContext(false);
+export const useOnDesk = () => useContext(OnDesk);
 const DESK_DOT = require('@/assets/images/spin-desk-dot.png');
 
 /** A strip of translucent tape across a paper's top edge. */
@@ -130,6 +137,32 @@ export function PaperTab({ paper, tilt, icon, label, selected, ...props }: Omit<
   </PaperButton>;
 }
 
+/**
+ * A note-sized paper on the desk: tinted, with its one fixed tilt, optional
+ * tape or pin, and — when it can be pressed — the spring and the shadow that
+ * shrinks under the finger. The base the desk screens' cards are made from.
+ */
+export function PaperCard({ paper, tilt = 0, tape = false, pin = false, style, children, onPress, onLongPress, ...props }: Omit<PressableProps, 'style' | 'children'> & { paper: string; tilt?: number; tape?: boolean; pin?: boolean; style?: StyleProp<ViewStyle>; children: ReactNode }) {
+  const desk = useDesk();
+  const reduced = useReducedMotion();
+  const scale = useSharedValue(1);
+  const motion = useAnimatedStyle(() => ({ transform: [{ rotate: `${tilt}deg` }, { scale: scale.get() }] }));
+  const pressable = Boolean(onPress || onLongPress);
+  return <Animated.View style={motion}>
+    {pressable ? <Pressable
+      {...props}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={350}
+      onPressIn={() => { if (!reduced) scale.set(withSpring(0.97, PRESS_SPRING)); }}
+      onPressOut={() => scale.set(withSpring(1, PRESS_SPRING))}
+      style={({ pressed }) => [styles.paper, { backgroundColor: paper, boxShadow: `0px ${pressed ? 2 : 6}px ${pressed ? 5 : 12}px ${desk.shadow}` }, reduced && pressed && styles.reducedPress, style]}
+    >{children}</Pressable> : <View {...props} style={[styles.paper, { backgroundColor: paper, boxShadow: `0px 6px 12px ${desk.shadow}` }, style]}>{children}</View>}
+    {tape ? <Tape width={58} angle={tilt * -3} /> : null}
+    {pin ? <View pointerEvents="none" style={styles.pin}><PushPin size={22} /></View> : null}
+  </Animated.View>;
+}
+
 /** A round paper button holding one icon: the controls under a finger mid-task. */
 export function PaperRound({ paper = PAPER_WHITE, icon, size = 52, ...props }: Omit<PressableProps, 'style' | 'children'> & { paper?: string; icon: IconName; size?: number }) {
   return <PaperButton paper={paper} accessibilityRole="button" style={{ width: size, height: size, borderRadius: size / 2 }} {...props}>
@@ -145,7 +178,21 @@ export function PaperRound({ paper = PAPER_WHITE, icon, size = 52, ...props }: O
 export function DeskPage({ style, children }: { style?: StyleProp<ViewStyle>; children: ReactNode }) {
   const desk = useDesk();
   const { tokens } = useTheme();
-  return <View style={[styles.page, { backgroundColor: tokens.cardPaper, boxShadow: `0px 6px 14px ${desk.shadow}` }, style]}>{children}</View>;
+  return <View style={[styles.page, { backgroundColor: tokens.cardPaper, boxShadow: `0px 6px 14px ${desk.shadow}` }, style]}><OnDesk.Provider value={false}>{children}</OnDesk.Provider></View>;
+}
+
+/** A section's name handwritten on the desk, with its count on a small tilted paper tag. */
+export function DeskHeading({ title, count, pinned = false, label, tone, style }: { title: string; count?: number; pinned?: boolean; label?: string; tone?: string; style?: StyleProp<ViewStyle> }) {
+  const desk = useDesk();
+  const { handBold } = useHandwriting();
+  const { rowStyle } = useDirection();
+  return <View accessibilityRole="header" accessibilityLabel={label ?? title} style={[styles.heading, rowStyle, style]}>
+    <View style={[styles.headingTitle, rowStyle]}>
+      {pinned ? <PushPin size={18} /> : null}
+      <AppText numberOfLines={1} style={[handBold, styles.headingText, { color: tone ?? desk.ink }]}>{title}</AppText>
+    </View>
+    {count !== undefined ? <View style={[styles.countTag, { boxShadow: `0px 2px 4px ${desk.shadow}` }]}><AppText weight="700" style={styles.countText}>{count}</AppText></View> : null}
+  </View>;
 }
 
 /** A full-width paper action: the taped yellow one leads, white ones follow. */
@@ -163,6 +210,11 @@ const styles = StyleSheet.create({
   messageNote: { flex: 1, minHeight: 66, justifyContent: 'center', paddingHorizontal: 14, paddingTop: 8, paddingBottom: 6 },
   messageText: { color: PAPER_INK, fontSize: 18, lineHeight: 24 },
   tab: { paddingHorizontal: 12, paddingVertical: 4 },
+  heading: { alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 44 },
+  headingTitle: { flex: 1, minWidth: 0, alignItems: 'center', gap: 6 },
+  headingText: { flexShrink: 1, fontSize: 24, lineHeight: 31 },
+  countTag: { minWidth: 28, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 2, alignItems: 'center', backgroundColor: PAPER_WHITE, transform: [{ rotate: '3deg' }] },
+  countText: { color: PAPER_INK, fontSize: 12, lineHeight: 17, fontVariant: ['tabular-nums'] },
   tabSelected: { boxShadow: '0px 8px 14px rgba(80,60,30,0.28)' },
   page: { borderRadius: 4, overflow: 'hidden' },
   tabRow: { alignItems: 'center', gap: 6 },

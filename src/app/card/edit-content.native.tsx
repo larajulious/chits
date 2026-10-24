@@ -14,6 +14,7 @@ import { useTheme } from '@/components/theme-provider';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { AppHeader, IconButton, Screen, HeaderIcon, useHeaderInk } from '@/components/ui/primitives';
+import { DeskPage, PaperDesk, useDesk } from '@/components/desk/paper-desk';
 import { spacing } from '@/constants/theme';
 import { discardPastedImages, NoteBlocksEditor, InsertImageButton, NoteListButtons, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
 import { createMessageRepository } from '@/db/repositories';
@@ -46,6 +47,7 @@ export default function EditContentScreen() {
   const autoFocusOnOpen = useRef(autoFocus !== '0');
   const messageRepository = useMemo(() => createMessageRepository(database), [database]);
   const { tokens: theme } = useTheme();
+  const desk = useDesk();
   const headerInk = useHeaderInk();
   const { confirm } = useAppDialog();
   const navigation = useNavigation();
@@ -130,18 +132,21 @@ export default function EditContentScreen() {
   }, [blocks, canSave, messageId, messageRepository, leaveNote]);
 
   return (
-    <Screen edges={['top', 'left', 'right']}>
+    <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: desk.desk }}>
       <AppHeader
         title={tr("editcontent.editNote")}
         leading={<IconButton label={tr("chat.cancel")} disabled={saving || pasteImage.pasting} onPress={leaveNote}><HeaderIcon name="close" size={24} /></IconButton>}
         trailing={<IconButton label={tr("editcontent.save")} disabled={!canSave} onPress={() => void save()}><Icon name={saving ? 'ellipsis-horizontal' : 'checkmark'} size={24} color={canSave ? (headerInk.banded ? headerInk.ink : theme.accent) : headerInk.inkMuted} /></IconButton>}
       />
+      <PaperDesk>
       <View style={[styles.noteActions, rowStyle]}>
         <ConnectedNotes noteKey={`thought:${messageId}`} compact inline />
         {!hasChanges && initialSignature !== null ? <FocusEntry noteKey={`thought:${messageId}`} compact /> : null}
       </View>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { borderColor: theme.danger }]}><AppText style={[styles.errorText, { color: theme.danger }]}>{error}</AppText></View> : null}
+        {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { borderColor: desk.danger }]}><AppText style={[styles.errorText, { color: desk.danger }]}>{error}</AppText></View> : null}
+        {/* The note is a page of the theme's own paper lying on the desk. */}
+        <DeskPage style={styles.page}>
         {/* The screen itself is the editing surface — no boxed field, no
             border. Without images, a single flex:1 TextInput handles its own
             scrolling for content of any length, so it never has to compete
@@ -161,12 +166,14 @@ export default function EditContentScreen() {
           blockContainerStyle={styles.blocks}
           blockInputStyle={[styles.blockInput, { color: theme.textPrimary }]}
         />
-        <SafeAreaView edges={keyboardVisible ? [] : ['bottom']} style={[styles.footer, { borderTopColor: theme.borderSubtle }]}>
+        </DeskPage>
+        <SafeAreaView edges={keyboardVisible ? [] : ['bottom']} style={styles.footer}>
           <InsertImageButton disabled={saving} busy={pasteImage.pasting} onPress={() => void pasteImage.pick()} />
           <NoteListButtons editor={inputRef} disabled={saving || pasteImage.pasting} />
           <PasteImageButton visible={pasteImage.canPaste} pasting={pasteImage.pasting && !pasteImage.picking} disabled={saving || pasteImage.picking} onPress={() => void pasteImage.paste()} />
         </SafeAreaView>
       </KeyboardAvoidingView>
+      </PaperDesk>
     </Screen>
   );
 }
@@ -178,7 +185,8 @@ const styles = StyleSheet.create({
   blocks: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   blockInput: { minHeight: 27, padding: 0, fontSize: 17, lineHeight: 27, textAlignVertical: 'top' },
   // Image actions sit above the keyboard.
-  footer: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.lg, paddingVertical: spacing.xs, borderTopWidth: StyleSheet.hairlineWidth },
+  page: { flex: 1, marginHorizontal: spacing.sm, marginTop: spacing.xs },
+  footer: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
   errorBanner: { marginHorizontal: spacing.lg, marginTop: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10 },
   errorText: { fontSize: 13, lineHeight: 18 },
 });

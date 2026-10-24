@@ -97,14 +97,14 @@ function blendHex(entries: [HeaderSceneId, number][], color: (id: HeaderSceneId)
 
 // ── Sky ──────────────────────────────────────────────────────────────────────
 
-/** What drifts and twinkles in the window at each hour. */
-const SKY: Record<HeaderSceneId, { cloud: string; clouds: number; stars: number; motes: number }> = {
-  dawn: { cloud: '#FFE6EC', clouds: 0.75, stars: 0, motes: 0.5 },
-  morning: { cloud: '#FFFFFF', clouds: 0.9, stars: 0, motes: 1 },
-  afternoon: { cloud: '#FFFFFF', clouds: 0.85, stars: 0, motes: 1 },
-  golden: { cloud: '#FFE0C2', clouds: 0.8, stars: 0, motes: 0.8 },
-  evening: { cloud: '#B999BE', clouds: 0.35, stars: 0.5, motes: 0 },
-  night: { cloud: '#46527C', clouds: 0, stars: 1, motes: 0 },
+/** What drifts, flies and twinkles in the window at each hour. */
+const SKY: Record<HeaderSceneId, { cloud: string; clouds: number; stars: number; motes: number; sun: string; birds: number; meteors: number }> = {
+  dawn: { cloud: '#FFE6EC', clouds: 0.75, stars: 0, motes: 0.5, sun: '#FFE2C6', birds: 0.7, meteors: 0 },
+  morning: { cloud: '#FFFFFF', clouds: 0.9, stars: 0, motes: 1, sun: '#FFFBEA', birds: 1, meteors: 0 },
+  afternoon: { cloud: '#FFFFFF', clouds: 0.85, stars: 0, motes: 1, sun: '#FFF7D6', birds: 0.8, meteors: 0 },
+  golden: { cloud: '#FFE0C2', clouds: 0.8, stars: 0, motes: 0.8, sun: '#FFF0C2', birds: 0.8, meteors: 0 },
+  evening: { cloud: '#B999BE', clouds: 0.35, stars: 0.5, motes: 0, sun: '#FFC9A0', birds: 0, meteors: 0.4 },
+  night: { cloud: '#46527C', clouds: 0, stars: 1, motes: 0, sun: '#FFC9A0', birds: 0, meteors: 1 },
 };
 
 export function sceneSky(mix: HeaderSceneMix) {
@@ -112,8 +112,27 @@ export function sceneSky(mix: HeaderSceneMix) {
   const sum = (pick: (id: HeaderSceneId) => number) => entries.reduce((total, [id, weight]) => total + weight * pick(id), 0);
   return {
     cloudColor: blendHex(entries, (id) => SKY[id].cloud),
+    sunColor: blendHex(entries, (id) => SKY[id].sun),
     clouds: sum((id) => SKY[id].clouds),
     stars: sum((id) => SKY[id].stars),
     motes: sum((id) => SKY[id].motes),
+    birds: sum((id) => SKY[id].birds),
+    meteors: sum((id) => SKY[id].meteors),
   };
+}
+
+// The sun follows the clock across the glass: it comes up behind the hills
+// where dawn's glow is painted, climbs to the top panes by noon and goes down
+// where golden hour's glow is (picture pixels; the hills hide it at either end).
+const SUNRISE = at(6, 15);
+const SUNSET = at(18, 50);
+const SUN_PATH = { from: 1250, to: 1522, horizon: 420, noon: 150 };
+export const HEADER_SCENE_SUN_RADIUS = 26;
+
+/** Where the sun sits in the window at this minute, or null while it is down. */
+export function sunAt(minute: number) {
+  const m = ((minute % DAY) + DAY) % DAY;
+  if (m <= SUNRISE || m >= SUNSET) return null;
+  const t = (m - SUNRISE) / (SUNSET - SUNRISE);
+  return { x: SUN_PATH.from + (SUN_PATH.to - SUN_PATH.from) * t, y: SUN_PATH.horizon - (SUN_PATH.horizon - SUN_PATH.noon) * Math.sin(Math.PI * t) };
 }

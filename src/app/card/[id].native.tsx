@@ -30,6 +30,7 @@ import { NotePaper } from '@/components/notes/note-paper';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { AppHeader, EmptyState, IconButton, Screen, Toast, HeaderIcon } from '@/components/ui/primitives';
+import { PAPER_INK, PAPER_WHITE, PaperDesk, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { radii, spacing, type ThemeTokens } from '@/constants/theme';
 import { createBoardRepository } from '@/db/repositories';
@@ -93,7 +94,10 @@ export default function CardDetailScreen() {
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [detail, setDetail] = useState<Detail | null | undefined>();
-  const showCardLoader = useChitsLoading(detail === undefined);
+  const desk = useDesk();
+  // The title and headings are handwritten: the loader covers the moment the face takes.
+  const handwriting = useHandwriting();
+  const showCardLoader = useChitsLoading(detail === undefined || !handwriting.ready);
   const [messages, setMessages] = useState<Message[]>([]);
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
@@ -472,10 +476,10 @@ export default function CardDetailScreen() {
     },
   });
 
-  if (detail === undefined) return <Screen>{showCardLoader ? <View style={styles.cardLoader}><ChitsLoader label={tr("id.loadingCard")} /></View> : null}</Screen>;
-  if (!detail) return <Screen>
+  if (detail === undefined || !handwriting.ready) return <Screen style={{ backgroundColor: desk.desk }}>{showCardLoader ? <View style={styles.cardLoader}><ChitsLoader label={tr("id.loadingCard")} /></View> : null}</Screen>;
+  if (!detail) return <Screen style={{ backgroundColor: desk.desk }}>
     <AppHeader title={tr("id.cardDetails")} leading={<IconButton label={tr("search.goBack")} onPress={() => goBack()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
-    <EmptyState title={tr("id.cardUnavailable")} description={tr("id.itMayHaveBeenArchivedOrDeleted")} />
+    <PaperDesk><EmptyState title={tr("id.cardUnavailable")} description={tr("id.itMayHaveBeenArchivedOrDeleted")} /></PaperDesk>
   </Screen>;
 
   const detailDate = (timestamp: number) => dateFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(timestamp);
@@ -496,7 +500,9 @@ export default function CardDetailScreen() {
   const contentAccentSolid = detail.boardAccent ?? theme.accent;
   const contentAccentOn = detail.boardAccent ? '#FFFFFF' : theme.accentText;
 
-  return <Screen edges={['top', 'left', 'right']}>
+  const handTitle = [handwriting.handBold, styles.handTitle, { color: desk.ink }];
+  const handSection = [styles.sectionTitle, handwriting.handBold, styles.handSection, { color: desk.ink }];
+  return <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: desk.desk }}>
     <AppHeader
       title={tr("id.cardDetails")}
       actionWidth={covered ? 44 : 88}
@@ -507,17 +513,18 @@ export default function CardDetailScreen() {
       </View>}
     />
     {viewingPhoto ? <PhotoAttachmentViewer attachment={viewingPhoto} onDismiss={() => setViewingPhoto(null)} /> : null}
+    <PaperDesk>
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView ref={scrollRef} style={styles.flex} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          {covered ? <View style={styles.titleRow}><AppText variant="display" style={[styles.title, styles.hiddenTitle]}>{tr("index.hiddenChit")}</AppText></View> : titleEditing ? <View style={styles.editor}>
+          {covered ? <View style={styles.titleRow}><AppText variant="display" style={[styles.title, ...handTitle, styles.hiddenTitle]}>{tr("index.hiddenChit")}</AppText></View> : titleEditing ? <View style={styles.editor}>
             <TextInput autoFocus accessibilityLabel={tr("id.cardTitle")} value={titleDraft} onChangeText={setTitleDraft} placeholder={tr("id.cardTitle")} placeholderTextColor={theme.textMuted} maxLength={120} returnKeyType="done" onSubmitEditing={() => void saveTitle()} style={[styles.titleInput, { borderColor: contentAccentSolid }]} />
             <View style={styles.editActions}>
               <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => void saveTitle()} style={[styles.editSave, { backgroundColor: contentAccentSolid }, sticky({ fill: contentAccentSolid, radius: styleTokens.button.radius, edge: false }), savingEdit && styles.disabled]}><AppText style={[styles.editSaveText, { color: contentAccentOn }]}>{savingEdit ? tr("id.saving") : tr("id.saveTitle")}</AppText></Pressable>
               <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => { setTitleDraft(detail.explicitTitle ?? ''); setTitleEditing(false); }} style={styles.editCancel}><AppText style={styles.editCancelText}>{tr("chat.cancel")}</AppText></Pressable>
             </View>
           </View> : displayTitle ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.editCardTitle")} onPress={startTitleEdit} style={({ pressed }) => [styles.titleRow, pressed && styles.pressed]}>
-            <AppText variant="display" style={styles.title}>{displayTitle}</AppText>
+            <AppText variant="display" style={[styles.title, ...handTitle]}>{displayTitle}</AppText>
             <View style={styles.titleEditButton}><Icon name="create-outline" size={17} color={contentAccentStrong} /></View>
           </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel={detail.explicitTitle ? tr("id.editCardTitle") : tr("id.addACardTitle")} onPress={startTitleEdit} style={({ pressed }) => [styles.addTitle, pressed && styles.pressed]}><Icon name={detail.explicitTitle ? 'create-outline' : 'add'} size={17} color={contentAccentStrong} /><AppText style={[styles.editHint, { color: contentAccentStrong }]}>{detail.explicitTitle ? tr("id.editTitle") : tr("id.addTitle")}</AppText></Pressable>}
         </View>
@@ -528,7 +535,7 @@ export default function CardDetailScreen() {
         </View> : null}
 
         <View style={[styles.sectionHeader, styles.contentSectionHeader]}>
-          <AppText accessibilityRole="header" style={styles.sectionTitle}>{tr("id.content")}</AppText>
+          <AppText accessibilityRole="header" style={handSection}>{tr("id.content")}</AppText>
           <View style={styles.contentHeaderActions}>
             {!covered && messages.some((message) => message.text || message.content?.some((block) => block.type === 'text' && block.list)) ? <Pressable accessibilityRole="button" accessibilityLabel={tr('templates.saveAs')} hitSlop={8} onPress={() => {
               const candidates = messages.filter((message) => message.text || message.content?.some((block) => block.type === 'text' && block.list));
@@ -576,7 +583,7 @@ export default function CardDetailScreen() {
         </Pressable>
 
         <ConnectedNotes noteKey={`card:${id}`} style={styles.connectedNotes} />
-        <View style={styles.sectionHeader}><AppText accessibilityRole="header" style={styles.sectionTitle}>{tr("id.details")}</AppText></View>
+        <View style={styles.sectionHeader}><AppText accessibilityRole="header" style={handSection}>{tr("id.details")}</AppText></View>
         <View style={[styles.detailsCard, panel]}>
           <View style={styles.detailGroup}>
             <Pressable accessibilityRole="link" accessibilityLabel={tr("id.openBoardValue", { value1: detail.boardName })} onPress={() => router.push({ pathname: '/board/[id]', params: { id: detail.boardId } })} style={({ pressed }) => [styles.detailRow, styles.detailLinkRow, pressed && styles.pressed]}>
@@ -597,7 +604,7 @@ export default function CardDetailScreen() {
         </View>
 
         <View style={styles.sectionHeader}>
-          <AppText accessibilityRole="header" style={styles.sectionTitle}>{tr("id.attachments2")}</AppText>
+          <AppText accessibilityRole="header" style={handSection}>{tr("id.attachments2")}</AppText>
           {cardAttachments.length ? <View style={styles.countBadge}><AppText style={styles.countText}>{cardAttachments.length}</AppText></View> : null}
         </View>
         {cardAttachments.length === 0 ? <View style={styles.commentsEmpty}>
@@ -620,7 +627,7 @@ export default function CardDetailScreen() {
         </>}
 
         <View style={styles.sectionHeader}>
-          <AppText accessibilityRole="header" style={styles.sectionTitle}>{tr("id.comments")}</AppText>
+          <AppText accessibilityRole="header" style={handSection}>{tr("id.comments")}</AppText>
           {comments.length ? <View style={styles.countBadge}><AppText style={styles.countText}>{comments.length}</AppText></View> : null}
         </View>
         {comments.length === 0 ? <View style={styles.commentsEmpty}>
@@ -646,7 +653,7 @@ export default function CardDetailScreen() {
           </View>; })}
         </View>}
 
-        <View style={styles.sectionHeader}><AppText accessibilityRole="header" style={styles.sectionTitle}>{tr("id.cardActions")}</AppText></View>
+        <View style={styles.sectionHeader}><AppText accessibilityRole="header" style={handSection}>{tr("id.cardActions")}</AppText></View>
         <View style={[styles.cardActions, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.panel, clip: true })]}>
           {!covered ? <>
             <Pressable accessibilityRole="button" accessibilityHint={tr("id.turnThisCardIntoAnImageYouCan")} onPress={openShareNote} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
@@ -713,12 +720,14 @@ export default function CardDetailScreen() {
         </View>
       </View>
     </KeyboardAvoidingView>
+    </PaperDesk>
     <AddCardAttachmentSheet visible={addAttachmentOpen} onClose={() => setAddAttachmentOpen(false)} onPick={(kind) => void pickCardAttachment(kind)} />
     <Toast message={attachmentDeletion.status ?? toast ?? download.status} />
     <ReminderSheet key={reminderSheetKey} visible={reminderSheetOpen} existing={reminder?.scheduledAt ?? null} accent={contentAccentSolid} accentOn={contentAccentOn} onClose={() => setReminderSheetOpen(false)} onSave={saveReminder} onRemove={deleteReminder} />
   </Screen>;
 }
 
+const PAPER_SHADOW = '0px 4px 12px rgba(60,42,20,0.18)';
 const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   headerActions: { alignItems: 'center' },
   flex: { flex: 1 },
@@ -732,6 +741,8 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   // to two lines.
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, alignSelf: 'stretch' },
   title: { flex: 1, color: tokens.textPrimary, fontSize: 30, lineHeight: 37, fontWeight: '800' },
+  handTitle: { fontSize: 32, lineHeight: 40, fontWeight: 'normal' },
+  handSection: { fontSize: 22, lineHeight: 29, fontWeight: 'normal', letterSpacing: 0 },
   titleEditButton: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: tokens.surfaceElevated },
   editHint: { color: tokens.accent, fontSize: 12, fontWeight: '700' },
   addTitle: { minHeight: 40, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.xxs },
@@ -766,8 +777,8 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   hiddenCover: { minHeight: 132, alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: radii.contentCard, backgroundColor: tokens.surfaceElevated },
   hiddenCoverTitle: { marginTop: spacing.xxs, color: tokens.textSecondary, fontSize: 15, fontWeight: '700' },
   hiddenCoverCopy: { color: tokens.textMuted, fontSize: 13 },
-  countBadge: { minWidth: 26, height: 22, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7, borderRadius: 11, backgroundColor: tokens.surfaceElevated },
-  countText: { color: tokens.textSecondary, fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  countBadge: { minWidth: 26, height: 22, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7, borderRadius: 2, backgroundColor: PAPER_WHITE, boxShadow: '0px 2px 4px rgba(80,60,30,0.18)', transform: [{ rotate: '3deg' }] },
+  countText: { color: PAPER_INK, fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
   flexCopy: { flex: 1, minWidth: 0 },
   thought: { paddingTop: spacing.xs },
   thoughtHeader: { minHeight: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
@@ -796,9 +807,10 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   // One compact card, two groups: Board/Column (what it belongs to — more
   // important) separated from Created/Edited (metadata) by a single divider
   // rather than a border under every row, which reads as a settings list.
-  reminderRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xl, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 14, backgroundColor: tokens.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: tokens.borderSubtle },
+  // Panels are sheets of the theme's paper on the desk, so their theme ink stays readable.
+  reminderRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xl, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 4, backgroundColor: tokens.cardPaper, boxShadow: PAPER_SHADOW },
   reminderIcon: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 17 },
-  detailsCard: { marginTop: spacing.sm, borderRadius: 14, backgroundColor: tokens.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: tokens.borderSubtle, paddingHorizontal: spacing.md },
+  detailsCard: { marginTop: spacing.sm, borderRadius: 4, backgroundColor: tokens.cardPaper, boxShadow: PAPER_SHADOW, paddingHorizontal: spacing.md },
   detailGroup: { paddingVertical: spacing.xxs },
   detailDivider: { height: StyleSheet.hairlineWidth, backgroundColor: tokens.borderSubtle },
   detailRow: { minHeight: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
@@ -808,7 +820,7 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   detailLinkValue: { color: tokens.accentStrong },
   // Deliberately quieter than the card's own content: no icon chips, smaller
   // type, a plain bordered list rather than a prominent surfaced card.
-  cardActions: { marginTop: spacing.sm, overflow: 'hidden', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: tokens.borderSubtle },
+  cardActions: { marginTop: spacing.sm, borderRadius: 4, backgroundColor: tokens.cardPaper, boxShadow: PAPER_SHADOW },
   actionRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md },
   actionTitle: { color: tokens.textPrimary, fontSize: 14, fontWeight: '600' },
   deleteTitle: { color: tokens.danger, fontSize: 14, fontWeight: '600' },

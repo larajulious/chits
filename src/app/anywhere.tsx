@@ -4,6 +4,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
 import { BackHeader, EmptyState, LoadingState, Screen } from '@/components/ui/primitives';
+import { PaperDesk, useDesk } from '@/components/desk/paper-desk';
 
 /** Widget URLs carry only stable identifiers. Recheck eligibility after every tap:
  * old launcher snapshots must never reopen archived, deleted or hidden notes. */
@@ -11,6 +12,7 @@ export default function AnywhereRoute() {
   useLocale();
   const { kind, id } = useLocalSearchParams<{ kind?: string; id?: string }>();
   const database = useSQLiteContext();
+  const desk = useDesk();
   const key = `${kind}:${id}`;
   const [result, setResult] = useState<{ key: string; valid: boolean } | null>(null);
   const validParams = typeof id === 'string' && id.length > 0 && id.length <= 200 && (kind === 'thought' || kind === 'card');
@@ -32,5 +34,5 @@ export default function AnywhereRoute() {
     return () => { current = false; };
   }, [database, id, kind, key, validParams]);
   if (status === 'loading') return <LoadingState />;
-  return <Screen><BackHeader title={tr('anywhere.brand')} onBack={() => router.replace('/chat')} /><EmptyState title={tr('chat.thatThoughtIsNoLongerAvailableInChat')} description={tr('anywhere.description')} /></Screen>;
+  return <Screen style={{ backgroundColor: desk.desk }}><BackHeader title={tr('anywhere.brand')} onBack={() => router.replace('/chat')} /><PaperDesk><EmptyState title={tr('chat.thatThoughtIsNoLongerAvailableInChat')} description={tr('anywhere.description')} /></PaperDesk></Screen>;
 }

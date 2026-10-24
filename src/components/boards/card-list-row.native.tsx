@@ -1,18 +1,15 @@
 import { countLabel, tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { memo } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, type AccessibilityActionEvent, type AccessibilityActionInfo } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { AttachmentContent } from '@/components/chat/message-row';
-import { useTheme } from '@/components/theme-provider';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
-import { NoteCard, NoteCategory, useNoteColors } from '@/components/ui/note-card';
-import { mix } from '@/constants/style-tokens';
-import { type ThemeTokens } from '@/constants/theme';
-import { tintWithAccent } from '@/constants/board-appearance';
+import { PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW, PushPin, Tape, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { mix, noteColors, stableTilt } from '@/constants/style-tokens';
 import { formatReminder, dateFormat } from '@/services/reminder-time';
 import type { AttachmentLike, CardListItem } from '@/db/types';
 
@@ -114,39 +111,39 @@ function fileKindLabel(name: string, count: number) {
   return extension ? `${extension.toUpperCase()} document` : tr("attachments.document");
 }
 
-// Unorganized notes sit on the theme's neutral paper; board notes take a soft
-// tint of their board's color, like sticky notes, so a glance at the grid
-// shows which notes belong together.
-function paperColors(accent: string | null, dark: boolean, theme: Pick<ThemeTokens, 'cardPaper' | 'cardBase' | 'borderSubtle'>) {
-  if (!accent) return { paper: theme.cardPaper, edge: theme.borderSubtle };
-  return { paper: tintWithAccent(theme.cardBase, accent, dark ? 0.16 : 0.1), edge: tintWithAccent(theme.borderSubtle, accent, dark ? 0.3 : 0.35) };
+// Notes are paper on the desk, always light whatever the appearance: a board's
+// notes take a pastel of the board's color, so a glance at the grid shows which
+// belong together; unorganized notes are cream; a hidden note is plain kraft.
+function paperFor(accent: string | null, hidden: boolean) {
+  if (hidden) return { paper: KRAFT, muted: PAPER_INK_MUTED };
+  if (!accent) return { paper: PAPER_WHITE, muted: PAPER_INK_MUTED };
+  const colors = noteColors(accent);
+  return { paper: colors.cardTint, muted: colors.cardInkMuted };
 }
-
+const KRAFT = '#E6DCC8';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PRESS_SPRING = { damping: 18, stiffness: 320, mass: 0.6 };
 
-// A content-first note tile: a quiet paper surface, optional cover, a bounded
+// A content-first note on the desk: a paper with a fixed little tilt, tape on
+// some and a pushpin on the pinned, an optional polaroid photo, a bounded
 // preview and one line of metadata. Tapping opens the note; pressing springs
-// the tile down, a long press opens its actions, and subtasks tick in place.
-export const CardListRow = memo(function CardListRow({ item, onPress, onMore, onToggleSubtask }: { item: CardListItem; onPress: () => void; onMore: () => void; onToggleSubtask?: (subtaskId: string) => void }) {
+// it down, a long press opens its actions, and subtasks tick in place.
+// `arranging` hands the long press to the list's drag (My order), which opens
+// the actions itself when the note is held without moving.
+export const CardListRow = memo(function CardListRow({ item, onPress, onMore, onToggleSubtask, arranging = false, accessibilityActions, onAccessibilityAction }: { item: CardListItem; onPress: () => void; onMore: () => void; onToggleSubtask?: (subtaskId: string) => void; arranging?: boolean; accessibilityActions?: AccessibilityActionInfo[]; onAccessibilityAction?: (event: AccessibilityActionEvent) => void }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const { scheme, tokens, styleTokens } = useTheme();
+  const desk = useDesk();
+  const { hand, handBold } = useHandwriting();
   const reduceMotion = useReducedMotion();
+  const tilt = stableTilt(`${item.kind}:${item.id}:paper`, 1.1);
+  const taped = !item.pinned && stableTilt(`${item.id}:tape`, 1) > 0.2;
   const press = useSharedValue(1);
-  const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: press.get() }] }));
-  const dark = scheme === 'dark';
+  const pressStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${tilt}deg` }, { scale: press.get() }] }));
   const accent = item.hidden ? null : item.boardAccent;
-  // Sticky notes are tinted paper whatever the page, so their text uses the
-  // note's own ink rather than the page's text colors.
-  const note = useNoteColors(accent);
-  const tinted = styleTokens.card.tinted;
-  const theme = tinted ? {
-    ...tokens, textPrimary: note.cardInk, textSecondary: note.cardInkMuted, textMuted: note.cardInkMuted,
-    surfaceElevated: mix(note.cardTint, '#FFFFFF', 0.55), accentSoft: mix(note.cardTint, '#FFFFFF', 0.55), accentStrong: note.cardInk,
-  } : tokens;
-  const r = styleTokens.noteCard.detailRadius;
+  const { paper, muted } = paperFor(accent, item.hidden);
+  const ink = PAPER_INK;
   const media = item.hidden ? null : getCardPreviewMedia(item);
   const picture = media && media.type !== 'audio' ? media : null;
   const audio = media?.type === 'audio' ? media : null;
@@ -155,91 +152,84 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
   const checklist = item.hidden ? null : item.checklistSummary;
   const showFileBadge = item.fileCount > 0 && content.kind !== 'file' && !item.hidden;
   const connectionCount = item.hidden ? 0 : item.connectionCount ?? 0;
-
-  const paper = paperColors(accent, dark, tokens);
-  const cardFill = tinted ? note.cardTint : paper.paper;
-  const frame = mix(cardFill, tinted ? note.cardEdge : tokens.textSecondary, dark ? 0.24 : 0.12);
-  const progressColor = tinted ? note.cardInk : dark ? '#E6A5B6' : '#802743';
+  const wash = mix(paper, '#FFFFFF', 0.55);
+  const rule = 'rgba(43,38,32,0.16)';
   const hasCopy = content.kind !== 'text' || Boolean(content.title || content.body || checklist || item.subtaskPreview?.length || audio || item.reminderAt);
   // Half-width notes: the board name alone reads cleanly; the column is in the label for screen readers.
   const location = item.boardName ?? tr("index.unorganized");
   const mediaPhrase = mediaAccessibilityPhrase(item);
   const overflowPhrase = overflowCount > 0 ? tr('common.moreAttachments', { count: overflowCount }) : '';
   const reminderLabel = item.reminderAt ? formatReminder(new Date(item.reminderAt), new Date()) : null;
-  // A reminder due within a day stands out in the accent; one that has
-  // passed (until the list catches up) in the danger color. Sticky keeps its ink.
+  // A reminder due within a day is a yellow slip; one that has passed (until
+  // the list catches up) a red one.
   const reminderDue = item.reminderAt ? item.reminderAt - Date.now() : null;
   const reminder = reminderDue === null ? null
-    : tinted ? { fill: theme.surfaceElevated, ink: theme.textPrimary, icon: 'notifications-outline' as const }
-      : reminderDue < 0 ? { fill: mix(cardFill, tokens.danger, dark ? 0.22 : 0.12), ink: tokens.danger, icon: 'notifications' as const }
-        : reminderDue < DAY_MS ? { fill: mix(cardFill, tokens.accent, dark ? 0.22 : 0.3), ink: tokens.accentStrong, icon: 'notifications' as const }
-          : { fill: mix(cardFill, theme.textPrimary, 0.06), ink: theme.textSecondary, icon: 'notifications-outline' as const };
+    : reminderDue < 0 ? { fill: '#F6C9C2', ink: '#8E2A22', icon: 'notifications' as const }
+      : reminderDue < DAY_MS ? { fill: PAPER_YELLOW, ink, icon: 'notifications' as const }
+        : { fill: wash, ink, icon: 'notifications-outline' as const };
   const accessibleLabel = `${item.hidden ? tr("entrydetailsheet.hiddenNote") : `Note. ${accessibleTitle(item)}`}. ${checklist ? tr("messages.ofChecklistItemsCompleted", { value1: checklist.completed, value2: checklist.total }) : ''}${mediaPhrase ? `${mediaPhrase} ` : ''}${overflowPhrase ? `${overflowPhrase} ` : ''}${item.pinned ? 'Pinned. ' : ''}${!item.hidden && item.subtaskCount ? tr("messages.ofSubtasksCompleted2", { value1: item.completedSubtaskCount, value2: item.subtaskCount }) : ''}${reminderLabel ? `Reminder ${reminderLabel}. ` : ''}${item.boardName ?? tr("index.unorganized")}${item.columnName ? `, ${item.columnName}` : ''}.`;
 
   return (
     <Animated.View style={pressStyle}>
-    <NoteCard
-      id={item.id}
-      accent={accent}
-      paper={paper.paper}
-      border={frame}
-      variant="collection"
+    <Pressable
       accessibilityRole="button"
       accessibilityLabel={connectionCount ? `${accessibleLabel} ${tr('connectednotes.connectedNotes')}, ${countLabel('link', connectionCount)}.` : accessibleLabel}
       accessibilityHint={tr("cardlistrow.opensNote")}
       onPress={onPress}
       onPressIn={() => { if (!reduceMotion) press.set(withSpring(0.965, PRESS_SPRING)); }}
       onPressOut={() => press.set(withSpring(1, PRESS_SPRING))}
-      onLongPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onMore(); }}
+      // Still set while arranging, so letting go after a hold never counts as a tap.
+      onLongPress={arranging ? () => {} : () => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onMore(); }}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
       delayLongPress={350}
-      pressedStyle={reduceMotion ? styles.reducedPressed : styles.springPressed}
-      style={styles.card}
+      style={({ pressed }) => [styles.card, { backgroundColor: paper, boxShadow: `0px ${pressed ? 2 : 6}px ${pressed ? 5 : 12}px ${desk.shadow}` }, reduceMotion && pressed && styles.reducedPressed]}
     >
       {picture ? (
-        <View pointerEvents="none" style={[styles.picture, { borderTopLeftRadius: styleTokens.noteCard.radius.topLeft, borderTopRightRadius: styleTokens.noteCard.radius.topRight, backgroundColor: theme.surfaceElevated }]}>
-          <AttachmentContent attachment={picture} variant="grid" />
+        <View pointerEvents="none" style={[styles.picture, { backgroundColor: wash, borderColor: rule }]}>
+          <AttachmentContent attachment={picture} variant="paper" />
           {picture.type === "video" ? <View style={styles.videoPlay}><Icon name="play" size={18} color="#FFFFFF" /></View> : null}
           {picture.type === "video" && picture.duration ? <View style={styles.durationBadge}><AppText weight="600" style={styles.durationBadgeText}>{formatDurationSeconds(picture.duration)}</AppText></View> : null}
           {overflowCount > 0 ? <View style={styles.overflowBadge}><AppText weight="700" style={styles.overflowBadgeText}>+{overflowCount}</AppText></View> : null}
         </View>
       ) : null}
 
-      {hasCopy ? <View style={[styles.noteContent, !picture && styles.textOnlyContent, item.pinned && !picture && styles.besidePin]}>
+      {hasCopy ? <View style={[styles.noteContent, !picture && styles.textOnlyContent]}>
         {content.kind === 'hidden' ? (
           <View style={styles.hiddenRow}>
-            <Icon name="lock-closed-outline" size={18} color={theme.textMuted} />
-            <AppText weight="600" style={[styles.hiddenTitle, { color: theme.textSecondary }]}>{tr("index.hiddenChit")}</AppText>
-            <AppText style={[styles.hiddenCopy, { color: theme.textMuted }]}>{tr("cardlistrow.openToReveal")}</AppText>
+            <Icon name="lock-closed-outline" size={18} color={muted} />
+            <AppText style={[handBold, styles.hiddenTitle, { color: ink }]}>{tr("index.hiddenChit")}</AppText>
+            <AppText style={[styles.hiddenCopy, { color: muted }]}>{tr("cardlistrow.openToReveal")}</AppText>
           </View>
         ) : content.kind === "file" ? (
           <View style={styles.fileRow}>
-            <View style={[styles.fileIcon, { borderRadius: r.tile, backgroundColor: theme.surfaceElevated }]}><Icon name={/\.pdf$/i.test(content.name) ? 'document-text-outline' : 'document-outline'} size={22} color={theme.textSecondary} /></View>
-            <AppText weight="600" numberOfLines={2} style={[styles.fileName, { color: theme.textPrimary }]}>{content.name}</AppText>
-            <AppText style={[styles.fileMeta, { color: theme.textMuted }]}>{fileKindLabel(content.name, item.fileCount)}</AppText>
+            <View style={[styles.fileIcon, { backgroundColor: wash }]}><Icon name={/\.pdf$/i.test(content.name) ? 'document-text-outline' : 'document-outline'} size={22} color={muted} /></View>
+            <AppText weight="600" numberOfLines={2} style={[styles.fileName, { color: ink }]}>{content.name}</AppText>
+            <AppText style={[styles.fileMeta, { color: muted }]}>{fileKindLabel(content.name, item.fileCount)}</AppText>
           </View>
         ) : <>
-          {content.title ? <AppText variant="display" weight="600" numberOfLines={2} style={[styles.title, { color: theme.textPrimary }]}>{content.title}</AppText> : null}
-          {content.body ? <AppText variant="paragraph" numberOfLines={checklist || item.subtaskPreview?.length ? 3 : content.title ? 4 : 6} style={[content.title ? styles.bodyUnderTitle : styles.body, { color: content.title ? theme.textSecondary : theme.textPrimary }]}>{content.body}</AppText> : null}
-          {checklist && !content.title && !content.body ? <AppText variant="display" weight="600" style={[styles.title, { color: theme.textPrimary }]}>{tr("cardlistrow.checklist")}</AppText> : null}
+          {content.title ? <AppText numberOfLines={2} style={[handBold, styles.title, { color: ink }]}>{content.title}</AppText> : null}
+          {content.body ? <AppText numberOfLines={checklist || item.subtaskPreview?.length ? 3 : content.title ? 4 : 6} style={content.title ? [styles.bodyUnderTitle, { color: muted }] : [hand, styles.body, { color: ink }]}>{content.body}</AppText> : null}
+          {checklist && !content.title && !content.body ? <AppText style={[handBold, styles.title, { color: ink }]}>{tr("cardlistrow.checklist")}</AppText> : null}
         </>}
 
         {checklist ? <View style={styles.checklist}>
           <View style={styles.progressLabels}>
-            <AppText weight="600" style={[styles.progressCount, { color: theme.textSecondary }]}>{checklist.completed} {' '}{tr("id.of")}{' '}{checklist.total} {' '}{tr("cardlistrow.done")}</AppText>
-            <AppText style={[styles.progressPercent, { color: theme.textMuted }]}>{checklist.percent}%</AppText>
+            <AppText weight="600" style={[styles.progressCount, { color: muted }]}>{checklist.completed} {' '}{tr("id.of")}{' '}{checklist.total} {' '}{tr("cardlistrow.done")}</AppText>
+            <AppText style={[styles.progressPercent, { color: muted }]}>{checklist.percent}%</AppText>
           </View>
-          <View style={[styles.progressTrack, { backgroundColor: mix(cardFill, progressColor, 0.12) }]}>
-            <View style={[styles.progressFill, { width: `${checklist.percent}%`, backgroundColor: progressColor }]} />
+          <View style={[styles.progressTrack, { backgroundColor: rule }]}>
+            <View style={[styles.progressFill, { width: `${checklist.percent}%`, backgroundColor: ink }]} />
           </View>
           {checklist.remaining.map((text, index) => <View key={index} style={styles.checklistRow}>
-            <View style={[styles.previewCheckbox, { borderColor: theme.textMuted }]} />
-            <AppText variant="paragraph" numberOfLines={2} style={[styles.checklistText, { color: theme.textSecondary }]}>{text}</AppText>
+            <View style={[styles.previewCheckbox, { borderColor: muted }]} />
+            <AppText variant="paragraph" numberOfLines={2} style={[styles.checklistText, { color: ink }]}>{text}</AppText>
           </View>)}
-          {checklist.total - checklist.completed > 3 ? <AppText style={[styles.checklistMore, { color: theme.textMuted }]}>+{checklist.total - checklist.completed - 3} {' '}{tr("cardlistrow.more")}</AppText> : null}
+          {checklist.total - checklist.completed > 3 ? <AppText style={[styles.checklistMore, { color: muted }]}>+{checklist.total - checklist.completed - 3} {' '}{tr("cardlistrow.more")}</AppText> : null}
         </View> : null}
 
         {!item.hidden && item.subtaskPreview?.length ? <View style={styles.checklist}>
-          <AppText weight="600" style={[styles.progressCount, { color: theme.textSecondary }]}>{checklist ? tr("cardlistrow.cardTasks") : ''}{item.completedSubtaskCount} {' '}{tr("id.of")}{' '}{item.subtaskCount} {' '}{tr("cardlistrow.done")}</AppText>
+          <AppText weight="600" style={[styles.progressCount, { color: muted }]}>{checklist ? tr("cardlistrow.cardTasks") : ''}{item.completedSubtaskCount} {' '}{tr("id.of")}{' '}{item.subtaskCount} {' '}{tr("cardlistrow.done")}</AppText>
           {item.subtaskPreview.slice(0, 3).map((subtask) => <Pressable
             key={subtask.id}
             accessibilityRole="checkbox"
@@ -250,15 +240,15 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
             onPress={(event) => { event.stopPropagation(); onToggleSubtask?.(subtask.id); }}
             style={({ pressed }) => [styles.checklistRow, pressed && styles.subtaskPressed]}
           >
-            <View style={[styles.previewCheckbox, { borderColor: subtask.isCompleted ? progressColor : theme.textMuted, backgroundColor: subtask.isCompleted ? progressColor : 'transparent' }]}>{subtask.isCompleted ? <Icon name="checkmark" size={11} color={cardFill} /> : null}</View>
-            <AppText variant="paragraph" numberOfLines={2} style={[styles.checklistText, { color: subtask.isCompleted ? theme.textMuted : theme.textSecondary }, subtask.isCompleted && styles.completedText]}>{subtask.title}</AppText>
+            <View style={[styles.previewCheckbox, { borderColor: subtask.isCompleted ? ink : muted, backgroundColor: subtask.isCompleted ? ink : 'transparent' }]}>{subtask.isCompleted ? <Icon name="checkmark" size={11} color={paper} /> : null}</View>
+            <AppText variant="paragraph" numberOfLines={2} style={[styles.checklistText, { color: subtask.isCompleted ? muted : ink }, subtask.isCompleted && styles.completedText]}>{subtask.title}</AppText>
           </Pressable>)}
-          {item.subtaskCount > 3 ? <AppText style={[styles.checklistMore, { color: theme.textMuted }]}>+{item.subtaskCount - 3} {' '}{tr("cardlistrow.more")}</AppText> : null}
+          {item.subtaskCount > 3 ? <AppText style={[styles.checklistMore, { color: muted }]}>+{item.subtaskCount - 3} {' '}{tr("cardlistrow.more")}</AppText> : null}
         </View> : null}
 
-        {audio ? <View style={[styles.audioPill, { borderRadius: r.strip, backgroundColor: theme.accentSoft }]}>
-          <View style={styles.waveform}>{[7, 14, 10, 18, 9, 14, 6].map((height, index) => <View key={index} style={[styles.waveformBar, { height, backgroundColor: theme.accentStrong }]} />)}</View>
-          <AppText weight="600" style={[styles.audioText, { color: theme.accentStrong }]}>{audio.duration ? formatDurationSeconds(audio.duration) : tr("cardlistrow.voiceNote")}</AppText>
+        {audio ? <View style={[styles.audioPill, { backgroundColor: wash }]}>
+          <View style={styles.waveform}>{[7, 14, 10, 18, 9, 14, 6].map((height, index) => <View key={index} style={[styles.waveformBar, { height, backgroundColor: ink }]} />)}</View>
+          <AppText weight="600" style={[styles.audioText, { color: ink }]}>{audio.duration ? formatDurationSeconds(audio.duration) : tr("cardlistrow.voiceNote")}</AppText>
         </View> : null}
         {reminder && reminderLabel ? <View style={[styles.reminderChip, { backgroundColor: reminder.fill }]}>
           <Icon name={reminder.icon} size={12} color={reminder.ink} />
@@ -266,47 +256,41 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
         </View> : null}
       </View> : null}
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { borderTopColor: rule }]}>
         <View style={styles.footerMeta}>
-          {tinted ? <NoteCategory label={location} color={theme.textMuted} />
-            : accent ? <View style={[styles.boardLabel, { backgroundColor: mix(cardFill, accent, dark ? 0.22 : 0.18) }]}>
-              <View style={[styles.boardDot, { backgroundColor: accent, borderColor: mix(accent, theme.textPrimary, 0.25) }]} />
-              <AppText weight="600" numberOfLines={1} style={[styles.location, { color: theme.textSecondary }]}>{location}</AppText>
-            </View>
-              : <AppText weight="500" numberOfLines={1} style={[styles.location, { color: theme.textMuted }]}>{location}</AppText>}
-          <AppText style={[styles.date, { color: theme.textMuted }]}>{formatCardDate(item.updatedAt)}</AppText>
-          {showFileBadge ? <View style={styles.badge}><Icon name="attach" size={13} color={theme.textMuted} /><AppText style={[styles.badgeText, { color: theme.textMuted }]}>{item.fileCount}</AppText></View> : null}
-          {connectionCount > 0 ? <View style={styles.badge}><Icon name="link-outline" size={13} color={theme.textSecondary} /><AppText style={[styles.badgeText, { color: theme.textSecondary }]}>{connectionCount}</AppText></View> : null}
+          {accent ? <View style={[styles.boardDot, { backgroundColor: accent, borderColor: mix(accent, ink, 0.3) }]} /> : null}
+          <AppText weight={accent ? '600' : '500'} numberOfLines={1} style={[styles.location, { color: muted }]}>{location}</AppText>
+          <AppText style={[styles.date, { color: muted }]}>{formatCardDate(item.updatedAt)}</AppText>
+          {showFileBadge ? <View style={styles.badge}><Icon name="attach" size={13} color={muted} /><AppText style={[styles.badgeText, { color: muted }]}>{item.fileCount}</AppText></View> : null}
+          {connectionCount > 0 ? <View style={styles.badge}><Icon name="link-outline" size={13} color={muted} /><AppText style={[styles.badgeText, { color: muted }]}>{connectionCount}</AppText></View> : null}
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel={tr("cardlistrow.cardActions")} hitSlop={6} onPress={(event) => { event.stopPropagation(); onMore(); }} style={({ pressed }) => [styles.more, pressed && { backgroundColor: mix(cardFill, theme.textPrimary, 0.08) }]}>
-          <Icon name="ellipsis-horizontal" size={16} color={theme.textMuted} />
+        <Pressable accessibilityRole="button" accessibilityLabel={tr("cardlistrow.cardActions")} hitSlop={6} onPress={(event) => { event.stopPropagation(); onMore(); }} style={({ pressed }) => [styles.more, pressed && { backgroundColor: wash }]}>
+          <Icon name="ellipsis-horizontal" size={16} color={muted} />
         </Pressable>
       </View>
-
-      {item.pinned ? <View pointerEvents="none" style={[styles.pin, picture ? styles.pinOnPicture : { backgroundColor: mix(cardFill, theme.textPrimary, dark ? 0.14 : 0.07) }]}>
-        <Icon name="pin" size={12} color={picture ? '#FFFFFF' : theme.textSecondary} />
-      </View> : null}
-    </NoteCard>
+    </Pressable>
+    {taped ? <Tape width={58} angle={stableTilt(`${item.id}:tape-angle`, 5)} /> : null}
+    {item.pinned ? <View pointerEvents="none" style={styles.pin}><PushPin size={22} /></View> : null}
     </Animated.View>
   );
 });
 
 const styles = StyleSheet.create({
-  card: { minHeight: 112 },
-  springPressed: {},
+  card: { minHeight: 108, borderRadius: 3 },
   reducedPressed: { opacity: 0.82 },
-  noteContent: { minWidth: 0, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 2 },
-  textOnlyContent: { minHeight: 64 },
-  besidePin: { paddingRight: 38 },
-  picture: { height: 128, overflow: 'hidden' },
-  videoPlay: { position: 'absolute', alignSelf: 'center', top: 46, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)' },
-  durationBadge: { position: 'absolute', left: 10, bottom: 10, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.55)' },
+  noteContent: { minWidth: 0, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4 },
+  textOnlyContent: { minHeight: 60, paddingTop: 16 },
+  // A printed photo stuck on the paper: an even white margin, square corners,
+  // a hairline edge. The photo fills it exactly (AttachmentContent's 'paper').
+  picture: { height: 120, marginTop: 8, marginHorizontal: 8, borderRadius: 1, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  videoPlay: { position: 'absolute', alignSelf: 'center', top: 42, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)' },
+  durationBadge: { position: 'absolute', left: 8, bottom: 8, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.55)' },
   durationBadgeText: { color: '#FFFFFF', fontSize: 11 },
-  overflowBadge: { position: 'absolute', right: 10, bottom: 10, minWidth: 26, height: 22, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: 'rgba(0,0,0,0.55)' },
+  overflowBadge: { position: 'absolute', right: 8, bottom: 8, minWidth: 26, height: 22, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: 'rgba(0,0,0,0.55)' },
   overflowBadgeText: { color: '#FFFFFF', fontSize: 11 },
-  title: { fontSize: 16, lineHeight: 21.5, letterSpacing: -0.25 },
-  body: { fontSize: 15, lineHeight: 21.5, letterSpacing: -0.15 },
-  bodyUnderTitle: { marginTop: 4, fontSize: 14, lineHeight: 20 },
+  title: { fontSize: 19, lineHeight: 25 },
+  body: { fontSize: 17, lineHeight: 23 },
+  bodyUnderTitle: { marginTop: 3, fontSize: 14, lineHeight: 20 },
   checklist: { marginTop: 12, gap: 8 },
   progressLabels: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 },
   progressCount: { flexShrink: 1, fontSize: 12, lineHeight: 16 },
@@ -319,28 +303,26 @@ const styles = StyleSheet.create({
   checklistText: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 18.5 },
   completedText: { textDecorationLine: 'line-through' },
   checklistMore: { fontSize: 11.5, lineHeight: 16, marginLeft: 23 },
-  hiddenRow: { gap: 6, paddingTop: 2 },
-  hiddenTitle: { fontSize: 14, lineHeight: 20 },
+  hiddenRow: { gap: 4, paddingTop: 2 },
+  hiddenTitle: { fontSize: 19, lineHeight: 25 },
   hiddenCopy: { fontSize: 12, lineHeight: 17 },
   fileRow: { gap: 6 },
-  fileIcon: { width: 38, height: 42, marginBottom: 3, alignItems: 'center', justifyContent: 'center' },
+  fileIcon: { width: 38, height: 42, marginBottom: 3, borderRadius: 3, alignItems: 'center', justifyContent: 'center' },
   fileName: { fontSize: 13.5, lineHeight: 19 },
   fileMeta: { fontSize: 11.5, lineHeight: 16 },
-  audioPill: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 9, minHeight: 36, marginTop: 10, paddingHorizontal: 10 },
+  audioPill: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 9, minHeight: 36, marginTop: 10, paddingHorizontal: 10, borderRadius: 3 },
   waveform: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   waveformBar: { width: 2, borderRadius: 1, opacity: 0.7 },
   audioText: { flexShrink: 1, fontSize: 12, fontVariant: ['tabular-nums'] },
-  reminderChip: { alignSelf: 'flex-start', maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
+  reminderChip: { alignSelf: 'flex-start', maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 2, transform: [{ rotate: '-1deg' }] },
   reminderText: { flexShrink: 1, fontSize: 11.5, lineHeight: 15 },
-  footer: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 14, paddingRight: 6, paddingTop: 8, paddingBottom: 8 },
-  footerMeta: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 7 },
-  boardLabel: { flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 5, paddingLeft: 6, paddingRight: 8, paddingVertical: 3, borderRadius: 999 },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10, marginHorizontal: 14, paddingTop: 6, paddingBottom: 6, borderTopWidth: 1, borderStyle: 'dashed', marginRight: 6 },
+  footerMeta: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
   boardDot: { width: 7, height: 7, borderRadius: 3.5, borderWidth: StyleSheet.hairlineWidth },
   location: { flexShrink: 1, fontSize: 12, lineHeight: 16 },
   date: { flexShrink: 0, fontSize: 11.5, lineHeight: 16, fontVariant: ['tabular-nums'] },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 1 },
   badgeText: { fontSize: 11.5, lineHeight: 16, fontVariant: ['tabular-nums'] },
   more: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  pin: { position: 'absolute', top: 9, right: 9, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  pinOnPicture: { backgroundColor: 'rgba(0,0,0,0.45)' },
+  pin: { position: 'absolute', top: -10, left: '50%', marginLeft: -11 },
 });

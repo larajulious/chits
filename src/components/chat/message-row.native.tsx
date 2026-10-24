@@ -215,28 +215,31 @@ function AudioPlayer({ attachment }: { attachment: AttachmentLike }) {
   </View>;
 }
 
-function Unavailable({ attachment, style }: { attachment: AttachmentLike; style?: StyleProp<ViewStyle> }) {
+function Unavailable({ attachment, style, paper = false }: { attachment: AttachmentLike; style?: StyleProp<ViewStyle>; paper?: boolean }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
   const { tokens: theme } = useTheme();
   const icon = attachment.type === 'photo' ? 'image-outline' : attachment.type === 'video' ? 'videocam-outline' : attachment.type === 'audio' ? 'volume-medium-outline' : fileIcon(attachment);
   const label = attachment.type === 'photo' ? tr("attachmentdraftpreview.photoUnavailable") : attachment.type === 'video' ? tr("messagerow.videoUnavailable") : tr("messagerow.attachmentUnavailable");
-  return <View accessibilityLabel={label} style={[styles.unavailable, style, { backgroundColor: theme.surfaceElevated }]}><Icon name={icon} size={25} color={theme.textMuted} /><AppText style={[styles.unavailableText, { color: theme.textSecondary }]}>{label}</AppText></View>;
+  return <View accessibilityLabel={label} style={[styles.unavailable, style, { backgroundColor: paper ? PAPER_TONE.fill : theme.surfaceElevated }]}><Icon name={icon} size={25} color={paper ? PAPER_TONE.ink : theme.textMuted} /><AppText style={[styles.unavailableText, { color: paper ? PAPER_TONE.ink : theme.textSecondary }]}>{label}</AppText></View>;
 }
 
-function AttachmentLoading({ attachment, style }: { attachment: AttachmentLike; style?: StyleProp<ViewStyle> }) {
+function AttachmentLoading({ attachment, style, paper = false }: { attachment: AttachmentLike; style?: StyleProp<ViewStyle>; paper?: boolean }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
   const { tokens: theme } = useTheme();
   const icon = attachment.type === 'photo' ? 'image-outline' : attachment.type === 'video' ? 'videocam-outline' : attachment.type === 'audio' ? 'volume-medium-outline' : fileIcon(attachment);
-  return <View accessibilityLabel={tr("messagerow.valueLoading", { value1: typeLabel(attachment) })} style={[styles.unavailable, style, { backgroundColor: theme.surfaceElevated }]}><Icon name={icon} size={25} color={theme.textMuted} /></View>;
+  return <View accessibilityLabel={tr("messagerow.valueLoading", { value1: typeLabel(attachment) })} style={[styles.unavailable, style, { backgroundColor: paper ? PAPER_TONE.fill : theme.surfaceElevated }]}><Icon name={icon} size={25} color={paper ? PAPER_TONE.ink : theme.textMuted} /></View>;
 }
 
 // `onOpen` (photo/video only): a tap hands off to the caller's multi-attachment
 // gallery instead of this attachment's own single-item viewer.
-export function AttachmentContent({ attachment, accessibilityLabel, overlay, variant = 'chat', accentColor, onLongPress, onOpen }: { attachment: AttachmentLike; accessibilityLabel?: string; overlay?: ReactNode; variant?: 'chat' | 'board' | 'detail' | 'thumbnail' | 'grid'; accentColor?: string; onLongPress?: () => void; onOpen?: () => void }) {
+// Placeholder tones for media on a desk paper, which stays light in every appearance.
+const PAPER_TONE = { fill: 'rgba(43,38,32,0.07)', ink: '#574E41' };
+
+export function AttachmentContent({ attachment, accessibilityLabel, overlay, variant = 'chat', accentColor, onLongPress, onOpen }: { attachment: AttachmentLike; accessibilityLabel?: string; overlay?: ReactNode; variant?: 'chat' | 'board' | 'detail' | 'thumbnail' | 'grid' | 'paper'; accentColor?: string; onLongPress?: () => void; onOpen?: () => void }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -264,11 +267,14 @@ export function AttachmentContent({ attachment, accessibilityLabel, overlay, var
   // 'thumbnail': a small fixed square (e.g. the Cards tab's compact right-side
   // preview) — same fixed-box reasoning as 'board' above, just sized for a
   // corner thumbnail rather than a full-width card top.
-  const mediaStyle = variant === 'board' ? [styles.media, styles.boardMedia] : variant === 'thumbnail' ? [styles.media, styles.thumbnailMedia] : variant === 'grid' ? [styles.media, styles.gridMedia] : variant === 'detail' ? [styles.media, styles.detailMedia, { aspectRatio }] : [styles.media, styles.chatMedia, { aspectRatio, maxHeight: Math.round(screenHeight * 0.6) }];
-  if (available === null) return <AttachmentLoading attachment={attachment} style={mediaStyle} />;
-  if (available === false || mediaError) return <Unavailable attachment={attachment} style={mediaStyle} />;
+  // 'paper': fills a frame drawn on a desk paper exactly — square corners, and
+  // placeholders in the paper's own tones rather than the theme's.
+  const paper = variant === 'paper';
+  const mediaStyle = variant === 'board' ? [styles.media, styles.boardMedia] : variant === 'thumbnail' ? [styles.media, styles.thumbnailMedia] : variant === 'grid' ? [styles.media, styles.gridMedia] : paper ? [styles.media, styles.paperMedia] : variant === 'detail' ? [styles.media, styles.detailMedia, { aspectRatio }] : [styles.media, styles.chatMedia, { aspectRatio, maxHeight: Math.round(screenHeight * 0.6) }];
+  if (available === null) return <AttachmentLoading attachment={attachment} style={mediaStyle} paper={paper} />;
+  if (available === false || mediaError) return <Unavailable attachment={attachment} style={mediaStyle} paper={paper} />;
   const galleryHint = tr("messagerow.opensAllAttachmentsOnThisCard");
-  if (attachment.type === 'photo') return <><View style={[mediaStyle, { backgroundColor: theme.surfaceElevated }]}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? tr("messagerow.photoDoubleTapToViewFullscreen")} accessibilityHint={onOpen ? galleryHint : tr("messagerow.opensThePhotoFullscreen")} onPress={onOpen ?? (() => setViewerOpen(true))} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><Image source={uri} contentFit="cover" transition={120} allowDownscaling onError={() => setMediaError(true)} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <PhotoAttachmentViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
+  if (attachment.type === 'photo') return <><View style={[mediaStyle, { backgroundColor: paper ? PAPER_TONE.fill : theme.surfaceElevated }]}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? tr("messagerow.photoDoubleTapToViewFullscreen")} accessibilityHint={onOpen ? galleryHint : tr("messagerow.opensThePhotoFullscreen")} onPress={onOpen ?? (() => setViewerOpen(true))} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><Image source={uri} contentFit="cover" transition={120} allowDownscaling onError={() => setMediaError(true)} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <PhotoAttachmentViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
   if (attachment.type === 'video') return <><View style={mediaStyle}><Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? tr("messagerow.videoValuePlayVideo", { value1: attachment.duration ? ', ' + tr('common.seconds', { count: durationSeconds(attachment.duration) }) : '' })} accessibilityHint={onOpen ? galleryHint : tr("messagerow.opensTheVideoPlayer")} onPress={onOpen ?? (() => setViewerOpen(true))} onLongPress={onLongPress} delayLongPress={350} style={StyleSheet.absoluteFill}><VideoPoster attachment={attachment} style={StyleSheet.absoluteFill} /></Pressable>{overlay}</View>{viewerOpen ? <VideoViewer attachment={attachment} onDismiss={() => setViewerOpen(false)} /> : null}</>;
   if (attachment.type === 'audio') return <AudioPlayer attachment={attachment} />;
   // PDFs open in Chits' own viewer; every other document keeps the existing
@@ -646,6 +652,7 @@ const styles = StyleSheet.create({
   // each cell a computed square footprint) rather than a fixed pixel box —
   // same fixed-box-not-aspectRatio reasoning as 'board'/'thumbnail' above.
   gridMedia: { width: '100%', height: '100%', borderRadius: radii.compactCard, overflow: 'hidden' },
+  paperMedia: { width: '100%', height: '100%', overflow: 'hidden' },
   videoPlay: { position: 'absolute', alignSelf: 'center', top: '50%', marginTop: -23, width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 23, backgroundColor: 'rgba(0,0,0,0.62)' },
   durationBadge: { position: 'absolute', right: spacing.xs, bottom: spacing.xs, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.7)' },
   durationText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
