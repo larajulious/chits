@@ -76,7 +76,7 @@ export function TemplateLibrary({ ref, onClose, onSelect, initialDocument, initi
     } else if (selected) { setSelected(null); setError(null); }
     else onClose();
   };
-  useImperativeHandle(ref, () => ({ back }));
+  useImperativeHandle(ref, () => ({ back: () => { if (!editor.current?.dismissActivePanel()) back(); } }));
   const startEdit = (template?: NoteTemplate, renameOnly = false) => {
     const next: Edit = { id: template?.source === 'custom' ? template.id : undefined, title: template?.title ?? '', description: template?.description ?? '', blocks: template ? templateDraft(template.document) : textDraft(), renameOnly };
     baseline.current = JSON.stringify(next); setError(null); setEdit(next);

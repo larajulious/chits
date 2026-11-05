@@ -1,7 +1,7 @@
 import { formattingText } from './note-formatting-copy';
 import { useLocale } from '@/localization/provider';
-import { useEffect, useRef, useState, type RefObject } from 'react';
-import { Animated, BackHandler, Pressable, ScrollView, StyleSheet, View, type TextStyle } from 'react-native';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { Animated, Pressable, ScrollView, StyleSheet, View, type TextStyle } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { AppText, useFontStyle } from '@/components/ui/app-text';
 import { noteFontStyle } from '@/services/note-text-style';
@@ -12,7 +12,7 @@ import type { NoteBlocksEditorControl } from './note-blocks-editor';
 
 /** An inset bottom sheet participates in the host's keyboard-aware layout.
  * It never places a modal/backdrop over the note or steals native selection. */
-export function NoteFormattingSheet({ editor, open, onClose }: { editor: RefObject<NoteBlocksEditorControl | null>; open: boolean; onClose: () => void }) {
+export function NoteFormattingSheet({ editor, open, closing, onClose, onClosed }: { editor: RefObject<NoteBlocksEditorControl | null>; open: boolean; closing: boolean; onClose: () => void; onClosed: () => void }) {
   "use no memo";
   useLocale();
   const { tokens, scheme } = useTheme();
@@ -21,16 +21,19 @@ export function NoteFormattingSheet({ editor, open, onClose }: { editor: RefObje
   const captureSelection = () => { pressedSelection.current = editor.current?.cursor() ?? null; };
   const [format, setFormat] = useState<NoteFormat>({ marks: {}, heading: 0, list: null });
   const [height] = useState(() => new Animated.Value(0));
+  const hasOpened = useRef(false);
+  const closedCallback = useRef(onClosed);
+  useLayoutEffect(() => { closedCallback.current = onClosed; }, [onClosed]);
   useEffect(() => editor.current?.subscribeRichFormat(setFormat), [editor, open]);
   useEffect(() => {
+    if (!open && !hasOpened.current) { if (closing) closedCallback.current(); return; }
+    if (open) hasOpened.current = true;
     const animation = Animated.timing(height, { toValue: open ? 188 : 0, duration: reduceMotion ? 0 : 180, useNativeDriver: false });
-    animation.start(); return () => animation.stop();
-  }, [height, open, reduceMotion]);
-  useEffect(() => {
-    if (!open) return;
-    const handler = BackHandler.addEventListener('hardwareBackPress', () => { onClose(); return true; });
-    return () => handler.remove();
-  }, [onClose, open]);
+    animation.start(({ finished }) => {
+      if (finished && !open) { hasOpened.current = false; closedCallback.current(); }
+    });
+    return () => animation.stop();
+  }, [closing, height, open, reduceMotion]);
 
   return <Animated.View pointerEvents={open ? 'auto' : 'none'} accessibilityElementsHidden={!open} importantForAccessibility={open ? 'auto' : 'no-hide-descendants'} style={[styles.sheet, { height, backgroundColor: tokens.surface, borderColor: tokens.borderSubtle }]}>
     <View style={styles.header}><AppText style={{ color: tokens.textSecondary, fontSize: 13, fontWeight: '700' }}>{formattingText("heading")}</AppText><Pressable accessibilityRole="button" accessibilityLabel={formattingText("close")} onPress={onClose} style={styles.close}><AppText style={{ color: tokens.accentStrong, fontWeight: '700' }}>{formattingText("done")}</AppText></Pressable></View>

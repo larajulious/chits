@@ -1,3 +1,4 @@
+import { NavigationMenuButton } from '@/components/navigation/navigation-menu-button';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Keyboard, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
@@ -264,7 +265,7 @@ export default function FocusScreen() {
 
   return <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: desk.desk }}>
     <AppHeader actionWidth={100} title={tr('focus.title')}
-      leading={<IconButton label={tr('focus.exit')} disabled={busy} onPress={exit}><HeaderIcon name="chevron-back" size={24} /></IconButton>}
+      leading={<NavigationMenuButton disabled={busy} />}
       trailing={<View style={[focusStyles.row,rowStyle,{ flexWrap: 'nowrap', gap: 8 }]}>{showSpin ? <SpinEntry header /> : null}<IconButton label={tr('focus.history')} onPress={openHistory}><HeaderIcon name="time-outline" size={22} /></IconButton></View>} />
     <PaperDesk>
     {error ? <AppText accessibilityRole="alert" weight="600" style={[styles.error, { color: desk.danger }]}>{error}</AppText> : null}

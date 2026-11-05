@@ -1,5 +1,5 @@
 import { countLabel, tr } from '@/localization/runtime';
-import { useLocale } from '@/localization/provider';
+import { useDirection, useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -16,8 +16,9 @@ import { AttachmentContent } from '@/components/chat/message-row';
 import { isPdfAttachment } from '@/services/pdf-attachment';
 import { AppHeader, AppText, EmptyState, Icon, IconButton, PrimaryButton, Screen, SecondaryButton, Toast, HeaderIcon, MenuIcon } from '@/components/ui/primitives';
 import { FilterRail } from '@/components/boards/filter-rail';
-import { DeskHeading, PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW, PaperCard, PaperDesk, PaperTab, useDesk, useHandwriting } from '@/components/desk/paper-desk';
-import { stableTilt } from '@/constants/style-tokens';
+import { PAPER_INK, PAPER_WHITE, PAPER_YELLOW, PaperButton, PaperCard, PaperDesk, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { useWelcomeFonts } from '@/features/onboarding/welcome/welcome-fonts';
+import { welcomeSurfaces } from '@/features/onboarding/welcome/welcome-surfaces';
 import type { IconName } from '@/components/ui/icon';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
@@ -32,11 +33,8 @@ import { createAttachmentRepository } from '@/db/repositories';
 import type { AttachmentFilterType, AttachmentLike, AttachmentSummary } from '@/db/types';
 
 const PAGE_SIZE = 24;
-const GRID_COLUMNS = 3;
-// Room between the papers for their tilt, tape and shadow.
-const GRID_GAP = 14;
-const POLAROID_SIDE = 7;
-const POLAROID_BOTTOM = 20;
+const GRID_GAP = 12;
+const PREVIEW_INSET = 8;
 const SEARCH_DEBOUNCE_MS = 300;
 
 type TypeFilter = 'all' | AttachmentFilterType;
@@ -83,71 +81,48 @@ function TypeFilterRail({ filter, onChange }: { filter: TypeFilter; onChange: (n
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
+  const { tokens } = useTheme();
   return (
-    <View style={styles.filterRail}>
+    <View style={[styles.filterRail, { backgroundColor: tokens.accentSoft }]}>
       <FilterRail value={filter} onChange={onChange} options={TYPE_FILTERS.map((option) => ({ ...option, accessibilityLabel: tr("attachments.filterByValue", { value1: option.label }) }))} />
     </View>
   );
 }
 
-// Photo/video reuse AttachmentContent's own thumbnail rendering (lazy image
-// loading, availability checks, all built in) with pointerEvents disabled on
-// it — this whole tile's tap target is the outer Pressable, which opens the
-// context/"View card" detail sheet below rather than AttachmentContent's own
-// internal fullscreen viewer. Audio and file don't have a square-tile mode in
-// AttachmentContent (it renders a full inline player / full-width row for
-// those), so they get compact custom tiles here instead, matching the same
-// pattern card-list-row.native.tsx already uses for its own audio thumbnail.
+// Keep thumbnail loading and file availability in the existing media renderer.
+// The outer paper owns taps, long presses and accessibility actions.
 function AttachmentTile({ item, size, onPress, onLongPress, selectingBackground = false }: { item: AttachmentSummary; size: number; onPress: () => void; onLongPress: () => void; selectingBackground?: boolean }) {
-  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
-
+  "use no memo";
   useLocale();
-  const { handBold } = useHandwriting();
-  const key = `${item.source}-${item.id}`;
-  let paper = PAPER_WHITE;
-  let content: React.ReactNode;
-  let accessibilityLabel: string;
-  if (item.type === 'photo' || item.type === 'video') {
-    // A polaroid: the picture printed square-cornered with a white border, a deeper one at the bottom.
-    content = <View pointerEvents="none" style={[styles.print, { height: size - POLAROID_SIDE - POLAROID_BOTTOM }]}><AttachmentContent attachment={toAttachmentLike(item)} variant="paper" /></View>;
-    accessibilityLabel = item.type === 'photo' ? tr("id.photo") : tr('addcardattachmentsheet.video') + (item.duration ? ', ' + formatDurationSeconds(item.duration) : '');
-  } else if (item.type === 'audio') {
-    paper = PAPER_YELLOW;
-    content = (
-      <View style={styles.tileFill}>
-        <Icon name="mic" size={24} color={PAPER_INK} />
-        {item.duration ? <AppText style={[handBold, styles.tileDuration]}>{formatDurationSeconds(item.duration)}</AppText> : null}
-      </View>
-    );
-    accessibilityLabel = tr('messagerow.audioNote') + (item.duration ? ', ' + formatDurationSeconds(item.duration) : '');
-  } else {
-    const size2 = formatFileSize(item.size);
-    content = (
-      <View style={[styles.tileFill, styles.filePadding]}>
-        <Icon name={fileTileIcon(item)} size={22} color={PAPER_INK} />
-        <AppText weight="600" numberOfLines={2} style={styles.tileFileName}>{item.originalName ?? tr("attachments.document")}</AppText>
-        <AppText weight="600" numberOfLines={1} style={styles.tileMeta}>{[fileExtension(item), size2].filter(Boolean).join(' · ')}</AppText>
-      </View>
-    );
-    accessibilityLabel = `${isPdfAttachment(item) ? 'PDF' : tr("addcardattachmentsheet.file")}, ${item.originalName ?? 'document'}`;
-  }
-  return (
-    <PaperCard
-      paper={paper}
-      tilt={stableTilt(`attachment:${key}`, 1.6)}
-      tape={item.type !== 'photo' && item.type !== 'video' ? false : stableTilt(`attachment:${key}:tape`, 1) > 0.35}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityHint={selectingBackground ? tr("attachments.opensChatBackgroundPreview") : tr("attachments.opensDetailsHoldForMoreActions")}
-      accessibilityActions={selectingBackground ? [] : [{ name: 'longpress', label: tr("attachments.moreActions") }]}
-      onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === 'longpress') onLongPress(); }}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      style={{ width: size, height: size }}
-    >
-      {content}
-    </PaperCard>
-  );
+  const { tokens, styleTokens } = useTheme();
+  const fonts = useWelcomeFonts();
+  const media = item.type === 'photo' || item.type === 'video';
+  const typeLabel = item.type === 'photo' ? tr('id.photo') : item.type === 'video' ? tr('addcardattachmentsheet.video') : item.type === 'audio' ? tr('messagerow.audioNote') : tr('addcardattachmentsheet.file');
+  const title = item.originalName?.trim() || typeLabel;
+  const metadata = [item.type === 'file' ? fileExtension(item) : typeLabel, item.duration ? formatDurationSeconds(item.duration) : formatFileSize(item.size)].filter(Boolean).join(' · ');
+  const radius = styleTokens.button.radius;
+  return <PaperCard
+    paper={tokens.surface}
+    accessibilityRole="button"
+    accessibilityLabel={`${title}. ${metadata}`}
+    accessibilityHint={selectingBackground ? tr("attachments.opensChatBackgroundPreview") : tr("attachments.opensDetailsHoldForMoreActions")}
+    accessibilityActions={selectingBackground ? [] : [{ name: 'longpress', label: tr("attachments.moreActions") }]}
+    onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === 'longpress') onLongPress(); }}
+    onPress={onPress}
+    onLongPress={onLongPress}
+    style={[styles.tile, { width: size, borderRadius: radius }]}
+  >
+    <View pointerEvents="none" style={[styles.preview, { height: size - PREVIEW_INSET * 2, borderRadius: radius, backgroundColor: tokens.accentSoft }]}>
+      {media ? <AttachmentContent attachment={toAttachmentLike(item)} variant="paper" /> : <View style={styles.tileFill}>
+        <View style={[styles.fileMark, { borderRadius: radius, backgroundColor: tokens.surface }]}><Icon name={item.type === 'audio' ? 'mic-outline' : fileTileIcon(item)} size={28} color={tokens.accentStrong} /></View>
+        {item.type === 'audio' && item.duration ? <AppText family={fonts.display} style={[styles.tileDuration, { color: tokens.textPrimary }]}>{formatDurationSeconds(item.duration)}</AppText> : item.type === 'file' ? <AppText family={fonts.textBold} numberOfLines={1} style={[styles.fileKind, { color: tokens.accentStrong }]}>{fileExtension(item) ?? tr('attachments.document')}</AppText> : null}
+      </View>}
+    </View>
+    <View style={styles.tileCopy}>
+      <AppText family={fonts.textBold} numberOfLines={2} style={[styles.tileFileName, { color: tokens.textPrimary }]}>{title}</AppText>
+      <AppText family={fonts.text} numberOfLines={1} style={[styles.tileMeta, { color: tokens.textSecondary }]}>{metadata}</AppText>
+    </View>
+  </PaperCard>;
 }
 
 function AttachmentDetailModal({ item, onClose, onViewCard }: { item: AttachmentSummary; onClose: () => void; onViewCard: (cardId: string) => void }) {
@@ -204,10 +179,14 @@ export default function AttachmentsScreen() {
   const { isCurrentBackground } = useChatBackground();
   const deletion = useAttachmentDeletion();
   const { openDrawer } = useAppDrawer();
-  const { styleTokens } = useTheme();
+  const { styleTokens, tokens, scheme } = useTheme();
+  const { rowStyle } = useDirection();
+  const fonts = useWelcomeFonts();
   const desk = useDesk();
+  const surfaces = welcomeSurfaces(scheme, desk, { white: PAPER_WHITE, ink: PAPER_INK, yellow: PAPER_YELLOW });
   const handwriting = useHandwriting();
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, fontScale } = useWindowDimensions();
+  const columns = fontScale >= 1.6 ? 1 : screenWidth >= 900 ? 4 : screenWidth >= 600 ? 3 : 2;
   const tabBarHeight = useBottomTabBarHeight();
   const repository = useMemo(() => createAttachmentRepository(database), [database]);
 
@@ -273,7 +252,7 @@ export default function AttachmentsScreen() {
     }
   }, [repository, queryOptions, items.length, loadingMore, hasMore]);
 
-  const tileSize = Math.floor((screenWidth - spacing.md * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS);
+  const tileSize = Math.floor((screenWidth - spacing.md * 2 - GRID_GAP * (columns - 1)) / columns);
 
   const viewCard = (cardId: string) => {
     setDetailItem(null);
@@ -313,25 +292,26 @@ export default function AttachmentsScreen() {
   return (
     <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: desk.desk }}>
       <AppHeader
-        showTitle={choosingBackground}
         title={choosingBackground ? tr("attachments.chooseABackground") : tr("attachments.attachments")}
-        subtitle={choosingBackground && ready ? pluralize(totalCount, 'item') : undefined}
+        subtitle={ready ? pluralize(totalCount, 'item') : '\u00a0'}
         leading={<IconButton label={choosingBackground ? tr("attachments.cancelBackgroundSelection") : tr("archive.openNavigation")} onPress={() => { if (choosingBackground) returnToAppearance('current'); else openDrawer(); }}>{choosingBackground ? <HeaderIcon name="close" size={24} /> : <MenuIcon />}</IconButton>}
+        trailing={!choosingBackground ? <IconButton label={tr("attachments.close")} onPress={() => router.canGoBack() ? router.back() : router.navigate('/')}><HeaderIcon name="close" size={24} /></IconButton> : undefined}
       />
-      <PaperDesk>
+      <PaperDesk faint>
       <FlatList
         data={handwriting.ready ? items : []}
-        key={`grid-${GRID_COLUMNS}`}
-        numColumns={GRID_COLUMNS}
+        key={`grid-${columns}`}
+        numColumns={columns}
         keyExtractor={(item) => `${item.source}-${item.id}`}
-        columnWrapperStyle={styles.gridRow}
+        columnWrapperStyle={columns > 1 ? styles.gridRow : undefined}
         contentContainerStyle={[styles.gridContent, { paddingBottom: tabBarHeight + spacing.md }]}
+        ItemSeparatorComponent={columns === 1 ? () => <View style={{ height: GRID_GAP }} /> : undefined}
         renderItem={({ item }) => <AttachmentTile item={item} size={tileSize} selectingBackground={choosingBackground} onPress={() => choosingBackground ? selectPhoto(item) : setDetailItem(item)} onLongPress={() => { if (!choosingBackground) openItemMenu(item); }} />}
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <SearchField accessibilityLabel={tr("attachments.searchAttachments")} value={searchInput} onChangeText={setSearchInput} placeholder={tr("attachments.searchAttachments")} />
-            {choosingBackground ? <AppText weight="700" style={[styles.sectionLabel, { color: desk.inkMuted }]}>{tr("attachments.photosChooseAPhotoToPreview")}</AppText> : <TypeFilterRail filter={filter} onChange={setFilter} />}
-            {items.length && handwriting.ready ? <DeskHeading title={tr("attachments.recent")} style={styles.recent} /> : null}
+            {choosingBackground ? <AppText family={fonts.textBold} style={[styles.sectionLabel, { color: surfaces.inkMuted }]}>{tr("attachments.photosChooseAPhotoToPreview")}</AppText> : <TypeFilterRail filter={filter} onChange={setFilter} />}
+            {items.length > 0 && handwriting.ready ? <AppText accessibilityRole="header" family={fonts.display} style={[styles.recent, { color: surfaces.ink }]}>{tr("attachments.recent")}</AppText> : null}
           </View>
         }
         ListEmptyComponent={
@@ -343,7 +323,7 @@ export default function AttachmentsScreen() {
           hasMore ? (
             <View style={styles.footer}>
               {loadingMore ? <ChitsLoader size="small" /> : (
-                <PaperTab tilt={-1.2} icon="chevron-down" label={tr("attachments.loadMore")} accessibilityRole="button" accessibilityLabel={tr("attachments.loadMoreAttachments")} onPress={() => void loadMore()} />
+                <PaperButton paper={tokens.accentSoft} accessibilityRole="button" accessibilityLabel={tr("attachments.loadMoreAttachments")} onPress={() => void loadMore()} style={[styles.loadMore, rowStyle, { borderRadius: styleTokens.button.radius }]}><AppText family={fonts.textBold} style={[styles.loadMoreText, { color: tokens.textPrimary }]}>{tr("attachments.loadMore")}</AppText><Icon name="chevron-down" size={18} color={tokens.textPrimary} /></PaperButton>
               )}
             </View>
           ) : null
@@ -363,19 +343,24 @@ export default function AttachmentsScreen() {
 
 const styles = StyleSheet.create({
   // The grid content already supplies the field's horizontal inset.
-  listHeader: { paddingBottom: spacing.xs },
+  listHeader: { paddingBottom: spacing.sm },
   // Bleeds to the screen edges so chips scroll edge to edge (like the Cards tab), while resting at the same inset.
-  filterRail: { marginTop: 4, marginBottom: 8, marginHorizontal: -spacing.md },
-  sectionLabel: { fontSize: 11, letterSpacing: 0.5, marginTop: spacing.md, marginBottom: spacing.xs },
+  filterRail: { marginTop: spacing.sm, marginHorizontal: -spacing.md },
+  sectionLabel: { fontSize: 14, lineHeight: 20, marginTop: spacing.md, marginBottom: spacing.xs },
   gridContent: { paddingHorizontal: spacing.md, flexGrow: 1 },
   gridRow: { gap: GRID_GAP, marginBottom: GRID_GAP },
-  recent: { marginTop: spacing.sm, marginBottom: 4 },
-  print: { marginTop: POLAROID_SIDE, marginHorizontal: POLAROID_SIDE, borderRadius: 1, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(43,38,32,0.16)', overflow: 'hidden' },
-  tileFill: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', gap: 4 },
-  filePadding: { paddingHorizontal: 6 },
-  tileDuration: { color: PAPER_INK, fontSize: 18, lineHeight: 24 },
-  tileFileName: { color: PAPER_INK, fontSize: 11, textAlign: 'center' },
-  tileMeta: { color: PAPER_INK_MUTED, fontSize: 10 },
+  recent: { fontSize: 19, lineHeight: 25, marginTop: spacing.md },
+  tile: { padding: PREVIEW_INSET },
+  preview: { overflow: 'hidden' },
+  tileFill: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.xs, padding: spacing.xs },
+  fileMark: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
+  fileKind: { fontSize: 13, lineHeight: 18 },
+  tileCopy: { paddingHorizontal: spacing.xxs, paddingTop: spacing.xs, paddingBottom: spacing.xxs, gap: 3 },
+  tileDuration: { fontSize: 22, lineHeight: 27, fontVariant: ['tabular-nums'] },
+  tileFileName: { fontSize: 14, lineHeight: 19 },
+  tileMeta: { fontSize: 12, lineHeight: 17 },
+  loadMore: { minHeight: 44, alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
+  loadMoreText: { fontSize: 14, lineHeight: 19 },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl },
   footer: { paddingVertical: spacing.md, alignItems: 'center' },
   detailScreen: { flex: 1 },

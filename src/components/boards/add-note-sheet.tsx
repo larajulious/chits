@@ -220,7 +220,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
       visible={visible}
       transparent
       animationType="slide"
-      onRequestClose={() => stage === 'templates' ? libraryRef.current?.back() : close()}
+      onRequestClose={() => { if (inputRef.current?.dismissActivePanel()) return; if (stage === 'templates') libraryRef.current?.back(); else close(); }}
       onShow={() => { if (initialBlocks) requestAnimationFrame(() => inputRef.current?.focus()); }}
     >
       <SafeAreaProvider>

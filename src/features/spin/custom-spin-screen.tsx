@@ -1,6 +1,7 @@
+import { NavigationMenuButton } from '@/components/navigation/navigation-menu-button';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Animated, AppState, Keyboard, type ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useAudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
@@ -136,7 +137,7 @@ export function CustomSpinScreen({ modeAction, modeNotice, onBusyChange }: { mod
   const disabled = busy || loading || !items.length;
   const actions = result ? <SpinActions primary={{ label: tr('spin.again'), disabled: busy, onPress: spin }} secondary={[{ label: tr('spin.custom.items'), disabled: busy, onPress: () => { setResult(null); manage(); } }]} animate={revealId === result.id && accessibleLayout} stacked={accessibleLayout} /> : null;
   return <Screen edges={['top','left','right']} style={{ backgroundColor: desk.desk }}>
-    <AppHeader actionWidth={100} title={tr('spin.title')} subtitle={tr('spin.mode.custom')} leading={<IconButton label={tr('search.goBack')} disabled={busy} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} trailing={<View style={[styles.headerActions,rowStyle]}>{modeAction}<IconButton label={tr('spin.custom.items')} disabled={busy} onPress={manage}><HeaderIcon name="create-outline" size={22} /></IconButton></View>} />
+    <AppHeader actionWidth={100} title={tr('spin.title')} subtitle={tr('spin.mode.custom')} leading={<NavigationMenuButton disabled={busy} />} trailing={<View style={[styles.headerActions,rowStyle]}>{modeAction}<IconButton label={tr('spin.custom.items')} disabled={busy} onPress={manage}><HeaderIcon name="create-outline" size={22} /></IconButton></View>} />
     <SpinStage scrollRef={scroll} title={tr(result && !spinning ? 'spin.mascot.result' : empty ? 'spin.custom.empty' : 'spin.hero.title')} body={tr(result && !spinning ? 'spin.hero.resultBody' : 'spin.custom.help')} moment={result ? 'result' : empty ? 'empty' : 'idle'} spinning={spinning} landing={landing.count} repeat={landing.repeat} celebrate={landing.celebrate} entrance={entrance} footer={!accessibleLayout ? actions : null} footerFresh={!!result && revealId === result.id}>
       {modeNotice}
       {error && !editing ? <AppText accessibilityRole="alert" weight="600" style={[styles.deskText,{ color: desk.danger }]}>{tr('spin.error')}</AppText> : null}

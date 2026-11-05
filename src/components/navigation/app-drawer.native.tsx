@@ -21,7 +21,7 @@ import { useTheme } from '@/components/theme-provider';
 import { DeskDots, PAPER_INK, PAPER_WHITE, PAPER_YELLOW, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
-import { SegmentedControl, Toast } from '@/components/ui/primitives';
+import { Toast } from '@/components/ui/primitives';
 import { DrawerHero } from './drawer-hero';
 import { APP_STYLE_NAMES, APP_STYLES, mix, type AppStyle } from '@/constants/style-tokens';
 import { spacing } from '@/constants/theme';
@@ -50,8 +50,6 @@ type ContextItem = {
 };
 type IconName = ComponentProps<typeof Ionicons>['name'];
 type Destination = { label: string; path: '/' | '/spaces/pick' | '/attachments' | '/calendar' | '/archive' | '/settings' | '/onboarding' | '/revisit' | '/focus' | '/spin'; icon: IconName };
-
-const styleOptions = () => APP_STYLES.map((key: AppStyle) => ({ key, label: APP_STYLE_NAMES[key], accessibilityLabel: tr("settings.valueStyle", { value1: APP_STYLE_NAMES[key] }) }));
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
 // Main destinations live in the side panel; Chat remains a floating button.
@@ -88,6 +86,11 @@ function useDrawerSurfaces() {
   return welcomeSurfaces(scheme, desk, { white: PAPER_WHITE, ink: PAPER_INK, yellow: PAPER_YELLOW });
 }
 
+const DOCK_PADDING = 4;
+const DOCK_ICON_SIZE = 21;
+// A cell's corners follow the dock's, so the two curves stay parallel.
+const dockCellRadius = (dockRadius: number) => Math.max(dockRadius - DOCK_PADDING, 0);
+
 /** A row's icon on a small rounded tile, as in the Boards list. */
 function DrawerIcon({ name, color, fill }: { name: IconName; color: string; fill: string }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
@@ -101,7 +104,7 @@ function DrawerIcon({ name, color, fill }: { name: IconName; color: string; fill
   );
 }
 
-function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'note' }: { destination: Destination; pathname: string; close: () => void; badge?: number; badgeNoun?: 'note' | 'reminder' }) {
+function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'note', iconOnly = false }: { destination: Destination; pathname: string; close: () => void; badge?: number; badgeNoun?: 'note' | 'reminder'; iconOnly?: boolean }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   const { rowStyle } = useDirection();
@@ -122,34 +125,38 @@ function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'n
         router.navigate(destination.path);
       }}
       style={({ pressed }) => [
-        styles.item, rowStyle,
-        { borderRadius: styleTokens.button.radius },
+        iconOnly ? styles.dockCell : [styles.item, rowStyle],
+        { borderRadius: iconOnly ? dockCellRadius(styleTokens.button.radius) : styleTokens.button.radius },
         active && { backgroundColor: tokens.accent, boxShadow: `0px 3px 8px ${desk.shadow}` },
         pressed && styles.pressed,
       ]}>
-      <DrawerIcon name={destination.icon} color={ink} fill={active ? mix(tokens.accent, PAPER_WHITE, 0.55) : surfaces.control} />
-      <AppText numberOfLines={1} family={active ? fonts.display : fonts.text} style={[styles.itemText, { color: ink }]}>{destination.label}</AppText>
+      {iconOnly ? <Icon name={destination.icon} size={DOCK_ICON_SIZE} color={ink} /> : <>
+        <DrawerIcon name={destination.icon} color={ink} fill={active ? mix(tokens.accent, PAPER_WHITE, 0.55) : surfaces.control} />
+        <AppText numberOfLines={1} family={active ? fonts.display : fonts.text} style={[styles.itemText, { color: ink }]}>{destination.label}</AppText>
+      </>}
       {/* The same small paper tag as a section's count; the number is in the row's label. */}
       {badge > 0 ? <View style={[styles.badge, { boxShadow: `0px 2px 4px ${desk.shadow}` }]}><AppText weight="700" style={styles.badgeText}>{badge}</AppText></View> : null}
     </Pressable>
   );
 }
 
-// The Style setting (same as Settings → Appearance → Style) as one of the
-// panel's rows: icon and label like the rest, a compact switch at the end.
-function StyleRow({ value, onChange }: { value: AppStyle; onChange: (next: AppStyle) => void }) {
+// The Style setting (same as Settings → Appearance → Style) as a footer icon:
+// each tap moves to the next style, and the panel restyles in place.
+function StyleButton({ value, onPress }: { value: AppStyle; onPress: () => void }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const { rowStyle } = useDirection();
-  const fonts = useWelcomeFonts();
+  const { styleTokens } = useTheme();
   const surfaces = useDrawerSurfaces();
   return (
-    <View accessibilityRole="radiogroup" accessibilityLabel={tr("settings.style")} style={[styles.item, rowStyle]}>
-      <DrawerIcon name="color-palette-outline" color={surfaces.ink} fill={surfaces.control} />
-      <AppText numberOfLines={1} family={fonts.text} style={[styles.itemText, { color: surfaces.ink }]}>{tr("settings.style")}</AppText>
-      <View style={styles.styleSwitch}><SegmentedControl options={styleOptions()} value={value} onChange={onChange} /></View>
-    </View>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={tr("settings.style")}
+      accessibilityValue={{ text: APP_STYLE_NAMES[value] }}
+      onPress={onPress}
+      style={({ pressed }) => [styles.dockCell, { borderRadius: dockCellRadius(styleTokens.button.radius) }, pressed && styles.pressed]}>
+      <Icon name="color-palette-outline" size={DOCK_ICON_SIZE} color={surfaces.ink} />
+    </Pressable>
   );
 }
 
@@ -271,7 +278,8 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   const database = useSQLiteContext();
   const repository = useMemo(() => createBoardRepository(database), [database]);
   const pathname = usePathname();
-  const { style, setStyle } = useTheme();
+  const { style, setStyle, styleTokens } = useTheme();
+  const { rowStyle } = useDirection();
   const desk = useDesk();
   const surfaces = useDrawerSurfaces();
   const insets = useSafeAreaInsets();
@@ -329,10 +337,13 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 1800); return () => clearTimeout(timer); }, [toast]);
 
   // Same setting as Settings → Appearance → Style; the drawer restyles in place.
-  const changeStyle = useCallback((next: AppStyle) => {
-    if (next === style) return;
+  // The icon doesn't show which style is on, so a toast names the new one.
+  const nextStyle = useCallback(() => {
+    const next = APP_STYLES[(APP_STYLES.indexOf(style) + 1) % APP_STYLES.length];
     void Haptics.selectionAsync();
-    setStyle(next).catch(() => setToast(tr("appdrawer.styleCouldNotBeSaved")));
+    setStyle(next)
+      .then(() => setToast(tr("settings.valueStyle", { value1: APP_STYLE_NAMES[next] })))
+      .catch(() => setToast(tr("appdrawer.styleCouldNotBeSaved")));
   }, [setStyle, style]);
 
   // Immediately reversible (pin it again elsewhere), so no confirmation — just an
@@ -367,11 +378,14 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
           <RecentSection items={recentUnpinned.slice(0, 5)} close={close} />
         </ScrollView>
         {/* Settings is app chrome, not a place your notes live: it stays at the
-            foot of the panel instead of sitting in the list of destinations. */}
-        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.xs), backgroundColor: surfaces.paper, boxShadow: `0px -3px 8px ${desk.shadow}` }]}>
-          <StyleRow value={style} onChange={changeStyle} />
-          <NavigationRow destination={gettingStartedDestination} pathname={pathname} close={close} />
-          <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
+            foot of the panel, as one compact dock lined up with the rows' icons,
+            instead of sitting in the list of destinations. */}
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.sm), backgroundColor: surfaces.paper, borderTopColor: surfaces.control }]}>
+          <View style={[styles.dock, rowStyle, { backgroundColor: surfaces.control, borderRadius: styleTokens.button.radius }]}>
+            <StyleButton value={style} onPress={nextStyle} />
+            <NavigationRow destination={gettingStartedDestination} pathname={pathname} close={close} iconOnly />
+            <NavigationRow destination={settingsDestination} pathname={pathname} close={close} iconOnly />
+          </View>
         </View>
       </View>
       <Toast message={toast} />
@@ -458,8 +472,9 @@ const styles = StyleSheet.create({
   iconTile: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   badge: { minWidth: 26, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 2, alignItems: 'center', backgroundColor: PAPER_WHITE, transform: [{ rotate: '3deg' }] },
   badgeText: { color: PAPER_INK, fontSize: 12, lineHeight: 17, fontVariant: ['tabular-nums'] },
-  footer: { paddingTop: spacing.xs, paddingHorizontal: spacing.xs, gap: 2 },
-  styleSwitch: { width: 148 },
+  footer: { paddingTop: spacing.sm, paddingHorizontal: spacing.md, borderTopWidth: StyleSheet.hairlineWidth },
+  dock: { padding: DOCK_PADDING, gap: DOCK_PADDING },
+  dockCell: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center' },
   section: { paddingTop: spacing.sm, gap: 2 },
   sectionHeader: { minHeight: 36, justifyContent: 'center', paddingHorizontal: spacing.xs },
   sectionLabel: { fontSize: 18, lineHeight: 24 },

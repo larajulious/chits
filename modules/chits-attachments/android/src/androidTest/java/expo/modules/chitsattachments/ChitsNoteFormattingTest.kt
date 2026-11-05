@@ -110,4 +110,20 @@ class ChitsNoteFormattingTest {
       if (previous != null) clipboard.setPrimaryClip(previous) else clipboard.clearPrimaryClip()
     }
   }
+
+  @Test fun keyboardTransitionsCancelStaleShowsWithoutChangingSelectionOrText() = withInput { input, _ ->
+    val keyboard = ChitsNoteKeyboard()
+    input.setText("textA\ntextB")
+    input.setSelection(6, 11)
+    assertTrue(keyboard.show(input, 1))
+    keyboard.cancel(input, 2)
+    assertFalse(input.showSoftInputOnFocus)
+    assertFalse(keyboard.show(input, 1))
+    assertTrue(keyboard.show(input, 3))
+    assertTrue(input.showSoftInputOnFocus)
+    assertEquals("textA\ntextB", input.text.toString())
+    assertEquals(6, input.selectionStart)
+    assertEquals(11, input.selectionEnd)
+    keyboard.clear()
+  }
 }

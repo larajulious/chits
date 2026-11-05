@@ -6,7 +6,7 @@ import { contentTextStyle, firstStrongDirection, languageDirection, needsSystemF
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode, type Ref, type RefObject } from 'react';
-import { ActivityIndicator, Keyboard, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
+import { ActivityIndicator, BackHandler, Keyboard, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ImagePlusGlyph from 'lucide-react-native/icons/image-plus';
@@ -18,7 +18,8 @@ import { createNoteEditHistory } from '@/services/note-edit-history';
 import { backspaceNoteBlock, editNoteListItem, toggleNoteList, toggleNoteChecklist } from '@/services/note-lists';
 
 import { bindNativeImagePaste, subscribeNativeImagePaste, subscribeNativeBoundaryBackspace } from '@/services/native-image-paste';
-import { nativeNoteFormattingAvailable, syncNativeNoteFormatting, detachNativeNoteFormatting } from '@/services/native-note-formatting';
+import { nativeNoteFormattingAvailable, syncNativeNoteFormatting, detachNativeNoteFormatting, showNativeNoteKeyboard, cancelNativeNoteKeyboard } from '@/services/native-note-formatting';
+import { createNoteEditorPanels, type NoteEditorPanels, type NoteEditorPanelState } from '@/services/note-editor-panels';
 import { pickAndStageMedia, type AttachmentDraft } from '@/services/attachment-import';
 import { NoteImage } from '@/components/notes/note-image';
 import { useDesk } from '@/components/desk/paper-desk';
@@ -38,7 +39,7 @@ const List = ListGlyph as ToolbarGlyph;
 const ListOrdered = ListOrderedGlyph as ToolbarGlyph;
 const SquareCheck = SquareCheckGlyph as ToolbarGlyph;
 
-export type NoteBlocksEditorHandle = { focus: () => void; blur: () => void; setKeyboardSuppressed: (suppressed: boolean) => void };
+export type NoteBlocksEditorHandle = { focus: () => void; blur: () => void; setKeyboardSuppressed: (suppressed: boolean) => void; panels: NoteEditorPanels; dismissActivePanel: () => boolean };
 
 /** Deletes images pasted in this session but never saved — call when a draft is discarded. */
 export function discardPastedImages(blocks: NoteDraftBlock[]) {
@@ -212,6 +213,11 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
   const locale = useLocale();
   const { tokens: theme } = useTheme();
   const inputs = useRef(new Map<string, TextInput>());
+  const titleInput = useRef<TextInput>(null);
+  const activeInput = useRef<'title' | 'body'>('body');
+  const resumePending = useRef(false);
+  const touchReturnRequested = useRef(false);
+  const [keyboardRequest, setKeyboardRequest] = useState(0);
   const liveBlocks = useRef(blocks);
   const [history] = useState(() => createNoteEditHistory());
   useLayoutEffect(() => {
@@ -276,17 +282,53 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
     return { key: block.key, start: Math.min(selection?.start ?? block.text.length, block.text.length), end: Math.min(selection?.end ?? block.text.length, block.text.length) };
   }, []);
   const suppressKeyboard = useCallback((suppressed: boolean) => {
+    if (suppressed) resumePending.current = false;
     const cursor = suppressed ? currentCursor() : null;
     keyboardSuppressedRef.current = suppressed;
     formattingCursor.current = cursor;
     setKeyboardSuppressed(suppressed);
   }, [currentCursor]);
+  const hideKeyboard = useCallback(() => {
+    resumePending.current = false;
+    for (const input of inputs.current.values()) cancelNativeNoteKeyboard(input);
+    if (titleInput.current) cancelNativeNoteKeyboard(titleInput.current);
+    Keyboard.dismiss();
+  }, []);
   const releaseRequestedSelection = useCallback(() => {
     formattingCursor.current = null;
     pendingFocus.current = null;
     pendingScroll.current = null;
     setFocusTarget(null);
   }, []);
+  const resumeKeyboard = useCallback(() => {
+    const held = formattingCursor.current;
+    suppressKeyboard(false);
+    if (held && activeInput.current === 'body') scheduleFocus(held, false);
+    resumePending.current = true;
+    setKeyboardRequest(value => value + 1);
+  }, [scheduleFocus, suppressKeyboard]);
+  const [panels] = useState(() => createNoteEditorPanels(undefined, Keyboard.isVisible()));
+  useLayoutEffect(() => { panels.configure({ suppressKeyboard, hideKeyboard, resumeKeyboard }); }, [hideKeyboard, panels, resumeKeyboard, suppressKeyboard]);
+  useEffect(() => {
+    panels.activate();
+    const shown = Keyboard.addListener('keyboardDidShow', () => {
+      if (titleInput.current?.isFocused() || [...inputs.current.values()].some(input => input.isFocused())) panels.keyboardChanged(true);
+    });
+    const hidden = Keyboard.addListener('keyboardDidHide', () => panels.keyboardChanged(false));
+    return () => { shown.remove(); hidden.remove(); panels.dispose(); };
+  }, [panels]);
+  const touchBody = useCallback(() => {
+    activeInput.current = 'body';
+    touchReturnRequested.current = true;
+    headingContinuation.current = null;
+    releaseRequestedSelection();
+  }, [releaseRequestedSelection]);
+  const finishTouch = useCallback(() => {
+    if (!touchReturnRequested.current) return;
+    touchReturnRequested.current = false;
+    panels.requestTyping();
+  }, [panels]);
+  const cancelTouch = useCallback(() => { touchReturnRequested.current = false; }, []);
   const commit = useCallback((next: NoteDraftBlock[], cursor?: NoteCursor, titleEdit = false) => {
     if (next === liveBlocks.current) { if (cursor) scheduleFocus(cursor); return; }
     const title = noteTitle(liveBlocks.current);
@@ -329,9 +371,11 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
     scheduleFocus(cursor, false);
   }, [commit, currentCursor, editable, notifyFormat, scheduleFocus]);
   useImperativeHandle(ref, () => ({
-    focus: () => focusBlock(lastFocused.current && inputs.current.has(lastFocused.current) ? lastFocused.current : lastTextKey),
+    focus: () => { activeInput.current = 'body'; panels.requestTyping(true); },
     blur: () => { for (const input of inputs.current.values()) input.blur(); },
     setKeyboardSuppressed: suppressKeyboard,
+    panels,
+    dismissActivePanel: panels.dismiss,
     cursor: () => {
       if (formattingCursor.current) return formattingCursor.current;
       const key = lastFocused.current;
@@ -356,7 +400,7 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
       listener(block?.type === 'text' ? block.list?.kind ?? null : null);
       return () => { formatListeners.current.delete(listener); };
     },
-  }), [blocks, commit, currentCursor, editable, focusBlock, formatAction, history, lastTextKey, listAction, notifyFormat, scheduleFocus, suppressKeyboard, travel]);
+  }), [blocks, commit, currentCursor, editable, formatAction, history, listAction, notifyFormat, panels, scheduleFocus, suppressKeyboard, travel]);
 
   // Restore explicit formatting/structural selections after native refs commit. Ordinary
   // typing never controls selection or schedules a later cursor overwrite.
@@ -372,6 +416,13 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
     // BlockInput receives a transient selection prop. RN 0.86 Fabric applies
     // selection through TextInput commands, not a native view selection prop.
   }, [blocks, focusBlock, focusRequest, editable, keyboardSuppressed]);
+  useLayoutEffect(() => {
+    if (!editable || keyboardSuppressed || !resumePending.current) return;
+    resumePending.current = false;
+    const key = lastFocused.current && inputs.current.has(lastFocused.current) ? lastFocused.current : lastTextKey;
+    const input = activeInput.current === 'title' ? titleInput.current : key ? inputs.current.get(key) : null;
+    if (input) showNativeNoteKeyboard(input);
+  }, [editable, keyboardRequest, keyboardSuppressed, lastTextKey]);
   const resetEmptyScroll = useCallback(() => {
     if (!isEmptyNoteDraft(liveBlocks.current)) return;
     // An old row coordinate must never scroll a newly cleared document. Native
@@ -396,6 +447,7 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
 
   const register = useCallback((key: string, input: TextInput | null) => { if (input) inputs.current.set(key, input); else inputs.current.delete(key); }, []);
   const focused = useCallback((key: string) => {
+    activeInput.current = 'body';
     if (blurTimer.current !== null) clearTimeout(blurTimer.current);
     blurTimer.current = null;
     lastFocused.current = key; notifyFormat(key); onFocus?.();
@@ -466,7 +518,9 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
   const textInput = (block: Extract<NoteDraftBlock, { type: 'text' }>, single: boolean) => <BlockInput
     key={block.key}
     block={block}
-    onTouchBlock={() => { headingContinuation.current = null; releaseRequestedSelection(); }}
+    onTouchBlock={touchBody}
+    onTouchEndBlock={finishTouch}
+    onTouchCancelBlock={cancelTouch}
     onKeyBlock={releaseRequestedSelection}
     requestedSelection={focusTarget?.key === block.key ? { start: focusTarget.start, end: focusTarget.end } : undefined}
     register={register}
@@ -501,7 +555,7 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
   const leadingImageSlot = blocks[0]?.type === 'text' && blocks[0].text === '' && !blocks[0].list && blocks[1]?.type === 'image';
   const imageNumbers = new Map(blocks.filter((block) => block.type === 'image').map((block, index) => [block.key, index + 1]));
   return <ScrollView ref={scroll} style={richLayout ? blockContainerStyle : singleContainer} scrollEnabled={richLayout || showTitle} contentContainerStyle={[styles.scrollContent, fillPlainViewport && styles.fillViewport, contentContainerStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="none" onLayout={resetEmptyScroll} onContentSizeChange={resetEmptyScroll}>
-    {showTitle ? <TextInput showSoftInputOnFocus={!keyboardSuppressed} accessibilityLabel={formattingText("titleLabel")} placeholder={formattingText("titlePlaceholder")} value={noteTitle(blocks)} onChangeText={title => commit(withNoteTitle(liveBlocks.current, title), undefined, true)} editable={editable} maxLength={200} placeholderTextColor={theme.textMuted} style={{ color: theme.textPrimary, fontSize: 20, fontWeight: '700', flexShrink: 0, minHeight: 48, paddingHorizontal: richLayout ? 0 : singleLayout?.paddingHorizontal ?? 0, paddingVertical: spacing.xs, marginBottom: spacing.xs, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.borderSubtle }} /> : null}
+    {showTitle ? <TextInput ref={titleInput} onTouchStart={() => { activeInput.current = 'title'; touchReturnRequested.current = true; releaseRequestedSelection(); }} onTouchEnd={finishTouch} onTouchCancel={cancelTouch} onFocus={() => { activeInput.current = 'title'; }} showSoftInputOnFocus={!keyboardSuppressed} accessibilityLabel={formattingText("titleLabel")} placeholder={formattingText("titlePlaceholder")} value={noteTitle(blocks)} onChangeText={title => commit(withNoteTitle(liveBlocks.current, title), undefined, true)} editable={editable} maxLength={200} placeholderTextColor={theme.textMuted} style={{ color: theme.textPrimary, fontSize: 20, fontWeight: '700', flexShrink: 0, minHeight: 48, paddingHorizontal: richLayout ? 0 : singleLayout?.paddingHorizontal ?? 0, paddingVertical: spacing.xs, marginBottom: spacing.xs, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.borderSubtle }} /> : null}
     <View style={[styles.blocks, !richLayout && styles.singleBlocks, fillPlainViewport && styles.fillViewport]} onLayout={({ nativeEvent }) => { const next = Math.floor(nativeEvent.layout.width); setWidth((current) => current === next ? current : next); }}>
     {blocks.map((block, blockIndex) => {
       if (blockIndex === 0 && leadingImageSlot) return null;
@@ -543,6 +597,8 @@ type BlockInputProps = {
   keyboardSuppressed?: boolean;
   block: Extract<NoteDraftBlock, { type: 'text' }>;
   onTouchBlock?: () => void;
+  onTouchEndBlock?: () => void;
+  onTouchCancelBlock?: () => void;
   onKeyBlock?: () => void;
   requestedSelection?: { start: number; end: number };
   register: (key: string, input: TextInput | null) => void;
@@ -562,7 +618,7 @@ type BlockInputProps = {
 
 // One run of the note's words. Alone (no images) it scrolls itself like any
 // note field; between images it grows with its text inside the editor's column.
-function BlockInput({ block, onTouchBlock, onKeyBlock, requestedSelection, register, onFocusBlock, onSelectBlock, onChangeBlock, onBoundaryBackspace, onBlurBlock, extra, accessibilityLabel, placeholder, single, maxLength, editable, style, keyboardSuppressed = false }: BlockInputProps) {
+function BlockInput({ block, onTouchBlock, onTouchEndBlock, onTouchCancelBlock, onKeyBlock, requestedSelection, register, onFocusBlock, onSelectBlock, onChangeBlock, onBoundaryBackspace, onBlurBlock, extra, accessibilityLabel, placeholder, single, maxLength, editable, style, keyboardSuppressed = false }: BlockInputProps) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   const locale = useLocale();
@@ -576,7 +632,7 @@ function BlockInput({ block, onTouchBlock, onKeyBlock, requestedSelection, regis
   const { key } = block;
   const inputRef = useRef<TextInput | null>(null);
   const registerInput = useCallback((input: TextInput | null) => {
-    if (inputRef.current && inputRef.current !== input) detachNativeNoteFormatting(inputRef.current);
+    if (inputRef.current && inputRef.current !== input) { cancelNativeNoteKeyboard(inputRef.current); detachNativeNoteFormatting(inputRef.current); }
     inputRef.current = input;
     register(key, input);
   }, [key, register]);
@@ -616,6 +672,8 @@ function BlockInput({ block, onTouchBlock, onKeyBlock, requestedSelection, regis
     selection={requestedSelection}
     showSoftInputOnFocus={!keyboardSuppressed}
     onTouchStart={onTouchBlock}
+    onTouchEnd={onTouchEndBlock}
+    onTouchCancel={onTouchCancelBlock}
     // Android owns one ordinary controlled text buffer. Native spans style it
     // without replacing characters, selection or composing text. Other runtimes
     // keep the attributed fallback; a runtime never switches modes per mark.
@@ -702,35 +760,40 @@ export function NoteToolbar({ editor, images, disabled, safeBottom = false, chil
   const desk = useDesk();
   const insets = useSafeAreaInsets();
   const keyboard = useKeyboardInset();
-  const [formatting, setFormatting] = useState(false);
-  const [keyboardHidden, setKeyboardHidden] = useState(() => !Keyboard.isVisible());
-  useEffect(() => {
-    const shown = Keyboard.addListener('keyboardDidShow', () => setKeyboardHidden(false));
-    const hidden = Keyboard.addListener('keyboardDidHide', () => setKeyboardHidden(true));
-    return () => { shown.remove(); hidden.remove(); };
-  }, []);
+  const [panel, setPanel] = useState<NoteEditorPanelState>({ mode: 'typing', sheet: 'closed', keyboardVisible: false, keyboardClosing: false, keyboardOpening: false, resumePending: false });
   const formattingSelection = useRef<NoteCursor>(null);
   const formatDisabled = Boolean(disabled || images?.pasting);
-  const formatRequested = formatting && !formatDisabled;
-  const sheetOpen = formatRequested && keyboardHidden;
-  useLayoutEffect(() => {
+  const sheetOpen = panel.sheet === 'open' && !formatDisabled;
+  useEffect(() => {
     const control = editor.current;
-    control?.setKeyboardSuppressed(formatRequested);
-    if (formatRequested) {
-      // Retain the range before dismissing native focus. Formatting restores
-      // selection without reopening the keyboard, including new list inputs.
-      if (formattingSelection.current) control?.focusAt(formattingSelection.current, false);
-      // Let the keyboard finish changing the viewport before moving controls
-      // into it. A user can then tap a swatch without it moving mid-press.
-      Keyboard.dismiss();
+    const unsubscribe = control?.panels.subscribe(setPanel);
+    return () => { unsubscribe?.(); control?.panels.reset(); };
+  }, [editor]);
+  useEffect(() => {
+    if (formatDisabled && (panel.mode === 'formatting' || panel.sheet !== 'closed')) editor.current?.panels.dismiss();
+  }, [editor, formatDisabled, panel.mode, panel.sheet]);
+  useEffect(() => {
+    if (panel.mode !== 'formatting' && panel.sheet === 'closed' && !panel.keyboardClosing && !panel.keyboardOpening) return;
+    const handler = BackHandler.addEventListener('hardwareBackPress', () => editor.current?.dismissActivePanel() ?? false);
+    return () => handler.remove();
+  }, [editor, panel.keyboardClosing, panel.keyboardOpening, panel.mode, panel.sheet]);
+  const returnToTyping = () => { editor.current?.panels.requestTyping(); };
+  const sheetClosed = () => { editor.current?.panels.sheetClosed(); };
+  const toggleFormatting = () => {
+    const control = editor.current;
+    if (!control) return;
+    if (control.panels.getState().mode === 'formatting') control.panels.requestTyping();
+    else {
+      control.panels.keyboardChanged(Keyboard.isVisible());
+      control.panels.openFormatting();
+      if (formattingSelection.current) control.focusAt(formattingSelection.current, false);
     }
-    return () => control?.setKeyboardSuppressed(false);
-  }, [editor, formatRequested]);
+  };
   const { tokens: theme } = useTheme();
   return <View style={[toolbarStyles.bar, { borderTopColor: desk.rule, paddingBottom: safeBottom && !keyboard ? insets.bottom : 0 }]}>
-    <NoteFormattingSheet editor={editor} open={sheetOpen} onClose={() => setFormatting(false)} />
+    <NoteFormattingSheet editor={editor} open={sheetOpen} closing={panel.sheet === 'closing'} onClose={returnToTyping} onClosed={sheetClosed} />
     <ScrollView horizontal keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false} contentContainerStyle={toolbarStyles.row}>
-      <Pressable accessibilityRole="button" accessibilityLabel={formattingText("open")} accessibilityState={{ expanded: sheetOpen, disabled: formatDisabled }} disabled={formatDisabled} onPressIn={() => { formattingSelection.current = editor.current?.cursor() ?? null; }} onPress={() => { setKeyboardHidden(!Keyboard.isVisible()); setFormatting(value => !value); }} style={[styles.formattingAction, sheetOpen && { backgroundColor: theme.accentSoft }]}><AppText style={{ fontSize: 21, fontWeight: '700', color: theme.textPrimary }}>Aa</AppText></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={formattingText("open")} accessibilityState={{ expanded: sheetOpen, disabled: formatDisabled }} disabled={formatDisabled} onPressIn={() => { formattingSelection.current = editor.current?.cursor() ?? null; }} onPress={toggleFormatting} style={[styles.formattingAction, sheetOpen && { backgroundColor: theme.accentSoft }]}><AppText style={{ fontSize: 21, fontWeight: '700', color: theme.textPrimary }}>Aa</AppText></Pressable>
       {images ? <InsertImageButton disabled={disabled} busy={images.pasting} onPress={() => void images.pick()} /> : null}
       <NoteListButtons editor={editor} disabled={disabled || images?.pasting} />
       {images ? <PasteImageButton visible={images.canPaste} pasting={images.pasting && !images.picking} disabled={disabled || images.picking} onPress={() => void images.paste()} /> : null}

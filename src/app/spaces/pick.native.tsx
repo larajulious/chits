@@ -15,7 +15,8 @@ import { SpaceSurface } from '@/components/spaces/space-surface';
 import { StickyPaper } from '@/components/spaces/sticky-note';
 import { useTheme } from '@/components/theme-provider';
 import { AppText } from '@/components/ui/app-text';
-import { AppHeader, HeaderIcon, Icon, IconButton, Screen, Toast } from '@/components/ui/primitives';
+import { AppHeader, Icon, Screen, Toast } from '@/components/ui/primitives';
+import { NavigationMenuButton } from '@/components/navigation/navigation-menu-button';
 import { DEFAULT_SPACE_ID, SPACE_LIST, STICKY_COLORS, STICKY_SIZE, type SpaceDefinition, type SpaceId } from '@/constants/spaces';
 import { createMessageRepository, createSpaceRepository } from '@/db/repositories';
 import { useWelcomeFonts } from '@/features/onboarding/welcome/welcome-fonts';
@@ -141,7 +142,7 @@ export default function PickSpaceScreen() {
   const tile = (item: SpaceDefinition, index: number) => <SpaceTile key={item.id} space={item} tilt={TILTS[index]} selected={item.id === selected} count={counts[item.id] ?? 0} grid={grid} paper={surfaces.card} ink={surfaces.ink} inkMuted={surfaces.inkMuted} onPick={pick} />;
 
   return <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: desk.desk }}>
-    <AppHeader title={tr("pick.spaces")} leading={<IconButton label={tr("search.goBack")} onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
+    <AppHeader title={tr("pick.spaces")} leading={<NavigationMenuButton />} />
     <PickStage
       title={saved ? tr("pick.whereTo") : tr("pick.pickASpotForYourNotes")}
       body={tr("pick.stickNotesOnItAndMoveThemAround")}

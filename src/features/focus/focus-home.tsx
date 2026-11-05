@@ -1,3 +1,4 @@
+import { NavigationMenuButton } from '@/components/navigation/navigation-menu-button';
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
@@ -5,7 +6,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 
 import { PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PaperCard, PaperTab, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { MascotStage } from '@/components/mascot/mascot-stage';
-import { AppHeader, HeaderIcon, Icon, IconButton, Screen } from '@/components/ui/primitives';
+import { AppHeader, Icon, Screen } from '@/components/ui/primitives';
 import { SearchField } from '@/components/ui/search-field';
 import { createFocusRepository } from '@/db/focus-repository';
 import { listNoteCandidates } from '@/db/repositories';
@@ -60,7 +61,7 @@ export function FocusHome() {
     <PaperTab tilt={0.4} icon="settings-outline" label={tr('focus.settings')} accessibilityRole="button" containerStyle={styles.flex} onPress={() => router.push('/focus-settings')} />
   </View>;
   return <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: desk.desk }}>
-    <AppHeader actionWidth={100} title={tr('focus.title')} leading={<IconButton label={tr('search.goBack')} onPress={() => router.canGoBack() ? router.back() : router.replace('/')}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
+    <AppHeader actionWidth={100} title={tr('focus.title')} leading={<NavigationMenuButton />} />
     {checked ? <MascotStage rig={rig} title={tr('focus.home.title')} body={tr('focus.home.body')} mascot={companion} hint={tr('focus.hero.hint')} onTap={rig.tap} line={null} footer={footer}>
       <SearchField accessibilityLabel={tr('calendarnotepicker.searchNotes')} value={query} onChangeText={setQuery} placeholder={tr('calendarnotepicker.searchNotesAndCards')} style={styles.search} />
       {notes?.map((note) => <PaperCard key={`${note.kind}:${note.id}`} paper={PAPER_WHITE} accessibilityRole="button" accessibilityLabel={note.context ? `${note.title}, ${note.context}` : note.title} onPress={() => open(note)} style={styles.note}>

@@ -18,7 +18,7 @@ import { tr } from '@/localization/runtime';
 import { NotesCanvas } from './notes-canvas.native';
 
 type BoardProps = Pick<ComponentProps<typeof NotesCanvas>, 'notes' | 'shownKeys' | 'focus' | 'onFocusDone' | 'onToast' | 'onToggleChecklist'>;
-type Props = Omit<ComponentProps<typeof CardsCollection>, 'header' | 'estimatedHeaderHeight' | 'emptyState' | 'backgroundColor' | 'footer'> & {
+type Props = Omit<ComponentProps<typeof CardsCollection>, 'header' | 'estimatedHeaderHeight' | 'emptyState' | 'backgroundColor' | 'filterBackgroundColor' | 'footer'> & {
   empty: boolean;
   onWrite: () => void;
   footer?: ReactNode;
@@ -44,7 +44,7 @@ export function NotesListing({ empty, onWrite, footer, board, ...collection }: P
 
   if (board) return <View style={styles.flex}>
     <BoardsMascotHero variant="notes" width={width} paper={surfaces.paper} scrollY={scrollY} activity={activity} title={plan.title} body={plan.body} action={<PlanHeroActions cta={plan.cta} onWrite={onWrite} />} />
-    <View style={{ backgroundColor: surfaces.paper }}>
+    <View style={{ backgroundColor: surfaces.control }}>
       <FilterRail value={collection.filter} onChange={collection.onFilter} options={collection.chips.map((chip) => ({ ...chip, accessibilityLabel: tr('cardscollection.filterByValueValueValue', { value1: chip.label, value2: chip.count, value3: chip.count === 1 ? 'card' : 'cards' }) }))} />
     </View>
     <NotesCanvas {...board} filterKey={collection.filter} onOpen={collection.onOpen} onMore={collection.onMore} onToggleSubtask={collection.onToggleSubtask} bottomInset={collection.bottomInset} activity={activity} paper={surfaces.paper} footer={footer} emptyState={emptyState} />
@@ -54,6 +54,7 @@ export function NotesListing({ empty, onWrite, footer, board, ...collection }: P
     {...collection}
     scrollOffset={scrollY}
     backgroundColor={surfaces.paper}
+    filterBackgroundColor={surfaces.control}
     estimatedHeaderHeight={compactHeroLayout(width).height}
     header={<BoardsMascotHero variant="notes" width={width} paper={surfaces.paper} scrollY={scrollY} title={plan.title} body={plan.body} action={<PlanHeroActions cta={plan.cta} onWrite={onWrite} />} />}
     emptyState={emptyState}

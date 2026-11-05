@@ -202,3 +202,44 @@ Physical before/after checks confirm all 19 original message records and all 8
 attachment records are unchanged, with SQLite integrity ok. Both phone QA notes
 and the baseline emulator QA note were removed. The temporary production QA
 route was removed; no original notes were edited during validation.
+
+## Coordinated typing/formatting panels
+
+`note-editor-panels.ts` is the shared coordinator for the note editor and toolbar.
+Aa retains selection, suppresses the input keyboard and waits for keyboardDidHide
+before opening formatting. Applying a format keeps that panel open. Done/Aa and
+completed body/title touch gestures close it, then resume the keyboard only when
+the closing animation finishes. Gesture cancellation leaves the panel alone;
+the content stays still while native text selection handles are being moved.
+Pending typing marks, native selection and the existing text/history engine stay
+in use. No stored document or persistence behavior changes.
+
+Android Back chooses an idle target and cancels pending keyboard requests. Modal
+hosts forward onRequestClose to their editor before exiting, including Chat and
+Add Note/template editing. Native keyboard show/cancel requests are revisioned;
+they use ReactEditText's managed focus path and do not blur or replace selection.
+Only the owner of a focused input handles global keyboard-show events, so a
+background editor cannot dismiss another screen's keyboard. Rapid toggles,
+interrupted animations, unmounting and development effect replay are covered.
+
+Validation for the coordinated panel flow: the rebuilt Android app was installed
+on the connected Samsung phone. Real Edit Note checks verified Done/Aa returns,
+selection of a different section while formatting, pending bold/color marks on
+subsequent typing, title focus, Back and unchanged line separators after save.
+Production Chat and Add Note modal components also passed Back handling, compact
+and fullscreen returns, and long-press selection followed by replacement typing.
+Test automation waits for keyboard animation completion after touch release.
+The eight native checks pass, as do 241 focused note/composer checks, TypeScript
+and focused ESLint. All 19 original message and 8 attachment records were compared
+after cleanup and remained unchanged, with SQLite integrity ok. Both temporary
+panel QA routes and all owned test notes were removed. iOS device interaction
+validation remains pending. Capture: `/tmp/chits-panels-add-fullscreen.png`.
+
+The coordinator also tracks queued keyboard opening, so Back can cancel a return
+to typing before keyboardDidShow. Unmounting an input invalidates native IME work.
+iOS JavaScript export passes; this is separate from iOS device acceptance.
+
+Final broad run: 840 passes out of 841 tests. The remaining failure is the
+pre-existing header-title source assertion (`every header title gets the paper
+tag, and only with a title`), outside the editor changes. Final iOS JavaScript
+export: `/tmp/chits-editor-panels-ios-final`.

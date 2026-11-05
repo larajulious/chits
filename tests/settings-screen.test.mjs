@@ -164,3 +164,13 @@ test('the side panel is the desk over a sheet of paper, one layout for every sty
   assert.doesNotMatch(drawer, /DrawerCard|InCardContext|LabelTape|style === 'classic'/);
   assert.doesNotMatch(drawer + hero, /Mascot/);
 });
+
+test('the side panel footer is one row of labelled icons', () => {
+  const drawer = read('src/components/navigation/app-drawer.native.tsx');
+  assert.match(drawer, /<StyleButton value=\{style\}/);
+  assert.match(drawer, /destination=\{gettingStartedDestination\}[^>]*iconOnly/);
+  assert.match(drawer, /destination=\{settingsDestination\}[^>]*iconOnly/);
+  // With no visible text, the screen reader label is the only name these have.
+  assert.match(drawer, /accessibilityLabel=\{tr\("settings\.style"\)\}/);
+  assert.doesNotMatch(drawer, /SegmentedControl/);
+});

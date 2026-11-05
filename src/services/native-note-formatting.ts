@@ -3,3 +3,5 @@ import type { NoteText } from './note-content';
 export const nativeNoteFormattingAvailable = false;
 export function syncNativeNoteFormatting(_input: TextInput, _block: Pick<NoteText, 'text' | 'spans' | 'heading'>, _baseFamily?: string): void {}
 export function detachNativeNoteFormatting(_input: TextInput): void {}
+export function showNativeNoteKeyboard(input: TextInput): void { input.focus(); }
+export function cancelNativeNoteKeyboard(_input: TextInput): void {}

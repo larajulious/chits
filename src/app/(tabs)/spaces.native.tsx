@@ -29,7 +29,8 @@ import { StickyViewSheet } from '@/components/spaces/sticky-view-sheet';
 import { ReminderSheet } from '@/components/reminders/reminder-sheet';
 import { removeCardReminder, removeMessageReminder, setCardReminder, setMessageReminder } from '@/services/reminders';
 import { useTheme } from '@/components/theme-provider';
-import { HeaderIconButton, HeaderIcon, Toast } from '@/components/ui/primitives';
+import { HeaderIconButton, HeaderIcon, MenuIcon, Toast } from '@/components/ui/primitives';
+import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { DEFAULT_STICKY_COLOR, SPACE_CAPACITY, SPACE_IDS, SPACE_LIST, SPACES, resolveSpaceId, toUnit, type SpaceId, type SpacePaperStyle } from '@/constants/spaces';
 import { DARK_SURFACE, DOCK_ICONS, DOCK_LABELS, noteSeed } from '@/constants/spaces-theme';
 import { createSpaceRepository } from '@/db/repositories';
@@ -61,6 +62,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
   useLocale();
   const database = useSQLiteContext();
   const { tokens: theme, styleTokens, styleColors } = useTheme();
+  const { openDrawer } = useAppDrawer();
   const inkSurface = useInkSurface();
   const ui = useSpaceUI();
   const styles = useSpaceStyles(createStyles);
@@ -341,7 +343,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
         </Pressable>;
       })}
     </View>
-    <RoundButton icon="chevron-back" label={tr("search.goBack")} onPress={() => router.navigate({ pathname: '/', params: { view: 'cards' } })} size={DOCK_HEIGHT} style={[styles.bottomBack, { bottom: dockBottom }]} />
+    <RoundButton icon="menu" label={tr("archive.openNavigation")} onPress={openDrawer} size={DOCK_HEIGHT} style={[styles.bottomBack, { bottom: dockBottom }]} />
     {guideState ? <ChitsGuide text={guideState === 'success' ? tr("spaces.perfectSpot") : relationship ? tr("spaces.dropItAnywhereYouLikeItSStill") : tr("spaces.dropItAnywhereYouLike")} bottom={dockBottom + DOCK_HEIGHT + 12} onClose={() => setGuideState(null)} /> : null}
 
     {viewing && !selected ? <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -389,7 +391,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
 }
 
 /** A round paper button floating over the surface. */
-function RoundButton({ icon, label, onPress, disabled = false, size = 44, style }: { icon: 'chevron-back' | 'share-outline' | 'chatbox-outline'; label: string; onPress: () => void; disabled?: boolean; size?: number; style?: StyleProp<ViewStyle> }) {
+function RoundButton({ icon, label, onPress, disabled = false, size = 44, style }: { icon: 'menu' | 'chevron-back' | 'share-outline' | 'chatbox-outline'; label: string; onPress: () => void; disabled?: boolean; size?: number; style?: StyleProp<ViewStyle> }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -398,7 +400,7 @@ function RoundButton({ icon, label, onPress, disabled = false, size = 44, style 
   const ui = useSpaceUI();
   const styles = useSpaceStyles(createStyles);
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.round, size !== 44 && { width: size, height: size, borderRadius: size / 2 }, inkSurface({ fill: styleColors.controlFill, radius: size === 44 ? styleTokens.header.iconButton.radius : size / 2, edge: styleTokens.header.iconButton.edge }, pressed), style, disabled && styles.disabled, pressed && styles.pressed]}>
-    <Icon name={icon} size={icon === 'chevron-back' ? 24 : 21} color={ui.paper} style={icon === 'chevron-back' ? { marginLeft: -2 } : undefined} />
+    {icon === 'menu' ? <MenuIcon /> : <Icon name={icon} size={icon === 'chevron-back' ? 24 : 21} color={ui.paper} style={icon === 'chevron-back' ? { marginLeft: -2 } : undefined} />}
   </Pressable>;
 }
 

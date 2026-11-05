@@ -35,7 +35,7 @@ export function FullscreenComposer({ blocks, onChangeBlocks, editorRef, onClose,
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  return <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { if (!saving) onClose(); }} onShow={() => editorRef.current?.focus()}>
+  return <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { if (!saving && !editorRef.current?.dismissActivePanel()) onClose(); }} onShow={() => editorRef.current?.focus()}>
     {/* The safe-area insets are this modal's own, so they're read inside it. */}
     <SafeAreaProvider>
       <ComposerPage {...{ blocks, onChangeBlocks, editorRef, onClose, onSaveDraft, onSend, canSave, saving, error, savedText, savedContent, attachmentLabel, images, onReplaceImage }} />

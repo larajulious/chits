@@ -1,3 +1,4 @@
+import { NavigationMenuButton } from '@/components/navigation/navigation-menu-button';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Animated, AppState, ScrollView, StyleSheet, Switch, View, useWindowDimensions } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -370,7 +371,7 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
     <PaperTab paper={challenge ? SPIN_CATEGORY_PAPER.tasks : SPIN_CATEGORY_PAPER.boards} tilt={-1} icon={challenge ? 'checkmark-circle' : 'timer-outline'} label={tr('spin.challenge')} accessibilityRole="switch" accessibilityState={{ checked: challenge, disabled: busy }} disabled={busy} onPress={toggleChallenge} />
   </View>;
   return <Screen edges={['top','left','right']} style={{ backgroundColor: desk.desk }}>
-    <AppHeader actionWidth={100} title={tr('spin.title')} subtitle={tr('spin.subtitle')} leading={<IconButton label={tr('search.goBack')} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} trailing={<View style={[styles.headerActions,rowStyle]}>{modeAction}<IconButton label={tr('spin.preferences')} onPress={() => setAdvanced(true)}><HeaderIcon name="options-outline" size={22} /></IconButton></View>} />
+    <AppHeader actionWidth={100} title={tr('spin.title')} subtitle={tr('spin.subtitle')} leading={<NavigationMenuButton />} trailing={<View style={[styles.headerActions,rowStyle]}>{modeAction}<IconButton label={tr('spin.preferences')} onPress={() => setAdvanced(true)}><HeaderIcon name="options-outline" size={22} /></IconButton></View>} />
     <SpinStage scrollRef={scroll} title={tr(heroTitle)} body={tr(heroBody)} moment={hasResult ? 'result' : empty ? 'empty' : 'idle'} spinning={spinning} landing={landing.count} repeat={landing.repeat} celebrate={preferences.celebrations} entrance={entrance} footer={!accessibleLayout ? actions : null} footerFresh={fresh}>
       {modeNotice}
       {error ? <AppText accessibilityRole="alert" weight="600" style={[styles.deskText,{ color: desk.danger }]}>{error}</AppText> : null}

@@ -1,3 +1,4 @@
+import { NavigationMenuButton } from '@/components/navigation/navigation-menu-button';
 import { countLabel, tr } from '@/localization/runtime';
 import { FocusRevisit } from '@/features/focus/focus-revisit';
 import { useLocale } from '@/localization/provider';
@@ -30,7 +31,9 @@ function ReviewHeader({ title, subtitle, showTitle }: { title: string; subtitle?
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  return <AppHeader title={title} subtitle={subtitle} showTitle={showTitle} leading={<IconButton label={tr("search.goBack")} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />;
+  const params = useLocalSearchParams<{ note?: string; a?: string; b?: string; pick?: string; browse?: string }>();
+  const detail = params.note || params.a || params.b || params.pick || params.browse;
+  return <AppHeader title={title} subtitle={subtitle} showTitle={showTitle} leading={detail ? <IconButton label={tr("search.goBack")} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton> : <NavigationMenuButton />} />;
 }
 
 function RevisitExperience() {

@@ -11,7 +11,7 @@ test('native boundary/paste binding follows mounted input layout and focus, then
   const compiled = ts.transpileModule(component, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const effects = [], operations = [];
   const context = {
-    nativeNoteFormattingAvailable: false, syncNativeNoteFormatting: () => {}, detachNativeNoteFormatting: () => {}, useLayoutEffect: () => {},
+    cancelNativeNoteKeyboard: () => operations.push(['cancel keyboard']), nativeNoteFormattingAvailable: false, syncNativeNoteFormatting: () => {}, detachNativeNoteFormatting: () => {}, useLayoutEffect: () => {},
     exports: {}, noteHeadingStyle: () => undefined, noteTextSpans: block => block.text, contentTextStyle, languageDirection, useLocale: () => 'en', require: () => ({ jsx: (type, props) => ({ type, props }) }),
     useFontStyle: () => ({}), needsSystemFont: () => false, StyleSheet: { flatten: style => Array.isArray(style) ? Object.assign({}, ...style) : style }, useTheme: () => ({ tokens: {} }), useRef: value => ({ current: value }),
     useCallback: callback => callback, useEffect: callback => effects.push(callback),
@@ -40,4 +40,6 @@ test('native boundary/paste binding follows mounted input layout and focus, then
   assert.equal(operations.at(-1)[0], 'detach');
   assert.equal(operations.filter(([kind]) => kind === 'attach').length, 3);
   assert.equal(operations.filter(([kind]) => kind === 'detach').length, 3);
+  element.props.ref(null);
+  assert.equal(operations.at(-1)[0], 'cancel keyboard', 'unmount cancels queued IME work before releasing the native input');
 });

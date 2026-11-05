@@ -49,3 +49,17 @@ test('old native binaries and iOS retain the attributed fallback', () => {
   assert.equal(bridge('android', {}).nativeNoteFormattingAvailable, false);
   assert.equal(bridge('ios', { applyNoteTextFormatting() {}, detachNoteTextFormatting() {} }).nativeNoteFormattingAvailable, false);
 });
+
+test('Android resumes an already-focused input through the IME without blurring its selection', () => {
+  const calls = [];
+  const api = bridge('android', { showNoteKeyboard: (tag, revision) => { calls.push(['show', tag, revision]); return Promise.resolve(true); }, cancelNoteKeyboard: (tag, revision) => { calls.push(['cancel', tag, revision]); return Promise.resolve(); } });
+  api.showNativeNoteKeyboard({ isFocused: () => true, blur: () => assert.fail('must preserve native selection'), focus: () => assert.fail('already focused native input needs the IME command') });
+  assert.equal(calls[0][0], 'show'); assert.equal(calls[0][1], 42);
+  api.cancelNativeNoteKeyboard({});
+  assert.equal(calls[1][0], 'cancel'); assert.ok(calls[1][2] > calls[0][2]);
+});
+test('iOS resumes through its native focus/input-view behavior; old Android binaries have a fallback', () => {
+  const calls = [], input = { isFocused: () => true, blur: () => calls.push('blur'), focus: () => calls.push('focus') };
+  bridge('ios', {}).showNativeNoteKeyboard(input); assert.deepEqual(calls, ['focus']);
+  calls.length = 0; bridge('android', {}).showNativeNoteKeyboard(input); assert.deepEqual(calls, ['blur', 'focus']);
+});

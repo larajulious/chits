@@ -44,6 +44,8 @@ type Props = {
   footer?: ReactNode;
   emptyState?: ReactNode;
   backgroundColor?: string;
+  /** Optional solid surface separating the filters from the workspace hero. */
+  filterBackgroundColor?: string;
 };
 
 // The note being dragged in My order: where its cell sat when it lifted (in
@@ -69,7 +71,7 @@ function SectionHeading({ section }: { section: CardSection }) {
 }
 
 /** Real cards remain recycled; only the active date label changes while scrolling. */
-export function CardsCollection({ sections, chips, filter, onFilter, orderMode, onArrange, onOpen, onMore, onToggleSubtask, onSectionChange, bottomInset, header, estimatedHeaderHeight = 0, scrollOffset: providedScrollOffset, footer, emptyState, backgroundColor }: Props) {
+export function CardsCollection({ sections, chips, filter, onFilter, orderMode, onArrange, onOpen, onMore, onToggleSubtask, onSectionChange, bottomInset, header, estimatedHeaderHeight = 0, scrollOffset: providedScrollOffset, footer, emptyState, backgroundColor, filterBackgroundColor }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -327,9 +329,9 @@ export function CardsCollection({ sections, chips, filter, onFilter, orderMode, 
     <Animated.View pointerEvents="box-none" style={[styles.overlay, filterPosition]}>
       {Platform.OS === 'ios' ? <BlurView pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
         intensity={45} tint={scheme === 'dark' ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'} style={StyleSheet.absoluteFill} /> : null}
-      {/* Android uses paper rather than capturing and blurring the moving note
-          grid. iOS keeps its native frosted surface and contrast veil. */}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: backgroundColor ?? desk.desk, opacity: Platform.OS === 'ios' ? (scheme === 'dark' ? 0.9 : 0.6) : 1 }]} />
+      {/* A supplied filter surface stays solid on both platforms. Otherwise,
+          iOS keeps its native frosted surface and Android uses paper. */}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: filterBackgroundColor ?? backgroundColor ?? desk.desk, opacity: filterBackgroundColor ? 1 : Platform.OS === 'ios' ? (scheme === 'dark' ? 0.9 : 0.6) : 1 }]} />
       <View onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setFilterHeight((previous) => previous === next ? previous : next); }}>
         <FilterRail value={filter} onChange={onFilter} options={chips.map((chip) => ({ ...chip, accessibilityLabel: tr("cardscollection.filterByValueValueValue", { value1: chip.label, value2: chip.count, value3: chip.count === 1 ? 'card' : 'cards' }) }))} />
       </View>

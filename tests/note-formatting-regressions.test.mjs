@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { noteFontStyle } from '../src/services/note-text-style.ts';
 import { STICKY_FONT_FAMILIES } from '../src/constants/style-tokens.ts';
+import { createNoteEditorPanels } from '../src/services/note-editor-panels.ts';
 import { cleanMarks, formatRange, marksAt } from '../src/services/note-rich-text.ts';
 
 const source = readFileSync(new URL('../src/components/notes/note-blocks-editor.tsx', import.meta.url), 'utf8');
@@ -68,48 +69,41 @@ test('actual inline formatting handler retains the selected range and requests n
   assert.ok(restores.every(([range, reveal]) => range === cursor && reveal === false));
 });
 
-test('formatter retains selection, waits for keyboard dismissal and releases suppression on close/unmount', () => {
+test('toolbar delegates Done, Aa and Back to the shared coordinator while preserving the captured range', () => {
   const component = source.slice(source.indexOf('export function NoteToolbar('), source.indexOf('const toolbarStyles ='));
   const code = ts.transpileModule(component, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const jsx = (type, props) => ({ type, props });
-  const calls = [], range = { key: 'long-note', start: 900, end: 914 }, states = [false, false];
-  let subscriptionCleanup, liveCursor = range, stateIndex, selection = { current: null }, effect, cleanup, previousDeps, onHidden, visible = true;
+  const calls = [], range = { key: 'long-note', start: 900, end: 914 }, effects = [], pending = [];
+  const panels = createNoteEditorPanels({ suppressKeyboard: value => calls.push(['suppress', value]), hideKeyboard: () => calls.push(['hide']), resumeKeyboard: () => calls.push(['resume']) }, true);
+  let state = panels.getState(), effectIndex, liveCursor = range, visible = true, back;
+  const selection = { current: null };
   const context = {
     exports: {}, require: () => ({ jsx, jsxs: jsx }), useLocale: () => {}, useDesk: () => ({}),
     useTheme: () => ({ tokens: {} }), useSafeAreaInsets: () => ({ bottom: 0 }), useKeyboardInset: () => visible ? 300 : 0,
-    useState: () => { const index = stateIndex++; return [states[index], update => { states[index] = typeof update === 'function' ? update(states[index]) : update; }]; },
-    useRef: () => selection, useEffect: callback => { subscriptionCleanup ??= callback(); },
-    useLayoutEffect: (callback, deps) => {
-      if (!previousDeps || deps.some((dep, i) => dep !== previousDeps[i])) { effect = callback; previousDeps = deps; }
+    useState: () => [state, value => { state = value; }], useRef: () => selection,
+    useEffect: (callback, deps) => {
+      const index = effectIndex++, prior = effects[index];
+      if (!prior || deps.some((dep, i) => dep !== prior.deps[i])) pending.push(() => { prior?.cleanup?.(); effects[index] = { deps, cleanup: callback() }; });
     },
-    Keyboard: { isVisible: () => visible, addListener: (event, callback) => { if (event === 'keyboardDidHide') onHidden = callback; return { remove: () => { if (event === 'keyboardDidHide') onHidden = null; } }; }, dismiss: () => calls.push(['dismiss']) },
+    Keyboard: { isVisible: () => visible }, BackHandler: { addEventListener: (_, callback) => { back = callback; return { remove: () => { back = null; } }; } },
     formattingText: key => key, View: 'View', ScrollView: 'ScrollView', Pressable: 'Pressable', AppText: 'Text',
     NoteFormattingSheet: 'Sheet', NoteListButtons: 'Lists', styles: {}, toolbarStyles: {},
   };
   vm.runInNewContext(code, context);
-  const editor = { current: { cursor: () => liveCursor, focusAt: (...args) => calls.push(['range', ...args]), setKeyboardSuppressed: value => calls.push(['suppress', value]) } };
-  const render = disabled => {
-    stateIndex = 0; effect = null;
-    const tree = context.exports.NoteToolbar({ editor, disabled });
-    if (effect) { cleanup?.(); cleanup = effect(); } return tree;
-  };
-  let tree = render();
-  const button = tree.props.children[1].props.children[0];
-  button.props.onPressIn(); liveCursor = null; button.props.onPress();
-  tree = render();
-  assert.equal(tree.props.children[0].props.open, false, 'controls wait while the viewport changes');
-  assert.deepEqual(calls.slice(-3), [['suppress', true], ['range', range, false], ['dismiss']]);
-  visible = false; onHidden(); tree = render();
-  assert.equal(tree.props.children[0].props.open, true);
-  tree.props.children[0].props.onClose(); render();
-  assert.deepEqual(calls.at(-1), ['suppress', false]);
-  assert.ok(onHidden, 'keyboard subscription lives for the toolbar lifetime');
-  states[0] = true; render(); tree = render();
-  assert.equal(tree.props.children[0].props.open, true, 'already-hidden keyboards do not need another hide event');
-  render(true);
-  assert.deepEqual(calls.at(-1), ['suppress', false]);
-  render(); cleanup(); subscriptionCleanup();
-  assert.equal(onHidden, null);
+  const editor = { current: { panels, dismissActivePanel: panels.dismiss, cursor: () => liveCursor, focusAt: (...args) => calls.push(['range', ...args]) } };
+  const render = disabled => { effectIndex = 0; const tree = context.exports.NoteToolbar({ editor, disabled }); while (pending.length) pending.shift()(); return tree; };
+  let tree = render(), button = tree.props.children[1].props.children[0];
+  button.props.onPressIn(); liveCursor = null; button.props.onPress(); tree = render();
+  assert.equal(tree.props.children[0].props.open, false);
+  assert.deepEqual(calls.at(-1), ['range', range, false]);
+  visible = false; panels.keyboardChanged(false); tree = render(); assert.equal(tree.props.children[0].props.open, true);
+  tree.props.children[0].props.onClose(); tree = render(); assert.equal(tree.props.children[0].props.open, false);
+  assert.equal(calls.some(([kind]) => kind === 'resume'), false);
+  tree.props.children[0].props.onClosed(); assert.deepEqual(calls.at(-1), ['resume']);
+  panels.openFormatting(); tree = render(); assert.equal(back(), true); tree = render(); tree.props.children[0].props.onClosed();
+  assert.equal(calls.filter(([kind]) => kind === 'resume').length, 1, 'Back never requests typing');
+  panels.openFormatting(); render(true); tree = render(true); tree.props.children[0].props.onClosed();
+  for (const effect of effects) effect.cleanup?.();
   assert.deepEqual(calls.at(-1), ['suppress', false]);
 });
 
@@ -162,4 +156,28 @@ test('explicit body interaction cancels pending formatting selection and scroll 
   assert.equal(pendingFocus.current, null);
   assert.equal(pendingScroll.current, null);
   assert.equal(target, null);
+});
+
+test('touching the body releases the previous formatting selection before requesting typing', () => {
+  const activeInput = { current: 'title' }, touchReturnRequested = { current: false }, headingContinuation = { current: {} }, calls = [];
+  callback('touchBody', { activeInput, touchReturnRequested, headingContinuation, releaseRequestedSelection: () => calls.push('release'), panels: { requestTyping: () => calls.push('typing') } })();
+  assert.deepEqual(calls, ['release'], 'selection gesture completes before moving the controls');
+  assert.equal(touchReturnRequested.current, true);
+  callback('finishTouch', { touchReturnRequested, panels: { requestTyping: () => calls.push('typing') } })();
+  assert.deepEqual(calls, ['release', 'typing']);
+  assert.equal(activeInput.current, 'body'); assert.equal(headingContinuation.current, null);
+});
+test('Done restores the held range after enabling typing without scrolling or clearing pending marks', () => {
+  const range = { key: 'body', start: 6, end: 11 }, formattingCursor = { current: range }, calls = [];
+  const pending = { bold: true }, resumePending = { current: false };
+  callback('resumeKeyboard', { formattingCursor, activeInput: { current: 'body' }, suppressKeyboard: value => calls.push(['suppress', value]), scheduleFocus: (...args) => calls.push(['range', ...args]), resumePending, setKeyboardRequest: () => calls.push(['commit']), pendingMarks: { current: pending } })();
+  assert.deepEqual(calls, [['suppress', false], ['range', range, false], ['commit']]);
+  assert.equal(resumePending.current, true); assert.deepEqual(pending, { bold: true });
+});
+
+test('cancelled body gestures do not request a keyboard or move the sheet', () => {
+  const touchReturnRequested = { current: true };
+  callback('cancelTouch', { touchReturnRequested })();
+  callback('finishTouch', { touchReturnRequested, panels: { requestTyping: () => assert.fail('cancelled gesture') } })();
+  assert.equal(touchReturnRequested.current, false);
 });
