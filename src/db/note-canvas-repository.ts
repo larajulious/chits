@@ -27,6 +27,18 @@ export function createNoteCanvasRepository(db: SQLiteDatabase) {
       return { positions: new Map(rows.map((row) => [row.noteKey, { x: row.x, y: row.y, z: row.z }])), prefs: parseCanvasPrefs(setting?.value) };
     },
     savePosition: (key: string, { x, y, z }: CanvasPosition) => db.runAsync(UPSERT_POSITION, key, x, y, z, Date.now()),
+    /** Atomic arrange/Undo. A stale snapshot must never overwrite a later drag. */
+    saveArrangement: (before: ReadonlyMap<string, CanvasPosition>, after: ReadonlyMap<string, CanvasPosition>) => db.withExclusiveTransactionAsync(async (transaction) => {
+      for (const [key, previous] of before) {
+        const current = await transaction.getFirstAsync<CanvasPosition>('SELECT x,y,z FROM note_canvas_positions WHERE note_key = ?', key);
+        if (!current || current.x !== previous.x || current.y !== previous.y || current.z !== previous.z) throw new Error('Canvas positions changed');
+      }
+      const now = Date.now();
+      for (const [key, { x, y, z }] of after) {
+        if (!before.has(key)) throw new Error('Missing arrangement snapshot');
+        await transaction.runAsync(UPSERT_POSITION, key, x, y, z, now);
+      }
+    }),
     /** Adds generated spots. A note that already has one keeps it. */
     savePlacements: (placements: readonly (readonly [string, CanvasPosition])[]) => db.withExclusiveTransactionAsync(async (transaction) => {
       const now = Date.now();

@@ -18,7 +18,7 @@ import { createNoteEditHistory } from '@/services/note-edit-history';
 import { backspaceNoteBlock, editNoteListItem, toggleNoteList, toggleNoteChecklist } from '@/services/note-lists';
 
 import { bindNativeImagePaste, subscribeNativeImagePaste, subscribeNativeBoundaryBackspace } from '@/services/native-image-paste';
-import { nativeNoteFormattingAvailable, syncNativeNoteFormatting, detachNativeNoteFormatting, showNativeNoteKeyboard, cancelNativeNoteKeyboard } from '@/services/native-note-formatting';
+import { nativeNoteFormattingAvailable, syncNativeNoteFormatting, detachNativeNoteFormatting, showNativeNoteKeyboard, cancelNativeNoteKeyboard, hideNativeNoteKeyboard } from '@/services/native-note-formatting';
 import { createNoteEditorPanels, type NoteEditorPanels, type NoteEditorPanelState } from '@/services/note-editor-panels';
 import { pickAndStageMedia, type AttachmentDraft } from '@/services/attachment-import';
 import { NoteImage } from '@/components/notes/note-image';
@@ -288,10 +288,12 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
     formattingCursor.current = cursor;
     setKeyboardSuppressed(suppressed);
   }, [currentCursor]);
-  const hideKeyboard = useCallback(() => {
+  const hideKeyboard = useCallback((preserveSelection = false) => {
     resumePending.current = false;
     for (const input of inputs.current.values()) cancelNativeNoteKeyboard(input);
     if (titleInput.current) cancelNativeNoteKeyboard(titleInput.current);
+    const focusedInput = titleInput.current?.isFocused() ? titleInput.current : [...inputs.current.values()].find(input => input.isFocused());
+    if (preserveSelection && focusedInput && hideNativeNoteKeyboard(focusedInput)) return;
     Keyboard.dismiss();
   }, []);
   const releaseRequestedSelection = useCallback(() => {
@@ -412,7 +414,10 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
     pendingFocus.current = null;
     lastFocused.current = target.key;
     selections.current.set(target.key, { start: target.start, end: target.end });
-    if (!keyboardSuppressed && !input.isFocused()) focusBlock(target.key);
+    // A heading/list change can replace the native input. Its committed
+    // showSoftInputOnFocus=false keeps the IME closed while focus makes the
+    // retained selection visible on that new input.
+    if (!input.isFocused()) focusBlock(target.key);
     // BlockInput receives a transient selection prop. RN 0.86 Fabric applies
     // selection through TextInput commands, not a native view selection prop.
   }, [blocks, focusBlock, focusRequest, editable, keyboardSuppressed]);

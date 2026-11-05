@@ -73,6 +73,10 @@ class ChitsFilesModule : Module() {
     AsyncFunction("cancelNoteKeyboard") { tag: Int, revision: Double ->
       appContext.findView<EditText>(tag)?.let { noteKeyboard.cancel(it, revision.toLong()) }
     }.runOnQueue(Queues.MAIN)
+    AsyncFunction("hideNoteKeyboard") { tag: Int, revision: Double ->
+      val input = appContext.findView<EditText>(tag)
+      if (input == null) false else noteKeyboard.hide(input, revision.toLong())
+    }.runOnQueue(Queues.MAIN)
     OnDestroy {
       val paste = inlinePaste
       val formatting = noteFormatting

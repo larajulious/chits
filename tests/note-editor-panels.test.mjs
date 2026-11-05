@@ -2,6 +2,18 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createNoteEditorPanels } from '../src/services/note-editor-panels.ts';
 
+test('formatting hides only the keyboard, while Back may end native input focus', () => {
+  const hides = [];
+  const panels = createNoteEditorPanels({ suppressKeyboard: () => {}, hideKeyboard: preserve => hides.push(preserve), resumeKeyboard: () => {} }, true);
+  panels.openFormatting();
+  assert.equal(hides.at(-1), true);
+  panels.keyboardChanged(true);
+  assert.equal(hides.at(-1), true, 'a late IME show must also retain the visible selection');
+  panels.keyboardChanged(false);
+  panels.dismiss();
+  assert.notEqual(hides.at(-1), true, 'Back still dismisses the editor normally');
+});
+
 function setup(visible = false) {
   const calls = [];
   const panels = createNoteEditorPanels({ suppressKeyboard: value => calls.push(['suppress', value]), hideKeyboard: () => calls.push(['hide']), resumeKeyboard: () => calls.push(['resume']) }, visible);

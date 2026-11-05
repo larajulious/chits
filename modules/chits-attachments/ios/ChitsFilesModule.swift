@@ -31,6 +31,7 @@ internal final class ExportInProgressException: Exception, @unchecked Sendable {
 
 public final class ChitsFilesModule: Module {
   private let inlinePaste = ChitsInlinePaste()
+  private let noteKeyboard = ChitsNoteKeyboard()
 
   // UIKit holds these weakly; they must outlive the presented UI.
   private var interactionController: UIDocumentInteractionController?
@@ -46,9 +47,22 @@ public final class ChitsFilesModule: Module {
       }
     }.runOnQueue(.main)
     AsyncFunction("detachInlinePaste") { (tag: Int) in self.inlinePaste.detach(tag) }.runOnQueue(.main)
+    AsyncFunction("hideNoteKeyboard") { (tag: Int, revision: Double) -> Bool in
+      guard let root = self.appContext?.findView(withTag: tag, ofType: UIView.self) else { return false }
+      return self.noteKeyboard.hide(root, revision: revision)
+    }.runOnQueue(.main)
+    AsyncFunction("showNoteKeyboard") { (tag: Int, revision: Double) -> Bool in
+      guard let root = self.appContext?.findView(withTag: tag, ofType: UIView.self) else { return false }
+      return self.noteKeyboard.show(root, revision: revision)
+    }.runOnQueue(.main)
+    AsyncFunction("cancelNoteKeyboard") { (tag: Int, revision: Double) in
+      guard let root = self.appContext?.findView(withTag: tag, ofType: UIView.self) else { return }
+      self.noteKeyboard.cancel(root, revision: revision)
+    }.runOnQueue(.main)
     OnDestroy {
       let paste = self.inlinePaste
-      DispatchQueue.main.async { paste.clear() }
+      let keyboard = self.noteKeyboard
+      DispatchQueue.main.async { paste.clear(); keyboard.clear() }
     }
 
     AsyncFunction("atomicWriteFileAsync") { (uri: String, contents: String) in

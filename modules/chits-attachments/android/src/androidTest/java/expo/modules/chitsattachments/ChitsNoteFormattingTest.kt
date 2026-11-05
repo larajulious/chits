@@ -126,4 +126,20 @@ class ChitsNoteFormattingTest {
     assertEquals(11, input.selectionEnd)
     keyboard.clear()
   }
+
+  @Test fun hidingKeyboardForFormattingKeepsFocusAndTheVisibleSelection() = withInput { input, _ ->
+    val keyboard = ChitsNoteKeyboard()
+    input.requestFocus()
+    input.setText("Before selected words after")
+    input.setSelection(7, 21)
+    assertTrue(input.isFocused)
+    assertTrue(keyboard.hide(input, 2))
+    assertTrue(input.isFocused)
+    assertFalse(input.showSoftInputOnFocus)
+    assertEquals(7, input.selectionStart)
+    assertEquals(21, input.selectionEnd)
+    assertEquals("Before selected words after", input.text.toString())
+    assertFalse(keyboard.show(input, 1))
+    keyboard.clear()
+  }
 }

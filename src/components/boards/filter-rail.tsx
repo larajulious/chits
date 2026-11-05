@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
+import Svg, { Circle, Pattern, Rect } from 'react-native-svg';
 
 import { useDesk } from '@/components/desk/paper-desk';
 import { useTheme } from '@/components/theme-provider';
@@ -42,6 +43,18 @@ export function FilterRail<Key extends string>({ options, value, onChange }: { o
   const underline = useAnimatedStyle(() => ({ width: underlineWidth.get(), transform: [{ translateX: underlineX.get() }] }));
 
   return <View style={[styles.rail, { borderBottomColor: tokens.borderSubtle }]}>
+    <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.decoration}>
+      <Svg width="100%" height="100%">
+        <Pattern id="filterRailGrain" width={88} height={44} patternUnits="userSpaceOnUse">
+          <Circle cx={14} cy={8} r={1} fill={tokens.accentStrong} fillOpacity={0.16} />
+          <Circle cx={65} cy={34} r={0.8} fill={tokens.accentStrong} fillOpacity={0.12} />
+        </Pattern>
+        <Rect width="100%" height="100%" fill="url(#filterRailGrain)" />
+        <Circle cx="2%" cy={-34} r={44} fill={tokens.accent} fillOpacity={0.06} stroke={tokens.accentStrong} strokeOpacity={0.1} strokeWidth={1} />
+        <Circle cx="96%" cy={74} r={42} fill={tokens.accent} fillOpacity={0.07} stroke={tokens.accentStrong} strokeOpacity={0.12} strokeWidth={1} />
+        <Circle cx="96%" cy={74} r={38} fill="none" stroke={tokens.accentStrong} strokeOpacity={0.08} strokeWidth={1} />
+      </Svg>
+    </View>
     <ScrollView ref={scroller} horizontal showsHorizontalScrollIndicator={false} onLayout={({ nativeEvent }) => setViewportWidth(nativeEvent.layout.width)} contentContainerStyle={styles.content}>
       {options.map((option) => {
         const selected = option.key === value;
@@ -65,6 +78,7 @@ export function FilterRail<Key extends string>({ options, value, onChange }: { o
 
 const styles = StyleSheet.create({
   rail: { borderBottomWidth: StyleSheet.hairlineWidth },
+  decoration: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, overflow: 'hidden' },
   content: { paddingHorizontal: spacing.xxs },
   item: { minHeight: FILTER_RAIL_HEIGHT - 1, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: ITEM_PADDING },
   pressed: { opacity: 0.6 },

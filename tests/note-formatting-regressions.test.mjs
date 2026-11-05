@@ -69,6 +69,23 @@ test('actual inline formatting handler retains the selected range and requests n
   assert.ok(restores.every(([range, reveal]) => range === cursor && reveal === false));
 });
 
+test('opening the formatter bypasses global keyboard dismissal for the focused native editor', () => {
+  const calls = [];
+  const body = { isFocused: () => true };
+  const hide = callback('hideKeyboard', {
+    resumePending: { current: true }, inputs: { current: new Map([['body', body]]) }, titleInput: { current: null },
+    cancelNativeNoteKeyboard: input => calls.push(['cancel', input]),
+    hideNativeNoteKeyboard: input => { calls.push(['hide', input]); return true; },
+    Keyboard: { dismiss: () => calls.push(['dismiss']) },
+  });
+  hide(true);
+  assert.equal(calls.at(-1)[0], 'hide');
+  assert.equal(calls.at(-1)[1], body);
+  assert.equal(calls.some(([kind]) => kind === 'dismiss'), false, 'dismiss would remove the visible native selection');
+  hide();
+  assert.equal(calls.at(-1)[0], 'dismiss', 'Back still ends editing normally');
+});
+
 test('toolbar delegates Done, Aa and Back to the shared coordinator while preserving the captured range', () => {
   const component = source.slice(source.indexOf('export function NoteToolbar('), source.indexOf('const toolbarStyles ='));
   const code = ts.transpileModule(component, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
@@ -107,7 +124,7 @@ test('toolbar delegates Done, Aa and Back to the shared coordinator while preser
   assert.deepEqual(calls.at(-1), ['suppress', false]);
 });
 
-test('range restoration retains selection without native refocus while the keyboard is suppressed', () => {
+test('range restoration focuses a replacement input with keyboard suppression left intact', () => {
   let effect;
   const visit = node => {
     if (ts.isCallExpression(node) && node.expression.getText(ast) === 'useLayoutEffect' && node.arguments[0]?.getText(ast).includes('const target = pendingFocus.current')) effect = node.arguments[0];
@@ -126,7 +143,7 @@ test('range restoration retains selection without native refocus while the keybo
     assert.equal(pendingFocus.current, null);
     assert.equal(lastFocused.current, 'body');
     assert.deepEqual({ ...selections.current.get('body') }, { start: 7, end: 12 });
-    assert.deepEqual(focused, keyboardSuppressed ? [] : ['body']);
+    assert.deepEqual(focused, ['body']);
   }
 });
 

@@ -239,6 +239,25 @@ The coordinator also tracks queued keyboard opening, so Back can cancel a return
 to typing before keyboardDidShow. Unmounting an input invalidates native IME work.
 iOS JavaScript export passes; this is separate from iOS device acceptance.
 
+### Visible selection while formatting
+
+Opening Aa now hides the native keyboard without resigning the text input's
+focus. Android hides the IME through InputMethodManager; iOS swaps in an empty
+input view and reloads it while retaining first responder. This keeps the
+selection highlight visible while the formatter applies marks to the held range.
+Back still dismisses focus normally, and Done restores the keyboard through the
+same revisioned native bridge. A replacement input after a heading/list change
+receives focus with its soft keyboard suppressed. Text, saved marks and history
+keep their existing paths. These native commands require a rebuilt app; older
+binaries keep the previous keyboard-dismiss fallback.
+
+Validation: 227 note tests, TypeScript and focused ESLint pass. Android builds,
+the focused native focus/selection test and the actual fullscreen editor's
+touch-selection highlight with the formatter open were checked. The Swift
+module and keyboard helper typecheck against the simulator SDK. The full iOS
+app build hit local disk exhaustion in Expo dependency targets; iOS interaction
+acceptance remains manual. Temporary selection QA routes were removed.
+
 Final broad run: 840 passes out of 841 tests. The remaining failure is the
 pre-existing header-title source assertion (`every header title gets the paper
 tag, and only with a title`), outside the editor changes. Final iOS JavaScript

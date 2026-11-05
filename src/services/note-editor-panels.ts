@@ -6,7 +6,7 @@ export type NoteEditorPanelState = Readonly<{
   keyboardOpening: boolean;
   resumePending: boolean;
 }>;
-type Actions = { suppressKeyboard: (value: boolean) => void; hideKeyboard: () => void; resumeKeyboard: () => void };
+type Actions = { suppressKeyboard: (value: boolean) => void; hideKeyboard: (preserveSelection?: boolean) => void; resumeKeyboard: () => void };
 
 /** One coordinator per editor. Native keyboard events and sheet completion,
  * rather than delays, decide when the other surface may open. */
@@ -37,7 +37,7 @@ export function createNoteEditorPanels(actions: Actions = { suppressKeyboard: ()
       if (disposed) return;
       actions.suppressKeyboard(true);
       update({ mode: 'formatting', resumePending: false, keyboardOpening: false, keyboardClosing: state.keyboardVisible || state.keyboardClosing, sheet: state.keyboardVisible || state.keyboardClosing ? 'closed' : 'open' });
-      actions.hideKeyboard();
+      actions.hideKeyboard(true);
     },
     requestTyping(force = false) {
       if (disposed || !force && state.mode === 'typing' && state.sheet === 'closed' && !state.keyboardClosing) return false;
@@ -57,7 +57,7 @@ export function createNoteEditorPanels(actions: Actions = { suppressKeyboard: ()
       update({ keyboardVisible: visible, ...(visible ? { keyboardOpening: false } : { keyboardClosing: false }) });
       if (visible && (state.mode === 'formatting' || state.sheet !== 'closed' || state.keyboardClosing)) {
         update({ keyboardClosing: true });
-        actions.hideKeyboard();
+        actions.hideKeyboard(state.mode === 'formatting');
       } else if (!visible && state.mode === 'formatting' && state.sheet !== 'closing') update({ sheet: 'open' });
       settle();
     },

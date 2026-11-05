@@ -8,6 +8,7 @@ type FormattingModule = {
   detachNoteTextFormatting?: (tag: number) => Promise<void>;
   showNoteKeyboard?: (tag: number, revision: number) => Promise<boolean>;
   cancelNoteKeyboard?: (tag: number, revision: number) => Promise<void>;
+  hideNoteKeyboard?: (tag: number, revision: number) => Promise<boolean>;
 };
 const native = requireOptionalNativeModule<FormattingModule>('ChitsFiles');
 export const nativeNoteFormattingAvailable = Platform.OS === 'android' && Boolean(native?.applyNoteTextFormatting && native.detachNoteTextFormatting);
@@ -28,7 +29,7 @@ export function detachNativeNoteFormatting(input: TextInput) {
  * the input with its soft keyboard suppressed. It must not blur that selection. */
 export function showNativeNoteKeyboard(input: TextInput) {
   const tag = findNodeHandle(input);
-  if (tag && Platform.OS === 'android' && native?.showNoteKeyboard && native.cancelNoteKeyboard) {
+  if (tag && native?.showNoteKeyboard && native.cancelNoteKeyboard) {
     void native.showNoteKeyboard(tag, nextRevision()).catch(() => undefined);
   } else {
     if (Platform.OS === 'android' && input.isFocused()) input.blur();
@@ -37,5 +38,13 @@ export function showNativeNoteKeyboard(input: TextInput) {
 }
 export function cancelNativeNoteKeyboard(input: TextInput) {
   const tag = findNodeHandle(input);
-  if (tag && Platform.OS === 'android' && native?.cancelNoteKeyboard) void native.cancelNoteKeyboard(tag, nextRevision()).catch(() => undefined);
+  if (tag && native?.cancelNoteKeyboard) void native.cancelNoteKeyboard(tag, nextRevision()).catch(() => undefined);
+}
+/** Hide only the IME/input view: the native editor remains focused and keeps
+ * drawing its selection. False lets older binaries retain their fallback. */
+export function hideNativeNoteKeyboard(input: TextInput): boolean {
+  const tag = findNodeHandle(input);
+  if (!tag || !native?.hideNoteKeyboard) return false;
+  void native.hideNoteKeyboard(tag, nextRevision()).catch(() => undefined);
+  return true;
 }

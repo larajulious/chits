@@ -1,24 +1,30 @@
 import * as Haptics from 'expo-haptics';
 import { useSQLiteContext } from 'expo-sqlite';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { I18nManager, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { I18nManager, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedReaction, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withSequence, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { DOT_SPACING, DeskDots } from '@/components/desk/desk-surface';
 import { useDesk } from '@/components/desk/paper-desk';
 import { useTheme } from '@/components/theme-provider';
+import { AppText } from '@/components/ui/app-text';
 import { createNoteCanvasRepository } from '@/db/note-canvas-repository';
 import type { CardListItem } from '@/db/types';
 import { useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
-import { addToCanvasIndex, boundsOf, canvasCardFrame, canvasRangeKey, canvasTilt, CANVAS_HALF, clampToWorld, clampZoom, createCanvasIndex, fitCamera, floorZoom, focusCamera, frameCamera, homeCamera, nextTapZoom, noteAtPoint, openingCamera, parseCanvasRange, placeBoard, placeNear, queryCanvasIndex, zoomAround, type CanvasCamera, type CanvasPosition, type CanvasPrefs, type CanvasRect } from '@/services/note-canvas';
+import { boundsOf, canvasCardFrame, canvasRangeKey, canvasTilt, CANVAS_HALF, clampToWorld, clampZoom, createCanvasIndex, fitCamera, floorZoom, focusCamera, frameCamera, homeCamera, nextTapZoom, noteAtPoint, openingCamera, parseCanvasRange, queryCanvasIndex, zoomAround, type CanvasCamera, type CanvasPosition, type CanvasPrefs, type CanvasRect } from '@/services/note-canvas';
+import { placeConnectedNotes } from '@/services/canvas-connections';
+import { createCanvasReader } from '@/services/canvas-read';
 import { noteKey } from '@/services/note-order';
 import { CanvasCameraControls, CanvasHint } from './canvas-camera-controls';
 import { CanvasNoteCard, canvasCardInput, canvasPaper, type CanvasCardHandlers, type CanvasNote } from './canvas-note-card.native';
 import { NotesMiniMap, type MiniMapNote } from './notes-mini-map';
 import { useCanvasCamera, type CanvasCameraApi } from './use-canvas-camera';
 import { DRAG_ACTIVE, DRAG_NONE, useCanvasGestures, type CanvasDrag } from './use-canvas-gestures';
+import { CanvasConnectionLines, movingPosition, type ConnectionMotion } from './canvas-connection-lines';
+import { CanvasConnectionTools } from './canvas-connection-tools';
+import { useCanvasConnections } from './use-canvas-connections';
 
 type Phase = 'steady' | 'entering' | 'leaving';
 type Props = Pick<CanvasCardHandlers, 'onOpen' | 'onMore' | 'onToggleSubtask' | 'onToggleChecklist'> & {
@@ -26,6 +32,8 @@ type Props = Pick<CanvasCardHandlers, 'onOpen' | 'onMore' | 'onToggleSubtask' | 
   notes: CardListItem[];
   shownKeys: ReadonlySet<string>;
   filterKey: string;
+  selectedNoteKey: string | null;
+  onSelectNote: (key: string | null) => void;
   /** A note to bring into view; `nonce` lets the same note be asked for twice. */
   focus: { key: string; nonce: number } | null;
   onFocusDone: (found: boolean) => void;
@@ -65,20 +73,26 @@ const CanvasDots = memo(function CanvasDots({ camera, width, height }: { camera:
 });
 
 /** One note at its spot. Filter changes fade it; panning only ever mounts or unmounts it. */
-const CanvasSlot = memo(function CanvasSlot({ note, lite, phase, away, handlers }: { note: CanvasNote; lite: boolean; phase: Phase; away: boolean; handlers: CanvasCardHandlers }) {
+const CanvasSlot = memo(function CanvasSlot({ note, lite, phase, away, handlers, highlighted, dim, motion, progress }: ConnectionMotion & { note: CanvasNote; lite: boolean; phase: Phase; away: boolean; highlighted: boolean; dim: boolean; handlers: CanvasCardHandlers }) {
   const reduced = useReducedMotion();
+  const desk = useDesk();
   const appear = useSharedValue(phase === 'entering' && !reduced ? 0 : 1);
   useEffect(() => {
     if (phase === 'steady') return;
     const target = phase === 'entering' ? 1 : 0;
     appear.set(reduced ? target : withTiming(target, { duration: FILTER_FADE_MS }));
   }, [appear, phase, reduced]);
-  const style = useAnimatedStyle(() => ({ opacity: appear.get(), transform: [{ scale: 0.95 + 0.05 * appear.get() }, { rotate: `${note.tilt}deg` }] }));
-  return <Animated.View style={[styles.slot, { [PHYSICAL_LEFT]: note.x + CANVAS_HALF, top: note.y + CANVAS_HALF, width: note.width, height: note.height }, away && styles.away, style]}>
+  const style = useAnimatedStyle(() => {
+    const moves = motion.get();
+    const position = movingPosition(note.key, note, moves, moves.from[note.key] ? progress.get() : 1);
+    return { opacity: appear.get() * (away ? 0 : dim ? 0.5 : 1), transform: [{ translateX: position.x - note.x }, { translateY: position.y - note.y }, { scale: 0.95 + 0.05 * appear.get() }, { rotate: `${note.tilt}deg` }] };
+  });
+  return <Animated.View style={[styles.slot, { [PHYSICAL_LEFT]: note.x + CANVAS_HALF, top: note.y + CANVAS_HALF, width: note.width, height: note.height }, style]}>
     <CanvasNoteCard note={note} lite={lite} handlers={handlers} />
+    {highlighted ? <View pointerEvents="none" style={[styles.selection, { borderColor: desk.inkMuted }]} /> : null}
   </Animated.View>;
 }, (previous, next) => previous.note.item === next.note.item && previous.note.x === next.note.x && previous.note.y === next.note.y && previous.note.width === next.note.width && previous.note.height === next.note.height
-  && previous.lite === next.lite && previous.phase === next.phase && previous.away === next.away && previous.handlers === next.handlers);
+  && previous.lite === next.lite && previous.phase === next.phase && previous.away === next.away && previous.highlighted === next.highlighted && previous.dim === next.dim && previous.handlers === next.handlers && previous.motion === next.motion && previous.progress === next.progress);
 
 /** The lifted note: it follows the finger on the UI thread, above everything else. */
 function CanvasDragGhost({ note, lite, camera, drag, handlers }: { note: CanvasNote; lite: boolean; camera: CanvasCameraApi; drag: CanvasDrag; handlers: CanvasCardHandlers }) {
@@ -121,7 +135,7 @@ function FoundRing({ rect, tilt, ink }: { rect: CanvasRect; tilt: number; ink: s
  * and then mounts just the notes in those cells; notes already there are memoized
  * and stay put, so a board costs about the same at 50 notes or 5,000.
  */
-export function NotesCanvas({ notes, shownKeys, filterKey, focus, onFocusDone, onToast, onOpen, onMore, onToggleSubtask, onToggleChecklist, bottomInset, activity, paper, footer, emptyState }: Props) {
+export function NotesCanvas({ notes, shownKeys, filterKey, selectedNoteKey, onSelectNote, focus, onFocusDone, onToast, onOpen, onMore, onToggleSubtask, onToggleChecklist, bottomInset, activity, paper, footer, emptyState }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -134,6 +148,8 @@ export function NotesCanvas({ notes, shownKeys, filterKey, focus, onFocusDone, o
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const [dockHeight, setDockHeight] = useState(0);
   const [positions, setPositions] = useState<Map<string, CanvasPosition> | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [miniMap, setMiniMap] = useState(false);
   const [hint, setHint] = useState(false);
   const [ready, setReady] = useState(false);
@@ -147,21 +163,12 @@ export function NotesCanvas({ notes, shownKeys, filterKey, focus, onFocusDone, o
   const liftedAt = useRef({ x: 0, y: 0 });
   const inlineTouch = useRef<(() => void) | null>(null);
   const ignoreTapsUntil = useRef(0);
+  const viewport = useRef<View | null>(null);
+  const viewportOrigin = useRef({ x: 0, y: 0 });
   const bottomClearance = useSharedValue(bottomInset);
 
   // ── Where notes are ───────────────────────────────────────────────────────
 
-  useEffect(() => {
-    let active = true;
-    void repository.load().then((saved) => {
-      if (!active) return;
-      prefs.current = saved.prefs;
-      setMiniMap(saved.prefs.miniMap);
-      setHint(!saved.prefs.hintDone);
-      setPositions(saved.positions);
-    }).catch(() => { if (active) setPositions(new Map()); });
-    return () => { active = false; };
-  }, [repository]);
 
   const frames = useMemo(() => new Map(notes.map((item) => [noteKey(item), canvasCardFrame(canvasCardInput(item), fontScale)])), [fontScale, notes]);
   const placed = useMemo<CanvasNote[]>(() => positions ? notes.flatMap((item) => {
@@ -179,35 +186,6 @@ export function NotesCanvas({ notes, shownKeys, filterKey, focus, onFocusDone, o
   useEffect(() => { bottomClearance.set(bottomInset + dockHeight); }, [bottomClearance, bottomInset, dockHeight]);
   useEffect(() => { if (view) camera.minZoom.set(floorZoom(bounds, view)); }, [bounds, camera, view]);
   useEffect(() => { if (bounds) camera.extent.set([bounds.x, bounds.y, bounds.x + bounds.width, bounds.y + bounds.height]); }, [bounds, camera]);
-
-  // Only notes without a spot get one. An untouched board is laid out in sort
-  // order; a note that turns up later goes near what's on screen. Either way
-  // nothing already placed moves.
-  useEffect(() => {
-    if (!positions || !view) return;
-    const missing = notes.filter((item) => !positions.has(noteKey(item)));
-    if (!missing.length) return;
-    let added: [string, CanvasPosition][];
-    if (!positions.size) added = [...placeBoard(notes.map((item) => ({ key: noteKey(item), width: frames.get(noteKey(item))!.width, height: frames.get(noteKey(item))!.height })))];
-    else {
-      const occupied = createCanvasIndex<CanvasRect>(placed);
-      const { x, y, zoom } = camera.read();
-      const center = { x: (view.width / 2 - x) / zoom, y: (view.height / 2 - y) / zoom };
-      const visible = { x: -x / zoom, y: -y / zoom, width: view.width / zoom, height: view.height / zoom };
-      added = missing.map((item) => {
-        const key = noteKey(item);
-        const frame = frames.get(key)!;
-        const spot = placeNear(frame, center, occupied, visible);
-        addToCanvasIndex(occupied, { ...spot, width: frame.width, height: frame.height });
-        return [key, { ...spot, z: 0 }];
-      });
-    }
-    // The spots depend on the live camera, so this can't be worked out during render.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPositions(new Map([...positions, ...added]));
-    // A failed save costs nothing: the same notes are placed again next time.
-    repository.savePlacements(added).catch(() => {});
-  }, [camera, frames, notes, placed, positions, repository, view]);
 
   // ── Remembering the view ──────────────────────────────────────────────────
 
@@ -230,15 +208,6 @@ export function NotesCanvas({ notes, shownKeys, filterKey, focus, onFocusDone, o
   }, [writePrefs]);
   const fly = useCallback((target: CanvasCamera) => camera.fly(target, remember), [camera, remember]);
 
-  // Opening at the saved view, or at the start of the board the first time.
-  useEffect(() => {
-    if (ready || !view || !positions || notes.some((item) => !positions.has(noteKey(item)))) return;
-    camera.jump(prefs.current?.views[filterKey] ?? openingCamera(bounds, view));
-    // A latch, not derived: a note arriving later must not unmount the board.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setReady(true);
-  }, [bounds, camera, filterKey, notes, positions, ready, view]);
-
   // Each filter keeps its own view. Its first visit brings its notes into frame
   // at the current zoom, since they may be far from where the last filter was.
   useEffect(() => {
@@ -256,6 +225,51 @@ export function NotesCanvas({ notes, shownKeys, filterKey, focus, onFocusDone, o
   );
   useAnimatedReaction(() => Math.abs(camera.x.get()) + Math.abs(camera.y.get()), (distance) => { activity.set(distance); });
   const range = useMemo(() => rangeKey ? parseCanvasRange(rangeKey) : null, [rangeKey]);
+  const graphFrames = useMemo(() => notes.map((item) => ({ key: noteKey(item), ...frames.get(noteKey(item))!, tilt: canvasTilt(noteKey(item)) })), [frames, notes]);
+  const connections = useCanvasConnections({ notes: placed, frames: graphFrames, positions, setPositions, repository, camera, view, shownKeys, filterKey, range: range?.rect ?? null, dragKey: drag?.key ?? null, selected: selectedNoteKey, setSelected: onSelectNote, changePrefs, remember, onOpen, onMore, onToast });
+  const { setVisibility, selectSearch } = connections;
+  useEffect(() => {
+    const reader = createCanvasReader({ read: () => repository.load(), onValue: (saved) => {
+      prefs.current = saved.prefs;
+      setMiniMap(saved.prefs.miniMap);
+      setHint(!saved.prefs.hintDone);
+      setVisibility(saved.prefs.connections ?? 'selected');
+      setPositions(saved.positions);
+    }, onError: () => { setLoadFailed(true); onToast(tr('canvasConnections.loadFailed')); } });
+    void reader.refresh();
+    return reader.cancel;
+  }, [loadAttempt, onToast, repository, setVisibility]);
+
+  // Link data must arrive before first placement. Every saved spot is immutable.
+  useEffect(() => {
+    if (!positions || !view || connections.busy || connections.links === null || !notes.some((item) => !positions.has(noteKey(item)))) return;
+    let active = true;
+    try {
+      const { x, y, zoom } = camera.read();
+      const added = [...placeConnectedNotes(graphFrames, connections.links, positions, { x: (view.width / 2 - x) / zoom, y: (view.height / 2 - y) / zoom })];
+      // Persist before publishing spots. Re-read INSERT OR IGNORE's actual winners
+      // if another mounted board placed a note while this transaction waited.
+      void repository.savePlacements(added).then(() => repository.load()).then((saved) => {
+        if (active) setPositions(saved.positions);
+      }).catch((error) => {
+        if (!active) return;
+        if (__DEV__) console.warn('[Notes canvas placements]', error);
+        setLoadFailed(true); onToast(tr('notesCanvas.notSaved'));
+      });
+    } catch { onToast(tr('canvasConnections.noRoom')); }
+    return () => { active = false; };
+  }, [camera, connections.busy, connections.links, graphFrames, notes, onToast, positions, repository, view]);
+
+
+  // Opening at the saved view, or at the start of the board the first time.
+  useEffect(() => {
+    if (ready || !view || !positions || notes.some((item) => !positions.has(noteKey(item)))) return;
+    const firstLinked = placed.find((note) => shownKeys.has(note.key) && connections.links?.some((link) => link.note_a === note.key || link.note_b === note.key));
+    camera.jump(prefs.current?.views[filterKey] ?? (firstLinked ? focusCamera(firstLinked, view, 0.8) : openingCamera(bounds, view)));
+    // A latch, not derived: a note arriving later must not unmount the board.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setReady(true);
+  }, [bounds, camera, connections.links, filterKey, notes, placed, positions, ready, shownKeys, view]);
 
   // Filter changes fade notes in and out. Worked out during render, so a leaving
   // note is never gone for a frame before its fade begins.
@@ -273,15 +287,23 @@ export function NotesCanvas({ notes, shownKeys, filterKey, focus, onFocusDone, o
 
   const mounted = useMemo(() => {
     if (!range || !ready) return [];
+    const swept = connections.arrangement;
     const list = queryCanvasIndex(index, range.rect);
+    if (swept) for (const [key, target] of swept) {
+      const note = byKey.get(key);
+      if (!note || !shownKeys.has(key) || list.includes(note)) continue;
+      const movingBounds = boundsOf([note, { ...note, ...target }])!;
+      if (movingBounds.x < range.rect.x + range.rect.width && movingBounds.x + movingBounds.width > range.rect.x && movingBounds.y < range.rect.y + range.rect.height && movingBounds.y + movingBounds.height > range.rect.y) list.push(note);
+    }
     if (transition) for (const key of transition.leaving) { const note = byKey.get(key); if (note) list.push(note); }
     return list.sort((a, b) => a.z - b.z || (a.key < b.key ? -1 : 1));
-  }, [byKey, index, range, ready, transition]);
+  }, [byKey, connections.arrangement, index, range, ready, shownKeys, transition]);
 
   const mapNotes = useMemo<MiniMapNote[]>(() => shown.map((note) => ({ x: note.x, y: note.y, width: note.width, height: note.height, fill: canvasPaper(note.item).paper })), [shown]);
 
   // ── Touch ─────────────────────────────────────────────────────────────────
 
+  const touchStart = useRef({ x: 0, y: 0, at: 0, single: false });
   const worldPoint = (screenX: number, screenY: number) => {
     const { x, y, zoom } = camera.read();
     return { x: (screenX - x) / zoom, y: (screenY - y) / zoom };
@@ -322,6 +344,7 @@ export function NotesCanvas({ notes, shownKeys, filterKey, focus, onFocusDone, o
         const top = placed.reduce((highest, entry) => Math.max(highest, entry.z), 0);
         const next = { ...spot, z: top + 1 };
         const previous = positions.get(note.key);
+        connections.clearUndo();
         setPositions(new Map(positions).set(note.key, next));
         repository.savePosition(note.key, next).catch(() => {
           setPositions((current) => current && previous ? new Map(current).set(note.key, previous) : current);
@@ -330,7 +353,7 @@ export function NotesCanvas({ notes, shownKeys, filterKey, focus, onFocusDone, o
         void Haptics.selectionAsync();
       } else if (commit) {
         // Held without moving: the long press it always was, so the actions open.
-        onMore(note.item);
+        connections.more(note.item);
       }
       const finished = () => endDrag();
       if (reduced) { dragValues.lifted.set(0); finished(); }
@@ -352,8 +375,11 @@ export function NotesCanvas({ notes, shownKeys, filterKey, focus, onFocusDone, o
   });
 
   // Stable, so a memoized note never re-renders for a handler it already had.
-  const latest = useRef({ onOpen, onMore, onToggleSubtask, onToggleChecklist });
-  useEffect(() => { latest.current = { onOpen, onMore, onToggleSubtask, onToggleChecklist }; });
+  const latest = useRef({ onOpen: connections.open, onMore: connections.more, onToggleSubtask, onToggleChecklist });
+  useEffect(() => { latest.current = { onOpen: connections.open, onMore: connections.more,
+    onToggleSubtask: (item, id) => connections.source ? connections.open(item) : onToggleSubtask(item, id),
+    onToggleChecklist: (item, entry) => connections.source ? connections.open(item) : onToggleChecklist(item, entry),
+  }; });
   const handlers = useMemo<CanvasCardHandlers>(() => ({
     onOpen: (item) => { if (Date.now() >= ignoreTapsUntil.current) latest.current.onOpen(item); },
     onMore: (item) => latest.current.onMore(item),
@@ -375,12 +401,13 @@ export function NotesCanvas({ notes, shownKeys, filterKey, focus, onFocusDone, o
     }
     if (!shownKeys.has(note.key)) return;
     onFocusDone(true);
+    selectSearch(note.key);
     // The ring waits for the camera, so it's seen arriving rather than off in the distance.
     camera.fly(focusCamera(note, view, camera.read().zoom), () => {
       setFound({ x: note.x, y: note.y, width: note.width, height: note.height, tilt: note.tilt });
       remember();
     });
-  }, [byKey, camera, focus, notes, onFocusDone, ready, remember, shownKeys, view]);
+  }, [byKey, camera, focus, notes, onFocusDone, ready, remember, selectSearch, shownKeys, view]);
   useEffect(() => {
     if (!found) return;
     const timer = setTimeout(() => setFound(null), HIGHLIGHT_MS);
@@ -416,25 +443,38 @@ export function NotesCanvas({ notes, shownKeys, filterKey, focus, onFocusDone, o
   const overlayBottom = bottomInset + dockHeight + 10;
   const hasNotes = shown.length > 0;
 
-  return <View style={[styles.flex, { backgroundColor: paper }]} onLayout={({ nativeEvent: { layout } }) => {
+  return <View ref={viewport} style={[styles.flex, { backgroundColor: paper }]} onLayout={({ nativeEvent: { layout } }) => {
+    viewport.current?.measureInWindow((x, y) => { viewportOrigin.current = { x, y }; });
     camera.width.set(layout.width);
     camera.height.set(layout.height);
     setSize((previous) => previous?.width === layout.width && previous.height === layout.height ? previous : { width: layout.width, height: layout.height });
   }}>
     <GestureDetector gesture={gesture}>
-      <View collapsable={false} style={styles.viewport}>
+      <View collapsable={false} style={styles.viewport}
+        onTouchStart={(event) => { touchStart.current = { x: event.nativeEvent.pageX - viewportOrigin.current.x, y: event.nativeEvent.pageY - viewportOrigin.current.y, at: Date.now(), single: event.nativeEvent.touches.length === 1 }; }}
+        onTouchMove={(event) => { if (event.nativeEvent.touches.length > 1 || Math.hypot(event.nativeEvent.pageX - viewportOrigin.current.x - touchStart.current.x, event.nativeEvent.pageY - viewportOrigin.current.y - touchStart.current.y) > 8) touchStart.current.single = false; }}
+        onTouchEnd={() => {
+          const start = touchStart.current;
+          if (!start.single || Date.now() - start.at > 250 || Date.now() < ignoreTapsUntil.current) return;
+          const point = worldPoint(start.x, start.y);
+          if (!noteAtPoint(index, point.x, point.y)) connections.hit(point);
+        }}>
         {size ? <CanvasDots camera={camera} width={size.width} height={size.height} /> : null}
         <Animated.View style={[styles.world, { [PHYSICAL_LEFT]: 0 }, worldStyle]}>
-          {mounted.map((note) => <CanvasSlot key={note.key} note={note} lite={lite} away={drag?.key === note.key} handlers={handlers}
+          <CanvasConnectionLines edges={connections.edges} range={range?.rect ?? null} ink={desk.inkMuted} camera={camera} drag={dragValues} dragKey={drag?.key ?? null} motion={connections.motion} progress={connections.progress} />
+          {mounted.map((note) => <CanvasSlot key={note.key} note={note} lite={lite} away={drag?.key === note.key} handlers={handlers} highlighted={connections.highlight.has(note.key)} dim={connections.highlight.size > 0 && !connections.highlight.has(note.key)} motion={connections.motion} progress={connections.progress}
             phase={transition?.entering.has(note.key) ? 'entering' : transition?.leaving.has(note.key) ? 'leaving' : 'steady'} />)}
           {found ? <FoundRing rect={found} tilt={found.tilt} ink={desk.ink} /> : null}
           {drag ? <CanvasDragGhost note={drag} lite={lite} camera={camera} drag={dragValues} handlers={handlers} /> : null}
         </Animated.View>
       </View>
     </GestureDetector>
+    {connections.busy ? <View style={StyleSheet.absoluteFill} /> : null}
     {ready && !hasNotes ? <View pointerEvents="none" style={[styles.empty, { paddingBottom: bottomInset + dockHeight }]}>{emptyState}</View> : null}
+    {loadFailed ? <View pointerEvents="box-none" style={styles.loadError}><Pressable accessibilityRole="button" onPress={() => { setLoadFailed(false); setLoadAttempt((value) => value + 1); }} style={[styles.retry, { backgroundColor: paper }]}><AppText style={{ color: desk.ink }}>{tr('id.tryAgain')}</AppText></Pressable></View> : null}
     {hasNotes && miniMap && bounds ? <NotesMiniMap notes={mapNotes} bounds={bounds} camera={camera} paper={paper} onJump={jumpTo} onFit={fit} /> : null}
-    {hasNotes && hint ? <CanvasHint bottom={overlayBottom} paper={paper} onDismiss={dismissHint} /> : null}
+    {hasNotes ? <CanvasConnectionTools connections={connections} bottom={overlayBottom} paper={paper} /> : null}
+    {hasNotes && hint && !connections.selected && !connections.source ? <CanvasHint bottom={overlayBottom} paper={paper} onDismiss={dismissHint} /> : null}
     {footer ? <View onLayout={({ nativeEvent }) => setDockHeight(Math.ceil(nativeEvent.layout.height))} style={[styles.dock, { bottom: bottomInset, backgroundColor: paper }]}>{footer}</View> : null}
     {/* Last, so it opens over the dock rather than under it. */}
     {hasNotes ? <CanvasCameraControls paper={paper} miniMap={miniMap} onZoomIn={() => zoomBy(ZOOM_STEP)} onZoomOut={() => zoomBy(1 / ZOOM_STEP)} onFit={fit} onReset={reset} onToggleMiniMap={toggleMiniMap} /> : null}
@@ -447,10 +487,12 @@ const styles = StyleSheet.create({
   dots: { position: 'absolute', top: 0, transformOrigin: [0, 0, 0] },
   world: { position: 'absolute', top: 0, width: CANVAS_HALF * 2, height: CANVAS_HALF * 2, transformOrigin: [0, 0, 0] },
   slot: { position: 'absolute' },
-  away: { opacity: 0 },
+  selection: { position: 'absolute', top: -5, bottom: -5, left: -5, right: -5, borderRadius: 16, borderWidth: 2 },
   ghost: { position: 'absolute', top: 0, zIndex: 10 },
   deepShadow: { borderRadius: 12 },
   ring: { position: 'absolute', borderWidth: 3 },
   empty: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   dock: { position: 'absolute', left: 0, right: 0 },
+  loadError: { position: 'absolute', top: 16, left: 16, right: 16, alignItems: 'center' },
+  retry: { minHeight: 44, padding: 12, borderRadius: 12 },
 });

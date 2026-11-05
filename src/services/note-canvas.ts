@@ -314,7 +314,7 @@ export function focusCamera(rect: CanvasRect, view: CanvasSize, zoom: number): C
 // ── Saved view ──────────────────────────────────────────────────────────────
 
 export const NOTE_CANVAS_PREFS_KEY = 'notes_canvas_view';
-export type CanvasPrefs = { miniMap: boolean; hintDone: boolean; views: Record<string, CanvasCamera> };
+export type CanvasPrefs = { miniMap: boolean; hintDone: boolean; views: Record<string, CanvasCamera>; connections?: 'selected' | 'all' | 'hidden' };
 
 export function parseCanvasPrefs(value: string | null | undefined): CanvasPrefs {
   const prefs: CanvasPrefs = { miniMap: true, hintDone: false, views: {} };
@@ -324,6 +324,7 @@ export function parseCanvasPrefs(value: string | null | undefined): CanvasPrefs 
     if (!parsed || typeof parsed !== 'object') return prefs;
     prefs.miniMap = parsed.miniMap !== false;
     prefs.hintDone = parsed.hintDone === true;
+    if (parsed.connections === 'all' || parsed.connections === 'hidden' || parsed.connections === 'selected') prefs.connections = parsed.connections;
     for (const [key, view] of Object.entries(parsed.views ?? {})) {
       if (Number.isFinite(view?.x) && Number.isFinite(view?.y) && Number.isFinite(view?.zoom) && view.zoom > 0) prefs.views[key] = { x: view.x, y: view.y, zoom: Math.min(MAX_ZOOM, view.zoom) };
     }

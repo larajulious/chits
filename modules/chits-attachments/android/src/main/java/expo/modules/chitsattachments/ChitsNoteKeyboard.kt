@@ -15,6 +15,14 @@ internal class ChitsNoteKeyboard {
     revisions[input] = revision
     input.showSoftInputOnFocus = false
   }
+  fun hide(input: EditText, revision: Long): Boolean {
+    if (revision < (revisions[input] ?: -1L)) return false
+    cancel(input, revision)
+    // Keyboard.dismiss() clears ReactEditText's focus and selection highlight.
+    // Hiding the IME directly leaves the selected range visible instead.
+    (input.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(input.windowToken, 0)
+    return true
+  }
   fun show(input: EditText, revision: Long): Boolean {
     if (revision < (revisions[input] ?: -1L)) return false
     revisions[input] = revision

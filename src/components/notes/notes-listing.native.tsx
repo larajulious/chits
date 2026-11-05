@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from 'react';
+import { useCallback, useState, type ComponentProps, type ReactNode } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 
@@ -37,6 +37,9 @@ export function NotesListing({ empty, onWrite, footer, board, ...collection }: P
   const plan = usePlanHero();
   const scrollY = useSharedValue(0);
   const activity = useSharedValue(0);
+  // This listing survives masonry/canvas switches; the canvas itself does not.
+  const [canvasSelection, setCanvasSelection] = useState<{ filter: string; key: string | null } | null>(null);
+  const selectCanvasNote = useCallback((key: string | null) => setCanvasSelection({ filter: collection.filter, key }), [collection.filter]);
   const emptyState = <View style={styles.empty}>
     <AppText accessibilityRole="header" family={fonts.display} style={[styles.title, { color: surfaces.ink }]}>{tr(empty ? 'workspace.quietTitle' : 'cardscollection.noCardsInThisFilter')}</AppText>
     <AppText family={fonts.text} style={[styles.body, { color: surfaces.inkMuted }]}>{tr(empty ? 'chat.whatSOnYourMind' : 'cardscollection.chooseAnotherBoardOrAllCards')}</AppText>
@@ -47,7 +50,7 @@ export function NotesListing({ empty, onWrite, footer, board, ...collection }: P
     <View style={{ backgroundColor: surfaces.control }}>
       <FilterRail value={collection.filter} onChange={collection.onFilter} options={collection.chips.map((chip) => ({ ...chip, accessibilityLabel: tr('cardscollection.filterByValueValueValue', { value1: chip.label, value2: chip.count, value3: chip.count === 1 ? 'card' : 'cards' }) }))} />
     </View>
-    <NotesCanvas {...board} filterKey={collection.filter} onOpen={collection.onOpen} onMore={collection.onMore} onToggleSubtask={collection.onToggleSubtask} bottomInset={collection.bottomInset} activity={activity} paper={surfaces.paper} footer={footer} emptyState={emptyState} />
+    <NotesCanvas {...board} selectedNoteKey={canvasSelection?.filter === collection.filter ? canvasSelection.key : null} onSelectNote={selectCanvasNote} filterKey={collection.filter} onOpen={collection.onOpen} onMore={collection.onMore} onToggleSubtask={collection.onToggleSubtask} bottomInset={collection.bottomInset} activity={activity} paper={surfaces.paper} footer={footer} emptyState={emptyState} />
   </View>;
 
   return <CardsCollection

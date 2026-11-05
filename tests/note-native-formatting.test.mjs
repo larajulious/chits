@@ -63,3 +63,20 @@ test('iOS resumes through its native focus/input-view behavior; old Android bina
   bridge('ios', {}).showNativeNoteKeyboard(input); assert.deepEqual(calls, ['focus']);
   calls.length = 0; bridge('android', {}).showNativeNoteKeyboard(input); assert.deepEqual(calls, ['blur', 'focus']);
 });
+
+test('formatting hides the keyboard on either platform without blurring or restoring the text buffer', () => {
+  for (const platform of ['android', 'ios']) {
+    const calls = [];
+    const input = { blur: () => assert.fail('selection must stay visible'), focus: () => assert.fail('hiding must not refocus'), setNativeProps: () => assert.fail('do not replace text or selection') };
+    const api = bridge(platform, {
+      hideNoteKeyboard: (tag, revision) => { calls.push(['hide', tag, revision]); return Promise.resolve(true); },
+      showNoteKeyboard: (tag, revision) => { calls.push(['show', tag, revision]); return Promise.resolve(true); },
+      cancelNoteKeyboard: () => Promise.resolve(),
+    });
+    assert.equal(api.hideNativeNoteKeyboard(input), true);
+    api.showNativeNoteKeyboard(input);
+    assert.deepEqual(calls.map(call => call.slice(0, 2)), [['hide', 42], ['show', 42]]);
+    assert.ok(calls[1][2] > calls[0][2], 'a return to typing supersedes the hide request');
+    assert.equal(bridge(platform, {}).hideNativeNoteKeyboard(input), false, 'old binaries use the existing fallback');
+  }
+});
