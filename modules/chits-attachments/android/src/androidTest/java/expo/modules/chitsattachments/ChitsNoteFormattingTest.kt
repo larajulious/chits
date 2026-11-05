@@ -1,6 +1,8 @@
 package expo.modules.chitsattachments
 
 import android.content.Intent
+import android.content.ClipboardManager
+import android.content.Context
 import android.graphics.Color
 import android.text.Editable
 import android.text.InputType
@@ -90,5 +92,22 @@ class ChitsNoteFormattingTest {
     assertEquals("textA\ntextB", input.text.toString())
     assertEquals(6, input.selectionStart)
     assertEquals(11, input.selectionEnd)
+  }
+
+  @Test fun nativeCopyPastePreservesMultilineWordsAndEmoji() = withInput { input, formatter ->
+    val clipboard = input.context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val previous = clipboard.primaryClip
+    try {
+      val original = "textA\ntextB\n\n😀 after\n"
+      input.setText(original)
+      assertTrue(formatter.update(input, original, red, 1))
+      input.setSelection(0, input.length())
+      assertTrue(input.onTextContextMenuItem(android.R.id.copy))
+      input.setSelection(input.length())
+      assertTrue(input.onTextContextMenuItem(android.R.id.paste))
+      assertEquals(original + original, input.text.toString())
+    } finally {
+      if (previous != null) clipboard.setPrimaryClip(previous) else clipboard.clearPrimaryClip()
+    }
   }
 }

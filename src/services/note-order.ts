@@ -8,6 +8,9 @@
 export const NOTE_ORDER_KEY = 'cards_note_order';
 export const NOTE_ORDER_MODE_KEY = 'cards_order_mode';
 export type NoteOrderMode = 'recent' | 'custom';
+/** How Notes shows its notes: the free board, or the masonry grid. */
+export const NOTE_LAYOUT_KEY = 'notes_layout';
+export type NoteLayout = 'board' | 'grid';
 
 type Orderable = { kind: 'card' | 'thought'; id: string; createdAt: number };
 

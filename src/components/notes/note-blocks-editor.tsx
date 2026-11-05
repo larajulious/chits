@@ -703,33 +703,34 @@ export function NoteToolbar({ editor, images, disabled, safeBottom = false, chil
   const insets = useSafeAreaInsets();
   const keyboard = useKeyboardInset();
   const [formatting, setFormatting] = useState(false);
-  const [sheetReady, setSheetReady] = useState(false);
+  const [keyboardHidden, setKeyboardHidden] = useState(() => !Keyboard.isVisible());
+  useEffect(() => {
+    const shown = Keyboard.addListener('keyboardDidShow', () => setKeyboardHidden(false));
+    const hidden = Keyboard.addListener('keyboardDidHide', () => setKeyboardHidden(true));
+    return () => { shown.remove(); hidden.remove(); };
+  }, []);
   const formattingSelection = useRef<NoteCursor>(null);
   const formatDisabled = Boolean(disabled || images?.pasting);
   const formatRequested = formatting && !formatDisabled;
-  const sheetOpen = formatRequested && sheetReady;
+  const sheetOpen = formatRequested && keyboardHidden;
   useLayoutEffect(() => {
     const control = editor.current;
-    setSheetReady(false);
     control?.setKeyboardSuppressed(formatRequested);
-    let hidden: ReturnType<typeof Keyboard.addListener> | undefined;
     if (formatRequested) {
       // Retain the range before dismissing native focus. Formatting restores
       // selection without reopening the keyboard, including new list inputs.
       if (formattingSelection.current) control?.focusAt(formattingSelection.current, false);
       // Let the keyboard finish changing the viewport before moving controls
       // into it. A user can then tap a swatch without it moving mid-press.
-      if (Keyboard.isVisible()) hidden = Keyboard.addListener('keyboardDidHide', () => setSheetReady(true));
-      else setSheetReady(true);
       Keyboard.dismiss();
     }
-    return () => { hidden?.remove(); control?.setKeyboardSuppressed(false); };
+    return () => control?.setKeyboardSuppressed(false);
   }, [editor, formatRequested]);
   const { tokens: theme } = useTheme();
   return <View style={[toolbarStyles.bar, { borderTopColor: desk.rule, paddingBottom: safeBottom && !keyboard ? insets.bottom : 0 }]}>
     <NoteFormattingSheet editor={editor} open={sheetOpen} onClose={() => setFormatting(false)} />
     <ScrollView horizontal keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false} contentContainerStyle={toolbarStyles.row}>
-      <Pressable accessibilityRole="button" accessibilityLabel={formattingText("open")} accessibilityState={{ expanded: sheetOpen, disabled: formatDisabled }} disabled={formatDisabled} onPressIn={() => { formattingSelection.current = editor.current?.cursor() ?? null; }} onPress={() => setFormatting(value => !value)} style={[styles.formattingAction, sheetOpen && { backgroundColor: theme.accentSoft }]}><AppText style={{ fontSize: 21, fontWeight: '700', color: theme.textPrimary }}>Aa</AppText></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={formattingText("open")} accessibilityState={{ expanded: sheetOpen, disabled: formatDisabled }} disabled={formatDisabled} onPressIn={() => { formattingSelection.current = editor.current?.cursor() ?? null; }} onPress={() => { setKeyboardHidden(!Keyboard.isVisible()); setFormatting(value => !value); }} style={[styles.formattingAction, sheetOpen && { backgroundColor: theme.accentSoft }]}><AppText style={{ fontSize: 21, fontWeight: '700', color: theme.textPrimary }}>Aa</AppText></Pressable>
       {images ? <InsertImageButton disabled={disabled} busy={images.pasting} onPress={() => void images.pick()} /> : null}
       <NoteListButtons editor={editor} disabled={disabled || images?.pasting} />
       {images ? <PasteImageButton visible={images.canPaste} pasting={images.pasting && !images.picking} disabled={disabled || images.picking} onPress={() => void images.paste()} /> : null}

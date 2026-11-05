@@ -1,5 +1,5 @@
 import type { SpaceId, SpacePaperStyle } from '../constants/spaces';
-import type { NoteBlock, NoteRenderBlock } from '../services/note-content';
+import type { NoteBlock, NoteChecklistEntry, NoteRenderBlock } from '../services/note-content';
 
 export type MessageType = 'text' | 'photo' | 'video' | 'audio' | 'file';
 
@@ -75,6 +75,8 @@ export interface CardListItem {
   checklistSummary?: ReturnType<typeof import('../services/note-content').noteChecklistSummary>;
   connectionCount?: number;
   subtaskPreview?: { id: string; title: string; isCompleted: boolean }[];
+  // The first checklist lines written in the note itself, tickable on the board.
+  checklistItems?: NoteChecklistEntry[];
   photoCount: number; videoCount: number; fileCount: number;
   // The single, deterministic media preview for this card/thought — resolved
   // once, in SQL, by priority (photo > video > audio) across BOTH a card's
@@ -87,6 +89,9 @@ export interface CardListItem {
   thumbnailPath: string | null;
   mediaDuration: number | null;
   mediaCount: number;
+  // The preview's own proportions, when the attachment recorded them.
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
 }
 
 // A single attachment surfaced in the global Attachments library, regardless of

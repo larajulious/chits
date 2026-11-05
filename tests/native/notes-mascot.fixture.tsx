@@ -68,6 +68,7 @@ function FixtureContent() {
     />
     <PaperDesk faint>
       {opened ? <View style={{ flex: 1, padding: 24 }}><AppText accessibilityRole="header">Opened {opened}</AppText><AppText>Draft-only callback probe. Use QA back to return.</AppText></View> : <NotesListing
+        board={null}
         empty={total === 0} onWrite={() => setOpened('Write a note')}
         sections={sections} chips={chips} filter={filter} onFilter={setFilter} orderMode={orderMode} onArrange={arrange}
         onOpen={item => setOpened(item.title)} onMore={item => setOpened(`Actions ${item.id}`)} onToggleSubtask={() => {}}

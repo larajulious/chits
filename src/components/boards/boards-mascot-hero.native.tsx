@@ -23,12 +23,12 @@ const release = () => {};
 /** The lip of paper showing at rest: once it has scrolled past, the moving paper takes over. */
 const PAPER_LIP = 6;
 /** How long the list has to stay still before Chits nods off. */
-const DOZE_MS = 60_000;
+const DOZE_MS = 600_000;
 /** Scrolled distance between stirs, which keeps the hop to JS rare. */
 const STIR_STEP = 40;
 
 /** Animation and speech state stay here, isolated from the virtualized board list. */
-export const BoardsMascotHero = memo(function BoardsMascotHero({ width, paper, scrollY, action, title, body, variant = 'boards' }: { width: number; paper: string; scrollY: SharedValue<number>; action?: ReactNode; title?: string; body?: string; variant?: 'boards' | 'notes' }) {
+export const BoardsMascotHero = memo(function BoardsMascotHero({ width, paper, scrollY, activity, action, title, body, variant = 'boards' }: { width: number; paper: string; scrollY: SharedValue<number>; /** What keeps Chits awake when nothing scrolls, as a distance moved. */ activity?: SharedValue<number>; action?: ReactNode; title?: string; body?: string; variant?: 'boards' | 'notes' }) {
   useLocale();
   const desk = useDesk();
   const { scheme } = useTheme();
@@ -44,7 +44,7 @@ export const BoardsMascotHero = memo(function BoardsMascotHero({ width, paper, s
     dozeAfter: DOZE_MS,
   });
   const { stir } = rig;
-  useAnimatedReaction(() => Math.round(scrollY.get() / STIR_STEP), (step, previous) => {
+  useAnimatedReaction(() => Math.round((activity ?? scrollY).get() / STIR_STEP), (step, previous) => {
     if (previous !== null && step !== previous) runOnJS(stir)();
   });
   const [copyHeight, setCopyHeight] = useState(0);

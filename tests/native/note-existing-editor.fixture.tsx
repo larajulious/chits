@@ -3,7 +3,7 @@
 // Return here to inspect persisted data and delete only the fixture's notes.
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { AppText } from '@/components/ui/app-text';
 import { createMessageRepository } from '@/db/repositories';
@@ -11,6 +11,7 @@ import { nativeNoteFormattingAvailable } from '@/services/native-note-formatting
 
 export default function ExistingEditorQA() {
   const router = useRouter();
+  const { cleanupId } = useLocalSearchParams<{ cleanupId?: string }>();
   const database = useSQLiteContext();
   const notes = useMemo(() => createMessageRepository(database), [database]);
   const [owned, setOwned] = useState<string[]>([]);
@@ -29,7 +30,16 @@ export default function ExistingEditorQA() {
     <Pressable accessibilityRole="button" accessibilityLabel="Seed plain existing note" onPress={() => void seed(false)}><AppText>Seed plain existing note</AppText></Pressable>
     <Pressable accessibilityRole="button" accessibilityLabel="Seed structured existing note" onPress={() => void seed(true)}><AppText>Seed structured existing note</AppText></Pressable>
     <Pressable accessibilityRole="button" accessibilityLabel="Inspect saved QA notes" onPress={() => void Promise.all(owned.map(id => notes.getActiveById(id))).then(saved => setReport(JSON.stringify(saved.map(note => ({ id: note?.id, text: note?.text, content: note?.content })))))}><AppText>Inspect saved QA notes</AppText></Pressable>
-    <Pressable accessibilityRole="button" accessibilityLabel="Delete owned QA notes" onPress={() => void Promise.all(owned.map(id => notes.deletePermanently(id))).then(() => { setOwned([]); setReport('QA notes removed'); })}><AppText>Delete owned QA notes</AppText></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel="Delete owned QA notes" onPress={() => void (async () => {
+      // Explicit IDs allow cleanup after a dev reload. Serialize SQLite writes.
+      for (const id of new Set([...owned, ...(cleanupId?.split(',') ?? [])])) {
+        const note = await notes.getActiveById(id);
+        if (!note) continue;
+        if (note.attachments.length || !(note.content?.[0]?.type === 'text' && note.content[0].title === 'Editor QA') && !/^textA\ntextB(?:\nafter)?$/.test(note.text ?? '')) throw new Error('Not a fixture note');
+        await notes.deletePermanently(id);
+      }
+      setOwned([]); setReport('QA notes removed');
+    })().catch(error => setReport(String(error)))}><AppText>Delete owned QA notes</AppText></Pressable>
     <AppText selectable>{report}</AppText>
   </ScrollView>;
 }

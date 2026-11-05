@@ -15,13 +15,13 @@ import { useWelcomeFonts } from '@/features/onboarding/welcome/welcome-fonts';
 import { formatReminder, dateFormat } from '@/services/reminder-time';
 import type { AttachmentLike, CardListItem } from '@/db/types';
 
-function formatCardDate(timestamp: number) {
+export function formatCardDate(timestamp: number) {
   return dateFormat(undefined, { month: 'short', day: 'numeric' }).format(timestamp);
 }
 
 // AttachmentLike.duration is milliseconds throughout the app (see attachment-
 // picker.native.tsx/message-row.native.tsx); mm:ss to match those same spots.
-function formatDurationSeconds(durationMs: number) {
+export function formatDurationSeconds(durationMs: number) {
   const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
   return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
 }
@@ -32,7 +32,7 @@ function formatDurationSeconds(durationMs: number) {
 // message vs. card_attachments); this just adapts that flat result into the
 // AttachmentLike shape AttachmentContent already knows how to render, so the
 // UI never has to know or care where the media came from.
-function getCardPreviewMedia(item: CardListItem): AttachmentLike | null {
+export function getCardPreviewMedia(item: CardListItem): AttachmentLike | null {
   if (!item.previewMediaType || !item.thumbnailPath) return null;
   return {
     id: item.id, type: item.previewMediaType, storagePath: item.thumbnailPath,
@@ -86,7 +86,7 @@ type NoteContent =
 // from its text. Titles that merely restate the media ("Photo", "Video") are
 // dropped because the picture already says it, and a file-only card becomes a
 // document chip rather than a filename masquerading as a headline.
-function noteContent(item: CardListItem, hasMedia: boolean): NoteContent {
+export function noteContent(item: CardListItem, hasMedia: boolean): NoteContent {
   if (item.hidden) return { kind: 'hidden' };
   const title = item.title.trim();
   const preview = (item.checklistSummary ? item.checklistSummary.text : item.preview)?.trim() || null;
@@ -107,7 +107,7 @@ function noteContent(item: CardListItem, hasMedia: boolean): NoteContent {
   return item.kind === 'card' ? { kind: 'text', title, body: null } : { kind: 'text', title: null, body: title };
 }
 
-function fileKindLabel(name: string, count: number) {
+export function fileKindLabel(name: string, count: number) {
   if (count > 1) return `${count} files`;
   const extension = name.match(/\.([a-z0-9]{1,6})$/i)?.[1];
   return extension ? `${extension.toUpperCase()} document` : tr("attachments.document");
@@ -116,7 +116,7 @@ function fileKindLabel(name: string, count: number) {
 // Notes are paper on the desk, always light whatever the appearance: a board's
 // notes take a pastel of the board's color, so a glance at the grid shows which
 // belong together; unorganized notes are cream; a hidden note is plain kraft.
-function paperFor(accent: string | null, hidden: boolean) {
+export function paperFor(accent: string | null, hidden: boolean) {
   if (hidden) return { paper: KRAFT, muted: PAPER_INK_MUTED };
   if (!accent) return { paper: PAPER_WHITE, muted: PAPER_INK_MUTED };
   const colors = noteColors(accent);

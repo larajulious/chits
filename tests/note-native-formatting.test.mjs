@@ -16,6 +16,7 @@ test('native appearance snapshots retain UTF-16 ranges, registered faces and ind
   const heading = formatRange({ type: 'text', text: 'Heading', heading: 1 }, 0, 7, { italic: true });
   assert.equal(nativeNoteFormattingRuns(heading, 'Nunito_600SemiBold')[0].fontFamily, 'Nunito_700Bold_Italic');
   assert.equal(nativeNoteFormattingRuns(heading)[0].bold, true, 'system heading keeps its weight when italic is applied');
+  assert.deepEqual(nativeNoteFormattingRuns({ type: 'text', text: 'Heading', heading: 1 }, 'Nunito_600SemiBold'), [{ start: 0, end: 7, bold: true, fontFamily: 'Nunito_700Bold' }]);
 });
 
 const bridgeSource = readFileSync(new URL('../src/services/native-note-formatting.native.ts', import.meta.url), 'utf8');

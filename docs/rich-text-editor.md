@@ -23,8 +23,8 @@ Title-only notes are supported. Clearing both fields retains the host's existing
 empty-note rules.
 
 Legacy plain notes still use their original text field. There is no eager data
-migration, extra database, network dependency, new editor package or native code
-change. Existing JSON readers accept the additive properties. Saved readers,
+migration, extra database, network dependency or new editor package. Android
+uses the native appearance bridge described below. Existing JSON readers accept the additive properties. Saved readers,
 Chat drafts, templates, Focus, Card Details, Calendar/Space readers and Share Note
 use the same document. Plain-string updates reject formatted documents rather
 than silently flattening them. Backup/restore continues to copy the canonical
@@ -143,8 +143,8 @@ Capture: `/tmp/chits-formatting-keyboard-hidden.png`.
 
 ## Stable multiline native text during formatting
 
-Body inputs now keep one attributed Text root for both plain and formatted
-content. Applying the first color/highlight or clearing the last mark no longer
+The attributed fallback keeps one Text root for both plain and formatted
+content; newer Android builds use the native span projection described below. Applying the first color/highlight or clearing the last mark no longer
 switches the native input between a value prop and attributed children. This is
 a rendering stabilization; the exact reported device failure was not reproduced
 before the change on API 33 or API 37 emulators, so Samsung-device acceptance
@@ -158,3 +158,47 @@ color/highlight changes on the middle line, typing a third line and deletion
 without joining neighboring lines. Screenshots:
 `/tmp/chits-api37-add-after-fix.png`. The reusable no-write fixture is
 `tests/native/note-line-break-regression.fixture.tsx` (mode=add for Add Note).
+
+## Android native formatting and existing-note validation
+
+Android builds with the updated ChitsFiles module keep a normal controlled
+multiline TextInput. The document remains the canonical JSON block/span model;
+`ChitsNoteFormatting` projects those spans onto the existing native Editable.
+Formatting never calls setText, replaces a line separator, moves selection,
+changes input type or removes composing/foreign spans. Explicit snapshots use
+UTF-16 offsets, monotonic revisions and an exact text match. A TextWatcher waits
+for Fabric's matching buffer instead of applying stale offsets or retry timers.
+Owned spans and weak registrations are cleaned up with the input lifecycle.
+The bridge uses the existing React Native/Expo module and bundled font faces;
+there are no new npm dependencies or document migrations. iOS/older native
+binaries retain the attributed fallback, so Android needs the rebuilt binary.
+
+The formatter retains its range for the entire formatting session, including
+late collapsed-selection events after keyboard dismissal. Direct body interaction
+releases that range and cancels pending cursor/scroll requests. The sheet waits
+for keyboardDidHide before opening, so its controls do not move during a press.
+Native span formatting continues to use the existing undo/history and list/
+heading/attachment paths. The title remains separate document metadata.
+
+On 2026-11-05 the rebuilt app was installed on the connected Samsung Android.
+The real database-backed Edit Note screen was exercised with separately saved
+legacy plain text and structured heading/body notes, with native touch selection:
+color, highlight, bold, italic, underline, blank lines, save, reopen, continued
+Enter/typing and formatting/typing undo-redo all passed. Canonical saved JSON was
+checked, not just screenshots. Test notes were isolated from original notes.
+Synthetic review captures: `/tmp/chits-device-existing-fixed.png` and
+`/tmp/chits-device-reopened-typing-fixed.png`.
+
+Seven Android instrumented checks pass, including text/selection/composing-span
+invariance, native rendered line count, stale/malformed requests, queued typing,
+bold/italic, clipboard round trip with newlines/emoji, and existing native paste/
+boundary-Backspace bindings. The focused note run passes 213 tests; TypeScript
+and focused lint pass. The broad run has 823 passes and the existing unrelated
+header source assertion failure. iOS physical keyboard/IME acceptance and
+cross-block native selection remain separate limitations. Temporary QA routes
+are removed; reusable fixtures live under tests/native.
+
+Physical before/after checks confirm all 19 original message records and all 8
+attachment records are unchanged, with SQLite integrity ok. Both phone QA notes
+and the baseline emulator QA note were removed. The temporary production QA
+route was removed; no original notes were edited during validation.

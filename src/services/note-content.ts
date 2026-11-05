@@ -290,6 +290,15 @@ export function noteChecklistSummary(blocks: (NoteBlock | NoteDraftBlock | NoteR
   };
 }
 
+/** One checklist line, addressed the way setChecklistChecked expects: by its message and block position. */
+export type NoteChecklistEntry = { messageId: string; index: number; text: string; checked: boolean };
+
+export function noteChecklistEntries(messageId: string, blocks: NoteBlock[]): NoteChecklistEntry[] {
+  return blocks.flatMap((block, index) => block.type === 'text' && block.list?.kind === 'checklist'
+    ? [{ messageId, index, text: block.text.trim() || tr("notecontent.emptyItem"), checked: block.list.checked }]
+    : []);
+}
+
 export function noteHasChecklist(blocks: { type: string; list?: NoteList }[]) {
   return blocks.some((block) => block.type === 'text' && block.list?.kind === 'checklist');
 }

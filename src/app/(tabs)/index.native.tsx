@@ -1,6 +1,6 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
-import { noteChecklistSummary, type NoteBlock } from '@/services/note-content';
+import { noteChecklistEntries, noteChecklistSummary, serializeNoteContent, type NoteBlock, type NoteChecklistEntry } from '@/services/note-content';
 import { subscribeToNoteChanges } from '@/services/note-changes';
 import { cardNoteRoute } from '@/services/card-note-route';
 import { setHomeView } from '@/services/home-view';
@@ -36,16 +36,17 @@ import { FocusCardsBanner } from '@/features/focus/focus-cards-banner';
 import type { Board, CardListItem, MessageType } from '@/db/types';
 import { createRevisitRepository } from '@/db/revisit-repository';
 import { createNoteOrderRepository } from '@/db/note-order-repository';
-import { arrangeNotes, moveNote, noteKey, type NoteOrderMode } from '@/services/note-order';
+import { arrangeNotes, moveNote, noteKey, type NoteLayout, type NoteOrderMode } from '@/services/note-order';
 import { removeCardAttachmentFile } from '@/services/card-attachment-storage';
 import { spaceNoteAction } from '@/components/spaces/space-note-action';
 import { PaperDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { useScreenReader } from '@/hooks/use-screen-reader';
 import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
 
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 type ViewMode = 'boards' | 'cards';
 
-type UnorganizedSummaryRow = { id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; isHiddenContent: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number };
+type UnorganizedSummaryRow = { id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; isHiddenContent: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number; mediaWidth: number | null; mediaHeight: number | null };
 
 function unorganizedDisplayTitle(row: UnorganizedSummaryRow): string {
   if (row.isHiddenContent === 1) return tr("index.hiddenChit");
@@ -73,7 +74,7 @@ function unorganizedToCardListItem(row: UnorganizedSummaryRow): CardListItem {
     createdAt: row.createdAt, updatedAt: row.updatedAt, pinned: row.pinned === 1, hidden, reminderAt: null,
     subtaskCount: 0, completedSubtaskCount: 0,
     photoCount: row.photoCount, videoCount: row.videoCount, fileCount: row.fileCount,
-    previewMediaType: hidden ? null : row.previewMediaType, thumbnailPath: hidden ? null : row.thumbnailPath, mediaDuration: hidden ? null : row.mediaDuration, mediaCount: hidden ? 0 : row.mediaCount,
+    previewMediaType: hidden ? null : row.previewMediaType, thumbnailPath: hidden ? null : row.thumbnailPath, mediaDuration: hidden ? null : row.mediaDuration, mediaCount: hidden ? 0 : row.mediaCount, mediaWidth: hidden ? null : row.mediaWidth, mediaHeight: hidden ? null : row.mediaHeight,
   };
 }
 
@@ -83,6 +84,17 @@ function unorganizedToCardListItem(row: UnorganizedSummaryRow): CardListItem {
 type CardFilter = 'all' | 'unorganized' | (string & {});
 
 type CardFilterChip = { key: CardFilter; label: string; count: number };
+
+/** The first checklist lines the board shows on a note. */
+const BOARD_CHECKLIST_ROWS = 4;
+
+const inFilter = (item: CardListItem, filter: CardFilter) => filter === 'all' || (filter === 'unorganized' ? item.kind === 'thought' : item.boardId === filter);
+
+// Pinned leads either way; the rest follow the saved arrangement or newest first.
+function sortedNotes(all: CardListItem[], orderMode: NoteOrderMode, noteOrder: string[]) {
+  const sorted = orderMode === 'custom' ? arrangeNotes(all, noteOrder) : [...all].sort((a, b) => b.updatedAt - a.updatedAt);
+  return [...sorted.filter((item) => item.pinned), ...sorted.filter((item) => !item.pinned)];
+}
 
 export default function BoardsScreen() {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
@@ -98,6 +110,9 @@ export default function BoardsScreen() {
   const { actionSheet, confirm } = useAppDialog();
   const { tokens: theme, styleTokens, styleColors } = useTheme();
   const { width } = useWindowDimensions();
+  // The board mounts only what's on screen, which a screen reader can't reach
+  // past, so VoiceOver and TalkBack keep the list and its Move earlier/later.
+  const listOnly = useScreenReader();
   const headerGap = width < 390 ? spacing.xxs : spacing.xs;
   const headerActionsWidth = (count: number) => count * BOARD_HEADER_BUTTON_SIZE + (count - 1) * headerGap;
   const controls = useStickyControls();
@@ -136,7 +151,7 @@ export default function BoardsScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
   useEffect(() => { setHomeView(viewMode); }, [viewMode]);
   const [headerSection, setHeaderSection] = useState<{ sections: CardSection[]; key: string } | null>(null);
-  const { view } = useLocalSearchParams<{ view?: string }>();
+  const { view, focusNote } = useLocalSearchParams<{ view?: string; focusNote?: string }>();
   useFocusEffect(useCallback(() => {
     if (view !== 'cards') return;
     setViewMode('cards');
@@ -158,7 +173,15 @@ export default function BoardsScreen() {
   // which they drag into place. Both are saved preferences.
   const [orderMode, setOrderMode] = useState<NoteOrderMode>('recent');
   const [noteOrder, setNoteOrder] = useState<string[]>([]);
+  // The free board or the masonry grid, a saved preference. Read once: after that
+  // this session's choice stands, so a reload already in flight can't undo a switch.
+  const [noteLayout, setNoteLayout] = useState<NoteLayout>('board');
+  const noteLayoutRead = useRef(false);
+  const showBoard = !listOnly && noteLayout === 'board';
   const [cardToast, setCardToast] = useState<string | null>(null);
+  const [boardFocus, setBoardFocus] = useState<{ key: string; nonce: number } | null>(null);
+  // What each message's checklist said when last read, for ticking against that version.
+  const checklistContent = useRef(new Map<string, NoteBlock[]>());
   const openingNote = useRef(false);
 
   const openCardNote = async (item: CardListItem) => {
@@ -203,13 +226,19 @@ export default function BoardsScreen() {
       noteOrderRepository.load(),
     ]);
     setOrderMode(arrangement.mode);
+    if (!noteLayoutRead.current) { noteLayoutRead.current = true; setNoteLayout(arrangement.layout); }
     setNoteOrder(arrangement.order);
     const connectionsByKey = new Map<string, number>(connectionRows.map((row) => [row.noteKey, row.count]));
     const contentByCard = new Map<string, NoteBlock[]>();
     const contentByThought = new Map<string, NoteBlock[]>();
+    const entriesByCard = new Map<string, NoteChecklistEntry[]>();
+    checklistContent.current = new Map(checklistRows.map((row) => [row.messageId, row.content]));
     for (const row of checklistRows) {
       contentByThought.set(row.messageId, row.content);
-      if (row.cardId) contentByCard.set(row.cardId, [...(contentByCard.get(row.cardId) ?? []), ...row.content]);
+      if (row.cardId) {
+        contentByCard.set(row.cardId, [...(contentByCard.get(row.cardId) ?? []), ...row.content]);
+        entriesByCard.set(row.cardId, [...(entriesByCard.get(row.cardId) ?? []), ...noteChecklistEntries(row.messageId, row.content)]);
+      }
     }
     const subtasksByCard = new Map<string, { id: string; title: string; isCompleted: boolean }[]>();
     for (const row of subtaskRows) {
@@ -220,8 +249,8 @@ export default function BoardsScreen() {
     // A card whose thought is hidden in Chat is covered here too, the same as on its board.
     setCards(cardRows.map(({ isHidden, ...row }) => isHidden === 1
       ? { ...row, kind: 'card' as const, title: tr("index.hiddenChit"), preview: null, pinned: row.pinned === 1, hidden: true, previewMediaType: null, thumbnailPath: null, mediaDuration: null, mediaCount: 0 }
-      : { ...row, kind: 'card' as const, pinned: row.pinned === 1, hidden: false, connectionCount: connectionsByKey.get(`card:${row.id}`) ?? 0, mediaCount: row.mediaCount ?? 0, subtaskPreview: subtasksByCard.get(row.id) ?? [], checklistSummary: noteChecklistSummary(contentByCard.get(row.id) ?? []) }));
-    setUnorganizedThoughts(thoughtRows.map((row) => ({ ...unorganizedToCardListItem(row), connectionCount: row.isHiddenContent ? 0 : connectionsByKey.get(`thought:${row.id}`) ?? 0, checklistSummary: row.isHiddenContent ? null : noteChecklistSummary(contentByThought.get(row.id) ?? []) })));
+      : { ...row, kind: 'card' as const, pinned: row.pinned === 1, hidden: false, connectionCount: connectionsByKey.get(`card:${row.id}`) ?? 0, mediaCount: row.mediaCount ?? 0, subtaskPreview: subtasksByCard.get(row.id) ?? [], checklistSummary: noteChecklistSummary(contentByCard.get(row.id) ?? []), checklistItems: entriesByCard.get(row.id)?.slice(0, BOARD_CHECKLIST_ROWS) }));
+    setUnorganizedThoughts(thoughtRows.map((row) => ({ ...unorganizedToCardListItem(row), connectionCount: row.isHiddenContent ? 0 : connectionsByKey.get(`thought:${row.id}`) ?? 0, checklistSummary: row.isHiddenContent ? null : noteChecklistSummary(contentByThought.get(row.id) ?? []), checklistItems: row.isHiddenContent ? undefined : noteChecklistEntries(row.id, contentByThought.get(row.id) ?? []).slice(0, BOARD_CHECKLIST_ROWS) })));
     setCardsReady(true);
   }, [boardRepository, messageRepository, noteOrderRepository, revisitRepository]);
   // Card deletes/archives/hides go through loadCards afterwards, so reconciling
@@ -236,6 +265,24 @@ export default function BoardsScreen() {
     // Reload runs on every focus (e.g. returning from Card Details) regardless
     // of which tab is active, so a switch back to Cards never shows stale data.
   }, [load, loadCards]));
+
+  const changeNoteLayout = useCallback((next: NoteLayout) => {
+    noteLayoutRead.current = true;
+    setNoteLayout(next);
+    setHeaderSection(null);
+    // If this fails the switch still holds for now; only the next launch forgets it.
+    noteOrderRepository.setLayout(next).catch(() => {});
+  }, [noteOrderRepository]);
+
+  // Search's "Show on board". Waits for the reload above, so a note made
+  // elsewhere since this screen last looked is on the board to be found.
+  useFocusEffect(useCallback(() => {
+    if (!focusNote) return;
+    setViewMode('cards');
+    changeNoteLayout('board');
+    router.setParams({ focusNote: undefined });
+    void loadCards().then(() => setBoardFocus({ key: focusNote, nonce: Date.now() }));
+  }, [changeNoteLayout, focusNote, loadCards]));
 
   const changeViewMode = (next: ViewMode) => {
     if (next !== viewMode) {
@@ -300,6 +347,19 @@ export default function BoardsScreen() {
       ...groups.map((group) => ({ key: group.key, title: group.title, count: group.items.length, data: group.items })),
     ];
   }, [cards, unorganizedThoughts, cardFilter, orderMode, noteOrder, localeVersion]);
+
+  // The board holds every note whatever the filter, so a filtered-out note keeps
+  // its place and new notes are placed among all of them, not just those showing.
+  const boardNotes = useMemo(() => sortedNotes([...cards, ...unorganizedThoughts], orderMode, noteOrder), [cards, noteOrder, orderMode, unorganizedThoughts]);
+  const shownNoteKeys = useMemo(() => new Set(cardSections.flatMap((section) => section.data.map(noteKey))), [cardSections]);
+
+  // A note found from Search may sit outside the current filter.
+  const focusedNote = boardFocus ? boardNotes.find((item) => noteKey(item) === boardFocus.key) : undefined;
+  if (focusedNote && !inFilter(focusedNote, cardFilter)) setCardFilter('all');
+  const finishBoardFocus = useCallback((found: boolean) => {
+    setBoardFocus(null);
+    if (!found) setCardToast(tr('notesCanvas.notOnBoard'));
+  }, []);
 
   const changeOrderMode = useCallback((next: NoteOrderMode) => {
     if (next === orderMode) return;
@@ -373,6 +433,31 @@ export default function BoardsScreen() {
       .then(() => subtaskRepository.toggle(item.id, subtaskId))
       .then(() => {}, () => { setCardToast(tr("cardsubtasks.couldNotUpdateThatSubtask")); void loadCards(); });
   }, [loadCards, subtaskRepository]);
+
+  // A note's own checklist, ticked on the board. Saved through the same call the
+  // note uses, in order, against the version last read; a failed save reloads.
+  const toggleChecklistItem = useCallback((item: CardListItem, entry: NoteChecklistEntry) => {
+    void Haptics.selectionAsync();
+    const flip = (note: CardListItem) => {
+      if (note.kind !== item.kind || note.id !== item.id) return note;
+      const summary = note.checklistSummary;
+      const completed = (summary?.completed ?? 0) + (entry.checked ? -1 : 1);
+      return {
+        ...note,
+        checklistItems: note.checklistItems?.map((line) => line.messageId === entry.messageId && line.index === entry.index ? { ...line, checked: !entry.checked } : line),
+        checklistSummary: summary ? { ...summary, completed, percent: Math.round(completed / summary.total * 100) } : summary,
+      };
+    };
+    setCards((current) => current.map(flip));
+    setUnorganizedThoughts((current) => current.map(flip));
+    subtaskQueue.current = subtaskQueue.current.then(async () => {
+      const blocks = checklistContent.current.get(entry.messageId);
+      const expected = blocks ? serializeNoteContent(blocks) : null;
+      if (!expected) throw new Error('Checklist not loaded');
+      const { content } = await messageRepository.setChecklistChecked(entry.messageId, entry.index, !entry.checked, expected);
+      checklistContent.current.set(entry.messageId, content);
+    }).catch(() => { setCardToast(tr('savednotecontentview.checklistCouldNotBeUpdated')); void loadCards(); });
+  }, [loadCards, messageRepository]);
 
   const openCardActions = useCallback(async (item: CardListItem) => {
     // "Stick to Fridge" / "Remove from Fridge", looked up as the menu opens.
@@ -489,7 +574,7 @@ export default function BoardsScreen() {
         showTitle={false}
         title={activeHeaderSection?.title ?? appTitle}
         leadingWidth={headerActionsWidth(2)}
-        actionWidth={headerActionsWidth(2)}
+        actionWidth={headerActionsWidth(viewMode !== 'cards' ? 1 : listOnly || showBoard ? 2 : 3)}
         leading={(
           <View style={[styles.headerActions, { gap: headerGap }]}>
             <IconButton label={tr("archive.openNavigation")} onPress={openDrawer}>
@@ -506,9 +591,14 @@ export default function BoardsScreen() {
         )}
         trailing={(
           <View style={[styles.headerActions, { gap: headerGap }]}>
-            {viewMode === 'cards' ? <IconButton label={orderMode === 'custom' ? tr('cardscollection.switchToRecent') : tr('cardscollection.switchToMyOrder')} disabled={isLoading || showLoader} onPress={() => changeOrderMode(orderMode === 'custom' ? 'recent' : 'custom')}>
+            {viewMode === 'cards' && !showBoard ? <IconButton label={orderMode === 'custom' ? tr('cardscollection.switchToRecent') : tr('cardscollection.switchToMyOrder')} disabled={isLoading || showLoader} onPress={() => changeOrderMode(orderMode === 'custom' ? 'recent' : 'custom')}>
               {/* The icon names the order showing now: newest first, or your own arrangement. */}
               <HeaderIcon name={orderMode === 'custom' ? 'swap-vertical-outline' : 'time-outline'} size={22} />
+            </IconButton> : null}
+            {/* Screen readers stay on the grid, so they have nothing to switch. */}
+            {viewMode === 'cards' && !listOnly ? <IconButton label={tr(showBoard ? 'notesCanvas.showGrid' : 'notesCanvas.showBoard')} disabled={isLoading || showLoader} onPress={() => { void Haptics.selectionAsync(); changeNoteLayout(showBoard ? 'grid' : 'board'); }}>
+              {/* The icon names where it goes, since that's what it's there for. */}
+              <HeaderIcon name={showBoard ? 'grid-outline' : 'easel-outline'} size={22} />
             </IconButton> : null}
             <IconButton label={viewMode === 'cards' && cardFilter !== 'all' && cardFilter !== 'unorganized' ? tr("index.searchInValue", { value1: boards.find((board) => board.id === cardFilter)?.name ?? 'board' }) : tr("search.search")} onPress={() => {
               const selectedBoard = viewMode === 'cards' ? boards.find((board) => board.id === cardFilter) : undefined;
@@ -541,7 +631,8 @@ export default function BoardsScreen() {
               onToggleSubtask={toggleCardSubtask}
               onSectionChange={updateHeaderSection}
               bottomInset={tabBarHeight}
-              footer={<><FocusCardsBanner /><GettingStartedCard /></>}
+              footer={<GettingStartedCard />}
+              board={!showBoard ? null : { notes: boardNotes, shownKeys: shownNoteKeys, focus: boardFocus, onFocusDone: finishBoardFocus, onToast: setCardToast, onToggleChecklist: toggleChecklistItem }}
             />
         ) : (
       <BoardsListing

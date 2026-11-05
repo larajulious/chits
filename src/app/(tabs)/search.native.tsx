@@ -1,11 +1,11 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
-import { AppHeader, AppText, EmptyState, IconButton, Screen, HeaderIcon, MenuIcon } from '@/components/ui/primitives';
+import { AppHeader, AppText, EmptyState, Icon, IconButton, Screen, HeaderIcon, MenuIcon } from '@/components/ui/primitives';
 import { PAPERS, PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PaperCard, PaperDesk, PaperTab, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { stableTilt } from '@/constants/style-tokens';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
@@ -14,6 +14,7 @@ import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { spacing } from '@/constants/theme';
 import { createBoardRepository } from '@/db/repositories';
 import { useOpenCardNote } from '@/components/notes/use-open-card-note';
+import { useScreenReader } from '@/hooks/use-screen-reader';
 
 type Result = { id: string; title: string; context: string; kind: 'message' | 'card' | 'board' | 'file' };
 
@@ -37,6 +38,7 @@ function SearchContent({ scopedBoardId, boardName }: { scopedBoardId?: string; b
   const tabBarHeight = useBottomTabBarHeight();
   const repository = useMemo(() => createBoardRepository(database), [database]);
   const openCardNote = useOpenCardNote();
+  const listOnly = useScreenReader();
   const [term, setTerm] = useState('');
   const [archived, setArchived] = useState(false);
   const [results, setResults] = useState<Result[]>([]);
@@ -66,6 +68,11 @@ function SearchContent({ scopedBoardId, boardName }: { scopedBoardId?: string; b
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); ++requestId.current; }, []);
 
   const open = (result: Result) => result.kind === 'card' ? void openCardNote(result.id) : router.push(result.kind === 'board' ? `/board/${result.id}` : result.kind === 'message' || result.kind === 'file' ? `/chat?messageId=${result.id}` : '/search');
+  // Boards aren't notes, so they have no spot on the board to go to.
+  const showOnBoard = async (result: Result) => {
+    const focusNote = result.kind === 'card' ? `card:${result.id}` : await repository.noteKeyForMessage(result.id);
+    router.navigate({ pathname: '/', params: { focusNote } });
+  };
   const goBack = () => router.canGoBack() ? router.back() : router.navigate('/');
 
   return <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: desk.desk }}>
@@ -100,6 +107,10 @@ function SearchContent({ scopedBoardId, boardName }: { scopedBoardId?: string; b
         <AppText weight="700" style={styles.kind}>{result.kind}</AppText>
         <AppText numberOfLines={2} style={[handwriting.handBold, styles.title]}>{result.title}</AppText>
         <AppText numberOfLines={2} style={styles.context}>{result.context}</AppText>
+        {result.kind !== 'board' && !listOnly ? <Pressable accessibilityRole="button" accessibilityLabel={tr('search.showOnBoard')} hitSlop={8} onPress={() => void showOnBoard(result)} style={({ pressed }) => [styles.locate, pressed && styles.locatePressed]}>
+          <Icon name="locate-outline" size={19} color={PAPER_INK_MUTED} />
+          <AppText weight="600" style={styles.locateText}>{tr('search.showOnBoard')}</AppText>
+        </Pressable> : null}
       </PaperCard>) : <EmptyState title={tr("search.noMatches")} description={tr("search.tryADifferentWordOrIncludeArchivedItems")} />}
     </ScrollView>) : <EmptyState title={scopedBoardId ? tr("search.findACardInThisBoard") : tr("search.findAnythingLater")} description={scopedBoardId ? tr("search.searchCardTitlesThoughtsColumnsAndAttachmentNames") : tr("search.searchMessagesCardsBoardsAndAttachmentNames")} />}
     </PaperDesk>
@@ -116,4 +127,7 @@ const styles = StyleSheet.create({
   kind: { color: PAPER_INK_MUTED, fontSize: 10.5, letterSpacing: 0.8, textTransform: 'uppercase' },
   title: { color: PAPER_INK, fontSize: 19, lineHeight: 25 },
   context: { color: PAPER_INK_MUTED, fontSize: 13, lineHeight: 18 },
+  locate: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 5, minHeight: 32, marginTop: 4 },
+  locatePressed: { opacity: 0.55 },
+  locateText: { color: PAPER_INK_MUTED, fontSize: 12.5 },
 });

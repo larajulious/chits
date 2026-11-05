@@ -633,7 +633,7 @@ export function createMessageRepository(database: SQLiteDatabase) {
       // correlated subquery is enough; no card/card_attachments to union in
       // yet since it isn't organized into a card at all.
       const MEDIA_PRIORITY = `CASE a.type WHEN 'photo' THEN 1 WHEN 'video' THEN 2 WHEN 'audio' THEN 3 ELSE 9 END`;
-      return database.getAllAsync<{ id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; isHiddenContent: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number }>(`
+      return database.getAllAsync<{ id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; isHiddenContent: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number; mediaWidth: number | null; mediaHeight: number | null }>(`
         SELECT m.id, m.text, m.type, m.created_at AS createdAt, m.updated_at AS updatedAt, m.pinned, m.is_hidden_content AS isHiddenContent,
           (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id AND a.type = 'photo') AS photoCount,
           (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id AND a.type = 'video') AS videoCount,
@@ -643,6 +643,8 @@ export function createMessageRepository(database: SQLiteDatabase) {
           (SELECT a.type FROM attachments a WHERE a.message_id = m.id AND a.type IN ('photo', 'video', 'audio') ORDER BY ${MEDIA_PRIORITY} ASC, a.created_at ASC LIMIT 1) AS previewMediaType,
           (SELECT a.storage_path FROM attachments a WHERE a.message_id = m.id AND a.type IN ('photo', 'video', 'audio') ORDER BY ${MEDIA_PRIORITY} ASC, a.created_at ASC LIMIT 1) AS thumbnailPath,
           (SELECT a.duration FROM attachments a WHERE a.message_id = m.id AND a.type IN ('photo', 'video', 'audio') ORDER BY ${MEDIA_PRIORITY} ASC, a.created_at ASC LIMIT 1) AS mediaDuration,
+          (SELECT a.width FROM attachments a WHERE a.message_id = m.id AND a.type IN ('photo', 'video', 'audio') ORDER BY ${MEDIA_PRIORITY} ASC, a.created_at ASC LIMIT 1) AS mediaWidth,
+          (SELECT a.height FROM attachments a WHERE a.message_id = m.id AND a.type IN ('photo', 'video', 'audio') ORDER BY ${MEDIA_PRIORITY} ASC, a.created_at ASC LIMIT 1) AS mediaHeight,
           (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id AND a.type IN ('photo', 'video', 'audio')) AS mediaCount
         FROM messages m
         WHERE m.deleted_at IS NULL AND m.archived_at IS NULL
@@ -786,6 +788,11 @@ export function createBoardRepository(database: SQLiteDatabase) {
         `, boardId, like, like, like, like, like);
       }
       return database.getAllAsync<SearchResult>(`SELECT id, CASE WHEN is_hidden_content = 1 THEN 'Hidden Chit' ELSE text END AS title, 'Chat' AS context, 'message' AS kind FROM messages WHERE text LIKE ? ESCAPE '\\' ${includeArchived ? '' : 'AND archived_at IS NULL AND deleted_at IS NULL'} UNION ALL SELECT c.id, COALESCE(c.title, 'Related thoughts') AS title, b.name AS context, 'card' AS kind FROM cards c INNER JOIN boards b ON b.id = c.board_id WHERE c.title LIKE ? ESCAPE '\\' ${includeArchived ? '' : 'AND c.archived_at IS NULL AND b.archived_at IS NULL'} UNION ALL SELECT b.id, b.name AS title, 'Board' AS context, 'board' AS kind FROM boards b WHERE b.name LIKE ? ESCAPE '\\' ${includeArchived ? '' : 'AND b.archived_at IS NULL'} UNION ALL SELECT a.message_id AS id, CASE WHEN m.is_hidden_content = 1 THEN 'Hidden Chit' ELSE COALESCE(a.original_name, 'Attachment') END AS title, CASE WHEN m.is_hidden_content = 1 THEN 'Chat' ELSE 'File' END AS context, 'file' AS kind FROM attachments a INNER JOIN messages m ON m.id = a.message_id WHERE a.original_name LIKE ? ESCAPE '\\' ORDER BY title COLLATE NOCASE LIMIT 100`, like, like, like, like);
+    },
+    /** The note a Chat message shows as in the Notes list: its card, or the thought itself. */
+    async noteKeyForMessage(messageId: string) {
+      const row = await database.getFirstAsync<{ cardId: string }>('SELECT c.id AS cardId FROM card_messages cm INNER JOIN cards c ON c.id = cm.card_id INNER JOIN boards b ON b.id = c.board_id WHERE cm.message_id = ? AND c.archived_at IS NULL AND b.archived_at IS NULL', messageId);
+      return row ? `card:${row.cardId}` : `thought:${messageId}`;
     },
     getById: (id: string) => database.getFirstAsync<Board>('SELECT id, name, icon, accent, created_at AS createdAt, updated_at AS updatedAt, archived_at AS archivedAt, show_column_navigator = 1 AS showColumnNavigator FROM boards WHERE id = ? AND archived_at IS NULL', id),
     async create(input: { name: string; icon?: string | null; accent?: string | null }) {
@@ -948,14 +955,14 @@ export function createBoardRepository(database: SQLiteDatabase) {
     listAllCardSummaries: (options: { searchTerm?: string } = {}) => {
       const term = options.searchTerm?.trim();
       const like = term ? `%${term.replace(/[%_]/g, '\\$&')}%` : null;
-      return database.getAllAsync<{ id: string; title: string; preview: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; updatedAt: number; pinned: number; photoCount: number; videoCount: number; fileCount: number; subtaskCount: number; completedSubtaskCount: number; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number | null; isHidden: number; reminderAt: number | null }>(`
+      return database.getAllAsync<{ id: string; title: string; preview: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; updatedAt: number; pinned: number; photoCount: number; videoCount: number; fileCount: number; subtaskCount: number; completedSubtaskCount: number; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number | null; mediaWidth: number | null; mediaHeight: number | null; isHidden: number; reminderAt: number | null }>(`
         WITH card_media AS (
-          SELECT cm.card_id AS cardId, a.type AS mediaType, a.storage_path AS path, a.duration AS duration, a.created_at AS createdAt,
+          SELECT cm.card_id AS cardId, a.type AS mediaType, a.storage_path AS path, a.duration AS duration, a.width AS width, a.height AS height, a.created_at AS createdAt,
             CASE a.type WHEN 'photo' THEN 1 WHEN 'video' THEN 2 WHEN 'audio' THEN 3 ELSE 9 END AS priority
           FROM card_messages cm INNER JOIN attachments a ON a.message_id = cm.message_id
           WHERE a.type IN ('photo', 'video', 'audio')
           UNION ALL
-          SELECT ca.card_id AS cardId, ca.type AS mediaType, ca.storage_path AS path, ca.duration AS duration, ca.created_at AS createdAt,
+          SELECT ca.card_id AS cardId, ca.type AS mediaType, ca.storage_path AS path, ca.duration AS duration, ca.width AS width, ca.height AS height, ca.created_at AS createdAt,
             CASE ca.type WHEN 'photo' THEN 1 WHEN 'video' THEN 2 ELSE 9 END AS priority
           FROM card_attachments ca
           WHERE ca.type IN ('photo', 'video')
@@ -976,7 +983,7 @@ export function createBoardRepository(database: SQLiteDatabase) {
           ((SELECT COUNT(*) FROM attachments a INNER JOIN card_messages cm ON cm.message_id = a.message_id WHERE cm.card_id = c.id AND a.type = 'file') + (SELECT COUNT(*) FROM card_attachments ca WHERE ca.card_id = c.id AND ca.type = 'file')) AS fileCount,
           ${CARD_SUBTASK_TOTAL_SQL} AS subtaskCount,
           ${CARD_SUBTASK_DONE_SQL} AS completedSubtaskCount,
-          cmr.mediaType AS previewMediaType, cmr.path AS thumbnailPath, cmr.duration AS mediaDuration, cmr.mediaCount AS mediaCount,
+          cmr.mediaType AS previewMediaType, cmr.path AS thumbnailPath, cmr.duration AS mediaDuration, cmr.mediaCount AS mediaCount, cmr.width AS mediaWidth, cmr.height AS mediaHeight,
           EXISTS (SELECT 1 FROM card_messages cm INNER JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id AND m.is_hidden_content = 1) AS isHidden,
           ${UPCOMING_REMINDER_SQL} AS reminderAt
         FROM cards c

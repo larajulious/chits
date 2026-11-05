@@ -73,16 +73,16 @@ test('formatter retains selection, waits for keyboard dismissal and releases sup
   const code = ts.transpileModule(component, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const jsx = (type, props) => ({ type, props });
   const calls = [], range = { key: 'long-note', start: 900, end: 914 }, states = [false, false];
-  let liveCursor = range, stateIndex, selection = { current: null }, effect, cleanup, previousDeps, onHidden, visible = true;
+  let subscriptionCleanup, liveCursor = range, stateIndex, selection = { current: null }, effect, cleanup, previousDeps, onHidden, visible = true;
   const context = {
     exports: {}, require: () => ({ jsx, jsxs: jsx }), useLocale: () => {}, useDesk: () => ({}),
     useTheme: () => ({ tokens: {} }), useSafeAreaInsets: () => ({ bottom: 0 }), useKeyboardInset: () => visible ? 300 : 0,
     useState: () => { const index = stateIndex++; return [states[index], update => { states[index] = typeof update === 'function' ? update(states[index]) : update; }]; },
-    useRef: () => selection,
+    useRef: () => selection, useEffect: callback => { subscriptionCleanup ??= callback(); },
     useLayoutEffect: (callback, deps) => {
       if (!previousDeps || deps.some((dep, i) => dep !== previousDeps[i])) { effect = callback; previousDeps = deps; }
     },
-    Keyboard: { isVisible: () => visible, addListener: (event, callback) => { assert.equal(event, 'keyboardDidHide'); onHidden = callback; return { remove: () => { onHidden = null; } }; }, dismiss: () => calls.push(['dismiss']) },
+    Keyboard: { isVisible: () => visible, addListener: (event, callback) => { if (event === 'keyboardDidHide') onHidden = callback; return { remove: () => { if (event === 'keyboardDidHide') onHidden = null; } }; }, dismiss: () => calls.push(['dismiss']) },
     formattingText: key => key, View: 'View', ScrollView: 'ScrollView', Pressable: 'Pressable', AppText: 'Text',
     NoteFormattingSheet: 'Sheet', NoteListButtons: 'Lists', styles: {}, toolbarStyles: {},
   };
@@ -103,12 +103,13 @@ test('formatter retains selection, waits for keyboard dismissal and releases sup
   assert.equal(tree.props.children[0].props.open, true);
   tree.props.children[0].props.onClose(); render();
   assert.deepEqual(calls.at(-1), ['suppress', false]);
-  assert.equal(onHidden, null);
+  assert.ok(onHidden, 'keyboard subscription lives for the toolbar lifetime');
   states[0] = true; render(); tree = render();
   assert.equal(tree.props.children[0].props.open, true, 'already-hidden keyboards do not need another hide event');
   render(true);
   assert.deepEqual(calls.at(-1), ['suppress', false]);
-  render(); cleanup();
+  render(); cleanup(); subscriptionCleanup();
+  assert.equal(onHidden, null);
   assert.deepEqual(calls.at(-1), ['suppress', false]);
 });
 

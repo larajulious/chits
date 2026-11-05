@@ -27,9 +27,9 @@ test('a sleeping Chits swaps the smile for a sleeping mouth, and waking swaps it
   assert.match(rig, /asleep\.set\(reduced \? 0 : withTiming\(0/);
 });
 
-test('only the listing heroes doze, a minute after the last scroll', () => {
+test('only the listing heroes doze, ten minutes after the last scroll', () => {
   const hero = read('src/components/boards/boards-mascot-hero.native.tsx');
-  assert.match(hero, /const DOZE_MS = 60_000;/);
+  assert.match(hero, /const DOZE_MS = 600_000;/);
   assert.match(hero, /dozeAfter: DOZE_MS/);
   assert.match(hero, /runOnJS\(stir\)\(\)/);
   for (const path of ['src/features/plan/plan-screen.tsx', 'src/features/onboarding/screens/welcome-screen.tsx', 'src/features/spin/spin-stage.tsx']) assert.doesNotMatch(read(path), /dozeAfter/, path);
