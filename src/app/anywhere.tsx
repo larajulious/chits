@@ -5,6 +5,8 @@ import { useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
 import { BackHeader, EmptyState, LoadingState, Screen } from '@/components/ui/primitives';
 import { PaperDesk, useDesk } from '@/components/desk/paper-desk';
+import { createBoardRepository } from '@/db/repositories';
+import { cardNoteRoute } from '@/services/card-note-route';
 
 /** Widget URLs carry only stable identifiers. Recheck eligibility after every tap:
  * old launcher snapshots must never reopen archived, deleted or hidden notes. */
@@ -24,12 +26,14 @@ export default function AnywhereRoute() {
       ? 'SELECT id FROM messages WHERE id = ? AND deleted_at IS NULL AND archived_at IS NULL AND is_hidden_content = 0'
       : `SELECT c.id FROM cards c JOIN boards b ON b.id = c.board_id WHERE c.id = ? AND c.archived_at IS NULL AND b.archived_at IS NULL
          AND NOT EXISTS (SELECT 1 FROM card_messages cm JOIN messages m ON m.id = cm.message_id WHERE cm.card_id = c.id AND m.is_hidden_content = 1)`;
-    void database.getFirstAsync(query, id).then(row => {
+    void database.getFirstAsync(query, id).then(async row => {
       if (!current) return;
       if (!row) { setResult({ key, valid: false }); return; }
       // Reuse an existing destination in the stack, including repeated taps.
-      if (kind === 'card') router.dismissTo({ pathname: '/card/[id]', params: { id, fromWidget: '1' } });
-      else router.dismissTo({ pathname: '/card/edit-content', params: { messageId: id, autoFocus: '0', fromWidget: '1' } });
+      if (kind === 'card') {
+        const route = await cardNoteRoute(createBoardRepository(database), id, { fromWidget: '1' });
+        if (current) router.dismissTo(route);
+      } else router.dismissTo({ pathname: '/card/edit-content', params: { messageId: id, autoFocus: '0', fromWidget: '1' } });
     }).catch(() => { if (current) setResult({ key, valid: false }); });
     return () => { current = false; };
   }, [database, id, kind, key, validParams]);

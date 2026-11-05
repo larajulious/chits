@@ -1,5 +1,7 @@
+import { sliceNoteText } from './note-rich-text.ts';
+import type { NoteText } from './note-content.ts';
 import { tr } from '@/localization/runtime';
-import { noteListMarkers, type NoteList } from './note-content.ts';
+import { noteListMarkers } from './note-content.ts';
 import type { AttachmentLike, Message } from '@/db/types';
 
 // Share Note turns a thought or card into a designed image. Everything here is
@@ -33,7 +35,7 @@ export const SHARE_NOTE_MODES: { key: ShareNoteMode; label: string }[] = [
 ];
 
 export type ShareNoteImage = Pick<AttachmentLike, 'id' | 'storagePath' | 'width' | 'height'>;
-export type ShareNoteBlock = { type: 'text'; text: string; list?: NoteList; marker?: string | null } | { type: 'image'; image: ShareNoteImage };
+export type ShareNoteBlock = (NoteText & { marker?: string | null }) | { type: 'image'; image: ShareNoteImage };
 
 export type ShareNoteSubtask = { title: string; isCompleted: boolean };
 
@@ -285,15 +287,15 @@ export function paginateInlineShare(blocks: ShareNoteBlock[]): ShareNoteBlock[][
   const markers = noteListMarkers(blocks.map((block) => block.type === 'image' ? { type: 'image' as const, attachmentId: block.image.id } : block));
   for (const [index, block] of blocks.entries()) {
     if (block.type === 'image') { add(block, 16); continue; }
-    if (!block.text && block.list) { add({ ...block, marker: markers[index] }, 1); continue; }
-    let chunk = '', lines = 1, column = 0, first = true;
+    if (!block.text && (block.list || block.title)) { add({ ...block, marker: markers[index] }, 1); continue; }
+    let chunk = '', lines = 1, column = 0, first = true, offset = 0;
     for (const char of block.text) {
       chunk += char;
       column += 1;
       if (char === '\n' || column >= 12) { lines += 1; column = 0; }
-      if (lines >= 60) { add({ ...block, text: chunk, list: first ? block.list : undefined, marker: first ? markers[index] : null }, lines); chunk = ''; lines = 1; column = 0; first = false; }
+      if (lines >= 60) { add({ ...sliceNoteText(block, offset, offset + chunk.length), list: first ? block.list : undefined, marker: first ? markers[index] : null }, lines); offset += chunk.length; chunk = ''; lines = 1; column = 0; first = false; }
     }
-    if (chunk) add({ ...block, text: chunk, list: first ? block.list : undefined, marker: first ? markers[index] : null }, lines);
+    if (chunk) add({ ...sliceNoteText(block, offset, offset + chunk.length), list: first ? block.list : undefined, marker: first ? markers[index] : null }, lines);
   }
   if (page.length) pages.push(page);
   return pages;

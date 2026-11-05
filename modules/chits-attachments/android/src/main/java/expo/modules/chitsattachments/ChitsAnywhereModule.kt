@@ -18,5 +18,14 @@ class ChitsAnywhereModule : Module() {
         ChitsAnywhereProvider.render(context, manager, it)
       }
     }
+    AsyncFunction("updatePlanSnapshot") { today: String, fresh: String ->
+      val context = appContext.reactContext ?: return@AsyncFunction
+      require(today.length < 24000 && JSONObject(today).optInt("version") == 1 && fresh.length < 24000)
+      ChitsPlanProvider.store(context, today, fresh)
+    }
+    AsyncFunction("takePlanPending") {
+      val context = appContext.reactContext ?: return@AsyncFunction "[]"
+      ChitsPlanProvider.takePending(context)
+    }
   }
 }

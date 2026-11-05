@@ -1,0 +1,15 @@
+<resources>
+  <string name="plan_widget_name">Kế hoạch hôm nay</string>
+  <string name="plan_widget_description">Kế hoạch và tiến độ hôm nay.</string>
+  <string name="plan_widget_today">Hôm nay</string>
+  <string name="plan_widget_none">Hôm nay có kế hoạch nhỏ nào không?</string>
+  <string name="plan_widget_action">Lên kế hoạch ngày</string>
+  <string name="plan_widget_keep_going">Cố lên!</string>
+  <string name="plan_widget_all_done">Hôm nay đã xong hết!</string>
+  <string name="plan_widget_wrapped">Vậy là xong!</string>
+  <string name="plan_widget_hidden">Tên việc đang ẩn. Bạn có thể hiện trong Cài đặt.</string>
+  <string name="plan_widget_add">Thêm</string>
+  <string name="plan_widget_wrap">Kết thúc</string>
+  <string name="plan_widget_view">Xem kế hoạch hôm nay</string>
+  <string name="plan_widget_recap">Xem tổng kết ngày</string>
+</resources>

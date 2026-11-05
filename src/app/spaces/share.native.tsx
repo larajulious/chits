@@ -14,7 +14,7 @@ import { useSpaceFonts } from '@/components/spaces/space-fonts';
 import { useSpaceShapes, useSpaceStyles, useSpaceUI, type SpaceUI } from '@/components/spaces/ink-surface';
 import { SpaceShareCanvas } from '@/components/spaces/space-share-canvas';
 import { ChitsLoader } from '@/components/ui/chits-loader';
-import { Toast } from '@/components/ui/primitives';
+import { HeaderIcon, HeaderIconButton, Toast } from '@/components/ui/primitives';
 import { resolveSpaceId, SPACES, DEFAULT_SPACE_ID } from '@/constants/spaces';
 import { createSpaceRepository } from '@/db/repositories';
 import type { PinnedNote } from '@/db/types';
@@ -115,9 +115,7 @@ export default function ShareSpaceScreen() {
 
     <View style={[styles.cover, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel={tr("attachments.close")} onPress={close} style={({ pressed }) => [styles.round, shapes.round, pressed && styles.pressed]}>
-          <Icon name="close" size={22} color={ui.paper} />
-        </Pressable>
+        <HeaderIconButton label={tr("attachments.close")} onPress={close}><HeaderIcon name="close" size={22} /></HeaderIconButton>
         <Text accessibilityRole="header" numberOfLines={1} style={[fonts.uiHeavy, styles.title]}>{tr("share.shareYour")}{' '}{space.name}</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -157,9 +155,8 @@ const createStyles = (ui: SpaceUI) => StyleSheet.create({
   // Opaque and full-screen (status bar included), so the export canvas beneath never shows.
   cover: { flex: 1, backgroundColor: ui.ink },
   header: { height: 60, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
-  round: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: ui.inkRaised },
   title: { flex: 1, fontSize: 20, textAlign: 'center', color: ui.paper },
-  headerSpacer: { width: 44 },
+  headerSpacer: { width: 46 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 24 },
   option: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8, padding: 16, borderRadius: 16, backgroundColor: ui.inkRaised },

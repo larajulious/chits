@@ -1,4 +1,5 @@
 import type { Message } from '@/db/types';
+import { hasTextFormatting } from '../../services/note-rich-text.ts';
 
 export const MESSAGE_PRESENTATION = {
   longTextCharacters: 180,
@@ -63,7 +64,7 @@ export function classifyText(text: string | null): Exclude<MessagePresentation, 
 }
 
 export function classifyMessage(message: Pick<Message, 'attachments' | 'text' | 'content'>): MessagePresentation {
-  if (message.content?.some((block) => block.type === 'text' && block.list)) return 'rich-note';
+  if (message.content?.some((block) => block.type === 'text' && (block.list || hasTextFormatting(block)))) return 'rich-note';
   if (message.attachments.length) return 'attachment';
   return classifyText(message.text);
 }

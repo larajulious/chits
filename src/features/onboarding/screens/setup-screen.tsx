@@ -2,7 +2,7 @@ import { useLocale } from '@/localization/provider';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { useTheme } from '@/components/theme-provider';
 import { PrimaryButton, Screen } from '@/components/ui/primitives';
@@ -12,6 +12,7 @@ import { createSelectedBoards } from '../board-setup';
 import { OnboardingMascot } from '../components/onboarding-mascot';
 import { ot, type OnboardingStringKey } from '../strings';
 import { endTour } from '../tour';
+import { AppText } from '@/components/ui/app-text';
 
 const CHOICES: OnboardingStringKey[] = ['setup.board.personal', 'setup.board.work', 'setup.board.study', 'setup.board.home', 'setup.board.projects'];
 
@@ -37,20 +38,20 @@ export default function OnboardingSetupScreen() {
   return <Screen>
     <ScrollView contentContainerStyle={styles.content}>
       <OnboardingMascot size={112} style={styles.mascot} />
-      <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{ot('setup.title')}</Text>
-      <Text style={[styles.body, { color: theme.textSecondary }]}>{ot('setup.body')}</Text>
+      <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{ot('setup.title')}</AppText>
+      <AppText style={[styles.body, { color: theme.textSecondary }]}>{ot('setup.body')}</AppText>
       <View style={styles.chips}>{CHOICES.map((key) => {
         const name = ot(key);
         const chosen = selected.includes(name);
         const already = existing.includes(name.toLowerCase());
         return <Pressable key={key} accessibilityRole="button" accessibilityLabel={name + (already ? '. ' + ot('setup.have') : '')} accessibilityState={{ selected: chosen }} onPress={() => setSelected((current) => chosen ? current.filter((item) => item !== name) : [...current, name])} style={[styles.chip, { backgroundColor: chosen ? theme.accentSoft : theme.surface, borderColor: chosen ? theme.accentBorder : theme.borderSubtle }]}>
-          <Text style={[styles.chipText, { color: theme.textPrimary }]}>{name}</Text>
-          {already ? <Text style={[styles.hint, { color: theme.textSecondary }]}>{ot('setup.have')}</Text> : null}
+          <AppText style={[styles.chipText, { color: theme.textPrimary }]}>{name}</AppText>
+          {already ? <AppText style={[styles.hint, { color: theme.textSecondary }]}>{ot('setup.have')}</AppText> : null}
         </Pressable>;
       })}</View>
-      {error ? <Text accessibilityRole="alert" style={{ color: theme.danger }}>{ot('setup.error')}</Text> : null}
+      {error ? <AppText accessibilityRole="alert" style={{ color: theme.danger }}>{ot('setup.error')}</AppText> : null}
       <PrimaryButton label={working ? ot('setup.creating') : selected.length ? selected.length === 1 ? ot('setup.createOne') : ot('setup.create', { count: selected.length }) : ot('setup.none')} disabled={working} onPress={() => void create()} />
-      <Pressable accessibilityRole="button" accessibilityLabel={ot('setup.skipLabel')} disabled={working} onPress={() => void finish()} style={styles.skip}><Text style={{ color: theme.textSecondary }}>{ot('setup.skip')}</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={ot('setup.skipLabel')} disabled={working} onPress={() => void finish()} style={styles.skip}><AppText style={{ color: theme.textSecondary }}>{ot('setup.skip')}</AppText></Pressable>
     </ScrollView>
   </Screen>;
 }

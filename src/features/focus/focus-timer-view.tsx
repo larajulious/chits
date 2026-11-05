@@ -9,9 +9,11 @@ import { FocusText } from './focus-ui';
 
 /**
  * The ticking clock. `color` inks it for a paper; `progress` draws something
- * under a timed session from its completed fraction (see FocusProgress).
+ * under a timed session from its completed fraction (see FocusProgress), and
+ * `render` replaces the plain readout altogether (see DialReadout). Only this
+ * component ticks, so what it draws is all that redraws each second.
  */
-export function FocusTimer({ session, onComplete, compact = false, color, progress }: { session: FocusSession; onComplete: () => void; compact?: boolean; color?: string; progress?: (fraction: number) => ReactNode }) {
+export function FocusTimer({ session, onComplete, compact = false, color, progress, render }: { session: FocusSession; onComplete: () => void; compact?: boolean; color?: string; progress?: (fraction: number) => ReactNode; render?: (view: { time: string; label: string; fraction: number | null }) => ReactNode }) {
   const database = useSQLiteContext();
   const [now, setNow] = useState(() => focusNow(database, session));
   const { tokens } = useTheme();
@@ -31,7 +33,9 @@ export function FocusTimer({ session, onComplete, compact = false, color, progre
     if (projected.status !== 'completed') finished.current = false;
   }, [onComplete, projected.status]);
   const time = focusClock(session.planned_ms === null ? projected.focused_ms : session.planned_ms - projected.focused_ms);
-  const clock = <FocusText accessibilityLabel={tr(session.planned_ms === null ? 'focus.elapsed' : 'focus.timeLeft', { time })}
+  const label = tr(session.planned_ms === null ? 'focus.elapsed' : 'focus.timeLeft', { time });
+  if (render) return render({ time, label, fraction: session.planned_ms === null || session.planned_ms <= 0 ? null : Math.min(1, projected.focused_ms / session.planned_ms) });
+  const clock = <FocusText accessibilityLabel={label}
     weight="700" style={[styles.timer, compact && styles.compact, { color: color ?? tokens.textPrimary }]}>{time}</FocusText>;
   if (!progress || session.planned_ms === null || session.planned_ms <= 0) return clock;
   return <View style={styles.withBar}>{clock}{progress(Math.min(1, projected.focused_ms / session.planned_ms))}</View>;

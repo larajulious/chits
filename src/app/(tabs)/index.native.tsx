@@ -1,20 +1,15 @@
-import { countLabel, tr } from '@/localization/runtime';
-import { useDirection, useLocale } from '@/localization/provider';
+import { tr } from '@/localization/runtime';
+import { useLocale } from '@/localization/provider';
 import { noteChecklistSummary, type NoteBlock } from '@/services/note-content';
 import { subscribeToNoteChanges } from '@/services/note-changes';
+import { cardNoteRoute } from '@/services/card-note-route';
+import { setHomeView } from '@/services/home-view';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Keyboard,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import { Keyboard, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
@@ -22,14 +17,16 @@ import { useTheme } from '@/components/theme-provider';
 import { useStickyControls } from '@/components/ui/surface';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
-import { AppHeader, AppText, EmptyState, Icon, IconButton, PressableSurface, Screen, Toast, HeaderIcon, MenuIcon, useFontStyle } from '@/components/ui/primitives';
+import { AppHeader, AppText, PressableSurface, Screen, Toast, HeaderIcon, MenuIcon, useFontStyle } from '@/components/ui/primitives';
+import { BoardHeaderButton as IconButton, BOARD_HEADER_BUTTON_SIZE } from '@/components/boards/board-header-button';
 import { AddNoteSheet, type NoteSubmission } from '@/components/boards/add-note-sheet';
 import { groupRecentNotes } from '@/services/card-grouping';
 import { detachConfirmationMessage } from '@/services/detach-card';
 import { requestReminderSync, subscribeToReminderChanges } from '@/services/reminders';
 import { BoardAppearanceFields } from '@/components/boards/board-appearance-fields';
-import { BoardListItem } from '@/components/boards/board-list-item.native';
-import { CardsCollection, type CardSection } from '@/components/boards/cards-collection.native';
+import { BoardsListing } from '@/components/boards/boards-listing.native';
+import type { CardSection } from '@/components/boards/cards-collection.native';
+import { NotesListing } from '@/components/notes/notes-listing.native';
 import { shareNoteHref } from '@/services/share-note-source';
 import { type BoardIconName } from '@/constants/board-appearance';
 import { spacing } from '@/constants/theme';
@@ -42,15 +39,13 @@ import { createNoteOrderRepository } from '@/db/note-order-repository';
 import { arrangeNotes, moveNote, noteKey, type NoteOrderMode } from '@/services/note-order';
 import { removeCardAttachmentFile } from '@/services/card-attachment-storage';
 import { spaceNoteAction } from '@/components/spaces/space-note-action';
-import { StickyGreeting } from '@/components/mascot/sticky-greeting.native';
-import { DeskHeading, PAPER_INK, PAPER_INK_MUTED, PAPER_YELLOW, PaperButton, PaperDesk, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { PaperDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
 
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 type ViewMode = 'boards' | 'cards';
 
 type UnorganizedSummaryRow = { id: string; text: string | null; type: MessageType; createdAt: number; updatedAt: number; pinned: number; isHiddenContent: number; photoCount: number; videoCount: number; fileCount: number; firstAttachmentType: MessageType | null; firstAttachmentName: string | null; previewMediaType: 'photo' | 'video' | 'audio' | null; thumbnailPath: string | null; mediaDuration: number | null; mediaCount: number };
-
-function pluralize(count: number, singular: string) { return countLabel(singular, count); }
 
 function unorganizedDisplayTitle(row: UnorganizedSummaryRow): string {
   if (row.isHiddenContent === 1) return tr("index.hiddenChit");
@@ -102,8 +97,9 @@ export default function BoardsScreen() {
   const { openDrawer } = useAppDrawer();
   const { actionSheet, confirm } = useAppDialog();
   const { tokens: theme, styleTokens, styleColors } = useTheme();
-  // Room for a header side's buttons; both sides share one width so the title stays centered.
-  const headerActionsWidth = (count: number) => count * styleTokens.header.iconButton.size + (styleTokens.header.iconButton.filled ? (count - 1) * spacing.xs : 0);
+  const { width } = useWindowDimensions();
+  const headerGap = width < 390 ? spacing.xxs : spacing.xs;
+  const headerActionsWidth = (count: number) => count * BOARD_HEADER_BUTTON_SIZE + (count - 1) * headerGap;
   const controls = useStickyControls();
   const inputFont = useFontStyle('body');
   // The floating bottom nav is absolutely positioned over this screen (see
@@ -129,17 +125,16 @@ export default function BoardsScreen() {
   // Board metadata can finish before the card queries. Keep empty states hidden
   // until both have loaded and the loader's minimum visible duration has ended.
   const [cardsReady, setCardsReady] = useState(false);
-  // The notes are written in Kalam: it joins the loader's wait (it is bundled,
-  // so this is a moment) and the grid never reflows when the face arrives.
+  // Shared workspace type joins the loader's wait so the note grid does not
+  // reflow when its bundled faces register.
   const handwriting = useHandwriting();
-  const desk = useDesk();
-  const { rowStyle, isRTL } = useDirection();
   const isLoading = !ready || !cardsReady || !handwriting.ready;
   const showLoader = useChitsLoading(isLoading);
   const isNameValid = Boolean(name.trim());
 
   // Land on Cards on each launch; manual view switches remain session-local.
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
+  useEffect(() => { setHomeView(viewMode); }, [viewMode]);
   const [headerSection, setHeaderSection] = useState<{ sections: CardSection[]; key: string } | null>(null);
   const { view } = useLocalSearchParams<{ view?: string }>();
   useFocusEffect(useCallback(() => {
@@ -169,15 +164,13 @@ export default function BoardsScreen() {
   const openCardNote = async (item: CardListItem) => {
     if (openingNote.current) return;
     Keyboard.dismiss();
-    // Board cards open their details, including their board context and actions.
+    // Only a board column opens Card Details directly; here it's the note itself.
     // Hidden content keeps its existing reveal flow.
     const openDetails = () => router.push(item.kind === 'thought' ? `/chat?messageId=${item.id}` : `/card/${item.id}`);
-    if (item.hidden || (item.kind === 'card' && item.boardId)) { openDetails(); return; }
+    if (item.hidden) { openDetails(); return; }
     openingNote.current = true;
     try {
-      const messages = item.kind === 'card' ? await boardRepository.listCardMessages(item.id) : null;
-      if (messages && (messages.length !== 1 || messages[0].isHiddenContent)) { openDetails(); return; }
-      router.push({ pathname: '/card/edit-content', params: { messageId: messages ? messages[0].id : item.id, autoFocus: '0' } });
+      router.push(item.kind === 'card' ? await cardNoteRoute(boardRepository, item.id) : { pathname: '/card/edit-content', params: { messageId: item.id, autoFocus: '0' } });
     } catch {
       setCardToast(tr("index.thatNoteCouldNotBeOpenedPleaseTry"));
     } finally {
@@ -393,7 +386,7 @@ export default function BoardsScreen() {
           ...(item.hidden ? [] : [{ label: tr('focus.action'), icon: 'timer-outline' as const, onPress: () => router.push({ pathname: '/focus', params: { note: `thought:${item.id}` } }) }]),
           ...(item.hidden ? [] : [{ label: tr('templates.saveAs'), icon: 'copy-outline' as const, onPress: () => router.push({ pathname: '/templates', params: { sourceMessageId: item.id } }) }]),
           ...(item.hidden ? [] : [{ label: tr("index.shareNote"), icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ messageId: item.id })) }]),
-          { label: item.pinned ? tr("index.unpin") : tr("index.pin"), icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void messageRepository.setPinned(item.id, !item.pinned).then(() => loadCards()) },
+          { label: item.pinned ? tr("index.unpin") : tr("index.pin"), icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void messageRepository.setPinned(item.id, !item.pinned).then(() => loadCards()).catch(() => setCardToast(tr("chat.thatCouldnTBeSavedPleaseTryAgain"))) },
           ...spaceOption,
           {
             label: tr("index.archiveThought"), icon: 'archive-outline', onPress: () => confirm({
@@ -420,7 +413,7 @@ export default function BoardsScreen() {
       options: [
         ...(item.hidden ? [] : [{ label: tr('focus.action'), icon: 'timer-outline' as const, onPress: () => router.push({ pathname: '/focus', params: { note: `card:${item.id}` } }) }]),
         ...(item.hidden ? [] : [{ label: tr("index.shareNote"), icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ cardId: item.id })) }]),
-        { label: item.pinned ? tr("index.unpin") : tr("index.pin"), icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void boardRepository.setPinned('card', item.id, !item.pinned).then(() => loadCards()) },
+        { label: item.pinned ? tr("index.unpin") : tr("index.pin"), icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void boardRepository.setPinned('card', item.id, !item.pinned).then(() => loadCards()).catch(() => setCardToast(tr("chat.thatCouldnTBeSavedPleaseTryAgain"))) },
         ...spaceOption,
         { label: tr("index.moveBackToUnorganized"), icon: 'arrow-undo-outline', onPress: () => void moveCardBackToUnorganized(item) },
         {
@@ -493,11 +486,12 @@ export default function BoardsScreen() {
   return (
     <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: theme.background }}>
       <AppHeader
+        showTitle={false}
         title={activeHeaderSection?.title ?? appTitle}
-        actionWidth={viewMode === 'cards' ? headerActionsWidth(3) : headerActionsWidth(2)}
-        subtitle={viewMode === 'boards' ? pluralize(boards.length, 'board') : pluralize(activeHeaderSection?.count ?? cards.length + unorganizedThoughts.length, 'card')}
+        leadingWidth={headerActionsWidth(2)}
+        actionWidth={headerActionsWidth(2)}
         leading={(
-          <View style={[styles.headerActions, styleTokens.header.iconButton.filled && styles.headerActionsTiled]}>
+          <View style={[styles.headerActions, { gap: headerGap }]}>
             <IconButton label={tr("archive.openNavigation")} onPress={openDrawer}>
               <MenuIcon />
             </IconButton>
@@ -511,7 +505,7 @@ export default function BoardsScreen() {
           </View>
         )}
         trailing={(
-          <View style={[styles.headerActions, styleTokens.header.iconButton.filled && styles.headerActionsTiled]}>
+          <View style={[styles.headerActions, { gap: headerGap }]}>
             {viewMode === 'cards' ? <IconButton label={orderMode === 'custom' ? tr('cardscollection.switchToRecent') : tr('cardscollection.switchToMyOrder')} disabled={isLoading || showLoader} onPress={() => changeOrderMode(orderMode === 'custom' ? 'recent' : 'custom')}>
               {/* The icon names the order showing now: newest first, or your own arrangement. */}
               <HeaderIcon name={orderMode === 'custom' ? 'swap-vertical-outline' : 'time-outline'} size={22} />
@@ -524,27 +518,18 @@ export default function BoardsScreen() {
             }}>
               <HeaderIcon name="search-outline" size={23} />
             </IconButton>
-            <IconButton accent label={viewMode === 'boards' ? tr("index.createBoard") : tr("id.addNote")} onPress={viewMode === 'boards' ? openCreate : () => setAddNoteOpen(true)}>
-              <HeaderIcon name="add" size={26} />
-            </IconButton>
           </View>
         )}
       />
 
-      <FocusCardsBanner />
-      <GettingStartedCard onHome />
+      <PaperDesk faint>
 
       {isLoading || showLoader ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : (
       <View style={styles.flex}>
         {viewMode === "cards" ? (
-          totalCardCount === 0 ? (
-            <EmptyState
-              pose="no-notes"
-              title={tr("index.yourThoughtsWillShowUpHere")}
-              description={tr("index.sendYourselfSomethingInChatAndItBecomes")}
-            />
-          ) : (
-            <CardsCollection
+            <NotesListing
+              empty={totalCardCount === 0}
+              onWrite={() => setAddNoteOpen(true)}
               sections={cardSections}
               chips={cardFilterChips}
               filter={cardFilter}
@@ -556,49 +541,22 @@ export default function BoardsScreen() {
               onToggleSubtask={toggleCardSubtask}
               onSectionChange={updateHeaderSection}
               bottomInset={tabBarHeight}
+              footer={<><FocusCardsBanner /><GettingStartedCard /></>}
             />
-          )
         ) : (
-      <PaperDesk>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + spacing.md }]}>
-        <AppText style={[styles.intro, { color: desk.inkMuted }]}>
-          {tr("index.keepRelatedThoughtsTogetherAndEasyToFind")}</AppText>
-
-        <PaperButton
-          paper={PAPER_YELLOW}
-          tilt={-0.8}
-          tape
-          accessibilityRole="button"
-          accessibilityLabel={tr("index.valueOpenUnorganized", { value1: pluralize(unorganizedCount, 'unorganized thought') })}
-          onPress={() => router.push('/unorganized')}
-          style={[styles.unorganized, rowStyle]}
-        >
-          <View style={styles.unorganizedMark}>
-            <Icon name="file-tray-outline" size={20} color={PAPER_INK} />
-          </View>
-          <View style={styles.rowCopy}>
-            <AppText style={[handwriting.handBold, styles.unorganizedTitle]}>{tr("index.unorganized")}</AppText>
-            <AppText style={styles.rowDetail}>
-              {unorganizedCount === 0 ? tr("index.allCaughtUp") : tr("index.valueWaiting", { value1: pluralize(unorganizedCount, 'thought') })}
-            </AppText>
-          </View>
-          <Icon name={isRTL ? 'chevron-back' : 'chevron-forward'} size={20} color={PAPER_INK_MUTED} />
-        </PaperButton>
-
-        <DeskHeading title={tr("index.yourBoards")} count={boards.length > 0 ? boards.length : undefined} style={styles.sectionHeader} />
-
-        {boards.length > 0 ? (
-          <View style={styles.boardList}>
-            {boards.map((board) => <BoardListItem key={board.id} board={board} onPress={() => router.push(`/board/${board.id}`)} />)}
-          </View>
-        ) : (
-          <EmptyState pose="empty-board" title={tr("index.noBoardsYet")} description={tr("index.organizeYourChitsWhenYouReReady")} action={{ label: tr("index.createBoard"), onPress: openCreate }} />
-        )}
-      </ScrollView>
-      </PaperDesk>
+      <BoardsListing
+        boards={boards}
+        unorganizedCount={unorganizedCount}
+        onBoard={(id) => router.push(`/board/${id}`)}
+        onUnorganized={() => router.push('/unorganized')}
+        onCreate={openCreate}
+        bottomInset={tabBarHeight}
+        footer={<><FocusCardsBanner /><GettingStartedCard /></>}
+      />
         )}
       </View>
       )}
+      </PaperDesk>
 
       <FormSheet
         ref={scrollRef}
@@ -657,26 +615,14 @@ export default function BoardsScreen() {
       </FormSheet>
       <Toast message={cardToast} />
       <AddNoteSheet visible={addNoteOpen} onClose={() => setAddNoteOpen(false)} onSubmit={addNote} />
-      {!createOpen && !addNoteOpen ? <StickyGreeting /> : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { padding: spacing.md, flexGrow: 1 },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
-  headerActionsTiled: { gap: spacing.xs },
-  intro: { fontSize: 14, lineHeight: 20, marginBottom: 22, textAlign: 'center' },
-  unorganized: { minHeight: 76, alignItems: 'center', justifyContent: 'flex-start', paddingHorizontal: spacing.md, paddingVertical: 12, gap: spacing.sm },
-  unorganizedMark: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.6)' },
-  rowCopy: { flex: 1, minWidth: 0 },
-  unorganizedTitle: { color: PAPER_INK, fontSize: 22, lineHeight: 28 },
-  rowDetail: { color: PAPER_INK_MUTED, marginTop: 1, fontSize: 13, lineHeight: 18 },
-  sectionHeader: { marginTop: 26, marginBottom: 10, paddingHorizontal: spacing.xxs },
-  // Room between boards for their tape and the sheet peeking out behind.
-  boardList: { gap: 20, paddingHorizontal: 2 },
   pressed: { opacity: 0.58 },
   sheetContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.md, gap: spacing.xs },
   handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 4 / 2, marginBottom: spacing.xs },

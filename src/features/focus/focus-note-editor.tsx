@@ -1,12 +1,13 @@
 import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
 import { useTheme } from '@/components/theme-provider';
-import { Chip } from '@/components/ui/primitives';
-import { discardPastedImages, InsertImageButton, NoteBlocksEditor, NoteListButtons, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
+import { Chip, useFontStyle } from '@/components/ui/primitives';
+import { discardPastedImages, NoteBlocksEditor, noteEditorStyles, NoteToolbar, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
+import { DeskPage } from '@/components/desk/paper-desk';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
 import { createRevisitRepository } from '@/db/revisit-repository';
 import type { Message } from '@/db/types';
@@ -18,7 +19,7 @@ import type { NoteKey } from '@/services/revisit-engine';
 import { FocusText as AppText, FocusAction, focusErrorMessage, focusStyles } from './focus-ui';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 
-const signature = (blocks: NoteDraftBlock[]) => JSON.stringify(blocks.map((block) => block.type === 'text' ? { text: block.text, list: block.list } : { image: block.attachmentId ?? block.image.storagePath }));
+const signature = (blocks: NoteDraftBlock[]) => JSON.stringify(blocks.map((block) => block.type === 'text' ? { text: block.text, list: block.list, title: block.title, heading: block.heading, paragraph: block.paragraph, spans: block.spans } : { image: block.attachmentId ?? block.image.storagePath }));
 export type FocusEditorHandle = { save: () => Promise<boolean>; capture: (text: string) => Promise<boolean>; dirty: () => boolean; busy: () => boolean };
 
 /** The existing block editor and note repository; Focus owns only a working
@@ -30,6 +31,7 @@ export const FocusNoteEditor = memo(function FocusNoteEditor({ noteKey, ref }: {
   const messages = useMemo(() => createMessageRepository(database), [database]);
   const boards = useMemo(() => createBoardRepository(database), [database]);
   const { tokens } = useTheme();
+  const font = useFontStyle('paragraph');
   const { confirm } = useAppDialog();
   const editor = useRef<NoteBlocksEditorControl>(null);
   const [blocks, setBlocks] = useState<NoteDraftBlock[]>(textDraft);
@@ -128,24 +130,18 @@ export const FocusNoteEditor = memo(function FocusNoteEditor({ noteKey, ref }: {
     }}>{tr('focus.recoverChat')}</FocusAction> : null}
     </View> : null}
     {!loaded ? <AppText style={styles.documents}>{tr('focus.loading')}</AppText> : <>
-      <NoteBlocksEditor ref={editor} blocks={blocks} onChangeBlocks={change} editable={!busy && !paste.pasting} placeholder={tr('editcontent.startWriting')} maxLength={10000} maxImageHeight={320} accessibilityLabel={tr('editcontent.noteContent')} fillViewport contentContainerStyle={styles.editorContent}
-        singleInputStyle={[styles.input, { color: tokens.textPrimary }]} blockContainerStyle={styles.rich} blockInputStyle={[styles.blockInput, { color: tokens.textPrimary }]} onReplaceImage={(key) => void paste.pick(key)} />
-      <ScrollView horizontal keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false} style={[styles.toolbarScroll, { borderTopColor: tokens.borderSubtle }]} contentContainerStyle={styles.toolbar}>
-        <InsertImageButton disabled={busy} busy={paste.pasting} onPress={() => void paste.pick()} />
-        <NoteListButtons editor={editor} disabled={busy || paste.pasting} />
-        <PasteImageButton visible={paste.canPaste} pasting={paste.pasting} disabled={busy} onPress={() => void paste.paste()} />
+      <DeskPage style={noteEditorStyles.page}>
+        <NoteBlocksEditor ref={editor} blocks={blocks} onChangeBlocks={change} editable={!busy && !paste.pasting} placeholder={tr('editcontent.startWriting')} maxLength={10000} maxImageHeight={320} accessibilityLabel={tr('editcontent.noteContent')} fillViewport contentContainerStyle={styles.editorContent}
+          singleInputStyle={[noteEditorStyles.input, font, { color: tokens.textPrimary }]} blockContainerStyle={noteEditorStyles.blocks} blockInputStyle={[noteEditorStyles.blockInput, font, { color: tokens.textPrimary }]} onReplaceImage={(key) => void paste.pick(key)} />
+      </DeskPage>
+      <NoteToolbar editor={editor} images={paste} disabled={busy} safeBottom>
         <FocusAction quiet disabled={busy || paste.pasting} onPress={() => { void persist(live.current); }}>{tr('editcontent.save')}</FocusAction>
-      </ScrollView>
+      </NoteToolbar>
     </>}
   </View>;
 });
 const styles = StyleSheet.create({
   documents: { paddingHorizontal: 16, paddingVertical: 8 },
-  input: { flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16, fontSize: 17, lineHeight: 27 },
   editorContent: { paddingBottom: 16 },
-  rich: { flex: 1, paddingHorizontal: 24, paddingTop: 16 },
-  blockInput: { minHeight: 27, padding: 0, fontSize: 17, lineHeight: 27, textAlignVertical: 'top' },
-  toolbarScroll: { flexGrow: 0, flexShrink: 0, borderTopWidth: StyleSheet.hairlineWidth },
-  toolbar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
   error: { padding: 16, gap: 8 },
 });

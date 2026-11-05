@@ -1,7 +1,7 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
-import { useCallback, useMemo, useRef, useState, type RefObject } from 'react';
-import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { Keyboard, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 
@@ -11,14 +11,34 @@ import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { radii, spacing } from '@/constants/theme';
 import { createCardSubtaskRepository, type CardSubtask } from '@/db/repositories';
+import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
+import { useDesk } from '@/components/desk/paper-desk';
+import { OnboardingMascot } from '@/features/onboarding/components/onboarding-mascot';
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 
-export function CardSubtasks({ cardId, scrollRef, showHeading = true, onInputFocus }: { cardId: string; scrollRef?: RefObject<ScrollView | null>; showHeading?: boolean; onInputFocus?: (input: RefObject<TextInput | null>) => void }) {
+const SubtaskCheckbox = memo(function SubtaskCheckbox({ item, onToggle }: { item: CardSubtask; onToggle: (item: CardSubtask) => void }) {
+  const { tokens } = useTheme();
+  const reduced = useReducedMotion();
+  const scale = useSharedValue(1);
+  const previous = useRef(item.isCompleted);
+  useEffect(() => {
+    if (previous.current !== item.isCompleted && !reduced) scale.set(withSequence(withTiming(0.88, { duration: 80 }), withTiming(1, { duration: 140 })));
+    previous.current = item.isCompleted;
+  }, [item.isCompleted, reduced, scale]);
+  const motion = useAnimatedStyle(() => ({ transform: [{ scale: scale.get() }] }));
+  return <Pressable accessibilityRole="checkbox" accessibilityLabel={item.title} accessibilityState={{ checked: item.isCompleted }} onPress={() => onToggle(item)} style={styles.checkboxTarget}>
+    <Animated.View style={motion}><Icon name={item.isCompleted ? 'checkbox' : 'square-outline'} size={23} color={item.isCompleted ? tokens.accentStrong : tokens.textMuted} /></Animated.View>
+  </Pressable>;
+});
+
+export function CardSubtasks({ cardId, scrollRef, showHeading = true, onInputFocus, workspace = false }: { cardId: string; scrollRef?: RefObject<ScrollView | null>; showHeading?: boolean; onInputFocus?: (input: RefObject<TextInput | null>) => void; workspace?: boolean }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
   const database = useSQLiteContext();
   const repository = useMemo(() => createCardSubtaskRepository(database), [database]);
-  const { tokens } = useTheme();
+  const { tokens, styleTokens } = useTheme();
+  const desk = useDesk();
   const { actionSheet } = useAppDialog();
   const [items, setItems] = useState<CardSubtask[]>([]);
   const [adding, setAdding] = useState(false);
@@ -70,11 +90,11 @@ export function CardSubtasks({ cardId, scrollRef, showHeading = true, onInputFoc
     } catch { setError(tr("cardsubtasks.couldNotUpdateThatSubtaskTryAgain")); }
     finally { busyEdit.current = false; }
   };
-  const toggle = (item: CardSubtask) => {
+  const toggle = useCallback((item: CardSubtask) => {
     setItems((current) => current.map((row) => row.id === item.id ? { ...row, isCompleted: !row.isCompleted } : row));
     toggleQueue.current = toggleQueue.current.then(async () => { await repository.toggle(cardId, item.id); }, async () => { await repository.toggle(cardId, item.id); })
       .catch(() => { setError(tr("cardsubtasks.couldNotUpdateThatSubtask")); void reload(); });
-  };
+  }, [cardId, reload, repository]);
   const move = async (id: string, delta: -1 | 1) => {
     const from = items.findIndex((item) => item.id === id);
     const to = from + delta;
@@ -102,14 +122,16 @@ export function CardSubtasks({ cardId, scrollRef, showHeading = true, onInputFoc
 
   return <View onLayout={(event) => { sectionY.current = event.nativeEvent.layout.y; }}>
     {showHeading || items.length ? <View style={[styles.header, !showHeading && styles.sheetProgress]}>
-      {showHeading ? <AppText accessibilityRole="header" style={[styles.heading, { color: tokens.textMuted }]}>{tr("cardsubtasks.subtasks")}</AppText> : null}
-      {items.length ? <AppText style={[styles.progress, { color: tokens.textSecondary }]}>{completed} / {items.length}</AppText> : null}
+      {showHeading ? <AppText accessibilityRole="header" style={[styles.heading, { color: tokens.textMuted }, workspace && [styles.workspaceHeading, { color: desk.ink }]]}>{tr("cardsubtasks.subtasks")}</AppText> : null}
+      {!workspace && items.length ? <AppText style={[styles.progress, { color: tokens.textSecondary }]}>{completed} / {items.length}</AppText> : null}
     </View> : null}
-    {items.length || adding ? <View onLayout={(event) => { listY.current = event.nativeEvent.layout.y; }} style={[styles.list, { borderColor: tokens.borderSubtle, backgroundColor: tokens.surface }]}>
+    {workspace && items.length ? <View style={styles.progressRow}>
+      <AppText accessibilityLiveRegion="polite" style={[styles.progress, { color: workspace ? desk.inkMuted : tokens.textSecondary }]}>{tr('onboarding.hub.progress.count', { done: completed, total: items.length })}</AppText>
+      {workspace && completed === items.length ? <OnboardingMascot still size={32} accessible={false} /> : null}
+    </View> : null}
+    {items.length || adding ? <View onLayout={(event) => { listY.current = event.nativeEvent.layout.y; }} style={[styles.list, { borderColor: tokens.borderSubtle, backgroundColor: tokens.surface }, workspace && { marginTop: spacing.xs, backgroundColor: tokens.cardPaper, borderRadius: styleTokens.button.radius }]}>
       {items.map((item, index) => <View key={item.id} onLayout={(event) => { rowY.current.set(item.id, event.nativeEvent.layout.y); }} style={[styles.row, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: tokens.borderSubtle }]}>
-        <Pressable accessibilityRole="checkbox" accessibilityLabel={item.title} accessibilityState={{ checked: item.isCompleted }} onPress={() => toggle(item)} style={styles.checkboxTarget}>
-          <Icon name={item.isCompleted ? 'checkbox' : 'square-outline'} size={22} color={item.isCompleted ? tokens.accentStrong : tokens.textMuted} />
-        </Pressable>
+        <SubtaskCheckbox item={item} onToggle={toggle} />
         {editingId === item.id ? <TextInput
           ref={editRef} autoFocus multiline accessibilityLabel={tr("cardsubtasks.editSubtask")} value={editDraft} onChangeText={setEditDraft}
           onFocus={() => scrollToRow(item.id)} onBlur={() => void saveEdit()}
@@ -139,20 +161,22 @@ export function CardSubtasks({ cardId, scrollRef, showHeading = true, onInputFoc
 }
 
 const styles = StyleSheet.create({
-  header: { minHeight: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.lg },
+  header: { minHeight: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.md },
+  workspaceHeading: { fontSize: 14, lineHeight: 20, letterSpacing: 0 },
+  progressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 32, gap: spacing.xs },
   sheetProgress: { marginTop: 0, justifyContent: 'flex-end' },
   heading: { fontSize: 11, fontWeight: '700', letterSpacing: 0.9 },
   progress: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
   list: { marginTop: spacing.sm, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.control, overflow: 'hidden' },
   row: { minHeight: 46, flexDirection: 'row', alignItems: 'center', paddingLeft: spacing.xxs, paddingRight: spacing.xs },
-  checkboxTarget: { width: 42, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  checkboxTarget: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   draftCheckbox: { marginHorizontal: 10 },
   titleTarget: { flex: 1, minWidth: 0, paddingVertical: spacing.sm },
   title: { fontSize: 14, lineHeight: 20 },
   done: { textDecorationLine: 'line-through' },
   input: { flex: 1, minWidth: 0, minHeight: 42, maxHeight: 120, paddingVertical: spacing.xs, fontSize: 14, lineHeight: 20 },
-  more: { width: 36, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  add: { alignSelf: 'flex-start', minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: spacing.xs, marginTop: spacing.xxs },
+  more: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  add: { alignSelf: 'flex-start', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: spacing.xs, marginTop: spacing.xxs },
   addText: { fontSize: 13, fontWeight: '700' },
   error: { fontSize: 12, lineHeight: 17, marginTop: spacing.xxs },
 });

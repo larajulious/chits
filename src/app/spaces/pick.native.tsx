@@ -1,71 +1,74 @@
 import { countLabel, tr } from '@/localization/runtime';
-import { useLocale } from '@/localization/provider';
-import { memo, useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { Icon } from '@/components/ui/icon';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useDirection, useLocale } from '@/localization/provider';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { StatusBar } from 'expo-status-bar';
 import * as Haptics from 'expo-haptics';
 
-import { LabelTape } from '@/components/spaces/label-tape';
-import { MagnetButton } from '@/components/spaces/magnet-button';
-import { useSpaceFonts } from '@/components/spaces/space-fonts';
-import { useSpaceShapes, useSpaceStyles, useSpaceUI, type SpaceUI } from '@/components/spaces/ink-surface';
+import { PAPER_INK, PAPER_WHITE, PAPER_YELLOW, PaperAction, PaperButton, useDesk } from '@/components/desk/paper-desk';
+import { heroStageLayout } from '@/components/mascot/hero-stage-layout';
+import { useStageViewport } from '@/components/mascot/mascot-stage';
+import { PICK_GAP, PICK_PAD, pickGridLayout } from '@/components/spaces/pick-layout';
+import { PickStage } from '@/components/spaces/pick-stage';
 import { SpaceSurface } from '@/components/spaces/space-surface';
 import { StickyPaper } from '@/components/spaces/sticky-note';
-import { Toast } from '@/components/ui/primitives';
-import { DEFAULT_SPACE_ID, SPACE_LIST, STICKY_COLORS, type SpaceDefinition, type SpaceId } from '@/constants/spaces';
-import { layout } from '@/constants/theme';
+import { useTheme } from '@/components/theme-provider';
+import { AppText } from '@/components/ui/app-text';
+import { AppHeader, HeaderIcon, Icon, IconButton, Screen, Toast } from '@/components/ui/primitives';
+import { DEFAULT_SPACE_ID, SPACE_LIST, STICKY_COLORS, STICKY_SIZE, type SpaceDefinition, type SpaceId } from '@/constants/spaces';
 import { createMessageRepository, createSpaceRepository } from '@/db/repositories';
-import { OnboardingMascot } from '@/features/onboarding/components/onboarding-mascot';
+import { useWelcomeFonts } from '@/features/onboarding/welcome/welcome-fonts';
+import { welcomeSurfaces } from '@/features/onboarding/welcome/welcome-surfaces';
 import { markOrganizationAccepted } from '@/services/chits-organization';
 
-// Cards share whatever height the screen has left, up to this tall, and never
-// below the minimum (where the tapes and a sample note still fit).
-const CARD_MAX_HEIGHT = 112;
-const CARD_MIN_HEIGHT = 56;
-// Two small overlapping notes on every card, so the four spaces compare like for like.
+// Two small overlapping notes on every print, so the four spaces compare like for like.
 const SAMPLES = [
   { title: null, get text() { return tr("pick.oatMilkEggs"); }, hidden: false, color: STICKY_COLORS[0].hex, rotation: -6 },
   { title: null, get text() { return tr("pick.bigIdea"); }, hidden: false, color: STICKY_COLORS[2].hex, rotation: 5 },
 ];
+/** Each print's one fixed tilt, in reading order. */
+const TILTS = [-0.7, 0.6, 0.5, -0.6];
+/** The surface at about phone scale, cropped to the print. */
+const SURFACE_WIDTH = 242;
 
-const SpaceCard = memo(function SpaceCard({ space, selected, count, onPress }: { space: SpaceDefinition; selected: boolean; count: number; onPress: () => void }) {
+type Grid = ReturnType<typeof pickGridLayout>;
+
+/** One space as a print on the page: its surface with two notes on it, and its name written underneath. A chosen one takes the accent and lifts. */
+const SpaceTile = memo(function SpaceTile({ space, tilt, selected, count, grid, paper, ink, inkMuted, onPick }: { space: SpaceDefinition; tilt: number; selected: boolean; count: number; grid: Grid; paper: string; ink: string; inkMuted: string; onPick: (id: SpaceId) => void }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const ui = useSpaceUI();
-  const styles = useSpaceStyles(createStyles);
-  const fonts = useSpaceFonts();
-  const shapes = useSpaceShapes();
-  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
-  // The sample notes scale down with a short card, so they're never cut off.
-  const unit = size ? Math.min(0.5, (size.height - 14) / 150) : 0.5;
-  const nudge = unit / 0.5;
-  const shortCard = size !== null && size.height < 72;
-  return <Pressable
+  const { tokens } = useTheme();
+  const desk = useDesk();
+  const fonts = useWelcomeFonts();
+  const { previewHeight, previewWidth, stickyUnit: unit } = grid;
+  const noteWidth = STICKY_SIZE.width * unit;
+  const noteHeight = STICKY_SIZE.height * unit;
+  const left = (previewWidth - noteWidth * 1.7) / 2;
+  const top = (previewHeight - noteHeight * 1.2) / 2;
+  return <PaperButton
+    paper={selected ? tokens.accent : paper}
+    tilt={selected ? tilt * 1.6 : tilt}
     accessibilityRole="radio"
     accessibilityLabel={`${space.name}. ${space.description}.${count ? ' ' + countLabel('note', count) + '.' : ''}`}
     accessibilityState={{ selected }}
-    onPress={onPress}
-    onLayout={({ nativeEvent: { layout } }) => setSize((current) => (current && current.width === layout.width && current.height === layout.height ? current : { width: layout.width, height: layout.height }))}
-    style={({ pressed }) => [styles.card, shapes.card, { borderColor: selected ? ui.paper : 'transparent' }, pressed && styles.pressed]}
+    onPress={() => onPick(space.id)}
+    containerStyle={styles.tileSlot}
+    style={[styles.tile, { minHeight: grid.tileHeight }, selected && { boxShadow: `0px 9px 16px ${desk.shadow}` }]}
   >
-    {size ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.cardClip, shapes.cardClip]}>
-      {/* The surface at phone scale, cropped to the card. */}
-      <SpaceSurface spaceId={space.id} width={Math.max(size.width, 390) * 0.62} height={size.height} />
-      <View style={[styles.sample, { right: 74 * nudge, top: 20 * nudge }]}><StickyPaper note={SAMPLES[0]} space={space.id} seed={1} unit={unit} /></View>
-      <View style={[styles.sample, { right: 22 * nudge, top: 34 * nudge }]}><StickyPaper note={SAMPLES[1]} space={space.id} seed={2} unit={unit} /></View>
-    </View> : null}
-    <LabelTape themed text={space.name} variant="dark" size={shortCard ? 'sm' : 'md'} rotation={-2} decorative style={[styles.cardLabel, shortCard && styles.cardLabelShort]} />
-    <View pointerEvents="none" style={styles.cardDescription}>
-      <Text numberOfLines={1} style={[fonts.uiSemi, styles.cardDescriptionText]}>{space.description}</Text>
+    <View pointerEvents="none" style={[styles.preview, { height: previewHeight }]}>
+      <SpaceSurface spaceId={space.id} width={SURFACE_WIDTH} height={previewHeight} />
+      <View style={[styles.sample, { left, top }]}><StickyPaper note={SAMPLES[0]} space={space.id} seed={1} unit={unit} /></View>
+      <View style={[styles.sample, { left: left + noteWidth * 0.7, top: top + noteHeight * 0.2 }]}><StickyPaper note={SAMPLES[1]} space={space.id} seed={2} unit={unit} /></View>
+      {count ? <View style={[styles.count, { boxShadow: `0px 2px 4px ${desk.shadow}` }]}><AppText weight="700" family={fonts.text} numberOfLines={1} style={styles.countText}>{countLabel('note', count)}</AppText></View> : null}
+      {selected ? <View style={[styles.check, { backgroundColor: tokens.accent, borderColor: tokens.accentText }]}><Icon name="checkmark" size={15} color={tokens.accentText} /></View> : null}
     </View>
-    {count ? <LabelTape themed text={`${count} ${count === 1 ? 'note' : 'notes'}`} variant="red" size="sm" rotation={2} decorative style={styles.cardCount} /> : null}
-    {selected ? <MagnetButton size={30} icon="checkmark" style={styles.check} /> : null}
-  </Pressable>;
+    <View style={styles.caption}>
+      <AppText weight="700" family={fonts.display} numberOfLines={1} style={[styles.name, { color: selected ? tokens.accentText : ink }]}>{space.name}</AppText>
+      <AppText family={fonts.text} numberOfLines={2} style={[styles.description, { color: selected ? tokens.accentText : inkMuted }]}>{space.description}</AppText>
+    </View>
+  </PaperButton>;
 });
 
 /**
@@ -77,18 +80,19 @@ export default function PickSpaceScreen() {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const ui = useSpaceUI();
-  const styles = useSpaceStyles(createStyles);
   const database = useSQLiteContext();
   const { messageId, chitsGuided } = useLocalSearchParams<{ messageId?: string; chitsGuided?: string }>();
   const [guidedPending, setGuidedPending] = useState(chitsGuided === '1');
   const repository = createSpaceRepository(database);
-  const insets = useSafeAreaInsets();
-  const fonts = useSpaceFonts();
-  const shapes = useSpaceShapes();
-  // Everything fits on one screen, with no scrolling: the cards take the
-  // height that's left, and a short phone gets a tighter heading.
-  const compact = useWindowDimensions().height < 760;
+  const { tokens, scheme } = useTheme();
+  const desk = useDesk();
+  const { rowStyle } = useDirection();
+  const surfaces = welcomeSurfaces(scheme, desk, { white: PAPER_WHITE, ink: PAPER_INK, yellow: PAPER_YELLOW });
+  // Everything fits on one screen where it can: the prints share the height
+  // the header, Chits and the action leave.
+  const { width, height } = useWindowDimensions();
+  const viewport = useStageViewport();
+  const grid = useMemo(() => pickGridLayout(width, viewport, heroStageLayout(width, height).height), [height, viewport, width]);
   const [saved, setSaved] = useState(() => repository.getSelectedSpaceSync());
   const [selected, setSelected] = useState<SpaceId>(() => saved ?? DEFAULT_SPACE_ID);
   // Someone who's been here before sees what's already on each space. Read
@@ -129,55 +133,41 @@ export default function PickSpaceScreen() {
     }
   };
 
-  return <View style={[styles.root, { paddingTop: insets.top }]}>
-    <StatusBar style="light" />
-    <View style={styles.content}>
-      <View style={[styles.topRow, compact && styles.topRowCompact]}>
-        <Pressable accessibilityRole="button" accessibilityLabel={tr("search.goBack")} onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={({ pressed }) => [styles.back, shapes.round, pressed && styles.pressed]}>
-          <Icon name="chevron-back" size={24} color={ui.paper} style={{ marginLeft: -2 }} />
-        </Pressable>
-        <OnboardingMascot size={compact ? 60 : 76} />
+  const pick = useCallback((id: SpaceId) => {
+    if (id === selected) return;
+    void Haptics.selectionAsync();
+    setSelected(id);
+  }, [selected]);
+  const tile = (item: SpaceDefinition, index: number) => <SpaceTile key={item.id} space={item} tilt={TILTS[index]} selected={item.id === selected} count={counts[item.id] ?? 0} grid={grid} paper={surfaces.card} ink={surfaces.ink} inkMuted={surfaces.inkMuted} onPick={pick} />;
+
+  return <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: desk.desk }}>
+    <AppHeader title={tr("pick.spaces")} leading={<IconButton label={tr("search.goBack")} onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
+    <PickStage
+      title={saved ? tr("pick.whereTo") : tr("pick.pickASpotForYourNotes")}
+      body={tr("pick.stickNotesOnItAndMoveThemAround")}
+      firstVisit={!saved}
+      footer={<PaperAction primary paper={tokens.accent} ink={tokens.accentText} label={saved ? tr("pick.goToYourValue", { value1: space.name }) : tr("pick.stickThemOnTheValue", { value1: space.name })} accessibilityState={{ disabled: saving }} disabled={saving} onPress={() => void choose()} />}
+    >
+      <View accessibilityRole="radiogroup" accessibilityLabel={tr("pick.spaces")} style={styles.grid}>
+        <View style={[styles.row, rowStyle]}>{SPACE_LIST.slice(0, 2).map((item, index) => tile(item, index))}</View>
+        <View style={[styles.row, rowStyle]}>{SPACE_LIST.slice(2).map((item, index) => tile(item, index + 2))}</View>
       </View>
-      <LabelTape themed text={saved ? tr("pick.spaces") : 'New · Spaces'} variant="red" size="sm" rotation={-2} decorative />
-      <Text accessibilityRole="header" style={[fonts.uiHeavy, styles.title, compact && styles.titleCompact]}>{saved ? tr("pick.whereTo") : tr("pick.pickASpotForYourNotes")}</Text>
-      <Text style={[fonts.ui, styles.intro, compact && styles.introCompact]}>{tr("pick.stickNotesOnItAndMoveThemAround")}</Text>
-      <View accessibilityRole="radiogroup" accessibilityLabel={tr("pick.spaces")} style={styles.cards}>
-        {SPACE_LIST.map((item) => <SpaceCard key={item.id} space={item} selected={item.id === selected} count={counts[item.id] ?? 0} onPress={() => { if (item.id !== selected) { void Haptics.selectionAsync(); setSelected(item.id); } }} />)}
-      </View>
-    </View>
-    <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
-      <Pressable accessibilityRole="button" accessibilityState={{ disabled: saving }} disabled={saving} onPress={() => void choose()} style={({ pressed }) => [styles.primary, shapes.button, (pressed || saving) && styles.pressed]}>
-        <Text style={[fonts.uiSemi, styles.primaryText]}>{saved ? tr("pick.goToYourValue", { value1: space.name }) : tr("pick.stickThemOnTheValue", { value1: space.name })}</Text>
-      </Pressable>
-      <Text style={[fonts.ui, styles.helper]}>{tr("pick.youCanSwitchSpacesAnyTimeFromThe")}</Text>
-    </View>
+    </PickStage>
     <Toast message={toast} />
-  </View>;
+  </Screen>;
 }
 
-const createStyles = (ui: SpaceUI) => StyleSheet.create({
-  root: { flex: 1, backgroundColor: ui.ink },
-  content: { flex: 1, minHeight: 0, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, alignSelf: 'center', width: '100%', maxWidth: layout.maxContentWidth },
-  topRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 },
-  topRowCompact: { marginBottom: 4 },
-  back: { width: 44, height: 44, borderRadius: 22, marginLeft: -6, alignItems: 'center', justifyContent: 'center', backgroundColor: ui.inkRaised },
-  title: { marginTop: 14, fontSize: 36, lineHeight: 38, letterSpacing: -0.72, color: ui.paper },
-  titleCompact: { marginTop: 8, fontSize: 28, lineHeight: 31, letterSpacing: -0.56 },
-  intro: { marginTop: 10, marginBottom: 22, fontSize: 15, lineHeight: 21, color: ui.textMuted },
-  introCompact: { marginTop: 6, marginBottom: 14 },
-  cards: { flex: 1, minHeight: 0, gap: 10 },
-  card: { flex: 1, minHeight: CARD_MIN_HEIGHT, maxHeight: CARD_MAX_HEIGHT, borderRadius: 18, borderWidth: 3, backgroundColor: ui.inkRaised },
-  cardClip: { borderRadius: 15, overflow: 'hidden' },
+const styles = StyleSheet.create({
+  grid: { gap: PICK_GAP },
+  row: { gap: PICK_GAP },
+  tileSlot: { flex: 1, minWidth: 0 },
+  tile: { flex: 1, alignItems: 'stretch', justifyContent: 'flex-start', padding: PICK_PAD },
+  preview: { borderRadius: 2, overflow: 'hidden' },
   sample: { position: 'absolute' },
-  cardLabel: { position: 'absolute', left: 12, top: 12 },
-  cardLabelShort: { top: 6 },
-  cardDescription: { position: 'absolute', left: 12, bottom: 8, maxWidth: '62%', borderRadius: 7, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: ui.ink },
-  cardDescriptionText: { color: ui.paper, fontSize: 11, lineHeight: 14 },
-  cardCount: { position: 'absolute', right: 12, bottom: 8 },
-  check: { position: 'absolute', right: -8, top: -8 },
-  footer: { paddingHorizontal: 20, paddingTop: 12, alignSelf: 'center', width: '100%', maxWidth: layout.maxContentWidth, gap: 10 },
-  primary: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: ui.accent },
-  primaryText: { fontSize: 17, color: ui.accentText },
-  helper: { fontSize: 13, textAlign: 'center', color: ui.textMuted },
-  pressed: { opacity: 0.8 },
+  count: { position: 'absolute', left: 6, bottom: 6, maxWidth: '80%', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 2, backgroundColor: PAPER_WHITE, transform: [{ rotate: '-3deg' }] },
+  countText: { color: PAPER_INK, fontSize: 11, lineHeight: 15, fontVariant: ['tabular-nums'] },
+  check: { position: 'absolute', right: 6, top: 6, width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  caption: { paddingTop: 7, paddingHorizontal: 2, gap: 1 },
+  name: { fontSize: 17, lineHeight: 21 },
+  description: { fontSize: 13, lineHeight: 17 },
 });

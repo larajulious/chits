@@ -19,6 +19,8 @@ export const ONBOARDING_KEYS = {
   checklist: 'onboarding.checklist',
   /** 'shown' or 'dismissed': whether the Getting started card sits on the Notes screen. */
   checklistHome: 'onboarding.checklistHome',
+  /** How many checklist items Chits has reacted to, so a milestone plays once. */
+  celebrated: 'onboarding.celebrated',
 } as const;
 
 const UPSERT_SQL = 'INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at';

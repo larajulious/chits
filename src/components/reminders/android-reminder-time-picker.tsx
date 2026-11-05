@@ -1,13 +1,14 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useRef, useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { getCalendars } from 'expo-localization';
 
 import { AppText, useFontStyle } from '@/components/ui/app-text';
 import { useTheme } from '@/components/theme-provider';
 import { useStickyControls } from '@/components/ui/surface';
 import { parseReminderClock, dateFormat } from '@/services/reminder-time';
+import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
 
 type Props = {
   value: Date;

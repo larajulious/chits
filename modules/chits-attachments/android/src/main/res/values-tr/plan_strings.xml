@@ -1,0 +1,15 @@
+<resources>
+  <string name="plan_widget_name">Bugünün Planı</string>
+  <string name="plan_widget_description">Bugünkü planınız ve ilerlemeniz.</string>
+  <string name="plan_widget_today">Bugün</string>
+  <string name="plan_widget_none">Bugün için küçük bir planınız var mı?</string>
+  <string name="plan_widget_action">Günümü Planla</string>
+  <string name="plan_widget_keep_going">Devam edin!</string>
+  <string name="plan_widget_all_done">Bugün her şey bitti!</string>
+  <string name="plan_widget_wrapped">İşte bu kadar!</string>
+  <string name="plan_widget_hidden">Görev adları gizli. Ayarlar’dan gösterebilirsiniz.</string>
+  <string name="plan_widget_add">Ekle</string>
+  <string name="plan_widget_wrap">Toparla</string>
+  <string name="plan_widget_view">Bugünün Planını Gör</string>
+  <string name="plan_widget_recap">Gün Özetini Gör</string>
+</resources>

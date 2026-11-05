@@ -38,7 +38,7 @@ export default function FormattingQA() {
     <AppText>{`Formatted items ${formatted}`}</AppText>
     <NoteBlocksEditor ref={editor} blocks={blocks} onChangeBlocks={setBlocks} editable placeholder="Type" maxLength={10000} maxImageHeight={200} accessibilityLabel="QA text" singleInputStyle={{ flex: 1, color: '#111', fontSize: 18, padding: 12 }} blockContainerStyle={{ flex: 1, padding: 12 }} blockInputStyle={{ color: '#111', fontSize: 18, padding: 0, minHeight: 28 }} />
     <NoteListButtons editor={editor} />
-    {chatOpen ? <FullscreenComposer blocks={blocks} onChangeBlocks={setBlocks} editorRef={chatEditor} onClose={() => setChatOpen(false)} onSaveDraft={async () => {}} onSend={() => {}} canSave saving={false} error={null} savedText={null} savedContent={null} attachmentLabel={null} listButtons={<NoteListButtons editor={chatEditor} />} /> : null}
+    {chatOpen ? <FullscreenComposer blocks={blocks} onChangeBlocks={setBlocks} editorRef={chatEditor} onClose={() => setChatOpen(false)} onSaveDraft={async () => {}} onSend={() => {}} canSave saving={false} error={null} savedText={null} savedContent={null} attachmentLabel={null} /> : null}
     <AddNoteSheet visible={noteOpen} onClose={() => setNoteOpen(false)} onSubmit={async note => { setSubmitted(note.blocks?.map(b => b.type === 'text' ? b.text : '').join('|') === 'Meeting notes|Task' ? 'Submission preserved' : 'Submission changed'); }} />
   </KeyboardAvoidingView></SafeAreaView>;
 }

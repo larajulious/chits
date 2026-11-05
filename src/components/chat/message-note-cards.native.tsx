@@ -1,3 +1,5 @@
+import { NoteFormattedText } from '@/components/notes/note-rich-text';
+import type { NoteText as NoteTextBlock } from '@/services/note-content';
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import type { ReactNode } from 'react';
@@ -179,11 +181,12 @@ function StructuredContent({ text, mode, accentColor }: { text: string; mode: Co
 }
 
 /** One run of a note's words, drawn the way a note's text always is (lists, links, paragraphs). */
-export function NoteText({ text, mode, color, accentColor }: { text: string; mode: ContentMode; color?: string; accentColor?: string }) {
+export function NoteText({ text, mode, color, accentColor, block }: { text: string; mode: ContentMode; color?: string; accentColor?: string; block?: NoteTextBlock }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
   const { tokens } = useTheme();
+  if (block?.heading || block?.spans?.length) return <NoteFormattedText block={block} style={{ color: color ?? tokens.textPrimary }} />;
   return classifyText(text) === 'structured-note'
     ? <StructuredContent text={text} mode={mode} accentColor={accentColor} />
     : <PlainTextContent text={text} mode={mode} color={color ?? tokens.textPrimary} />;
@@ -207,14 +210,14 @@ export function MessageContentRenderer({ message, mode, focused = false, accentC
   }
   const inline = noteRenderContent(message);
   if (inline) {
-    const text = (value: string) => <NoteText text={value} mode="detail" accentColor={accentColor} />;
+    const text = (value: string, block?: NoteTextBlock) => <NoteText text={value} block={block} mode="detail" accentColor={accentColor} />;
     return <View style={styles.detailContent}>
       {inline.leading.length ? renderAttachments?.(inline.leading) : null}
       <SavedNoteContentView message={message}
         blocks={inline.blocks}
         maxImageHeight={480}
         onImageLongPress={onImageLongPress ? (attachment) => onImageLongPress(attachment as Attachment) : undefined}
-        renderText={(value) => onPressText ? <Pressable accessibilityRole="button" accessibilityLabel={textAccessibilityLabel ?? tr("id.editContent")} hitSlop={8} onPress={onPressText} style={({ pressed }) => pressed && styles.pressed}>{text(value)}</Pressable> : text(value)}
+        renderText={(value, _key, block) => onPressText ? <Pressable accessibilityRole="button" accessibilityLabel={textAccessibilityLabel ?? tr("id.editContent")} hitSlop={8} onPress={onPressText} style={({ pressed }) => pressed && styles.pressed}>{text(value, block)}</Pressable> : text(value, block)}
       />
     </View>;
   }

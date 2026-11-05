@@ -1,3 +1,4 @@
+import { sliceNoteText, joinNoteText, hasTextFormatting, replaceNoteText, noteTitle, withNoteTitle } from './note-rich-text.ts';
 import { newBlockKey, type NoteCursor, type NoteDraftBlock, type NoteList } from './note-content.ts';
 
 type TextBlock = Extract<NoteDraftBlock, { type: 'text' }>;
@@ -8,21 +9,21 @@ function normalize(blocks: NoteDraftBlock[], cursor: NoteCursor): NoteEdit {
   const result: NoteDraftBlock[] = [];
   for (const block of blocks) {
     const previous = result.at(-1);
-    if (block.type === 'text' && !block.list && previous?.type === 'text' && !previous.list) {
+    if (block.type === 'text' && !block.list && previous?.type === 'text' && !previous.list && !block.heading && !previous.heading && !block.paragraph && !previous.paragraph) {
       // Keep the focused input mounted, even when it absorbs an earlier run.
       const key = cursor?.key === block.key ? block.key : previous.key;
       if (cursor?.key === block.key) cursor = { key, start: previous.text.length + cursor.start, end: previous.text.length + cursor.end };
-      result[result.length - 1] = { ...previous, key, text: previous.text + block.text };
+      result[result.length - 1] = { ...joinNoteText(previous, block), key };
     } else result.push(block);
   }
-  return { blocks: result, cursor };
+  return { blocks: withNoteTitle(result, noteTitle(blocks)), cursor };
 }
 
 /** Run only after explicit boundary deletion or Enter exiting an empty item.
  * Never strip an intentional empty task, authored spaces, media, or composition.
  */
 function normalizeClearedDocument(edit: NoteEdit, focusedKey: string): NoteEdit {
-  if (!edit.blocks.length || edit.blocks.some((block) => block.type !== 'text' || block.list || /[^\r\n]/.test(block.text))) return edit;
+  if (!edit.blocks.length || edit.blocks.some((block) => block.type !== 'text' || block.list || hasTextFormatting(block) || /[^\r\n]/.test(block.text))) return edit;
   const active = edit.blocks.find((block) => block.key === focusedKey);
   if (active?.type !== 'text') return edit;
   if (edit.blocks.length === 1 && active.text === '') return edit;
@@ -38,6 +39,7 @@ export function backspaceNoteBlock(blocks: NoteDraftBlock[], cursor: NoteCursor)
   const block = blocks[index];
   if (block?.type !== 'text') return { blocks, cursor: null };
   if (block.list) return normalizeClearedDocument(toggleNoteList(blocks, cursor, block.list.kind), block.key);
+  if (block.heading) return { blocks: blocks.map(item => item.key === block.key ? { ...block, heading: undefined } : item), cursor };
   const previous = blocks[index - 1];
   if (!previous) return normalizeClearedDocument({ blocks, cursor: null }, block.key);
   if (previous.type === 'image') {
@@ -50,10 +52,10 @@ export function backspaceNoteBlock(blocks: NoteDraftBlock[], cursor: NoteCursor)
   // inside a run is authored content and must survive this structural merge.
   const prefix = previous.text;
   const newline = previous.list ? block.text.indexOf('\n') : -1;
-  const remainder: TextBlock[] = newline < 0 ? [] : [{ key: newBlockKey(), type: 'text', text: block.text.slice(newline + 1) }];
+  const remainder: TextBlock[] = newline < 0 ? [] : [{ ...sliceNoteText(block, newline + 1), key: newBlockKey(), list: undefined, heading: undefined }];
   return normalizeClearedDocument(normalize([
     ...blocks.slice(0, index - 1),
-    { ...previous, key: block.key, text: prefix + (newline < 0 ? block.text : block.text.slice(0, newline)) },
+    { ...joinNoteText(previous, sliceNoteText(block, 0, newline < 0 ? block.text.length : newline)), key: block.key },
     ...remainder,
     ...blocks.slice(index + 1),
   ], { key: block.key, start: prefix.length, end: prefix.length }), block.key);
@@ -78,9 +80,10 @@ export function toggleNoteList(blocks: NoteDraftBlock[], cursor: NoteCursor, kin
     const previous = blocks[index - 1], next = blocks[index + 1];
     // Adjacent blocks have one implicit paragraph boundary. Materialize it only
     // when plain runs coalesce, even if either run contains authored blank lines.
-    const start = previous?.type === 'text' && !previous.list ? 1 : 0;
-    const text = `${start ? '\n' : ''}${block.text}${next?.type === 'text' && !next.list ? '\n' : ''}`;
-    return normalize(blocks.map((item) => item.key === block.key ? { ...block, text, list: undefined } : item), { key: block.key, start: start + (cursor?.start ?? 0), end: start + (cursor?.end ?? 0) });
+    const start = previous?.type === 'text' && !previous.list && !previous.paragraph && !block.paragraph ? 1 : 0;
+    const text = `${start ? '\n' : ''}${block.text}${next?.type === 'text' && !next.list && !next.paragraph && !block.paragraph ? '\n' : ''}`;
+    const unlisted: TextBlock = { ...block, text, list: undefined, ...(block.spans ? { spans: block.spans.map(span => ({ ...span, start: span.start + start, end: span.end + start })) } : {}) };
+    return normalize(blocks.map((item) => item.key === block.key ? unlisted : item), { key: block.key, start: start + (cursor?.start ?? 0), end: start + (cursor?.end ?? 0) });
   }
   const start = Math.max(0, Math.min(cursor?.start ?? block.text.length, block.text.length));
   const end = Math.max(start, Math.min(cursor?.end ?? start, block.text.length));
@@ -93,19 +96,21 @@ export function toggleNoteList(blocks: NoteDraftBlock[], cursor: NoteCursor, kin
   const items: NoteDraftBlock[] = [];
   // Consume exactly the delimiter represented by each new block boundary.
   // Leaving it in the input creates an extra visible line above/below the item.
-  if (from) items.push({ ...block, key: newBlockKey(), text: block.text.slice(0, from - 1) });
+  if (from) items.push({ ...sliceNoteText(block, 0, from - 1), key: newBlockKey() });
   const lines = block.text.slice(from, to).split('\n');
-  lines.forEach((text, line) => items.push({ key: !line ? block.key : newBlockKey(), type: 'text', text, list }));
-  if (to < block.text.length) items.push({ key: newBlockKey(), type: 'text', text: block.text.slice(to + 1) });
+  let offset = from;
+  lines.forEach((text, line) => { items.push({ ...sliceNoteText(block, offset, offset + text.length), key: !line ? block.key : newBlockKey(), list }); offset += text.length + 1; });
+  if (to < block.text.length) items.push({ ...sliceNoteText(block, to + 1), key: newBlockKey() });
   const target = items[from ? 1 : 0];
-  return { blocks: [...blocks.slice(0, index), ...items, ...blocks.slice(index + 1)], cursor: { key: target.key, start: start - from, end: Math.min(end - from, (target as TextBlock).text.length) } };
+  return { blocks: withNoteTitle([...blocks.slice(0, index), ...items, ...blocks.slice(index + 1)], noteTitle(blocks)), cursor: { key: target.key, start: start - from, end: Math.min(end - from, (target as TextBlock).text.length) } };
 }
 
 /** Enter and multiline paste create structural items; no markers enter the input value. */
-export function editNoteListItem(blocks: NoteDraftBlock[], key: string, value: string, selection?: NoteCursor): NoteEdit {
+export function editNoteListItem(blocks: NoteDraftBlock[], key: string, value: string, selection?: NoteCursor, replacement?: TextBlock): NoteEdit {
   const index = blocks.findIndex((block) => block.key === key);
   const block = blocks[index] as TextBlock;
-  if (!block?.list || !value.includes('\n')) return { blocks: blocks.map((item) => item.key === key && item.type === 'text' ? { ...item, text: value } : item), cursor: null };
+  const updated = replacement ?? replaceNoteText(block, value, undefined, selection?.key === key ? selection : undefined);
+  if (!block?.list || !value.includes('\n')) return { blocks: blocks.map((item) => item.key === key && item.type === 'text' ? updated : item), cursor: null };
   if (!block.text.trim() && value === '\n') {
     return normalizeClearedDocument(toggleNoteList(blocks, { key, start: 0, end: 0 }, block.list.kind), key);
   }
@@ -123,12 +128,13 @@ export function editNoteListItem(blocks: NoteDraftBlock[], key: string, value: s
   if (block.list.kind === 'checklist' && inserted !== '\n') {
     const newline = value.indexOf('\n');
     const next = blocks[index + 1];
-    const after: TextBlock = { key: newBlockKey(), type: 'text', text: value.slice(newline + 1) + (next?.type === 'text' && !next.list ? '\n' : '') };
-    return normalize([...blocks.slice(0, index), { ...block, text: value.slice(0, newline) }, after, ...blocks.slice(index + 1)], { key: after.key, start: Math.max(0, caret - newline - 1), end: Math.max(0, caret - newline - 1) });
+    const after: TextBlock = { ...sliceNoteText(updated, newline + 1), key: newBlockKey(), list: undefined, text: value.slice(newline + 1) + (next?.type === 'text' && !next.list && !next.paragraph && !block.paragraph ? '\n' : '') };
+    return normalize([...blocks.slice(0, index), sliceNoteText(updated, 0, newline), after, ...blocks.slice(index + 1)], { key: after.key, start: Math.max(0, caret - newline - 1), end: Math.max(0, caret - newline - 1) });
   }
-  const items = lines.map((text, line): TextBlock => ({ ...block, key: line ? newBlockKey() : key, text, list: line ? listOf(block.list!.kind, block.list!.id) : block.list }));
+  let offset = 0;
+  const items = lines.map((text, line): TextBlock => { const item: TextBlock = { ...sliceNoteText(updated, offset, offset + text.length), key: line ? newBlockKey() : key, list: line ? listOf(block.list!.kind, block.list!.id) : block.list }; offset += text.length + 1; return item; });
   const target = items[beforeCaret.length - 1];
-  return { blocks: [...blocks.slice(0, index), ...items, ...blocks.slice(index + 1)], cursor: { key: target.key, start: beforeCaret.at(-1)!.length, end: beforeCaret.at(-1)!.length } };
+  return { blocks: withNoteTitle([...blocks.slice(0, index), ...items, ...blocks.slice(index + 1)], noteTitle(blocks)), cursor: { key: target.key, start: beforeCaret.at(-1)!.length, end: beforeCaret.at(-1)!.length } };
 }
 
 /** Completion changes never reorder content or rewrite the item's words. */

@@ -1,0 +1,12 @@
+<resources>
+  <string name="anywhere_brand">Chits Anywhere</string>
+  <string name="anywhere_quick">விரைவு குறிப்பு</string>
+  <string name="anywhere_recent">சமீபத்திய குறிப்புகள்</string>
+  <string name="anywhere_empty">உங்களின் அடுத்த எண்ணம் இங்கே தொடங்குகிறது.</string>
+  <string name="anywhere_hidden">குறிப்பு தகவல் மறைக்கப்பட்டுள்ளது.</string>
+  <string name="anywhere_description">குறிப்பை உருவாக்கவும் அல்லது உங்கள் சமீபத்திய குறிப்புகளைத் திறக்கவும்.</string>
+  <string name="anywhere_privacy">விட்ஜெட் தனியுரிமை</string>
+  <string name="anywhere_titles">குறிப்பு தலைப்புகளைக் காட்டு</string>
+  <string name="anywhere_previews">குறுகிய உரை மாதிரிக்காட்சிகளைக் காட்டு</string>
+  <string name="anywhere_warning">முகப்புத் திரை விட்ஜெட்களை உங்கள் சாதனத்தைப் பயன்படுத்தும் எவரும் பார்க்க முடியும். குறிப்பு தகவல் முன்னிருப்பாக மறைக்கப்பட்டுள்ளது.</string>
+</resources>

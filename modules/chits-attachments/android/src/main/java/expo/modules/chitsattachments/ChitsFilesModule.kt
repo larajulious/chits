@@ -38,6 +38,7 @@ internal class UnsupportedOnThisAndroidException : CodedException("ERR_UNSUPPORT
 
 class ChitsFilesModule : Module() {
   private val inlinePaste = ChitsInlinePaste()
+  private val noteFormatting = ChitsNoteFormatting()
   private val context: Context
     get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
 
@@ -57,9 +58,17 @@ class ChitsFilesModule : Module() {
       }
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("detachInlinePaste") { tag: Int -> inlinePaste.detach(tag) }.runOnQueue(Queues.MAIN)
+    AsyncFunction("applyNoteTextFormatting") { tag: Int, text: String, runs: String, revision: Double ->
+      val input = appContext.findView<EditText>(tag)
+      if (input == null) false else noteFormatting.update(input, text, runs, revision.toLong())
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("detachNoteTextFormatting") { tag: Int ->
+      appContext.findView<EditText>(tag)?.let { noteFormatting.detach(it) }
+    }.runOnQueue(Queues.MAIN)
     OnDestroy {
       val paste = inlinePaste
-      android.os.Handler(android.os.Looper.getMainLooper()).post { paste.clear() }
+      val formatting = noteFormatting
+      android.os.Handler(android.os.Looper.getMainLooper()).post { paste.clear(); formatting.clear() }
     }
 
 

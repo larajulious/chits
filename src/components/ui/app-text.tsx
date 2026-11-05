@@ -15,12 +15,13 @@ import { headingFontFamily } from '@/constants/theme';
 export type TextRole = 'title' | 'display' | 'body' | 'paragraph';
 
 /**
- * The face for a role and weight. Classic sets only fontWeight (and the
- * theme's heading face for titles), exactly as screens did before; Sticky
- * picks the bundled family for that weight — one family per weight, since a
- * fontWeight on a custom family isn't reliable on Android.
+ * The face for a role and weight: the bundled family for that weight — one
+ * family per weight, since a fontWeight on a custom family isn't reliable on
+ * Android. Until those register, only the fontWeight, in the system face.
  */
 export function fontStyle(tokens: StyleTokens, look: ChitsLook, role: TextRole = 'body', weight?: FontWeight): TextStyle {
+  // A theme with its own heading face (serif, mono, rounded) keeps that character.
+  if (role === 'title' && tokens.id === 'classic' && look.headingFont && look.headingFont !== 'system') return { fontWeight: look.headingWeight, fontFamily: headingFontFamily(look.headingFont) };
   const faces = role === 'title' ? tokens.font.display : tokens.font[role];
   if (faces) return { fontFamily: faces[weight ?? (role === 'title' ? '600' : '400')], fontWeight: 'normal' };
   if (role === 'title') return { fontWeight: look.headingWeight, fontFamily: headingFontFamily(look.headingFont) };
@@ -42,7 +43,7 @@ const WEIGHTS: Record<string, FontWeight> = { normal: '400', bold: '700', 100: '
  * Text in the style's face. Without a `weight`, it uses the fontWeight the
  * style already asks for, so swapping Text for AppText never changes Classic.
  */
-export function AppText({ variant = 'body', weight, style, ...props }: TextProps & { variant?: TextRole; weight?: FontWeight }) {
+export function AppText({ variant = 'body', weight, family, style, ...props }: TextProps & { variant?: TextRole; weight?: FontWeight; /** A specific bundled face, whatever the style. Languages it can't draw keep the system face. */ family?: string }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   const locale = useLocale();
@@ -53,5 +54,6 @@ export function AppText({ variant = 'body', weight, style, ...props }: TextProps
   const flattened = StyleSheet.flatten(style);
   const bidi = contentTextStyle(text, languageDirection(locale));
   const scriptFont = needsSystemFont(text, locale) ? { fontFamily: undefined, includeFontPadding: true, ...(flattened?.fontSize ? { lineHeight: Math.max(flattened.lineHeight ?? 0, Math.ceil(flattened.fontSize * 1.5)) } : {}) } : {};
-  return <Text {...props} accessibilityLanguage={props.accessibilityLanguage ?? locale} style={[bidi, style, font, scriptFont]} />;
+  const chosenFace = family && !needsSystemFont(text, locale) ? { fontFamily: family, fontWeight: 'normal' as const } : null;
+  return <Text {...props} accessibilityLanguage={props.accessibilityLanguage ?? locale} style={[bidi, style, flattened?.fontFamily ? null : font, chosenFace, scriptFont]} />;
 }

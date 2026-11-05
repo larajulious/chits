@@ -1,7 +1,7 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
@@ -9,6 +9,7 @@ import { useStickyControls } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { spacing } from '@/constants/theme';
+import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
 
 type Props = {
   visible: boolean;

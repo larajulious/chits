@@ -4,18 +4,21 @@ import { createSingleFlight } from '@/services/note-templates';
 import { tr } from '@/localization/runtime';
 import { useDirection, useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Keyboard, Modal, Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
 import { useStickyControls } from '@/components/ui/surface';
-import { AppText } from '@/components/ui/app-text';
+import { AppText, useFontStyle } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
-import { BottomSheetSurface, IconButton } from '@/components/ui/primitives';
+import { AppHeader, BottomSheetSurface, HeaderIcon, IconButton } from '@/components/ui/primitives';
+import { KeyboardPane } from '@/components/ui/keyboard-pane';
+import { useDesk } from '@/components/desk/paper-desk';
+import { useKeyboardInset } from '@/hooks/use-keyboard-inset';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { spacing } from '@/constants/theme';
 import { AttachmentDraftPreview } from '@/components/chat/attachment-draft-preview';
-import { discardPastedImages, NoteBlocksEditor, InsertImageButton, NoteListButtons, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
+import { discardPastedImages, NoteBlocksEditor, noteEditorStyles, NoteToolbar, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
 import { pickAndStageFile, pickAndStageMedia, type AttachmentDraft } from '@/services/attachment-import';
 import { draftHasRichContent, noteHasChecklist, draftImageCount, noteBlocksText, textDraft, type NoteDraftBlock } from '@/services/note-content';
 
@@ -65,6 +68,8 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   const { rowStyle, isRTL } = useDirection();
   const { tokens: theme } = useTheme();
   const controls = useStickyControls();
+  const desk = useDesk();
+  const paragraphFont = useFontStyle('paragraph');
   const inputRef = useRef<NoteBlocksEditorControl>(null);
   const wasVisible = useRef(false);
   const [stage, setStage] = useState<'choice' | 'templates' | 'editor'>('choice');
@@ -78,14 +83,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   // Full-screen writing mode (like Edit Note) for longer notes; same state, so
   // text and any attachment carry over when switching either way.
   const [fullscreen, setFullscreen] = useState(false);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-
-  useEffect(() => {
-    if (!visible || !extra) return;
-    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
-    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
-    return () => { show.remove(); hide.remove(); };
-  }, [visible, extra]);
+  const keyboardVisible = useKeyboardInset() > 0;
 
   useEffect(() => {
     if (visible && !wasVisible.current) {
@@ -146,6 +144,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   const noteInput = (
     <NoteBlocksEditor
       ref={inputRef}
+      fillViewport={fullscreen}
       accessibilityLabel={tr("addnotesheet.noteText")}
       blocks={blocks}
       onChangeBlocks={changeBlocks}
@@ -155,12 +154,12 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
       editable={!busy}
       maxImageHeight={fullscreen ? 320 : 140}
       singleInputStyle={fullscreen
-        ? [styles.fullInput, { color: theme.textPrimary }]
+        ? [noteEditorStyles.input, paragraphFont, { color: theme.textPrimary }]
         : [styles.input, controls.input, draft && styles.inputWithAttachment, { backgroundColor: theme.background, borderColor: theme.borderSubtle, color: theme.textPrimary }]}
       blockContainerStyle={fullscreen
-        ? styles.fullBlocks
+        ? noteEditorStyles.blocks
         : [styles.blocksBox, controls.input as ViewStyle | null, { backgroundColor: theme.background, borderColor: theme.borderSubtle }]}
-      blockInputStyle={[fullscreen ? styles.fullBlockInput : styles.blockInput, !fullscreen && controls.input ? { fontFamily: controls.input.fontFamily, fontWeight: controls.input.fontWeight } : null, { color: theme.textPrimary }]}
+      blockInputStyle={[fullscreen ? [noteEditorStyles.blockInput, paragraphFont] : styles.blockInput, !fullscreen && controls.input ? { fontFamily: controls.input.fontFamily, fontWeight: controls.input.fontWeight } : null, { color: theme.textPrimary }]}
     />
   );
   const pasteButton = <PasteImageButton visible={pasteImage.canPaste} pasting={pasteImage.pasting && !pasteImage.picking} disabled={saving || staging || pasteImage.picking} onPress={() => void pasteImage.paste()} />;
@@ -225,7 +224,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
       onShow={() => { if (initialBlocks) requestAnimationFrame(() => inputRef.current?.focus()); }}
     >
       <SafeAreaProvider>
-      <KeyboardAvoidingView style={[styles.backdrop, fullscreen && { backgroundColor: theme.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardPane style={[styles.backdrop, fullscreen && { backgroundColor: desk.desk }]}>
         {stage === 'choice' ? <>
           <Pressable accessibilityRole="button" accessibilityLabel={tr('attachments.close')} onPress={close} style={StyleSheet.absoluteFill} />
           <BottomSheetSurface style={styles.choiceSurface}>
@@ -239,36 +238,35 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
         </> : stage === 'templates' ? <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={[styles.fullScreen, { backgroundColor: theme.background }]}>
           <AppDialogProvider><TemplateLibrary ref={libraryRef} onClose={() => setStage('choice')} onSelect={(next) => { setBlocks(next); setStage('editor'); setFullscreen(true); requestAnimationFrame(() => inputRef.current?.focus()); }} /></AppDialogProvider>
         </SafeAreaView> : fullscreen ? (
-          <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={styles.fullScreen}>
-            {/* Same header pattern as Edit Note: exit on the left, Add (✓) on the right. */}
-            <View style={[styles.fullHeader, { borderBottomColor: theme.borderSubtle }]}>
-              <Pressable accessibilityRole="button" accessibilityLabel={tr("addnotesheet.exitFullScreen")} hitSlop={8} disabled={saving} onPress={toggleFullscreen} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
-                <Icon name="contract-outline" size={22} color={theme.textPrimary} />
-              </Pressable>
-              <AppText accessibilityRole="header" style={[styles.fullTitle, { color: theme.textPrimary }]}>{title}</AppText>
-              <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addNote")} accessibilityState={{ disabled: !canAdd }} disabled={!canAdd} hitSlop={8} onPress={() => void submit()} style={({ pressed }) => [styles.headerButton, pressed && canAdd && styles.pressed]}>
-                {saving ? <ActivityIndicator accessibilityLabel={tr("addnotesheet.addingNote")} size="small" color={theme.accent} /> : <Icon name="checkmark" size={24} color={canAdd ? theme.accent : theme.textMuted} />}
-              </Pressable>
-            </View>
-            <View style={styles.fullContext}>{contextLine}</View>
-            {noteInput}
-            <View style={[styles.fullFooter, { borderTopColor: theme.borderSubtle }]}>
-              {extra ? (keyboardVisible && extraSummary
-                ? <Pressable accessibilityRole="button" accessibilityLabel={tr("addnotesheet.valueHideKeyboardToChange", { value1: extraSummary })} onPress={() => Keyboard.dismiss()} style={({ pressed }) => [styles.summary, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>
-                  <Icon name="calendar-outline" size={16} color={theme.textSecondary} />
-                  <AppText numberOfLines={1} style={[styles.summaryText, { color: theme.textPrimary }]}>{extraSummary}</AppText>
-                  <Icon name="chevron-up" size={16} color={theme.textSecondary} />
-                </Pressable>
-                : <ScrollView bounces={false} keyboardShouldPersistTaps="handled" style={styles.extraFull}>{extra}</ScrollView>) : null}
-              {error ? <AppText accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</AppText> : null}
-              <View style={styles.attachRow}><InsertImageButton disabled={saving || staging} busy={pasteImage.pasting} onPress={() => void pasteImage.pick()} /><NoteListButtons editor={inputRef} disabled={busy} /></View>
-              {attachmentArea}
+          <SafeAreaView edges={['top', 'left', 'right']} style={[styles.fullScreen, { backgroundColor: theme.cardPaper }]}>
+            {/* One continuous editing page, with the shared toolbar above the keyboard. */}
+            <AppHeader
+              title={title}
+              leading={<IconButton label={tr("addnotesheet.exitFullScreen")} disabled={saving} onPress={toggleFullscreen}><HeaderIcon name="contract-outline" size={22} /></IconButton>}
+              trailing={<IconButton label={tr("id.addNote")} disabled={!canAdd} onPress={() => void submit()}>{saving ? <ActivityIndicator accessibilityLabel={tr("addnotesheet.addingNote")} size="small" color={theme.accent} /> : <HeaderIcon name="checkmark" size={24} />}</IconButton>}
+            />
+            <View style={[noteEditorStyles.fullscreenPage, { backgroundColor: theme.cardPaper }]}>
+              <View style={styles.fullContext}>{contextLine}</View>
+              <View style={noteEditorStyles.fullscreenPage}>{noteInput}</View>
+              <View style={styles.fullFooter}>
+                {extra ? (keyboardVisible && extraSummary
+                  ? <Pressable accessibilityRole="button" accessibilityLabel={tr("addnotesheet.valueHideKeyboardToChange", { value1: extraSummary })} onPress={() => Keyboard.dismiss()} style={({ pressed }) => [styles.summary, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>
+                    <Icon name="calendar-outline" size={16} color={theme.textSecondary} />
+                    <AppText numberOfLines={1} style={[styles.summaryText, { color: theme.textPrimary }]}>{extraSummary}</AppText>
+                    <Icon name="chevron-up" size={16} color={theme.textSecondary} />
+                  </Pressable>
+                  : <ScrollView bounces={false} keyboardShouldPersistTaps="handled" style={styles.extraFull}>{extra}</ScrollView>) : null}
+                {error ? <AppText accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</AppText> : null}
+                {attachmentArea}
+              </View>
+              <NoteToolbar editor={inputRef} images={pasteImage} disabled={saving || staging} safeBottom />
             </View>
           </SafeAreaView>
         ) : (
           <>
             <Pressable accessibilityRole="button" accessibilityLabel={tr("addnotesheet.closeAddNote")} style={StyleSheet.absoluteFill} onPress={close} />
-            <SafeAreaView edges={['bottom']} style={[styles.safeArea, { backgroundColor: theme.surface }]}>
+            {/* The keyboard covers the home indicator / navigation bar, so that room goes while it's up. */}
+            <SafeAreaView edges={keyboardVisible ? [] : ['bottom']} style={[styles.safeArea, { backgroundColor: theme.surface }]}>
               <GlassSurface style={[styles.sheet, { borderColor: theme.borderSubtle }]}>
                 <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
                 <ScrollView scrollEnabled={Boolean(extra)} bounces={false} keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={styles.content}>
@@ -280,6 +278,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
                   </View>
                   {contextLine}
                   {noteInput}
+                  <NoteToolbar editor={inputRef} disabled={busy} />
                   {attachmentArea}
                   {extra ? <View style={styles.extra}>{extra}</View> : null}
                   {error ? <AppText accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</AppText> : null}
@@ -304,7 +303,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
             </SafeAreaView>
           </>
         )}
-      </KeyboardAvoidingView>
+      </KeyboardPane>
       </SafeAreaProvider>
     </Modal>
   );
@@ -332,15 +331,11 @@ const styles = StyleSheet.create({
   title: { flex: 1, fontSize: 20, lineHeight: 25, fontWeight: '800' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   expandButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18 },
-  // Full-screen mode mirrors Edit Note (card/edit-content): plain header, the
-  // page itself is the writing surface, attachments sit above the keyboard.
+  // Full-screen mode is Edit Note's page (card/edit-content): the shared
+  // header, paper and toolbar, with this sheet's attachments and fields above the toolbar.
   fullScreen: { flex: 1, alignSelf: 'stretch' },
-  fullHeader: { minHeight: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  fullTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700' },
-  fullContext: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
-  fullInput: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.xs, fontSize: 17, lineHeight: 27 },
-  fullFooter: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth },
+  fullContext: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs },
+  fullFooter: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xs },
   context: { marginTop: spacing.xxs, marginBottom: spacing.md, fontSize: 13, lineHeight: 18 },
   inputWithAttachment: { minHeight: 64 },
   attachRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm },
@@ -351,8 +346,6 @@ const styles = StyleSheet.create({
   // With pasted images the box scrolls as a whole; its inputs grow with their text.
   blocksBox: { flexGrow: 0, minHeight: 96, maxHeight: 280, borderWidth: 1, borderRadius: 16, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
   blockInput: { minHeight: 24, padding: 0, fontSize: 16, lineHeight: 22, textAlignVertical: 'top' },
-  fullBlocks: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.xs },
-  fullBlockInput: { minHeight: 27, padding: 0, fontSize: 17, lineHeight: 27, textAlignVertical: 'top' },
   message: { marginTop: spacing.xs, fontSize: 12, lineHeight: 17 },
   actions: { minHeight: 48, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
   cancelButton: { minWidth: 80, minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md },

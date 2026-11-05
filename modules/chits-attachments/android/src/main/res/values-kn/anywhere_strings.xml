@@ -1,0 +1,12 @@
+<resources>
+  <string name="anywhere_brand">Chits Anywhere</string>
+  <string name="anywhere_quick">ತ್ವರಿತ ಟಿಪ್ಪಣಿ</string>
+  <string name="anywhere_recent">ಇತ್ತೀಚಿನ ಟಿಪ್ಪಣಿಗಳು</string>
+  <string name="anywhere_empty">ನಿಮ್ಮ ಮುಂದಿನ ಆಲೋಚನೆ ಇಲ್ಲಿಂದ ಪ್ರಾರಂಭವಾಗುತ್ತದೆ.</string>
+  <string name="anywhere_hidden">ಟಿಪ್ಪಣಿ ಮಾಹಿತಿಯನ್ನು ಮರೆಮಾಡಲಾಗಿದೆ.</string>
+  <string name="anywhere_description">ಟಿಪ್ಪಣಿಯನ್ನು ರಚಿಸಿ ಅಥವಾ ನಿಮ್ಮ ಇತ್ತೀಚಿನ ಟಿಪ್ಪಣಿಗಳನ್ನು ತೆರೆಯಿರಿ.</string>
+  <string name="anywhere_privacy">ವಿಜೆಟ್ ಗೌಪ್ಯತೆ</string>
+  <string name="anywhere_titles">ಟಿಪ್ಪಣಿ ಶೀರ್ಷಿಕೆಗಳನ್ನು ತೋರಿಸಿ</string>
+  <string name="anywhere_previews">ಚಿಕ್ಕ ಪಠ್ಯ ಪೂರ್ವವೀಕ್ಷಣೆಗಳನ್ನು ತೋರಿಸಿ</string>
+  <string name="anywhere_warning">ನಿಮ್ಮ ಸಾಧನವನ್ನು ಬಳಸುವ ಯಾರಾದರೂ ಹೋಮ್ ಸ್ಕ್ರೀನ್ ವಿಜೆಟ್‌ಗಳನ್ನು ನೋಡಬಹುದು. ಟಿಪ್ಪಣಿ ಮಾಹಿತಿಯನ್ನು ಡೀಫಾಲ್ಟ್ ಆಗಿ ಮರೆಮಾಡಲಾಗಿದೆ.</string>
+</resources>

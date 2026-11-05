@@ -6,17 +6,18 @@ import { BricolageGrotesque_400Regular } from '@expo-google-fonts/bricolage-grot
 import { BricolageGrotesque_600SemiBold } from '@expo-google-fonts/bricolage-grotesque/600SemiBold';
 import { BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque/800ExtraBold';
 import { Fredoka_700Bold } from '@expo-google-fonts/fredoka/700Bold';
-import { Kalam_400Regular } from '@expo-google-fonts/kalam/400Regular';
+import { Nunito_600SemiBold } from '@expo-google-fonts/nunito/600SemiBold';
 import { SpaceMono_700Bold } from '@expo-google-fonts/space-mono/700Bold';
+import { WORKSPACE_FONT_FAMILIES } from '@/constants/style-fonts';
 
 // Every face Spaces uses, bundled with the app (Open Font License) — nothing
 // is fetched at runtime, so Spaces looks the same offline.
-const FACES = { BricolageGrotesque_400Regular, BricolageGrotesque_600SemiBold, BricolageGrotesque_800ExtraBold, Kalam_400Regular, SpaceMono_700Bold, Fredoka_700Bold };
+const FACES = { BricolageGrotesque_400Regular, BricolageGrotesque_600SemiBold, BricolageGrotesque_800ExtraBold, Nunito_600SemiBold, SpaceMono_700Bold, Fredoka_700Bold };
 
 export type SpaceFonts = {
   /** App-theme typography for interface text and headings. */
   ui: TextStyle; uiSemi: TextStyle; uiHeavy: TextStyle;
-  /** Kalam: what's written on a note. */
+  /** The same Nunito body face used by the workspace heroes. */
   note: TextStyle;
   /** Space Mono Bold: label-maker tape and small caps labels. */
   label: TextStyle;
@@ -29,7 +30,7 @@ const LOADED: SpaceFonts = {
   ui: { fontFamily: 'BricolageGrotesque_400Regular' },
   uiSemi: { fontFamily: 'BricolageGrotesque_600SemiBold' },
   uiHeavy: { fontFamily: 'BricolageGrotesque_800ExtraBold' },
-  note: { fontFamily: 'Kalam_400Regular' },
+  note: { fontFamily: WORKSPACE_FONT_FAMILIES.text, fontWeight: 'normal' },
   label: { fontFamily: 'SpaceMono_700Bold' },
   letters: { fontFamily: 'Fredoka_700Bold' },
   ready: true,

@@ -1,13 +1,15 @@
+import { NoteFormattedText } from '@/components/notes/note-rich-text';
 import { countLabel, tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { NoteContentView } from '@/components/notes/note-content-view';
 import { NotePaper, PAPER_LINE } from '@/components/notes/note-paper';
 import { useTheme } from '@/components/theme-provider';
+import { ChitsLoader } from '@/components/ui/chits-loader';
 import { AppText } from '@/components/ui/app-text';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { radii, spacing } from '@/constants/theme';
@@ -103,11 +105,11 @@ export function EntryDetailSheet({ item, visible, now, onClose, onAction }: Prop
 
               {/* The same theme-aware neutral surface used in Card Details. */}
               <NotePaper accent={item.boardAccent} minHeight={item.hasTitle ? 120 : 150} style={styles.note}>
-                {!loaded ? <ActivityIndicator accessibilityLabel={tr("entrydetailsheet.loadingNote")} color={theme.textMuted} /> : item.searchText === '' && item.title === "Hidden note"
+                {!loaded ? <ChitsLoader size="small" /> : item.searchText === '' && item.title === "Hidden note"
                   ? <AppText style={[styles.muted, { color: theme.textSecondary }]}>{tr("entrydetailsheet.thisNoteIsHiddenInChat")}</AppText>
                   : thoughts.length
                     ? thoughts.map((thought) => thought.content
-                      ? <NoteContentView key={thought.messageId} blocks={thought.content} maxImageHeight={220} gap={spacing.xs} renderText={(text, key) => <AppText key={key} selectable style={[styles.body, !item.hasTitle && styles.bodyLead, { color: theme.textPrimary }]}>{text}</AppText>} />
+                      ? <NoteContentView key={thought.messageId} blocks={thought.content} maxImageHeight={220} gap={spacing.xs} renderText={(text, key, block) => block ? <NoteFormattedText key={key} block={block} style={[styles.body, { color: theme.textPrimary }]} /> : <AppText key={key} selectable style={[styles.body, !item.hasTitle && styles.bodyLead, { color: theme.textPrimary }]}>{text}</AppText>} />
                       : <AppText key={thought.messageId} selectable style={[styles.body, !item.hasTitle && styles.bodyLead, { color: theme.textPrimary }]}>{thought.text}</AppText>)
                     : <AppText style={[styles.muted, { color: theme.textSecondary }]}>{loaded.value ? tr("entrydetailsheet.noWrittenContent") : tr("entrydetailsheet.couldnTLoadThisNote")}</AppText>}
               </NotePaper>

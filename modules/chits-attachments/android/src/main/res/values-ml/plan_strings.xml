@@ -1,0 +1,15 @@
+<resources>
+  <string name="plan_widget_name">ഇന്നത്തെ പ്ലാൻ</string>
+  <string name="plan_widget_description">ഇന്നത്തെ നിങ്ങളുടെ പദ്ധതിയും പുരോഗതിയും.</string>
+  <string name="plan_widget_today">ഇന്ന്</string>
+  <string name="plan_widget_none">ഇന്നത്തേക്ക് ഒരു ചെറിയ പ്ലാൻ ഉണ്ടോ?</string>
+  <string name="plan_widget_action">എൻ്റെ ദിവസം ആസൂത്രണം ചെയ്യുക</string>
+  <string name="plan_widget_keep_going">പൊയ്ക്കൊണ്ടേയിരിക്കുന്നു!</string>
+  <string name="plan_widget_all_done">ഇന്നത്തേക്ക് എല്ലാം ചെയ്തു!</string>
+  <string name="plan_widget_wrapped">ഇന്നത്തേക്ക് ഇത്ര മതി!</string>
+  <string name="plan_widget_hidden">ടാസ്‌ക് പേരുകൾ മറച്ചിരിക്കുന്നു. നിങ്ങൾക്ക് അവ ക്രമീകരണങ്ങളിൽ കാണിക്കാനാകും.</string>
+  <string name="plan_widget_add">ചേർക്കുക</string>
+  <string name="plan_widget_wrap">പൂർത്തിയാക്കാം</string>
+  <string name="plan_widget_view">ഇന്നത്തെ പ്ലാൻ കാണുക</string>
+  <string name="plan_widget_recap">ഡേ റീക്യാപ്പ് കാണുക</string>
+</resources>

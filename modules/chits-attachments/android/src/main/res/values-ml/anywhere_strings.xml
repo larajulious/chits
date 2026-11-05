@@ -1,0 +1,12 @@
+<resources>
+  <string name="anywhere_brand">Chits Anywhere</string>
+  <string name="anywhere_quick">ദ്രുത കുറിപ്പ്</string>
+  <string name="anywhere_recent">സമീപകാല കുറിപ്പുകൾ</string>
+  <string name="anywhere_empty">നിങ്ങളുടെ അടുത്ത ചിന്ത ഇവിടെ തുടങ്ങുന്നു.</string>
+  <string name="anywhere_hidden">കുറിപ്പ് വിവരങ്ങൾ മറച്ചിരിക്കുന്നു.</string>
+  <string name="anywhere_description">ഒരു കുറിപ്പ് സൃഷ്‌ടിക്കുക അല്ലെങ്കിൽ നിങ്ങളുടെ സമീപകാല കുറിപ്പുകൾ തുറക്കുക.</string>
+  <string name="anywhere_privacy">വിജറ്റ് സ്വകാര്യത</string>
+  <string name="anywhere_titles">കുറിപ്പ് ശീർഷകങ്ങൾ കാണിക്കുക</string>
+  <string name="anywhere_previews">ചെറിയ ടെക്സ്റ്റ് പ്രിവ്യൂ കാണിക്കുക</string>
+  <string name="anywhere_warning">നിങ്ങളുടെ ഉപകരണം ഉപയോഗിക്കുന്ന ആർക്കും ഹോം സ്‌ക്രീൻ വിജറ്റുകൾ കാണാനാകും. കുറിപ്പ് വിവരങ്ങൾ ഡിഫോൾട്ടായി മറച്ചിരിക്കുന്നു.</string>
+</resources>

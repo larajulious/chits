@@ -22,7 +22,7 @@ type Props = {
   seed: number;
   board: { width: number; height: number };
   pinStyle: SpacePinStyle;
-  /** Unused since the redesign (notes are always set in Kalam); kept so callers needn't change. */
+  /** Unused since the redesign (notes use shared workspace type); kept for callers. */
   fontFamily?: string;
   onLift: (id: string) => void;
   /** Where it was dropped, in board points. */

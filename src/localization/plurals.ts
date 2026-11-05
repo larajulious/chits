@@ -17,4 +17,11 @@ if (typeof Intl.PluralRules !== 'function') {
   require('@formatjs/intl-pluralrules/locale-data/hi.js');
   require('@formatjs/intl-pluralrules/locale-data/tr.js');
   require('@formatjs/intl-pluralrules/locale-data/ar.js');
+  require('@formatjs/intl-pluralrules/locale-data/ta.js');
+  require('@formatjs/intl-pluralrules/locale-data/te.js');
+  require('@formatjs/intl-pluralrules/locale-data/bn.js');
+  require('@formatjs/intl-pluralrules/locale-data/mr.js');
+  require('@formatjs/intl-pluralrules/locale-data/kn.js');
+  require('@formatjs/intl-pluralrules/locale-data/ml.js');
+  require('@formatjs/intl-pluralrules/locale-data/gu.js');
 }

@@ -101,7 +101,7 @@ export function DayPanel({ dateKey, items, now, onAdd, onClose, onOpen, onAction
     <View style={styles.panel}>
       <View style={styles.panelHeader}>
         <View style={styles.flex}>
-          <AppText accessibilityRole="header" numberOfLines={1} style={[handBold, styles.panelTitle, { color: desk.ink }]}>{title}</AppText>
+          <AppText accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[handBold, styles.panelTitle, { color: desk.ink }]}>{title}</AppText>
           <AppText style={[styles.panelCount, { color: desk.inkMuted }]}>{items.length ? `${items.length} ${items.length === 1 ? 'entry' : 'entries'}` : tr("calendarentry.nothingPlanned")}</AppText>
         </View>
         <PaperTab paper={PAPER_YELLOW} tilt={-2} icon="add" label={tr("addnotesheet.add")} accessibilityRole="button" accessibilityLabel={tr("calendar.addNoteOnValue", { value1: title })} onPress={onAdd} />

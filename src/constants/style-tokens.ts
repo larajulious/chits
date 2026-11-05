@@ -64,12 +64,22 @@ const corners = (topLeft: number, topRight = topLeft, bottomRight = topLeft, bot
 const faces = (regular: string, medium: string, semibold: string, bold: string, heavy: string): Record<FontWeight, string> => ({ 400: regular, 500: medium, 600: semibold, 700: bold, 800: heavy });
 
 /** Every bundled face Sticky draws with (see use-style-fonts.ts). */
-export const STICKY_FONT_FAMILIES = ['Fredoka_500Medium', 'Fredoka_600SemiBold', 'Nunito_600SemiBold', 'Nunito_700Bold', 'Nunito_800ExtraBold'] as const;
+export const STICKY_FONT_FAMILIES = ['Fredoka_500Medium', 'Fredoka_600SemiBold', 'Nunito_600SemiBold', 'Nunito_600SemiBold_Italic', 'Nunito_700Bold', 'Nunito_700Bold_Italic', 'Nunito_800ExtraBold', 'Nunito_800ExtraBold_Italic'] as const;
+
+/** The app's type in every style: Fredoka for titles, Nunito for everything else. */
+const APP_FACES: StyleTokens['font'] = {
+  display: faces('Fredoka_600SemiBold', 'Fredoka_500Medium', 'Fredoka_600SemiBold', 'Fredoka_600SemiBold', 'Fredoka_600SemiBold'),
+  // Semibold for everyday UI text; bold and heavier only where asked for.
+  body: faces('Nunito_600SemiBold', 'Nunito_600SemiBold', 'Nunito_600SemiBold', 'Nunito_700Bold', 'Nunito_800ExtraBold'),
+  paragraph: faces('Nunito_600SemiBold', 'Nunito_600SemiBold', 'Nunito_700Bold', 'Nunito_700Bold', 'Nunito_800ExtraBold'),
+};
+/** What's drawn until those faces have registered, or if they never do. */
+export const SYSTEM_FACES: StyleTokens['font'] = { display: null, body: null, paragraph: null };
 
 export const STYLE_PRESETS: Record<AppStyle, StyleTokens> = {
   classic: {
     id: 'classic',
-    font: { display: null, body: null, paragraph: null },
+    font: APP_FACES,
     radius: { card: corners(18), control: 12, pill: 999, nav: 28, panel: 18, tile: 16, sheet: 22, toast: 20, bubble: 14 },
     outline: { width: 0 },
     elevation: 'soft',
@@ -102,12 +112,7 @@ export const STYLE_PRESETS: Record<AppStyle, StyleTokens> = {
   },
   sticky: {
     id: 'sticky',
-    font: {
-      display: faces('Fredoka_600SemiBold', 'Fredoka_500Medium', 'Fredoka_600SemiBold', 'Fredoka_600SemiBold', 'Fredoka_600SemiBold'),
-      // Semibold for everyday UI text; bold and heavier only where asked for.
-      body: faces('Nunito_600SemiBold', 'Nunito_600SemiBold', 'Nunito_600SemiBold', 'Nunito_700Bold', 'Nunito_800ExtraBold'),
-      paragraph: faces('Nunito_600SemiBold', 'Nunito_600SemiBold', 'Nunito_700Bold', 'Nunito_700Bold', 'Nunito_800ExtraBold'),
-    },
+    font: APP_FACES,
     radius: { card: corners(16, 16, 6, 16), control: 14, pill: 17, nav: 26, panel: 18, tile: 14, sheet: 22, toast: 16, bubble: 16 },
     outline: { width: 1.5 },
     elevation: 'edge',

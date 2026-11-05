@@ -1,4 +1,5 @@
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 
 import { useTheme } from '@/components/theme-provider';
 import { spacing } from '@/constants/theme';
@@ -13,6 +14,7 @@ import { Icon, type IconName } from './icon';
  * poses are drawn — give a pose its art in MascotPose below.
  */
 export type MascotPoseName = 'standard' | 'paperclip' | 'search' | 'no-notes' | 'empty-board';
+const GUIDE_SIZE = 108;
 const POSE_PROPS: Partial<Record<MascotPoseName, IconName>> = { paperclip: 'attach', search: 'search-outline', 'empty-board': 'folder-outline' };
 
 function MascotPose({ pose, width }: { pose: MascotPoseName; width: number }) {
@@ -33,12 +35,13 @@ function MascotPose({ pose, width }: { pose: MascotPoseName; width: number }) {
  * action. Sticky (mascotEmptyStates): the mascot in `pose` above them, in
  * the display face, with a large accent button.
  */
-export function EmptyState({ title, description, action, pose = 'standard', style }: { title: string; description: string; action?: { label: string; onPress: () => void }; pose?: MascotPoseName; style?: StyleProp<ViewStyle> }) {
+export function EmptyState({ title, description, action, pose = 'standard', style, guide = false }: { title: string; description: string; action?: { label: string; onPress: () => void }; pose?: MascotPoseName; style?: StyleProp<ViewStyle>; /** Chits, still, in any style: for the empty states people meet first. */ guide?: boolean }) {
   const { tokens, styleTokens: t, styleColors } = useTheme();
   const e = t.emptyState;
+  const reduced = useReducedMotion();
   const mascot = t.mascotEmptyStates;
   return <View style={[styles.emptyState, action && styles.withAction, style]}>
-    {mascot ? <MascotPose pose={pose} width={e.mascotWidth} /> : null}
+    {guide ? <Animated.View entering={reduced ? undefined : FadeIn.duration(320)} style={styles.guide}><OnboardingMascot size={GUIDE_SIZE} accessible={false} still /></Animated.View> : mascot ? <MascotPose pose={pose} width={e.mascotWidth} /> : null}
     <AppText accessibilityRole={mascot ? 'header' : undefined} variant="display" weight="600" style={[styles.title, { fontSize: e.titleSize, color: tokens.textPrimary }, e.maxWidth ? { maxWidth: e.maxWidth } : null]}>{title}</AppText>
     <AppText variant="paragraph" style={[styles.description, { fontSize: e.bodySize, lineHeight: e.bodyLineHeight, color: mascot ? styleColors.textSecondary : tokens.textSecondary }, e.maxWidth ? { maxWidth: e.maxWidth } : null, action && styles.descriptionAboveAction]}>{description}</AppText>
     {action ? <Button label={action.label} onPress={action.onPress} size="large" /> : null}
@@ -48,6 +51,7 @@ export function EmptyState({ title, description, action, pose = 'standard', styl
 const styles = StyleSheet.create({
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl, gap: spacing.xs },
   withAction: { minHeight: 220 },
+  guide: { marginBottom: spacing.xs, transform: [{ rotate: '-4deg' }] },
   title: { textAlign: 'center' },
   description: { textAlign: 'center' },
   descriptionAboveAction: { marginBottom: spacing.sm },

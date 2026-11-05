@@ -12,7 +12,7 @@ import { updateMessageReminder, updateTimelineReminders } from '@/services/chat-
 import { loadChatFeed } from '@/services/chat-feed-load';
 import { canMergeTimelineRefresh } from '@/services/timeline-refresh';
 import { removeMessageReminder, requestReminderSync, setMessageReminder, subscribeToReminderChanges } from '@/services/reminders';
-import { AccessibilityInfo, ActivityIndicator, AppState, BackHandler, FlatList, Keyboard, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, AppState, BackHandler, FlatList, Keyboard, KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AttachmentDraftPreview } from '@/components/chat/attachment-draft-preview';
 import { AttachmentPicker, type AttachmentDraft, type AttachmentPickerHandle } from '@/components/chat/attachment-picker';
@@ -32,9 +32,9 @@ import { useChatTransition } from '@/components/navigation/chat-transition';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { ChatComposerSurface } from '@/components/chat/chat-composer-surface';
 import { FullscreenComposer } from '@/components/chat/fullscreen-composer';
-import { discardPastedImages, NoteBlocksEditor, InsertImageButton, NoteListButtons, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
+import { discardPastedImages, NoteBlocksEditor, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
 import { noteHasChecklist, serializeNoteContent, draftContentForStorage, draftFromNote, draftHasRichContent, draftHasImages, draftHasUnsavedImages, draftPlainText, textDraft, type NoteDraftBlock } from '@/services/note-content';
-import { readChatDraft, saveChatComposer, writeChatDraft } from '@/services/chat-composer';
+import { prefillChatDraft, readChatDraft, saveChatComposer, writeChatDraft } from '@/services/chat-composer';
 import { BackgroundReadabilityProvider } from '@/components/chat/background-readability';
 import { ChatWallpaper } from '@/components/chat/chat-wallpaper';
 import { ChatThemeBackdrop } from '@/components/chat/chat-theme-backdrop';
@@ -50,6 +50,7 @@ import { deleteAttachment } from '@/services/attachment-storage';
 import { ChitsGuide } from '@/components/mascot/chits-guide.native';
 import { useChitsOrganization } from '@/hooks/use-chits-organization';
 import { dateFormat } from '@/services/reminder-time';
+import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
 
 const PAGE_SIZE = 50;
 const MIN_COMPOSER_INPUT_HEIGHT = 40;
@@ -633,7 +634,7 @@ export default function ChatScreen() {
     if (!prefill) return;
     const frame = requestAnimationFrame(() => {
       draftTouched.current = true;
-      setBlocks((current) => (draftPlainText(current).trim() || draftHasRichContent(current) ? current : textDraft(prefill)));
+      setBlocks((current) => prefillChatDraft(current, prefill));
       router.setParams({ prefill: undefined });
     });
     return () => cancelAnimationFrame(frame);
@@ -1187,6 +1188,7 @@ export default function ChatScreen() {
             {!isRecordingAudio && pasteButton && !fullscreenEditing ? <View style={styles.pasteRow}>{pasteButton}</View> : null}
             {!isRecordingAudio ? <NoteBlocksEditor
               ref={inputRef}
+              showTitle={false}
               accessibilityLabel={attachmentDraft || editing?.attachments.length ? tr("chat.attachmentDescription") : tr("chat.messageNote")}
               blocks={blocks}
               onChangeBlocks={changeBlocks}
@@ -1220,7 +1222,7 @@ export default function ChatScreen() {
             {!searchOpen && pinnedMessages.length > 0 ? <QuickFilterRow pinned={pinnedMessages} onSelect={openPinned} /> : null}
           </View>
         </View>
-      {fullscreenEditing ? <FullscreenComposer blocks={blocks} onChangeBlocks={changeBlocks} editorRef={fullscreenInputRef} onClose={closeFullscreenComposer} onSaveDraft={() => send(true)} onSend={() => { void send(); }} canSave={canSend && !paste.pasting} saving={isSaving || paste.pasting} error={error} savedText={editing ? editing.text ?? '' : null} savedContent={serializeNoteContent(editing?.content ?? [])} attachmentLabel={attachmentDraft ? tr("chat.valueAttachmentReadyToSend", { value1: attachmentDraft.attachment.type }) : editing?.attachments.length ? tr('chat.savedAttachments', { count: editing.attachments.length }) : null} pasteButton={pasteButton} insertImageButton={<InsertImageButton disabled={isSaving} busy={paste.pasting} onPress={() => void paste.pick()} />} listButtons={<NoteListButtons editor={fullscreenInputRef} disabled={isSaving || paste.pasting} />} onReplaceImage={(key) => void paste.pick(key)} /> : null}
+      {fullscreenEditing ? <FullscreenComposer blocks={blocks} onChangeBlocks={changeBlocks} editorRef={fullscreenInputRef} onClose={closeFullscreenComposer} onSaveDraft={() => send(true)} onSend={() => { void send(); }} canSave={canSend && !paste.pasting} saving={isSaving || paste.pasting} error={error} savedText={editing ? editing.text ?? '' : null} savedContent={serializeNoteContent(editing?.content ?? [])} attachmentLabel={attachmentDraft ? tr("chat.valueAttachmentReadyToSend", { value1: attachmentDraft.attachment.type }) : editing?.attachments.length ? tr('chat.savedAttachments', { count: editing.attachments.length }) : null} images={paste} onReplaceImage={(key) => void paste.pick(key)} /> : null}
       <MessageActions message={selected} temporarilyRevealed={Boolean(selected && temporarilyRevealedIds.has(selected.id))} onDismiss={() => { afterActionsClosed.current = null; setSelected(null); }} onClosed={runAfterActionsClosed} onCopy={copyChat} onEdit={beginEdit} onPin={togglePin} spaceAction={spaceAction} onSpaceAction={runSpaceAction} onAddToBoard={addToBoard} onReminder={openMessageReminder} onDownload={(message) => { setSelected(null); if (message.attachments[0]) void download.exportAttachment(message.attachments[0]); }} onFocusNote={(message) => { afterActionsClosed.current = () => router.push({ pathname: '/focus', params: { note: `thought:${message.id}` } }); setSelected(null); }} onSaveTemplate={(message) => { afterActionsClosed.current = () => router.push({ pathname: '/templates', params: { sourceMessageId: message.id } }); setSelected(null); }} onShareNote={(message) => { afterActionsClosed.current = () => router.push(shareNoteHref({ messageId: message.id })); setSelected(null); }} onReveal={revealContent} onHideAgain={hideAgain} onHideContent={hideContent} onShowContent={showContent} onArchive={archive} onDelete={remove} />
       <ReminderSheet key={reminderSheetKey} visible={reminderMessageId !== null} existing={reminderExisting} accent={theme.accent} accentOn={theme.accentText} onClose={() => setReminderMessageId(null)} onSave={async (date) => {
         if (!reminderMessageId) return { ok: false, reason: 'failed' };

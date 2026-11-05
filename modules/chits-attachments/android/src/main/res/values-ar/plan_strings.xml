@@ -1,0 +1,15 @@
+<resources>
+  <string name="plan_widget_name">خطة اليوم</string>
+  <string name="plan_widget_description">خطتك وتقدمك لهذا اليوم.</string>
+  <string name="plan_widget_today">اليوم</string>
+  <string name="plan_widget_none">هل لديك خطة صغيرة لليوم؟</string>
+  <string name="plan_widget_action">خطط ليومي</string>
+  <string name="plan_widget_keep_going">واصل!</string>
+  <string name="plan_widget_all_done">تم كل شيء لهذا اليوم!</string>
+  <string name="plan_widget_wrapped">انتهينا!</string>
+  <string name="plan_widget_hidden">أسماء المهام مخفية. يمكنك إظهارها من الإعدادات.</string>
+  <string name="plan_widget_add">إضافة</string>
+  <string name="plan_widget_wrap">اختتام</string>
+  <string name="plan_widget_view">عرض خطة اليوم</string>
+  <string name="plan_widget_recap">عرض ملخص اليوم</string>
+</resources>

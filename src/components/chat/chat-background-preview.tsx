@@ -1,7 +1,7 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/components/theme-provider';
@@ -15,6 +15,7 @@ import { BackgroundReadabilityProvider } from './background-readability';
 import { useChatBackground } from './chat-background-context';
 import { DEFAULT_BACKGROUND_DIM, type ChatBackgroundImage } from '@/services/chat-background';
 import type { Message } from '@/db/types';
+import { AppText } from '@/components/ui/app-text';
 
 const noAction = () => undefined;
 function sampleMessage(id: string, text: string, createdAt: number): Message {
@@ -51,20 +52,20 @@ export function ChatBackgroundPreview({ image, onCancel, onApplied }: { image: C
           <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <ChatHeaderSurface preview searchOpen={false} searchQuery="" onBack={noAction} onOpenSearch={noAction} onSearchChange={noAction} onOpenSettings={noAction} /></View>
           <ScrollView style={styles.sampleScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled><View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.notes}>
-            <Text style={[styles.day, { color: tokens.textSecondary, backgroundColor: tokens.surfaceElevated }]}>{tr("chatbackgroundpreview.todayExampleNotes")}</Text>
+            <AppText style={[styles.day, { color: tokens.textSecondary, backgroundColor: tokens.surfaceElevated }]}>{tr("chatbackgroundpreview.todayExampleNotes")}</AppText>
             <QuickThoughtBubble message={samples[0]} focused={false} onActions={noAction} />
             <StructuredNoteCard message={samples[1]} focused={false} onActions={noAction} />
             <QuickThoughtBubble message={samples[2]} focused={false} onActions={noAction} />
           </View></ScrollView>
-          <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.composerWrap}><ChatComposerSurface><View style={styles.composerRow}><Ionicons name="add" size={22} color={tokens.textSecondary} /><Text style={[styles.placeholder, { color: tokens.textMuted }]}>{tr("chatbackgroundpreview.messageNote")}</Text><View style={[styles.send, { backgroundColor: tokens.accent }]}><Ionicons name="mic-outline" size={19} color={tokens.accentText} /></View></View></ChatComposerSurface></View>
+          <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.composerWrap}><ChatComposerSurface><View style={styles.composerRow}><Ionicons name="add" size={22} color={tokens.textSecondary} /><AppText style={[styles.placeholder, { color: tokens.textMuted }]}>{tr("chatbackgroundpreview.messageNote")}</AppText><View style={[styles.send, { backgroundColor: tokens.accent }]}><Ionicons name="mic-outline" size={19} color={tokens.accentText} /></View></View></ChatComposerSurface></View>
         </View></BackgroundReadabilityProvider>
       </View>
-      {current ? <Text style={[styles.indicator, { color: tokens.textSecondary }]}>{tr("photoattachmentviewer.currentChatBackground")}</Text> : null}
-      <Text accessibilityRole="header" style={[styles.title, { color: tokens.textPrimary }]}>{tr("chatbackgroundpreview.backgroundStyle")}</Text>
+      {current ? <AppText style={[styles.indicator, { color: tokens.textSecondary }]}>{tr("photoattachmentviewer.currentChatBackground")}</AppText> : null}
+      <AppText accessibilityRole="header" style={[styles.title, { color: tokens.textPrimary }]}>{tr("chatbackgroundpreview.backgroundStyle")}</AppText>
       <BackgroundStyleControls dim={dim} blur={blur} onDimChange={setDim} onBlurChange={setBlur} disabled={busy} />
     </ScrollView>
     <View style={[styles.actions, { borderColor: tokens.borderSubtle, backgroundColor: tokens.background }]}>
-      {error || imageFailed ? <Text accessibilityRole="alert" style={{ color: tokens.danger }}>{error ?? tr("chatbackgroundpreview.thisPhotoCouldNotBeLoadedChooseAnother")}</Text> : null}
+      {error || imageFailed ? <AppText accessibilityRole="alert" style={{ color: tokens.danger }}>{error ?? tr("chatbackgroundpreview.thisPhotoCouldNotBeLoadedChooseAnother")}</AppText> : null}
       {busy ? <ActivityIndicator color={tokens.accent} /> : null}
       <PrimaryButton label={tr("chatbackgroundpreview.useAsBackground")} disabled={busy || imageFailed} onPress={() => void apply()} />
       <SecondaryButton label={tr("chat.cancel")} disabled={busy} onPress={onCancel} />

@@ -25,7 +25,7 @@ type Props = {
   notes: PinnedNote[];
   size: number;
   hideText: boolean;
-  /** Unused since the redesign (notes are always set in Kalam); kept so callers needn't change. */
+  /** Unused since the redesign (notes use shared workspace type); kept for callers. */
   fontFamily?: string;
   /** Unused since the redesign (a space looks the same in light and dark). */
   scheme?: 'light' | 'dark';

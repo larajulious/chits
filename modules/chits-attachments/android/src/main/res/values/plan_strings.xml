@@ -1,0 +1,15 @@
+<resources>
+  <string name="plan_widget_name">Today’s Plan</string>
+  <string name="plan_widget_description">Your plan and progress for today.</string>
+  <string name="plan_widget_today">Today</string>
+  <string name="plan_widget_none">Got a little plan for today?</string>
+  <string name="plan_widget_action">Plan My Day</string>
+  <string name="plan_widget_keep_going">Keep going!</string>
+  <string name="plan_widget_all_done">All done for today!</string>
+  <string name="plan_widget_wrapped">That’s a wrap!</string>
+  <string name="plan_widget_hidden">Task names are hidden. You can show them in Settings.</string>
+  <string name="plan_widget_add">Add</string>
+  <string name="plan_widget_wrap">Wrap up</string>
+  <string name="plan_widget_view">View Today’s Plan</string>
+  <string name="plan_widget_recap">View Day Recap</string>
+</resources>

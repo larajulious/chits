@@ -17,7 +17,7 @@ export async function readChecklist(database: OnboardingDatabase) {
     database.getFirstAsync<{ firstNote: number; firstCard: number; reminder: number; space: number }>(`
       SELECT EXISTS(SELECT 1 FROM messages WHERE deleted_at IS NULL) AS firstNote,
         EXISTS(SELECT 1 FROM card_messages) AS firstCard,
-        EXISTS(SELECT 1 FROM card_reminders) AS reminder,
+        (EXISTS(SELECT 1 FROM card_reminders) OR EXISTS(SELECT 1 FROM message_reminders)) AS reminder,
         EXISTS(SELECT 1 FROM space_placements) AS space`),
   ]);
   const prior = parseItems(saved);

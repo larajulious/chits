@@ -8,6 +8,7 @@ export function requestReminderSync(): Promise<void> { return Promise.resolve();
 export async function pauseReminderSync() {}
 export function resumeReminderSync() {}
 export async function hasNotificationPermission(): Promise<boolean> { return false; }
+export async function ensureNotificationPermission(): Promise<'granted' | 'denied' | 'blocked'> { return 'denied'; }
 export async function setCardReminder(_database: SQLiteDatabase, _cardId: string, _scheduledAt: number): Promise<SetReminderResult> { return { ok: false, reason: 'failed' }; }
 export async function removeCardReminder(_database: SQLiteDatabase, _cardId: string): Promise<void> {}
 export async function setMessageReminder(_database: SQLiteDatabase, _messageId: string, _scheduledAt: number): Promise<SetReminderResult> { return { ok: false, reason: 'failed' }; }

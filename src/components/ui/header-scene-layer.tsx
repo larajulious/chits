@@ -1,4 +1,4 @@
-import { memo, useEffect, useState, type ReactNode } from 'react';
+import { createContext, memo, useContext, useEffect, useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import Animated, { cancelAnimation, Easing, useAnimatedProps, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming, type SharedValue } from 'react-native-reanimated';
@@ -51,9 +51,13 @@ const STREAK = 0.05;
 const UPPER_PANES = HEADER_SCENE_PANES.slice(0, 2);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
+/** Holds the room at one minute of the day, for a moment that has its own light. */
+export const SceneMinuteContext = createContext<number | null>(null);
+
 export const HeaderSceneLayer = memo(function HeaderSceneLayer({ photo }: { photo: HeaderPhoto }) {
   const { scheme } = useTheme();
-  const minute = useSceneMinute();
+  const clock = useSceneMinute();
+  const minute = useContext(SceneMinuteContext) ?? clock;
   const [size, setSize] = useState({ width: 0, height: 0 });
   const mix = sceneMixAt(minute);
   const look = sceneLook(mix, scheme);

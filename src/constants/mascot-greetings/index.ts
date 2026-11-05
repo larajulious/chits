@@ -9,6 +9,13 @@ import { greetings as viGreetings } from './vi';
 import { greetings as hiGreetings } from './hi';
 import { greetings as trGreetings } from './tr';
 import { greetings as arGreetings } from './ar';
+import { greetings as taGreetings } from './ta';
+import { greetings as teGreetings } from './te';
+import { greetings as bnGreetings } from './bn';
+import { greetings as mrGreetings } from './mr';
+import { greetings as knGreetings } from './kn';
+import { greetings as mlGreetings } from './ml';
+import { greetings as guGreetings } from './gu';
 import { spanishGreetings } from './es';
 import { portugueseGreetings } from './pt-BR';
 import { englishGreetings } from './en';
@@ -32,7 +39,7 @@ export function getGreetingLanguage(locale: string | null | undefined): Greeting
 }
 
 export function getGreetingsForPeriod(language: GreetingLanguage, period: GreetingPeriod): readonly string[] {
-  const libraries = { en: englishGreetings, fil: filipinoGreetings, 'pt-BR': portugueseGreetings, es: spanishGreetings, id: idGreetings, fr: frGreetings, de: deGreetings, ja: jaGreetings, ko: koGreetings, it: itGreetings, vi: viGreetings, hi: hiGreetings, tr: trGreetings, ar: arGreetings };
+  const libraries = { en: englishGreetings, fil: filipinoGreetings, 'pt-BR': portugueseGreetings, es: spanishGreetings, id: idGreetings, fr: frGreetings, de: deGreetings, ja: jaGreetings, ko: koGreetings, it: itGreetings, vi: viGreetings, hi: hiGreetings, tr: trGreetings, ar: arGreetings, ta: taGreetings, te: teGreetings, bn: bnGreetings, mr: mrGreetings, kn: knGreetings, ml: mlGreetings, gu: guGreetings };
   return (libraries[language] ?? englishGreetings)[period];
 }
 

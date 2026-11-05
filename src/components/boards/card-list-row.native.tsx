@@ -6,10 +6,12 @@ import * as Haptics from 'expo-haptics';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { AttachmentContent } from '@/components/chat/message-row';
+import { useTheme } from '@/components/theme-provider';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW, PushPin, Tape, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { mix, noteColors, stableTilt } from '@/constants/style-tokens';
+import { useWelcomeFonts } from '@/features/onboarding/welcome/welcome-fonts';
 import { formatReminder, dateFormat } from '@/services/reminder-time';
 import type { AttachmentLike, CardListItem } from '@/db/types';
 
@@ -121,12 +123,13 @@ function paperFor(accent: string | null, hidden: boolean) {
   return { paper: colors.cardTint, muted: colors.cardInkMuted };
 }
 const KRAFT = '#E6DCC8';
+const PICTURE_MARGIN = 8;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PRESS_SPRING = { damping: 18, stiffness: 320, mass: 0.6 };
 
-// A content-first note on the desk: a paper with a fixed little tilt, tape on
-// some and a pushpin on the pinned, an optional polaroid photo, a bounded
-// preview and one line of metadata. Tapping opens the note; pressing springs
+// A content-first note on the desk, in the same rounded paper as the Boards
+// list: tape on some and a pushpin on the pinned, an optional polaroid photo, a
+// bounded preview and one line of metadata. Tapping opens the note; pressing springs
 // it down, a long press opens its actions, and subtasks tick in place.
 // `arranging` hands the long press to the list's drag (My order), which opens
 // the actions itself when the note is held without moving.
@@ -135,12 +138,14 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
 
   useLocale();
   const desk = useDesk();
+  const { styleTokens } = useTheme();
   const { hand, handBold } = useHandwriting();
+  const fonts = useWelcomeFonts();
   const reduceMotion = useReducedMotion();
-  const tilt = stableTilt(`${item.kind}:${item.id}:paper`, 1.1);
+  const radius = styleTokens.button.radius;
   const taped = !item.pinned && stableTilt(`${item.id}:tape`, 1) > 0.2;
   const press = useSharedValue(1);
-  const pressStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${tilt}deg` }, { scale: press.get() }] }));
+  const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: press.get() }] }));
   const accent = item.hidden ? null : item.boardAccent;
   const { paper, muted } = paperFor(accent, item.hidden);
   const ink = PAPER_INK;
@@ -183,10 +188,10 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
       accessibilityActions={accessibilityActions}
       onAccessibilityAction={onAccessibilityAction}
       delayLongPress={350}
-      style={({ pressed }) => [styles.card, { backgroundColor: paper, boxShadow: `0px ${pressed ? 2 : 6}px ${pressed ? 5 : 12}px ${desk.shadow}` }, reduceMotion && pressed && styles.reducedPressed]}
+      style={({ pressed }) => [styles.card, { backgroundColor: paper, borderRadius: radius, boxShadow: `0px ${pressed ? 1 : 3}px ${pressed ? 3 : 8}px ${desk.shadow}` }, reduceMotion && pressed && styles.reducedPressed]}
     >
       {picture ? (
-        <View pointerEvents="none" style={[styles.picture, { backgroundColor: wash, borderColor: rule }]}>
+        <View pointerEvents="none" style={[styles.picture, { backgroundColor: wash, borderColor: rule, borderRadius: Math.max(2, radius - PICTURE_MARGIN) }]}>
           <AttachmentContent attachment={picture} variant="paper" />
           {picture.type === "video" ? <View style={styles.videoPlay}><Icon name="play" size={18} color="#FFFFFF" /></View> : null}
           {picture.type === "video" && picture.duration ? <View style={styles.durationBadge}><AppText weight="600" style={styles.durationBadgeText}>{formatDurationSeconds(picture.duration)}</AppText></View> : null}
@@ -203,13 +208,13 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
           </View>
         ) : content.kind === "file" ? (
           <View style={styles.fileRow}>
-            <View style={[styles.fileIcon, { backgroundColor: wash }]}><Icon name={/\.pdf$/i.test(content.name) ? 'document-text-outline' : 'document-outline'} size={22} color={muted} /></View>
+            <View style={[styles.fileIcon, { backgroundColor: wash, borderRadius: radius / 2 }]}><Icon name={/\.pdf$/i.test(content.name) ? 'document-text-outline' : 'document-outline'} size={22} color={muted} /></View>
             <AppText weight="600" numberOfLines={2} style={[styles.fileName, { color: ink }]}>{content.name}</AppText>
             <AppText style={[styles.fileMeta, { color: muted }]}>{fileKindLabel(content.name, item.fileCount)}</AppText>
           </View>
         ) : <>
           {content.title ? <AppText numberOfLines={2} style={[handBold, styles.title, { color: ink }]}>{content.title}</AppText> : null}
-          {content.body ? <AppText numberOfLines={checklist || item.subtaskPreview?.length ? 3 : content.title ? 4 : 6} style={content.title ? [styles.bodyUnderTitle, { color: muted }] : [hand, styles.body, { color: ink }]}>{content.body}</AppText> : null}
+          {content.body ? <AppText family={fonts.text} numberOfLines={checklist || item.subtaskPreview?.length ? 3 : content.title ? 4 : 6} style={content.title ? [styles.bodyUnderTitle, { color: muted }] : [hand, styles.body, { color: ink }]}>{content.body}</AppText> : null}
           {checklist && !content.title && !content.body ? <AppText style={[handBold, styles.title, { color: ink }]}>{tr("cardlistrow.checklist")}</AppText> : null}
         </>}
 
@@ -246,21 +251,21 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
           {item.subtaskCount > 3 ? <AppText style={[styles.checklistMore, { color: muted }]}>+{item.subtaskCount - 3} {' '}{tr("cardlistrow.more")}</AppText> : null}
         </View> : null}
 
-        {audio ? <View style={[styles.audioPill, { backgroundColor: wash }]}>
+        {audio ? <View style={[styles.audioPill, { backgroundColor: wash, borderRadius: radius / 2 }]}>
           <View style={styles.waveform}>{[7, 14, 10, 18, 9, 14, 6].map((height, index) => <View key={index} style={[styles.waveformBar, { height, backgroundColor: ink }]} />)}</View>
           <AppText weight="600" style={[styles.audioText, { color: ink }]}>{audio.duration ? formatDurationSeconds(audio.duration) : tr("cardlistrow.voiceNote")}</AppText>
         </View> : null}
-        {reminder && reminderLabel ? <View style={[styles.reminderChip, { backgroundColor: reminder.fill }]}>
+        {reminder && reminderLabel ? <View style={[styles.reminderChip, { backgroundColor: reminder.fill, borderRadius: radius / 2 }]}>
           <Icon name={reminder.icon} size={12} color={reminder.ink} />
           <AppText weight="600" numberOfLines={1} style={[styles.reminderText, { color: reminder.ink }]}>{reminderLabel}</AppText>
         </View> : null}
       </View> : null}
 
-      <View style={[styles.footer, { borderTopColor: rule }]}>
+      <View style={styles.footer}>
         <View style={styles.footerMeta}>
           {accent ? <View style={[styles.boardDot, { backgroundColor: accent, borderColor: mix(accent, ink, 0.3) }]} /> : null}
-          <AppText weight={accent ? '600' : '500'} numberOfLines={1} style={[styles.location, { color: muted }]}>{location}</AppText>
-          <AppText style={[styles.date, { color: muted }]}>{formatCardDate(item.updatedAt)}</AppText>
+          <AppText family={fonts.text} numberOfLines={1} style={[styles.location, { color: muted }]}>{location}</AppText>
+          <AppText family={fonts.text} style={[styles.date, { color: muted }]}>{formatCardDate(item.updatedAt)}</AppText>
           {showFileBadge ? <View style={styles.badge}><Icon name="attach" size={13} color={muted} /><AppText style={[styles.badgeText, { color: muted }]}>{item.fileCount}</AppText></View> : null}
           {connectionCount > 0 ? <View style={styles.badge}><Icon name="link-outline" size={13} color={muted} /><AppText style={[styles.badgeText, { color: muted }]}>{connectionCount}</AppText></View> : null}
         </View>
@@ -276,22 +281,22 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
 });
 
 const styles = StyleSheet.create({
-  card: { minHeight: 108, borderRadius: 3 },
+  card: { minHeight: 96 },
   reducedPressed: { opacity: 0.82 },
-  noteContent: { minWidth: 0, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4 },
-  textOnlyContent: { minHeight: 60, paddingTop: 16 },
-  // A printed photo stuck on the paper: an even white margin, square corners,
-  // a hairline edge. The photo fills it exactly (AttachmentContent's 'paper').
-  picture: { height: 120, marginTop: 8, marginHorizontal: 8, borderRadius: 1, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  videoPlay: { position: 'absolute', alignSelf: 'center', top: 42, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)' },
+  noteContent: { minWidth: 0, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4 },
+  textOnlyContent: { minHeight: 52, paddingTop: 12 },
+  // A printed photo stuck on the paper: an even margin, corners that follow the
+  // card's, a hairline edge. The photo fills it exactly (AttachmentContent's 'paper').
+  picture: { height: 104, marginTop: PICTURE_MARGIN, marginHorizontal: PICTURE_MARGIN, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  videoPlay: { position: 'absolute', alignSelf: 'center', top: 34, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)' },
   durationBadge: { position: 'absolute', left: 8, bottom: 8, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.55)' },
   durationBadgeText: { color: '#FFFFFF', fontSize: 11 },
   overflowBadge: { position: 'absolute', right: 8, bottom: 8, minWidth: 26, height: 22, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: 'rgba(0,0,0,0.55)' },
   overflowBadgeText: { color: '#FFFFFF', fontSize: 11 },
-  title: { fontSize: 19, lineHeight: 25 },
-  body: { fontSize: 17, lineHeight: 23 },
-  bodyUnderTitle: { marginTop: 3, fontSize: 14, lineHeight: 20 },
-  checklist: { marginTop: 12, gap: 8 },
+  title: { fontSize: 17, lineHeight: 22 },
+  body: { fontSize: 15, lineHeight: 21 },
+  bodyUnderTitle: { marginTop: 3, fontSize: 14, lineHeight: 19 },
+  checklist: { marginTop: 10, gap: 6 },
   progressLabels: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 },
   progressCount: { flexShrink: 1, fontSize: 12, lineHeight: 16 },
   progressPercent: { fontSize: 11.5, lineHeight: 16, fontVariant: ['tabular-nums'] },
@@ -304,19 +309,19 @@ const styles = StyleSheet.create({
   completedText: { textDecorationLine: 'line-through' },
   checklistMore: { fontSize: 11.5, lineHeight: 16, marginLeft: 23 },
   hiddenRow: { gap: 4, paddingTop: 2 },
-  hiddenTitle: { fontSize: 19, lineHeight: 25 },
+  hiddenTitle: { fontSize: 18, lineHeight: 24 },
   hiddenCopy: { fontSize: 12, lineHeight: 17 },
   fileRow: { gap: 6 },
-  fileIcon: { width: 38, height: 42, marginBottom: 3, borderRadius: 3, alignItems: 'center', justifyContent: 'center' },
+  fileIcon: { width: 38, height: 42, marginBottom: 3, alignItems: 'center', justifyContent: 'center' },
   fileName: { fontSize: 13.5, lineHeight: 19 },
   fileMeta: { fontSize: 11.5, lineHeight: 16 },
-  audioPill: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 9, minHeight: 36, marginTop: 10, paddingHorizontal: 10, borderRadius: 3 },
+  audioPill: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 9, minHeight: 36, marginTop: 10, paddingHorizontal: 10 },
   waveform: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   waveformBar: { width: 2, borderRadius: 1, opacity: 0.7 },
   audioText: { flexShrink: 1, fontSize: 12, fontVariant: ['tabular-nums'] },
-  reminderChip: { alignSelf: 'flex-start', maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 2, transform: [{ rotate: '-1deg' }] },
+  reminderChip: { alignSelf: 'flex-start', maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10, paddingHorizontal: 8, paddingVertical: 4 },
   reminderText: { flexShrink: 1, fontSize: 11.5, lineHeight: 15 },
-  footer: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10, marginHorizontal: 14, paddingTop: 6, paddingBottom: 6, borderTopWidth: 1, borderStyle: 'dashed', marginRight: 6 },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, marginHorizontal: 12, paddingBottom: 4, marginRight: 6 },
   footerMeta: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
   boardDot: { width: 7, height: 7, borderRadius: 3.5, borderWidth: StyleSheet.hairlineWidth },
   location: { flexShrink: 1, fontSize: 12, lineHeight: 16 },

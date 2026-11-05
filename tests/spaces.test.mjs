@@ -222,3 +222,19 @@ test('schema 24 placements migrate to default sticky paper without altering stor
   await migration.migrateDatabase(db);
   assert.deepEqual({ ...db.raw.prepare('SELECT * FROM space_placements').get() }, { ...before, paper_style: 'sticky' });
 });
+
+test('Pick a Space keeps all four prints and the action on one screen, down to a small phone', async () => {
+  const { pickGridLayout } = await import('../src/components/spaces/pick-layout.ts');
+  // viewport = screen height less the safe areas and the header's minimum; hero = what Chits' stage takes.
+  for (const [width, viewport, hero] of [[360, 540, 122], [390, 720, 150], [411, 780, 150]]) {
+    const grid = pickGridLayout(width, viewport, hero);
+    assert.ok(grid.tileHeight * 2 + 10 + hero + 142 <= Math.max(viewport, 150 * 2 + 10 + hero + 142), `fits at ${width}x${viewport}`);
+    assert.ok(grid.previewHeight >= 70, 'the surface stays big enough to tell apart');
+    // Both sample notes stay inside the picture.
+    assert.ok(132 * grid.stickyUnit * 1.7 <= grid.previewWidth);
+    assert.ok(124 * grid.stickyUnit * 1.2 <= grid.previewHeight);
+  }
+  // A tablet doesn't stretch them past the content column.
+  assert.equal(pickGridLayout(1024, 1200, 150).tileHeight, 252);
+  assert.ok(pickGridLayout(1024, 1200, 150).previewWidth < 300);
+});

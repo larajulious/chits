@@ -1,0 +1,15 @@
+<resources>
+  <string name="plan_widget_name">আজকের পরিকল্পনা</string>
+  <string name="plan_widget_description">আজকের জন্য আপনার পরিকল্পনা এবং অগ্রগতি.</string>
+  <string name="plan_widget_today">আজ</string>
+  <string name="plan_widget_none">আজকের জন্য একটু পরিকল্পনা আছে?</string>
+  <string name="plan_widget_action">আমার দিন পরিকল্পনা</string>
+  <string name="plan_widget_keep_going">চালিয়ে যান!</string>
+  <string name="plan_widget_all_done">আজকের জন্য সব সম্পন্ন!</string>
+  <string name="plan_widget_wrapped">আজকের মতো শেষ!</string>
+  <string name="plan_widget_hidden">টাস্কের নাম লুকানো আছে। আপনি সেটিংসে সেগুলি দেখাতে পারেন৷</string>
+  <string name="plan_widget_add">যোগ করুন</string>
+  <string name="plan_widget_wrap">দিন শেষ করি</string>
+  <string name="plan_widget_view">আজকের পরিকল্পনা দেখুন</string>
+  <string name="plan_widget_recap">দিনের রিক্যাপ দেখুন</string>
+</resources>

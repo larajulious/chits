@@ -38,7 +38,7 @@ export function useSceneMinute() {
   return useSyncExternalStore(subscribe, getMinute);
 }
 
-/** The scene's ink, which changes only a few times a day; idle when no scene shows. */
+/** The appearance's scene ink; minute updates keep the same ink. Idle without a scene. */
 export function useSceneInk(scheme: 'light' | 'dark', enabled: boolean): HeaderSceneInk {
   return useSyncExternalStore(enabled ? subscribe : idle, () => sceneLook(sceneMixAt(minute), scheme).ink);
 }

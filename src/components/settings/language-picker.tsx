@@ -15,7 +15,7 @@ export function LanguagePicker({ preference, busy, onSelect }: { preference: Lan
   const { tokens } = useTheme();
   const { rowStyle } = useDirection();
   const options = filterLanguageOptions(query);
-  const row = (id: LanguagePreference, name: string) => <Pressable key={id} accessibilityRole="radio" accessibilityLabel={name} accessibilityState={{ selected: preference === id, disabled: busy }} disabled={busy} onPress={() => onSelect(id)} style={[{ minHeight: 52, paddingVertical: 12, gap: 12, alignItems: 'center' }, rowStyle]}>
+  const row = (id: LanguagePreference, name: string) => <Pressable key={id} accessibilityRole="radio" accessibilityLabel={name} accessibilityLanguage={id === 'system' ? undefined : id} accessibilityState={{ selected: preference === id, disabled: busy }} disabled={busy} onPress={() => onSelect(id)} style={[{ minHeight: 52, paddingVertical: 12, gap: 12, alignItems: 'center' }, rowStyle]}>
     <AppText accessibilityLanguage={id === 'system' ? undefined : id} style={{ color: tokens.textPrimary, flex: 1, fontSize: 16 }}>{name}</AppText>
     {preference === id ? <Icon name="checkmark" size={22} color={tokens.accent} /> : null}
   </Pressable>;

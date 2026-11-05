@@ -1,0 +1,15 @@
+<resources>
+  <string name="plan_widget_name">今日の計画</string>
+  <string name="plan_widget_description">今日の計画と進み具合。</string>
+  <string name="plan_widget_today">今日</string>
+  <string name="plan_widget_none">今日の小さな計画はありますか？</string>
+  <string name="plan_widget_action">今日の計画</string>
+  <string name="plan_widget_keep_going">その調子！</string>
+  <string name="plan_widget_all_done">今日はすべて完了！</string>
+  <string name="plan_widget_wrapped">おつかれさま！</string>
+  <string name="plan_widget_hidden">タスク名は非表示です。設定で表示できます。</string>
+  <string name="plan_widget_add">追加</string>
+  <string name="plan_widget_wrap">終える</string>
+  <string name="plan_widget_view">今日の計画を見る</string>
+  <string name="plan_widget_recap">一日のまとめを見る</string>
+</resources>

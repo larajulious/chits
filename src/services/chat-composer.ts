@@ -1,9 +1,16 @@
 import type { createMessageRepository, NoteContentInput } from '@/db/repositories';
 import type { Attachment, Message } from '@/db/types';
-import { draftFromNote, noteBlocksText, noteHasChecklist, parseNoteContent } from '@/services/note-content';
+import { draftFromNote, draftHasRichContent, draftPlainText, noteBlocksText, noteHasChecklist, parseNoteContent, textDraft, updateTextBlock, type NoteDraftBlock } from '@/services/note-content';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 type ComposerRepository = Pick<ReturnType<typeof createMessageRepository>, 'createText' | 'createAttachmentMessage' | 'updateText' | 'createNote' | 'updateContent' | 'getActiveById'>;
+
+/** Starter chips fill an empty draft without replacing its mounted native input. */
+export function prefillChatDraft(blocks: NoteDraftBlock[], text: string): NoteDraftBlock[] {
+  if (draftPlainText(blocks).trim() || draftHasRichContent(blocks)) return blocks;
+  const input = blocks.find((block) => block.type === 'text');
+  return input ? updateTextBlock(blocks, input.key, text) : textDraft(text);
+}
 
 // Both fullscreen actions use this path. The returned message becomes the
 // editing target after Save as draft, so the next save cannot create a duplicate.
@@ -21,7 +28,7 @@ export async function saveChatComposer(repository: ComposerRepository, { text, e
   const words = blocks ? noteBlocksText(blocks) : text.trim();
   const images = blocks?.filter((block) => block.type === 'image') ?? [];
   if (!words && !hasChecklist && !attachment && !images.length && !editing?.attachments.length) return null;
-  if (blocks?.some((block) => block.type === 'text' && block.list) || images.length || editing?.content) {
+  if ((blocks && draftHasRichContent(blocks)) || images.length || editing?.content) {
     // Never empty a thought by clearing it: keep it unless something would remain.
     if (editing && !words && !hasChecklist && !images.length && !editing.attachments.some((item) => item.type !== 'photo')) return null;
     // Photos the composer doesn't show stay where they are, ahead of its content:

@@ -1,21 +1,22 @@
 import { countLabel, tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
-import { BlurTargetView, BlurView } from 'expo-blur';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
+import { AccessibilityInfo, Platform, ScrollView, StyleSheet, View, useWindowDimensions, type ScrollViewProps } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { runOnJS, useAnimatedRef, useAnimatedStyle, useReducedMotion, useScrollOffset, useSharedValue, withSpring, type SharedValue } from 'react-native-reanimated';
 
 import { useTheme } from '@/components/theme-provider';
-import { Chip, ChipRow, EmptyState } from '@/components/ui/primitives';
-import { DeskHeading, PaperDesk } from '@/components/desk/paper-desk';
+import { EmptyState } from '@/components/ui/primitives';
+import { DeskHeading, PaperDesk, useDesk } from '@/components/desk/paper-desk';
 import { spacing } from '@/constants/theme';
 import type { CardListItem } from '@/db/types';
 import { noteKey, reorder, type NoteOrderMode } from '@/services/note-order';
 import { CardListRow } from './card-list-row.native';
 import { findStickySection } from './cards-sticky-section';
+import { FILTER_RAIL_HEIGHT, FilterRail } from './filter-rail';
 
 /** A section with an empty title shows its notes without a heading. */
 export type CardSection = { key: string; title: string; pinned?: boolean; count: number; data: CardListItem[] };
@@ -35,6 +36,14 @@ type Props = {
   onToggleSubtask: (item: CardListItem, subtaskId: string) => void;
   onSectionChange: (section: CardSection | null) => void;
   bottomInset: number;
+  /** Optional scrolling workspace hero; filters stick once it has scrolled away. */
+  header?: ReactNode;
+  estimatedHeaderHeight?: number;
+  /** Mirrors the list's scroll position for a header that reacts to it. */
+  scrollOffset?: SharedValue<number>;
+  footer?: ReactNode;
+  emptyState?: ReactNode;
+  backgroundColor?: string;
 };
 
 // The note being dragged in My order: where its cell sat when it lifted (in
@@ -60,24 +69,25 @@ function SectionHeading({ section }: { section: CardSection }) {
 }
 
 /** Real cards remain recycled; only the active date label changes while scrolling. */
-export function CardsCollection({ sections, chips, filter, onFilter, orderMode, onArrange, onOpen, onMore, onToggleSubtask, onSectionChange, bottomInset }: Props) {
+export function CardsCollection({ sections, chips, filter, onFilter, orderMode, onArrange, onOpen, onMore, onToggleSubtask, onSectionChange, bottomInset, header, estimatedHeaderHeight = 0, scrollOffset: providedScrollOffset, footer, emptyState, backgroundColor }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
+  const desk = useDesk();
   const { width, fontScale } = useWindowDimensions();
-  const { scheme, tokens, styleTokens } = useTheme();
+  const { scheme, styleTokens } = useTheme();
   const reduceMotion = useReducedMotion();
   const columns = width < 350 || fontScale >= 1.3 ? 1 : 2;
   const balanced = styleTokens.card.tinted;
   const arranging = orderMode === 'custom';
-  const columnGap = 14;
+  const columnGap = 12;
   // Room above each paper for its tape or pin, and below for its shadow.
-  const rowGap = 20;
+  const rowGap = 16;
   const listInset = spacing.md - columnGap / 2;
   const listPadding = balanced && columns > 1 ? listInset : 0;
-  const target = useRef<View | null>(null);
   const list = useRef<FlashListRef<Cell>>(null);
-  const [filterHeight, setFilterHeight] = useState(styleTokens.chip.height + styleTokens.chip.activeEdge + 16);
+  const scrollRef = useAnimatedRef<ScrollView>();
+  const [filterHeight, setFilterHeight] = useState(FILTER_RAIL_HEIGHT);
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
   const viewHeight = useRef(0);
@@ -87,6 +97,20 @@ export function CardsCollection({ sections, chips, filter, onFilter, orderMode, 
   const dragX = useSharedValue(0);
   const dragY = useSharedValue(0);
   const lifted = useSharedValue(0);
+  const headerHeight = useSharedValue(header ? estimatedHeaderHeight : 0);
+  // Listen directly to the native scroller: filter motion must not wait for
+  // FlashList's JS recycling/layout work on each frame.
+  const scrollOffset = useScrollOffset(scrollRef, providedScrollOffset);
+  const filterPosition = useAnimatedStyle(() => ({ transform: [{ translateY: Math.max(0, headerHeight.get() - Math.max(0, scrollOffset.get())) }] }));
+  // FlashList owns its scroll ref too. Keep the renderer stable so updates to
+  // filters, headings or notes never replace the native scroller.
+  const renderScrollComponent = useCallback((props: ScrollViewProps & { ref?: Ref<ScrollView> }) => (
+    <ScrollView {...props} ref={(node) => {
+      scrollRef(node);
+      if (typeof props.ref === 'function') props.ref(node);
+      else if (props.ref) props.ref.current = node;
+    }} />
+  ), [scrollRef]);
 
   const collection = useMemo(() => {
     const cells: Cell[] = [];
@@ -107,12 +131,16 @@ export function CardsCollection({ sections, chips, filter, onFilter, orderMode, 
 
   // Inline headings scroll normally; their measured bottom edge determines
   // which section appears in the existing app header above the filters.
+  const reportedSection = useRef<{ section: CardSection | null; notify: Props['onSectionChange'] } | null>(null);
   const updateSection = useCallback((scrollOffset?: number) => {
     const current = list.current;
     if (!current) return;
     const active = findStickySection(collection.headers, scrollOffset ?? current.getAbsoluteLastScrollOffset(), filterHeight, current.getFirstItemOffset(), (index) => current.getLayout(index));
     const cell = active === undefined ? undefined : collection.cells[active];
-    onSectionChange(cell?.kind === 'header' ? cell.section : null);
+    const section = cell?.kind === 'header' ? cell.section : null;
+    if (reportedSection.current?.section === section && reportedSection.current.notify === onSectionChange) return;
+    reportedSection.current = { section, notify: onSectionChange };
+    onSectionChange(section);
   }, [collection, filterHeight, onSectionChange]);
 
   useEffect(() => { updateSection(); }, [updateSection]);
@@ -177,7 +205,8 @@ export function CardsCollection({ sections, chips, filter, onFilter, orderMode, 
       const point = finger.current;
       const current = list.current;
       if (!point || !current || !dragRef.current) return;
-      const top = filterHeight + EDGE;
+      const visibleHeader = Math.max(0, headerHeight.get() - Math.max(0, current.getAbsoluteLastScrollOffset()));
+      const top = visibleHeader + filterHeight + EDGE;
       const bottom = viewHeight.current - bottomInset - EDGE;
       const step = point.y < top ? -MAX_SCROLL_STEP * Math.min(1, (top - point.y) / EDGE)
         : point.y > bottom ? MAX_SCROLL_STEP * Math.min(1, (point.y - bottom) / EDGE) : 0;
@@ -260,17 +289,18 @@ export function CardsCollection({ sections, chips, filter, onFilter, orderMode, 
   const stepActions = [{ name: 'decrement', label: tr('id.moveEarlier') }, { name: 'increment', label: tr('id.moveLater') }];
 
   return <View style={styles.flex} onLayout={({ nativeEvent }) => { viewHeight.current = nativeEvent.layout.height; }}>
-    <BlurTargetView ref={target} style={styles.flex}>
-      {/* The desk starts under the filter row, so the row itself looks as it always has. */}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { top: filterHeight }]}><PaperDesk>{null}</PaperDesk></View>
+    <View style={styles.flex}>
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, backgroundColor ? { backgroundColor } : null]}>{backgroundColor ? null : <PaperDesk faint>{null}</PaperDesk>}</View>
       <GestureDetector gesture={gesture}>
         <View collapsable={false} style={styles.flex}>
           <FlashList key={`cards-${columns}`} ref={list} data={collection.cells} masonry numColumns={columns} optimizeItemArrangement={balanced}
-            extraData={drag?.key} scrollEnabled={!drag}
+            extraData={drag?.key} scrollEnabled={!drag} renderScrollComponent={renderScrollComponent}
+            // Overscroll would pull the held hero away from the app header.
+            bounces={false} overScrollMode="never"
             overrideItemLayout={(layout, cell) => { layout.span = cell.kind === 'header' ? columns : 1; }}
             keyExtractor={(cell) => cell.kind === 'header' ? `section-${cell.section.key}` : `${cell.item.kind}-${cell.item.id}`}
             getItemType={(cell) => cell.kind}
-            onScroll={(event) => updateSection(event.nativeEvent.contentOffset.y)} scrollEventThrottle={32} onLoad={() => updateSection()} onContentSizeChange={() => updateSection()}
+            onScroll={(event) => updateSection(event.nativeEvent.contentOffset.y)} scrollEventThrottle={16} onLoad={() => updateSection()} onContentSizeChange={() => updateSection()}
             renderItem={({ item: cell }) => cell.kind === 'header' ? (
               <View style={balanced && columns > 1 && { marginHorizontal: -listInset }}>
                 <SectionHeading section={cell.section} />
@@ -283,24 +313,27 @@ export function CardsCollection({ sections, chips, filter, onFilter, orderMode, 
                   onAccessibilityAction={arranging ? (event) => step(cell, event.nativeEvent.actionName === 'decrement' ? -1 : 1) : undefined} />
               </View>
             )}
-            contentContainerStyle={{ paddingTop: filterHeight + 12, paddingHorizontal: listPadding, paddingBottom: bottomInset + spacing.md }}
-            ListEmptyComponent={<EmptyState pose="search" title={tr("cardscollection.noCardsInThisFilter")} description={tr("cardscollection.chooseAnotherBoardOrAllCards")} />}
+            contentContainerStyle={{ paddingTop: header ? 0 : filterHeight + 12, paddingHorizontal: listPadding, paddingBottom: bottomInset + spacing.md }}
+            ListHeaderComponent={header ? <View style={{ marginHorizontal: -listPadding }}>
+              <View onLayout={({ nativeEvent }) => headerHeight.set(nativeEvent.layout.height)}>{header}</View>
+              <View style={{ height: filterHeight + 12 }} />
+            </View> : null}
+            ListFooterComponent={footer ? <View style={{ marginHorizontal: -listPadding }}>{footer}</View> : null}
+            ListEmptyComponent={<>{emptyState ?? <EmptyState pose="search" title={tr("cardscollection.noCardsInThisFilter")} description={tr("cardscollection.chooseAnotherBoardOrAllCards")} />}</>}
           />
         </View>
       </GestureDetector>
-    </BlurTargetView>
-    <View pointerEvents="box-none" style={styles.overlay}>
-      <BlurView pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
-        blurTarget={target} blurMethod="dimezisBlurViewSdk31Plus" intensity={45}
-        tint={scheme === 'dark' ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'} style={StyleSheet.absoluteFill} />
-      {/* Keep transparent chips readable even when bright photos scroll behind the blur. */}
-      {scheme === 'dark' ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: tokens.background, opacity: 0.9 }]} /> : null}
-      <View onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setFilterHeight((previous) => previous === next ? previous : next); }}>
-        <ChipRow style={styles.chips}>
-          {chips.map((chip) => <Chip key={chip.key} label={chip.label} count={chip.count} selected={chip.key === filter} accessibilityLabel={tr("cardscollection.filterByValueValueValue", { value1: chip.label, value2: chip.count, value3: chip.count === 1 ? 'card' : 'cards' })} onPress={() => onFilter(chip.key)} />)}
-        </ChipRow>
-      </View>
     </View>
+    <Animated.View pointerEvents="box-none" style={[styles.overlay, filterPosition]}>
+      {Platform.OS === 'ios' ? <BlurView pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
+        intensity={45} tint={scheme === 'dark' ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'} style={StyleSheet.absoluteFill} /> : null}
+      {/* Android uses paper rather than capturing and blurring the moving note
+          grid. iOS keeps its native frosted surface and contrast veil. */}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: backgroundColor ?? desk.desk, opacity: Platform.OS === 'ios' ? (scheme === 'dark' ? 0.9 : 0.6) : 1 }]} />
+      <View onLayout={({ nativeEvent }) => { const next = Math.ceil(nativeEvent.layout.height); setFilterHeight((previous) => previous === next ? previous : next); }}>
+        <FilterRail value={filter} onChange={onFilter} options={chips.map((chip) => ({ ...chip, accessibilityLabel: tr("cardscollection.filterByValueValueValue", { value1: chip.label, value2: chip.count, value3: chip.count === 1 ? 'card' : 'cards' }) }))} />
+      </View>
+    </Animated.View>
     {/* The lifted note, under the finger and above everything else. */}
     {drag ? <Animated.View pointerEvents="none" accessible={false} importantForAccessibility="no-hide-descendants" style={[styles.dragLayer, { left: drag.left, top: drag.top, width: drag.width }, liftStyle]}>
       <View style={cellPadding(drag.column)}><CardListRow item={drag.item} onPress={noop} onMore={noop} arranging /></View>
@@ -318,8 +351,7 @@ function orderedBy(items: CardListItem[], keys: string[]) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0 },
-  chips: { marginVertical: 8 },
-  section: { paddingHorizontal: spacing.md, paddingTop: 4, paddingBottom: 10 },
+  section: { paddingHorizontal: spacing.md, paddingTop: 2, paddingBottom: 6 },
   dragGap: { opacity: 0.25 },
   dragLayer: { position: 'absolute', zIndex: 10, elevation: 10 },
 });

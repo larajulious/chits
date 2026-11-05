@@ -102,6 +102,13 @@ export function spinLanding(current: number, index: number, count: number) {
   return current + 5 * 360 + ((target - current % 360 + 360) % 360);
 }
 
+/** What a note says beyond its title, for the result card. Empty when the title already says it all. */
+export function spinSummary(note: Pick<RevisitNote, 'title' | 'text'>) {
+  const text = note.text.replace(/\s+/g, ' ').trim();
+  const title = note.title.replace(/\s+/g, ' ').trim();
+  return text.startsWith(title) ? text.slice(title.length).replace(/^[\s.,:;·–—-]+/, '') : text;
+}
+
 export function spinSourceRoute(key: NoteKey) {
   return key.startsWith('card:') ? { pathname: '/card/[id]' as const, params: { id: key.slice(5) } } : { pathname: '/chat' as const, params: { messageId: key.slice(8) } };
 }

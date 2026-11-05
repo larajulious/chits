@@ -1,14 +1,16 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { useTheme } from '@/components/theme-provider';
 import { useStickyControls } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
+import { HeaderIconButton } from '@/components/ui/controls';
 import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
 import { spacing } from '@/constants/theme';
+import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
 
 export type ManagedColumn = { id: string; name: string; position: number };
 type Page = 'manage' | 'add' | 'delete';
@@ -215,16 +217,16 @@ export function ColumnManagementSheet({
       <View style={styles.header}>
         <View style={styles.headerSide}>
           {back ? (
-            <Pressable accessibilityRole="button" accessibilityLabel={tr("search.goBack")} disabled={busy} onPress={back} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+            <HeaderIconButton label={tr("search.goBack")} disabled={busy} onPress={back}>
               <Icon name="chevron-back" size={22} color={theme.textPrimary} />
-            </Pressable>
+            </HeaderIconButton>
           ) : null}
         </View>
         <AppText accessibilityRole="header" numberOfLines={1} style={[styles.title, { color: theme.textPrimary }]}>{pageTitle}</AppText>
         <View style={[styles.headerSide, styles.headerSideRight]}>
-          <Pressable accessibilityRole="button" accessibilityLabel={tr("attachments.close")} disabled={busy} onPress={close} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-            <Icon name="close-outline" size={22} color={theme.textSecondary} />
-          </Pressable>
+          <HeaderIconButton label={tr("attachments.close")} disabled={busy} onPress={close}>
+            <Icon name="close-outline" size={22} color={theme.textPrimary} />
+          </HeaderIconButton>
         </View>
       </View>
     </>
@@ -406,9 +408,8 @@ export function ColumnManagementSheet({
 const styles = StyleSheet.create({
   handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginTop: spacing.xs },
   header: { minHeight: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.sm },
-  headerSide: { width: 44, alignItems: 'flex-start' },
+  headerSide: { width: 46, alignItems: 'flex-start' },
   headerSideRight: { alignItems: 'flex-end' },
-  iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   title: { flex: 1, fontSize: 19, fontWeight: '700', textAlign: 'center' },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
   context: { fontSize: 13, lineHeight: 18, marginBottom: spacing.md },

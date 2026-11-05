@@ -1,17 +1,17 @@
 import { countLabel, tr } from '@/localization/runtime';
-import { useLocale } from '@/localization/provider';
+import { useDirection, useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
-import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
+import Animated, { SlideInDown, SlideOutDown, useReducedMotion } from 'react-native-reanimated';
 
-import { AppHeader, EmptyState, HeaderGlyph, IconButton, Screen } from '@/components/ui/primitives';
-import { PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW, PaperButton, PaperCard, PaperDesk, useDesk, useHandwriting } from '@/components/desk/paper-desk';
-import { stableTilt } from '@/constants/style-tokens';
+import { AppHeader, EmptyState, HeaderIcon, HeaderIconButton, IconButton, Screen } from '@/components/ui/primitives';
+import { PAPER_INK, PAPER_WHITE, PAPER_YELLOW, PaperButton, PaperCard, PaperDesk, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { mix, noteColors } from '@/constants/style-tokens';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { useTheme } from '@/components/theme-provider';
@@ -26,6 +26,10 @@ import { resolveAttachmentUri } from '@/services/attachment-storage';
 import { markOrganizationAccepted } from '@/services/chits-organization';
 import { OnboardingMascot } from '@/features/onboarding/components/onboarding-mascot';
 import { dateFormat } from '@/services/reminder-time';
+import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
+import { SearchField } from '@/components/ui/search-field';
+import { useWelcomeFonts } from '@/features/onboarding/welcome/welcome-fonts';
+import { welcomeSurfaces } from '@/features/onboarding/welcome/welcome-surfaces';
 
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -109,6 +113,7 @@ function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCa
 
   useLocale();
   const { tokens: theme } = useTheme();
+  const fonts = useWelcomeFonts();
   const stickySheet = useStickySheet();
   const stickyInner = stickySheet() && { borderWidth: 0, backgroundColor: 'transparent' };
   const [mode, setMode] = useState<'board' | 'board-create' | 'column' | 'column-create'>(lockedBoard ? 'column' : 'board');
@@ -161,8 +166,8 @@ function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCa
           {guided ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 16, paddingBottom: 3 }}><OnboardingMascot size={36} accessible={false} /><AppText style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '600' }}>{mode === "column" || mode === 'column-create' ? tr("unorganized.chitsWhichColumn") : tr("unorganized.chitsWhichBoardShouldThisGoTo")}</AppText></View> : null}
           {mode === 'board-create' ? <>
             <View style={sheetStyles.headerRow}>
-              <IconButton label={tr("unorganized.back")} onPress={() => setMode('board')}><AppText style={[sheetStyles.backIcon, { color: theme.textPrimary }]}>‹</AppText></IconButton>
-              <AppText accessibilityRole="header" style={[sheetStyles.title, { color: theme.textPrimary }]}>{tr("index.newBoard")}</AppText>
+              <HeaderIconButton label={tr("unorganized.back")} onPress={() => setMode('board')}><HeaderIcon name="chevron-back" size={24} /></HeaderIconButton>
+              <AppText accessibilityRole="header" family={fonts.display} style={[sheetStyles.title, { color: theme.textPrimary }]}>{tr("index.newBoard")}</AppText>
               <View style={sheetStyles.headerSpacer} />
             </View>
             <View style={sheetStyles.createBody}>
@@ -175,12 +180,12 @@ function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCa
             </View>
           </> : mode === "column" || mode === 'column-create' ? <>
             <View style={sheetStyles.headerRow}>
-              {lockedBoard ? null : <IconButton label={tr("unorganized.back")} onPress={mode === 'column-create' ? () => setMode('column') : backToBoards}><AppText style={[sheetStyles.backIcon, { color: theme.textPrimary }]}>‹</AppText></IconButton>}
+              {lockedBoard ? null : <HeaderIconButton label={tr("unorganized.back")} onPress={mode === 'column-create' ? () => setMode('column') : backToBoards}><HeaderIcon name="chevron-back" size={24} /></HeaderIconButton>}
               <View style={sheetStyles.headerCopy}>
-                <AppText accessibilityRole="header" style={[sheetStyles.title, { color: theme.textPrimary }]}>{mode === 'column-create' ? tr("unorganized.newColumn") : tr("unorganized.chooseAColumn")}</AppText>
+                <AppText accessibilityRole="header" family={fonts.display} style={[sheetStyles.title, { color: theme.textPrimary }]}>{mode === 'column-create' ? tr("unorganized.newColumn") : tr("unorganized.chooseAColumn")}</AppText>
                 <AppText style={[sheetStyles.subtitle, { color: theme.textSecondary }]}>{mode === 'column-create' ? tr("unorganized.addAColumnToValue", { value1: selectedBoard?.name ?? tr("unorganized.thisBoard2") }) : tr('unorganized.placeSelected', { board: selectedBoard?.name ?? tr('unorganized.thisBoard'), notes: countLabel('note', selectedCount) })}</AppText>
               </View>
-              <IconButton label={tr("attachments.close")} onPress={close}><Icon name="close" size={22} color={theme.textPrimary} /></IconButton>
+              <HeaderIconButton label={tr("attachments.close")} onPress={close}><HeaderIcon name="close" size={22} /></HeaderIconButton>
             </View>
 
             {mode === 'column-create' ? (
@@ -193,7 +198,7 @@ function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCa
                 </Pressable>
               </View>
             ) : columnsLoading ? (
-              <View style={sheetStyles.emptyWrap}><ActivityIndicator color={theme.accent} /></View>
+              <View style={sheetStyles.emptyWrap}><ChitsLoader size="small" /></View>
             ) : !columns || columns.length === 0 ? (
               <View style={sheetStyles.emptyWrap}>
                 <View style={[sheetStyles.emptyMark, { backgroundColor: theme.accentSoft }]}><Icon name="albums-outline" size={28} color={theme.accentStrong} /></View>
@@ -214,10 +219,10 @@ function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCa
           </> : <>
             <View style={sheetStyles.headerRow}>
               <View style={sheetStyles.headerCopy}>
-                <AppText accessibilityRole="header" style={[sheetStyles.title, { color: theme.textPrimary }]}>{forCard ? tr("unorganized.addToCard") : tr("index.addToBoard")}</AppText>
+                <AppText accessibilityRole="header" family={fonts.display} style={[sheetStyles.title, { color: theme.textPrimary }]}>{forCard ? tr("unorganized.addToCard") : tr("index.addToBoard")}</AppText>
                 <AppText style={[sheetStyles.subtitle, { color: theme.textSecondary }]}>{tr('unorganized.organizeSelected', { notes: countLabel('note', selectedCount) })}</AppText>
               </View>
-              <IconButton label={tr("attachments.close")} onPress={close}><Icon name="close" size={22} color={theme.textPrimary} /></IconButton>
+              <HeaderIconButton label={tr("attachments.close")} onPress={close}><HeaderIcon name="close" size={22} /></HeaderIconButton>
             </View>
 
             {boards.length === 0 ? (
@@ -233,11 +238,7 @@ function AddToBoardSheet({ visible, boards, recentBoardIds, selectedCount, forCa
                 </Pressable>
               </View>
             ) : <>
-              <View style={sheetStyles.searchRow}>
-                <Icon name="search" size={17} color={theme.textMuted} style={sheetStyles.searchIcon} />
-                <TextInput value={search} onChangeText={setSearch} placeholder={tr("unorganized.searchBoards")} placeholderTextColor={theme.textMuted} style={[sheetStyles.searchInput, { color: theme.textPrimary }]} returnKeyType="search" />
-                {search ? <IconButton label={tr("unorganized.clearSearch")} onPress={() => setSearch('')}><Icon name="close-circle" size={17} color={theme.textMuted} /></IconButton> : null}
-              </View>
+              <SearchField accessibilityLabel={tr("unorganized.searchBoards")} value={search} onChangeText={setSearch} placeholder={tr("unorganized.searchBoards")} style={sheetStyles.searchRow} />
 
               <Pressable accessibilityRole="button" onPress={() => beginCreate(query)} style={[sheetStyles.createRow, { borderColor: theme.borderSubtle }]}>
                 <View style={[sheetStyles.createMark, { backgroundColor: theme.accentSoft }]}><Icon name="add" size={18} color={theme.accentStrong} /></View>
@@ -291,6 +292,7 @@ function MergeSheet({ visible, boards, recentBoardIds, count, busy, error, onClo
 
   useLocale();
   const { tokens: theme } = useTheme();
+  const fonts = useWelcomeFonts();
   const stickySheet = useStickySheet();
   const stickyInner = stickySheet() && { borderWidth: 0, backgroundColor: 'transparent' };
   const [board, setBoard] = useState<BoardSummary | null>(null);
@@ -322,12 +324,12 @@ function MergeSheet({ visible, boards, recentBoardIds, count, busy, error, onClo
         <GlassSurface style={[sheetStyles.sheet, { borderColor: theme.borderSubtle }, stickyInner]}>
           <View style={[sheetStyles.handle, { backgroundColor: theme.borderSubtle }]} />
           <View style={sheetStyles.headerRow}>
-            {board ? <IconButton label={tr("unorganized.backToBoards")} onPress={() => setBoard(null)}><AppText style={[sheetStyles.backIcon, { color: theme.textPrimary }]}>‹</AppText></IconButton> : null}
+            {board ? <HeaderIconButton label={tr("unorganized.backToBoards")} onPress={() => setBoard(null)}><HeaderIcon name="chevron-back" size={24} /></HeaderIconButton> : null}
             <View style={sheetStyles.headerCopy}>
-              <AppText accessibilityRole="header" style={[sheetStyles.title, { color: theme.textPrimary }]}>{heading}</AppText>
+              <AppText accessibilityRole="header" family={fonts.display} style={[sheetStyles.title, { color: theme.textPrimary }]}>{heading}</AppText>
               <AppText style={[sheetStyles.subtitle, { color: theme.textSecondary }]}>{board ? tr("unorganized.intoValueChooseAColumnAndATitle", { value1: board.name }) : tr("unorganized.theyLlBecomeOneCardInTheOrder")}</AppText>
             </View>
-            <IconButton label={tr("attachments.close")} onPress={close}><Icon name="close" size={22} color={theme.textPrimary} /></IconButton>
+            <HeaderIconButton label={tr("attachments.close")} onPress={close}><HeaderIcon name="close" size={22} /></HeaderIconButton>
           </View>
 
           {!board ? (boards.length === 0 ? (
@@ -340,11 +342,7 @@ function MergeSheet({ visible, boards, recentBoardIds, count, busy, error, onClo
               </Pressable>
             </View>
           ) : <>
-            <View style={sheetStyles.searchRow}>
-              <Icon name="search" size={17} color={theme.textMuted} style={sheetStyles.searchIcon} />
-              <TextInput value={search} onChangeText={setSearch} placeholder={tr("unorganized.searchBoards")} placeholderTextColor={theme.textMuted} style={[sheetStyles.searchInput, { color: theme.textPrimary }]} returnKeyType="search" />
-              {search ? <IconButton label={tr("unorganized.clearSearch")} onPress={() => setSearch('')}><Icon name="close-circle" size={17} color={theme.textMuted} /></IconButton> : null}
-            </View>
+            <SearchField accessibilityLabel={tr("unorganized.searchBoards")} value={search} onChangeText={setSearch} placeholder={tr("unorganized.searchBoards")} style={sheetStyles.searchRow} />
             <View style={sheetStyles.listWrap}>
               {query && filtered.length === 0 ? (
                 <View style={sheetStyles.noResults}><AppText style={[sheetStyles.noResultsText, { color: theme.textSecondary }]}>{tr("unorganized.noBoardsFoundFor")}{query}”</AppText></View>
@@ -362,7 +360,7 @@ function MergeSheet({ visible, boards, recentBoardIds, count, busy, error, onClo
           </>) : (
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={mergeStyles.body}>
               <AppText style={[sheetStyles.label, { color: theme.textSecondary }]}>{tr("id.column")}</AppText>
-              {columns === null ? <View style={mergeStyles.loading}><ActivityIndicator color={theme.accent} /></View>
+              {columns === null ? <View style={mergeStyles.loading}><ChitsLoader size="small" /></View>
                 : columns.length === 0 ? <AppText style={[mergeStyles.note, { color: theme.textSecondary }]}>{board.name} {' '}{tr("unorganized.doesnTHaveAColumnYetAddOne")}</AppText>
                 : <View accessibilityRole="radiogroup" accessibilityLabel={tr("id.column")} style={mergeStyles.chips}>
                   {columns.map((column) => {
@@ -399,29 +397,37 @@ function BoardRow({ board, disabled, onPress }: { board: BoardSummary; disabled:
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const { tokens: theme } = useTheme();
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${board.name}. ${pluralize(board.cardCount, 'note')}.`} disabled={disabled} onPress={onPress} style={({ pressed }) => [sheetStyles.boardRow, { borderBottomColor: theme.borderSubtle }, pressed && sheetStyles.pressed]}>
-    <View style={[sheetStyles.boardMark, { backgroundColor: board.accent ?? theme.accentSoft }]}><Icon name={boardIconName(board.icon)} size={17} color={board.accent ? '#FFFFFF' : theme.accentStrong} /></View>
+  const { tokens: theme, styleTokens } = useTheme();
+  const { rowStyle, isRTL } = useDirection();
+  const fonts = useWelcomeFonts();
+  const accent = board.accent ?? theme.accent;
+  const { cardTint: paper, cardInkMuted: muted } = noteColors(accent);
+  return <PaperCard paper={paper} accessibilityRole="button" accessibilityLabel={`${board.name}. ${pluralize(board.cardCount, 'note')}.`} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={[sheetStyles.boardRow, rowStyle, { borderRadius: styleTokens.button.radius }, disabled && sheetStyles.disabled]}>
+    <View style={[sheetStyles.boardMark, { backgroundColor: mix(paper, PAPER_WHITE, 0.55) }]}><Icon name={boardIconName(board.icon)} size={19} color={mix(accent, PAPER_INK, 0.4)} /></View>
     <View style={sheetStyles.boardCopy}>
-      <AppText numberOfLines={1} style={[sheetStyles.boardName, { color: theme.textPrimary }]}>{board.name}</AppText>
-      <AppText style={[sheetStyles.boardDetail, { color: theme.textSecondary }]}>{pluralize(board.cardCount, 'note')}</AppText>
+      <AppText family={fonts.display} numberOfLines={2} style={[sheetStyles.boardName, { color: PAPER_INK }]}>{board.name}</AppText>
+      <AppText family={fonts.text} style={[sheetStyles.boardDetail, { color: muted }]}>{pluralize(board.cardCount, 'note')}</AppText>
     </View>
-    <Icon name="chevron-forward" size={18} color={theme.textMuted} />
-  </Pressable>;
+    <Icon name={isRTL ? 'chevron-back' : 'chevron-forward'} size={19} color={muted} />
+  </PaperCard>;
 }
 
 function ColumnRow({ name, disabled, onPress }: { name: string; disabled: boolean; onPress: () => void }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const { tokens: theme } = useTheme();
-  return <Pressable accessibilityRole="button" accessibilityLabel={name} disabled={disabled} onPress={onPress} style={({ pressed }) => [sheetStyles.boardRow, { borderBottomColor: theme.borderSubtle }, pressed && sheetStyles.pressed]}>
-    <View style={[sheetStyles.boardMark, { backgroundColor: theme.accentSoft }]}><Icon name="albums-outline" size={17} color={theme.accentStrong} /></View>
+  const { scheme, styleTokens } = useTheme();
+  const desk = useDesk();
+  const surfaces = welcomeSurfaces(scheme, desk, { white: PAPER_WHITE, ink: PAPER_INK, yellow: PAPER_YELLOW });
+  const { rowStyle, isRTL } = useDirection();
+  const fonts = useWelcomeFonts();
+  return <PaperCard paper={surfaces.card} accessibilityRole="button" accessibilityLabel={name} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={[sheetStyles.boardRow, rowStyle, { borderRadius: styleTokens.button.radius }, disabled && sheetStyles.disabled]}>
+    <View style={[sheetStyles.boardMark, { backgroundColor: surfaces.control }]}><Icon name="albums-outline" size={19} color={surfaces.inkMuted} /></View>
     <View style={sheetStyles.boardCopy}>
-      <AppText numberOfLines={1} style={[sheetStyles.boardName, { color: theme.textPrimary }]}>{name}</AppText>
+      <AppText family={fonts.display} numberOfLines={2} style={[sheetStyles.boardName, { color: surfaces.ink }]}>{name}</AppText>
     </View>
-    <Icon name="chevron-forward" size={18} color={theme.textMuted} />
-  </Pressable>;
+    <Icon name={isRTL ? 'chevron-back' : 'chevron-forward'} size={19} color={surfaces.inkMuted} />
+  </PaperCard>;
 }
 
 export default function UnorganizedScreen() {
@@ -429,9 +435,14 @@ export default function UnorganizedScreen() {
 
   useLocale();
   const database = useSQLiteContext();
-  const { tokens: theme } = useTheme();
+  const { tokens: theme, scheme, styleTokens } = useTheme();
   const desk = useDesk();
   const handwriting = useHandwriting();
+  const fonts = useWelcomeFonts();
+  const { rowStyle } = useDirection();
+  const insets = useSafeAreaInsets();
+  const reduced = useReducedMotion();
+  const surfaces = welcomeSurfaces(scheme, desk, { white: PAPER_WHITE, ink: PAPER_INK, yellow: PAPER_YELLOW });
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { addToCard, messageId, boardId, openBoardPicker, chitsGuided } = useLocalSearchParams<{ addToCard?: string; messageId?: string; boardId?: string; openBoardPicker?: string; chitsGuided?: string }>();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -569,42 +580,52 @@ export default function UnorganizedScreen() {
     finally { setWorking(false); }
   };
 
-  return <Screen style={{ backgroundColor: desk.desk }}>
-    <AppHeader title={tr("index.unorganized")} leading={<IconButton label={tr("search.goBack")} onPress={() => router.back()}><HeaderGlyph style={styles.back}>‹</HeaderGlyph></IconButton>} />
-    <PaperDesk>
+  return <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: desk.desk }}>
+    <AppHeader showTitle={false} title={tr("index.unorganized")} leading={<IconButton label={tr("search.goBack")} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
+    <PaperDesk faint>
+    <View style={styles.intro}>
+      <View style={[styles.introHeading, rowStyle]}>
+        <View style={[styles.introMark, { backgroundColor: surfaces.control, borderRadius: styleTokens.button.radius }]}><Icon name="file-tray-outline" size={20} color={surfaces.ink} /></View>
+        <View style={styles.messageCopy}>
+          <AppText accessibilityRole="header" family={fonts.display} style={[styles.title, { color: desk.ink }]}>{tr("index.unorganized")}</AppText>
+          <AppText family={fonts.text} style={[styles.introCount, { color: desk.inkMuted }]}>{ready ? pluralize(messages.length, 'note') : '\u00a0'}</AppText>
+        </View>
+      </View>
+      <AppText family={fonts.text} style={[styles.introBody, { color: desk.inkMuted }]}>{addToCard ? tr("unorganized.selectThoughtsToAttachToThisCardYour") : tr("unorganized.notesThatHavenTBeenAddedToA")}</AppText>
+    </View>
     {selectionMode ? (
-      <View style={[styles.header, { borderBottomColor: desk.rule }]}>
-        <IconButton label={tr("unorganized.exitSelection")} onPress={() => setSelected([])}><Icon name="close" size={22} color={desk.ink} /></IconButton>
-        <AppText style={[handwriting.handBold, styles.selectionTitle, { color: desk.ink }]}>{selected.length} {' '}{tr("unorganized.selected")}</AppText>
-        <Pressable accessibilityRole="button" hitSlop={8} onPress={toggleSelectAll} style={styles.selectAllHit}><AppText style={[handwriting.handBold, styles.selectAllText, { color: desk.ink }]}>{selected.length === messages.length ? tr("unorganized.deselectAll") : tr("unorganized.selectAll")}</AppText></Pressable>
+      <View style={[styles.header, rowStyle, { borderBottomColor: desk.rule }]}>
+        <HeaderIconButton label={tr("unorganized.exitSelection")} onPress={() => setSelected([])}><HeaderIcon name="close" size={22} /></HeaderIconButton>
+        <AppText family={fonts.display} style={[styles.selectionTitle, { color: desk.ink }]}>{selected.length} {' '}{tr("unorganized.selected")}</AppText>
+        <Pressable accessibilityRole="button" onPress={toggleSelectAll} style={[styles.selectAllHit, { backgroundColor: surfaces.control, borderRadius: styleTokens.button.radius }]}><AppText family={fonts.textBold} style={[styles.selectAllText, { color: desk.ink }]}>{selected.length === messages.length ? tr("unorganized.deselectAll") : tr("unorganized.selectAll")}</AppText></Pressable>
       </View>
     ) : null}
     {!ready || !handwriting.ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : messages.length ? <>
-      <ScrollView contentContainerStyle={styles.list}>
-        {!selectionMode ? <AppText style={[styles.intro, { color: desk.inkMuted }]}>{addToCard ? tr("unorganized.selectThoughtsToAttachToThisCardYour") : tr("unorganized.notesThatHavenTBeenAddedToA")}</AppText> : null}
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.list, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
         {messages.map((message) => {
           const isSelected = selected.includes(message.id);
           const messagePreview = preview(message);
           const dateLabel = formatDateTime(message.createdAt);
-          // Loose thoughts on cream paper; a picked one turns yellow, like a highlighted note.
-          return <PaperCard key={message.id} paper={isSelected ? PAPER_YELLOW : PAPER_WHITE} tilt={stableTilt(`unorganized:${message.id}`, 0.8)} tape={stableTilt(`unorganized:${message.id}:tape`, 1) > 0.5} accessibilityRole="checkbox" accessibilityLabel={`${messagePreview}. ${dateLabel}`} accessibilityState={{ checked: isSelected }} onPress={() => toggle(message.id)} style={styles.message}>
-            <Icon name={isSelected ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={isSelected ? PAPER_INK : PAPER_INK_MUTED} />
+          return <PaperCard key={message.id} paper={isSelected ? surfaces.control : surfaces.card} accessibilityRole="checkbox" accessibilityLabel={`${messagePreview}. ${dateLabel}`} accessibilityState={{ checked: isSelected }} onPress={() => toggle(message.id)} style={[styles.message, rowStyle, { borderRadius: styleTokens.button.radius, borderColor: isSelected ? surfaces.action : 'transparent' }]}>
+            <Icon name={isSelected ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={isSelected ? surfaces.ink : surfaces.inkMuted} />
             <Thumbnail message={message} />
             <View style={styles.messageCopy}>
-              <AppText numberOfLines={2} ellipsizeMode="tail" style={[handwriting.hand, styles.messageText]}>{messagePreview}</AppText>
-              <AppText numberOfLines={1} style={styles.messageMeta}>{message.pinned ? tr("unorganized.pinned") : ''}{dateLabel}</AppText>
+              <AppText family={fonts.text} numberOfLines={2} ellipsizeMode="tail" style={[styles.messageText, { color: surfaces.ink }]}>{messagePreview}</AppText>
+              <View style={[styles.metadata, rowStyle]}>
+                {message.pinned ? <Icon accessibilityLabel={tr("unorganized.pinned")} name="pin" size={12} color={surfaces.inkMuted} /> : null}
+                <AppText family={fonts.text} numberOfLines={1} style={[styles.messageMeta, { color: surfaces.inkMuted }]}>{dateLabel}</AppText>
+              </View>
             </View>
           </PaperCard>;
         })}
       </ScrollView>
       {selectionMode ? (
-        <Animated.View entering={SlideInDown.springify().damping(20).mass(0.6)} exiting={SlideOutDown.duration(160)} style={[styles.actionBar, { boxShadow: `0px -6px 14px ${desk.shadow}` }]}>
-          <AppText style={styles.selectedCount}>{selected.length} {' '}{tr("unorganized.selected")}</AppText>
-          <View style={styles.actionButtons}>
-            {!addToCard ? <Pressable disabled={selected.length < 2 || working} accessibilityRole="button" onPress={() => { setError(null); setMergeOpen(true); }} style={styles.textAction}><AppText style={[handwriting.handBold, styles.mergeText, (selected.length < 2 || working) && styles.disabledText]}>{tr("unorganized.merge")}</AppText></Pressable> : null}
-            <Pressable disabled={working} onPress={() => void archive()} style={styles.textAction}><AppText style={[handwriting.handBold, styles.archiveText, working && styles.disabledText]}>{tr("archive.archive")}</AppText></Pressable>
-            <PaperButton paper={PAPER_YELLOW} tilt={-1.5} accessibilityRole="button" disabled={working} onPress={() => { if (addToCard) void addToExistingCard(); else openAddToBoardSheet(); }} style={styles.primaryPill}>
-              <AppText style={[handwriting.handBold, styles.primaryPillText]}>{addToCard ? tr("unorganized.addToCard") : tr("index.addToBoard")}</AppText>
+        <Animated.View entering={reduced ? undefined : SlideInDown.springify().damping(20).mass(0.6)} exiting={reduced ? undefined : SlideOutDown.duration(160)} style={[styles.actionBar, { backgroundColor: surfaces.paper, paddingBottom: Math.max(insets.bottom, spacing.sm), borderTopColor: desk.rule, boxShadow: `0px -3px 8px ${desk.shadow}` }]}>
+          <View style={[styles.actionButtons, rowStyle]}>
+            {!addToCard ? <Pressable disabled={selected.length < 2 || working} accessibilityRole="button" accessibilityState={{ disabled: selected.length < 2 || working }} onPress={() => { setError(null); setMergeOpen(true); }} style={[styles.textAction, { backgroundColor: surfaces.control, borderRadius: styleTokens.button.radius }]}><AppText family={fonts.textBold} style={[styles.actionText, { color: surfaces.ink }, (selected.length < 2 || working) && styles.disabledText]}>{tr("unorganized.merge")}</AppText></Pressable> : null}
+            <Pressable disabled={working} accessibilityRole="button" accessibilityState={{ disabled: working }} onPress={() => void archive()} style={[styles.textAction, { backgroundColor: surfaces.control, borderRadius: styleTokens.button.radius }]}><AppText family={fonts.textBold} style={[styles.actionText, { color: desk.danger }, working && styles.disabledText]}>{tr("archive.archive")}</AppText></Pressable>
+            <PaperButton paper={surfaces.action} accessibilityRole="button" disabled={working} onPress={() => { if (addToCard) void addToExistingCard(); else openAddToBoardSheet(); }} containerStyle={styles.primaryContainer} style={[styles.primaryPill, { borderRadius: styleTokens.button.radius }]}>
+              <AppText family={fonts.display} style={[styles.primaryPillText, { color: surfaces.onAction }]}>{addToCard ? tr("unorganized.addToCard") : tr("index.addToBoard")}</AppText>
             </PaperButton>
           </View>
         </Animated.View>
@@ -654,27 +675,31 @@ export default function UnorganizedScreen() {
 }
 
 const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
-  back: { color: tokens.textPrimary, fontSize: 30, lineHeight: 30 },
-  header: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderStyle: 'dashed' },
-  selectionTitle: { flex: 1, fontSize: 20, lineHeight: 26 },
-  selectAllHit: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.xxs },
-  selectAllText: { fontSize: 17, lineHeight: 23, textDecorationLine: 'underline' },
-  list: { padding: spacing.md, paddingTop: spacing.lg, gap: 16 },
+  header: { minHeight: 48, alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, paddingBottom: spacing.xxs, borderBottomWidth: StyleSheet.hairlineWidth },
+  selectionTitle: { flex: 1, minWidth: 0, fontSize: 16, lineHeight: 21 },
+  selectAllHit: { minHeight: 44, maxWidth: '50%', flexShrink: 1, justifyContent: 'center', paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
+  selectAllText: { fontSize: 14, lineHeight: 19 },
+  list: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, gap: 10 },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  intro: { fontSize: 14, lineHeight: 20, marginBottom: spacing.xs, textAlign: 'center' },
-  message: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: 12 },
+  intro: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm, gap: spacing.xs },
+  introHeading: { alignItems: 'center', gap: spacing.sm },
+  introMark: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  title: { fontSize: 23, lineHeight: 27 },
+  introCount: { fontSize: 13, lineHeight: 18 },
+  introBody: { fontSize: 14, lineHeight: 20 },
+  message: { minHeight: 64, alignItems: 'center', gap: 10, paddingHorizontal: spacing.sm, paddingVertical: 10, borderWidth: 1.5 },
   messageCopy: { flex: 1, minWidth: 0, justifyContent: 'center' },
-  messageText: { color: PAPER_INK, fontSize: 17, lineHeight: 23 },
-  messageMeta: { color: PAPER_INK_MUTED, fontSize: 12, lineHeight: 16, marginTop: 2 },
-  // The selection's actions on a paper strip along the bottom of the desk.
-  actionBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: PAPER_WHITE },
-  selectedCount: { flex: 1, color: PAPER_INK_MUTED, fontSize: 13 },
-  actionButtons: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  textAction: { minHeight: 40, justifyContent: 'center', paddingHorizontal: spacing.xxs },
-  mergeText: { color: PAPER_INK, fontSize: 17, lineHeight: 23 },
-  archiveText: { color: '#B8372E', fontSize: 17, lineHeight: 23 },
-  primaryPill: { minHeight: 40, paddingHorizontal: spacing.md },
-  primaryPillText: { color: PAPER_INK, fontSize: 17, lineHeight: 23 },
+  messageText: { fontSize: 16, lineHeight: 22 },
+  metadata: { alignItems: 'center', gap: 5, marginTop: 3 },
+  messageMeta: { flexShrink: 1, fontSize: 12, lineHeight: 17 },
+  // Actions wrap below the notes rather than squeezing translated labels.
+  actionBar: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth },
+  actionButtons: { flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs },
+  textAction: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
+  actionText: { fontSize: 14, lineHeight: 19 },
+  primaryContainer: { flexGrow: 1, flexShrink: 1, minWidth: 136, maxWidth: '100%' },
+  primaryPill: { minHeight: 44, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  primaryPillText: { fontSize: 15, lineHeight: 20, textAlign: 'center' },
   disabled: { opacity: 0.42 },
   disabledText: { opacity: 0.42 },
   error: { color: '#fff', backgroundColor: tokens.danger, padding: spacing.sm, textAlign: 'center' },
@@ -689,7 +714,7 @@ const mergeStyles = StyleSheet.create({
   loading: { minHeight: 44, alignItems: 'flex-start', justifyContent: 'center' },
   note: { fontSize: 14, lineHeight: 20 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  chip: { minHeight: 40, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, borderRadius: 20, borderWidth: 1.5 },
+  chip: { minHeight: 44, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, borderRadius: 12, borderWidth: 1.5 },
   chipText: { flexShrink: 1, fontSize: 14, fontWeight: '600' },
   titleLabel: { marginTop: spacing.md },
   error: { marginTop: spacing.xs },
@@ -699,29 +724,26 @@ const mergeStyles = StyleSheet.create({
 const sheetStyles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,23,0.34)' },
   sheetSafeArea: { flexShrink: 1, maxHeight: '86%', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
-  sheet: { flexShrink: 1, maxHeight: '100%', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
+  sheet: { flexShrink: 1, maxHeight: '100%', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: spacing.md, paddingBottom: spacing.md },
   handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginTop: spacing.xs, marginBottom: spacing.xs },
-  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingVertical: spacing.xs },
-  headerCopy: { flex: 1 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.xs },
+  headerCopy: { flex: 1, minWidth: 0 },
   headerSpacer: { width: 44 },
-  backIcon: { fontSize: 30, lineHeight: 30 },
-  title: { fontSize: 20, fontWeight: '700' },
+  title: { flexShrink: 1, fontSize: 20, lineHeight: 25, fontWeight: '700' },
   subtitle: { fontSize: 13, lineHeight: 18, marginTop: 2 },
   label: { fontSize: 13, fontWeight: '600', marginTop: spacing.xs, marginBottom: spacing.xxs },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs },
-  searchIcon: { marginLeft: spacing.xxs },
-  searchInput: { flex: 1, minHeight: 44, fontSize: 16 },
+  searchRow: { marginTop: spacing.xs, marginBottom: spacing.xs },
   createRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 52, marginTop: spacing.xs, marginBottom: spacing.xs, borderBottomWidth: StyleSheet.hairlineWidth },
   createMark: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   createLabel: { fontSize: 15, fontWeight: '600' },
   listWrap: { flexShrink: 1 },
-  listContent: { paddingBottom: spacing.md },
+  listContent: { paddingTop: spacing.xs, paddingBottom: spacing.md, gap: 10 },
   sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginTop: spacing.sm, marginBottom: spacing.xxs },
-  boardRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth },
-  boardMark: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  boardRow: { minHeight: 64, alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  boardMark: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   boardCopy: { flex: 1, minWidth: 0 },
-  boardName: { fontSize: 15, fontWeight: '600' },
-  boardDetail: { fontSize: 12, marginTop: 2 },
+  boardName: { fontSize: 17, lineHeight: 22 },
+  boardDetail: { fontSize: 13, lineHeight: 17, marginTop: 2 },
   pressed: { opacity: 0.6 },
   noResults: { alignItems: 'flex-start', gap: spacing.sm, paddingVertical: spacing.md },
   noResultsText: { fontSize: 14, lineHeight: 20 },
@@ -735,7 +757,7 @@ const sheetStyles = StyleSheet.create({
   createBody: { paddingVertical: spacing.xs, gap: spacing.xxs },
   nameInput: { minHeight: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: spacing.sm, fontSize: 17 },
   error: { fontSize: 13 },
-  primaryButton: { minHeight: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md, marginTop: spacing.xs },
+  primaryButton: { minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.xs, marginTop: spacing.xs },
   primaryButtonText: { fontWeight: '700', fontSize: 15 },
   disabled: { opacity: 0.42 },
 });

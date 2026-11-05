@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { HEADER_SCENE_IDS, HEADER_SCENE_SUN_RADIUS, localMinute, sceneLook, sceneMixAt, sceneSky, sceneTone, sunAt } from '../src/constants/header-scenes.ts';
+import { HEADER_SCENE_DARK_INK, HEADER_SCENE_IDS, HEADER_SCENE_SUN_RADIUS, localMinute, sceneLook, sceneMixAt, sceneSky, sceneTone, sunAt } from '../src/constants/header-scenes.ts';
 import { HEADER_SCENE_LUMINANCE, HEADER_SCENE_PANES, HEADER_SCENE_SIZE, HEADER_SCENE_TONE } from '../src/constants/header-scenes.generated.ts';
 
 const DAY = 24 * 60;
@@ -37,27 +37,46 @@ test('time changes the scene smoothly, across midnight too', () => {
   assert.deepEqual(sceneMixAt(-60), sceneMixAt(hm(23)));
 });
 
-test('dark ink by day, white ink by night, whatever the appearance', () => {
-  for (const scheme of ['light', 'dark']) {
-    for (const minute of [hm(6, 20), hm(9), hm(14), hm(17, 30)]) assert.equal(sceneLook(sceneMixAt(minute), scheme).ink, 'dark');
-    for (const minute of [hm(19, 30), hm(23), hm(2)]) assert.equal(sceneLook(sceneMixAt(minute), scheme).ink, 'light');
+test('header ink follows appearance at every hour, including evening and night', () => {
+  for (const minute of minutes) {
+    const mix = sceneMixAt(minute);
+    assert.equal(sceneLook(mix, 'light').ink, 'dark', String(minute));
+    assert.equal(sceneLook(mix, 'dark').ink, 'light', String(minute));
   }
 });
 
-test('dark mode only dims: same ink, never a lighter veil, never heavy', () => {
+test('the room uses warm paper in light mode and warm charcoal in dark mode', () => {
   for (const minute of minutes) {
     const mix = sceneMixAt(minute);
     const light = sceneLook(mix, 'light');
     const dark = sceneLook(mix, 'dark');
-    assert.equal(dark.ink, light.ink, String(minute));
-    if (light.veil.color === '#000000') {
-      assert.equal(dark.veil.color, '#000000', String(minute));
-      assert.ok(dark.veil.opacity >= light.veil.opacity, String(minute));
-    }
-    for (const { veil } of [light, dark]) assert.ok(veil.opacity >= 0 && veil.opacity <= 0.4, `${minute}: ${veil.opacity}`);
+    assert.equal(light.veil.color, '#FFFDF6');
+    assert.equal(dark.veil.color, '#221E18');
+    for (const { veil } of [light, dark]) assert.ok(veil.opacity > 0 && veil.opacity <= 0.75, `${minute}: ${veil.opacity}`);
   }
-  assert.ok(sceneLook(sceneMixAt(hm(9)), 'dark').veil.opacity > 0, 'morning dims in dark mode');
-  assert.ok(sceneLook(sceneMixAt(hm(23)), 'dark').veil.opacity > sceneLook(sceneMixAt(hm(23)), 'light').veil.opacity, 'night dims further in dark mode');
+  assert.ok(sceneLook(sceneMixAt(hm(23)), 'light').veil.opacity > sceneLook(sceneMixAt(hm(9)), 'light').veil.opacity, 'night lifts more in light mode');
+  assert.ok(sceneLook(sceneMixAt(hm(9)), 'dark').veil.opacity > sceneLook(sceneMixAt(hm(23)), 'dark').veil.opacity, 'day dims more in dark mode');
+});
+
+test('tinted scene bounds retain text and status-bar contrast through every blend', () => {
+  const decode = value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  const encode = value => value <= 0.0031308 ? value * 12.92 : 1.055 * value ** (1 / 2.4) - 0.055;
+  const channels = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const luminance = rgb => rgb.map(decode).reduce((sum, value, i) => sum + value * [0.2126, 0.7152, 0.0722][i], 0);
+  const contrast = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  for (const minute of minutes) for (const scheme of ['light', 'dark']) {
+    const mix = sceneMixAt(minute);
+    const { ink, veil } = sceneLook(mix, scheme);
+    const tint = channels(veil.color);
+    for (const region of ['text', 'status']) {
+      const end = ink === 'dark' ? 0 : 1;
+      const base = Object.entries(mix).reduce((sum, [id, weight]) => sum + weight * encode(HEADER_SCENE_LUMINANCE[id][region][end]), 0);
+      const background = luminance(tint.map(value => base * (1 - veil.opacity) + value * veil.opacity));
+      const foreground = luminance(channels(ink === 'dark' ? HEADER_SCENE_DARK_INK.text : '#FFFFFF'));
+      assert.ok(contrast(foreground, background) >= (region === 'text' ? 4.5 : 3), `${scheme} ${minute} ${region}`);
+      if (region === 'text' && ink === 'dark') assert.ok(contrast(luminance(channels(HEADER_SCENE_DARK_INK.muted)), background) >= 3, `${minute} muted`);
+    }
+  }
 });
 
 test('clouds by day, stars and moon by night', () => {

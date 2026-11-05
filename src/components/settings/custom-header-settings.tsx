@@ -5,6 +5,7 @@ import { AppState, Modal, PanResponder, Platform, ScrollView, StyleSheet, View }
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SettingsRow, SettingsSection } from '@/components/settings/settings-rows';
 import { useTheme } from '@/components/theme-provider';
 import { AppHeader, AppText, HeaderIcon, Icon, IconButton, MenuIcon, PrimaryButton, Screen, SecondaryButton } from '@/components/ui/primitives';
 import { HeaderPhotoPreviewContext } from '@/components/ui/header-photo-context';
@@ -27,9 +28,9 @@ function HeaderPreview({ photo, onError }: { photo: HeaderPhoto; onError: () => 
   const insets = useSafeAreaInsets();
   return <HeaderPhotoPreviewContext.Provider value={{ photo, onError }}>
     <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ paddingTop: insets.top }}>
-      <AppHeader title="Chits" subtitle={tr("customheadersettings.yourThoughtsBeautifullyKept")} actionWidth={96}
+      <AppHeader title="Chits" subtitle={tr("customheadersettings.yourThoughtsBeautifullyKept")} actionWidth={100}
         leading={<IconButton label={tr("customheadersettings.openMenu")}><MenuIcon /></IconButton>}
-        trailing={<View style={{ flexDirection: 'row' }}><IconButton label={tr("calendarnotepicker.searchNotes")}><HeaderIcon name="search-outline" size={23} /></IconButton><IconButton label={tr("id.addNote")}><HeaderIcon name="add" size={26} /></IconButton></View>} />
+        trailing={<View style={{ flexDirection: 'row', gap: 8 }}><IconButton label={tr("calendarnotepicker.searchNotes")}><HeaderIcon name="search-outline" size={23} /></IconButton><IconButton label={tr("id.addNote")}><HeaderIcon name="add" size={26} /></IconButton></View>} />
     </View>
   </HeaderPhotoPreviewContext.Provider>;
 }
@@ -196,7 +197,7 @@ export function CustomHeaderSettings() {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const { tokens, styleTokens, customHeader, headerPhotoFailed, setCustomHeader, failHeaderPhoto } = useTheme();
+  const { tokens, customHeader, headerPhotoFailed, setCustomHeader, failHeaderPhoto } = useTheme();
   const [editing, setEditing] = useState(false);
   const [presentationReady, setPresentationReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -207,23 +208,30 @@ export function CustomHeaderSettings() {
     finally { setBusy(false); }
   };
   if (Platform.OS === 'web') return null;
-  return <View style={[styles.card, { backgroundColor: tokens.surface, borderColor: tokens.borderSubtle, borderRadius: styleTokens.radius.panel }]}>
-    {customHeader && !headerPhotoFailed ? <View style={{ overflow: 'hidden' }}><HeaderPreview photo={customHeader} onError={failHeaderPhoto} /></View> : null}
-    <View style={styles.copy}>
-      <View style={styles.row}><AppText variant="title">{tr("customheadersettings.customHeader")}</AppText>{customHeader && !headerPhotoFailed ? <AppText style={{ color: tokens.textPrimary }}>{tr("customheadersettings.selected")}</AppText> : null}</View>
-      <AppText style={{ color: tokens.textSecondary }}>{tr("customheadersettings.makeChitsFeelMoreLikeYours")}</AppText>
-      {!customHeader || headerPhotoFailed ? <View style={[styles.placeholder, { backgroundColor: tokens.surfaceElevated }]}><Icon color={tokens.textMuted} name="image-outline" size={30} /><AppText style={{ color: tokens.textMuted }}>{headerPhotoFailed ? tr("customheadersettings.photoUnavailableYourBuiltInHeaderIsIn") : tr("customheadersettings.aFavoritePlaceAQuietMomentYourPhoto")}</AppText></View> : null}
-      <SecondaryButton label={customHeader ? tr("customheadersettings.editOrReplacePhoto") : tr("customheadersettings.choosePhoto")} disabled={busy} onPress={() => { photoDiagnostic('Settings photo button tap received'); setPresentationReady(false); setEditing(true); }} />
-      {customHeader ? <SecondaryButton label={tr("customheadersettings.removePhotoUseBuiltInHeader")} disabled={busy} onPress={() => void remove()} /> : null}
-      {error ? <AppText accessibilityRole="alert" style={{ color: tokens.danger }}>{error}</AppText> : null}
-    </View>
+  const hasPhoto = Boolean(customHeader) && !headerPhotoFailed;
+  const openEditor = () => { photoDiagnostic('Settings photo button tap received'); setPresentationReady(false); setEditing(true); };
+  return <View style={styles.card}>
+    <SettingsSection title={tr("customheadersettings.customHeader")}>
+      {customHeader && !headerPhotoFailed ? <View style={{ overflow: 'hidden' }}><HeaderPreview photo={customHeader} onError={failHeaderPhoto} /></View> : null}
+      <SettingsRow
+        icon="image-outline"
+        label={customHeader ? tr("customheadersettings.editOrReplacePhoto") : tr("customheadersettings.choosePhoto")}
+        description={hasPhoto ? undefined : headerPhotoFailed ? tr("customheadersettings.photoUnavailableYourBuiltInHeaderIsIn") : tr("customheadersettings.aFavoritePlaceAQuietMomentYourPhoto")}
+        value={hasPhoto ? tr("customheadersettings.selected") : undefined}
+        disabled={busy}
+        onPress={openEditor}
+      />
+      {customHeader ? <SettingsRow icon="trash-outline" label={tr("customheadersettings.removePhotoUseBuiltInHeader")} chevron={false} disabled={busy} onPress={() => void remove()} /> : null}
+    </SettingsSection>
+    {error ? <AppText accessibilityRole="alert" style={[styles.error, { color: tokens.danger }]}>{error}</AppText> : null}
     <Modal visible={editing} animationType="none" presentationStyle="fullScreen" onShow={() => { photoDiagnostic('Editor native presentation completed'); setPresentationReady(true); }} onRequestClose={() => { if (!busy) setEditing(false); }}>
       <SafeAreaProvider>{editing ? <HeaderEditor presentationReady={Platform.OS !== 'ios' || presentationReady} onClose={() => { setBusy(false); setEditing(false); }} onBusyChange={setBusy} /> : null}</SafeAreaProvider>
     </Modal>
   </View>;
 }
 const styles = StyleSheet.create({
-  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 18, overflow: 'hidden', marginTop: spacing.lg },
+  card: { marginTop: spacing.lg },
+  error: { marginTop: spacing.xs, paddingHorizontal: spacing.xxs },
   copy: { padding: spacing.lg, gap: spacing.md },
   row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   placeholder: { padding: spacing.lg, minHeight: 100, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderRadius: 12 },

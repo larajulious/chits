@@ -6,6 +6,7 @@ import { loadModule, migration, runtime } from './helpers/backup-runtime.mjs';
 
 const tour = await loadModule('src/features/onboarding/tour');
 const checklist = await loadModule('src/features/onboarding/checklist');
+const journey = await loadModule('src/features/onboarding/hub/journey');
 const setup = await loadModule('src/features/onboarding/board-setup');
 const storage = await loadModule('src/features/onboarding/storage');
 const repositories = await loadModule('src/db/repositories');
@@ -84,10 +85,78 @@ test('drawer, real Chat and home link to onboarding without replacing existing f
   const chat = read('src/app/(tabs)/chat.native.tsx');
   const hub = read('src/features/onboarding/screens/hub-screen.tsx');
   assert.match(nativeDrawer, /NavigationRow destination={gettingStartedDestination}/);
-  assert.match(home, /<GettingStartedCard onHome \/>/);
+  assert.match(home, /<GettingStartedCard \/>/);
   assert.match(chat, /prefill\?: string/);
   assert.match(hub, /startTour\(database, 'replay'\)/);
   assert.doesNotMatch(hub, /resetOnboarding|hub\.reset/);
   assert.match(read('src/features/onboarding/onboarding-layer.native.tsx'), /pathname: '\/unorganized'/);
   assert.match(read('src/features/onboarding/onboarding-layer.native.tsx'), /card_messages cm INNER JOIN cards/);
+});
+
+test('a reminder set on a chat note counts, not only one on a card', async (t) => {
+  const db = await freshDatabase(t);
+  const note = await repositories.createMessageRepository(db).createText('Call the vet');
+  assert.deepEqual(await checklist.readChecklist(db), ['firstNote']);
+  const columns = (await db.getAllAsync("SELECT name FROM pragma_table_info('message_reminders') WHERE \"notnull\" = 1 AND dflt_value IS NULL")).map((column) => column.name);
+  const values = { message_id: note.id, scheduled_at: Date.now() + 100000, created_at: Date.now(), updated_at: Date.now() };
+  const row = columns.map((name) => [name, values[name] ?? (name === 'id' ? 'reminder-1' : 0)]);
+  await db.runAsync(`INSERT INTO message_reminders (${row.map(([name]) => name).join(', ')}) VALUES (${row.map(() => '?').join(', ')})`, ...row.map(([, value]) => value));
+  assert.deepEqual(await checklist.readChecklist(db), ['firstNote', 'reminder']);
+  await db.runAsync('DELETE FROM message_reminders');
+  assert.deepEqual(await checklist.readChecklist(db), ['firstNote', 'reminder'], 'it stays ticked after the reminder is gone');
+});
+
+test('opening a task records nothing: only saved work ticks the checklist', async (t) => {
+  const db = await freshDatabase(t);
+  const hook = read('src/features/onboarding/hub/use-checklist.ts');
+  assert.doesNotMatch(hook.slice(hook.indexOf('const open ='), hook.indexOf('const dismissFromHome')), /ONBOARDING_KEYS\.checklist,|INSERT|UPDATE/);
+  assert.deepEqual(await checklist.readChecklist(db), []);
+});
+
+test('Chits says hello once, then reacts only when progress actually moves', () => {
+  assert.deepEqual(journey.journeyReaction(0, null), { line: 0, remember: 0 }, 'first visit greets');
+  assert.deepEqual(journey.journeyReaction(2, null), { line: 2, remember: 2 }, 'first visit greets from wherever they are');
+  assert.deepEqual(journey.journeyReaction(0, 0), { line: null, remember: null }, 'reopening stays quiet');
+  assert.deepEqual(journey.journeyReaction(3, 3), { line: null, remember: null });
+  assert.deepEqual(journey.journeyReaction(1, 0), { line: 1, remember: 1 }, 'a new task is celebrated');
+  assert.deepEqual(journey.journeyReaction(4, 3), { line: 4, remember: 4 });
+  assert.deepEqual(journey.journeyReaction(1, 3), { line: null, remember: null }, 'never replays a lower milestone');
+});
+
+test('the last celebrated milestone survives, so a reopened hub stays quiet', async (t) => {
+  const db = await freshDatabase(t);
+  assert.equal(await journey.readCelebrated(db), null);
+  await journey.saveCelebrated(db, 2);
+  assert.equal(await journey.readCelebrated(db), 2);
+  assert.deepEqual(journey.journeyReaction(2, await journey.readCelebrated(db)), { line: null, remember: null });
+  assert.equal(await storage.hasPriorUse(db), false, 'it is an onboarding row, so it never makes a fresh install look used');
+});
+
+test('replaying the tour keeps every note, card, tick and milestone', async (t) => {
+  const db = await freshDatabase(t);
+  const note = await repositories.createMessageRepository(db).createText('Remember milk');
+  const board = await repositories.createBoardRepository(db).create({ name: 'Personal' });
+  await repositories.createBoardRepository(db).organizeMessages(board.id, [note.id]);
+  const before = await checklist.readChecklist(db);
+  await journey.saveCelebrated(db, before.length);
+  await tour.endTour(db);
+  await tour.startTour(db, 'replay');
+  await tour.endTour(db);
+  assert.deepEqual(await checklist.readChecklist(db), before);
+  assert.equal(await journey.readCelebrated(db), before.length);
+  assert.equal(await count(db, 'messages'), 1);
+  assert.equal(await count(db, 'boards'), 1);
+});
+
+test('Settings replays the whole tour without touching saved work', () => {
+  const settings = read('src/app/settings.tsx');
+  assert.match(settings, /endTour\(database\); await startTour\(database, 'replay'\); router\.push\('\/onboarding\/welcome'\)/);
+  assert.match(settings, /label=\{tr\('onboarding\.hub\.replay'\)\}/);
+  assert.doesNotMatch(settings, /resetOnboarding/);
+});
+
+test('the next task is the first one not done, in the original order', () => {
+  assert.equal(journey.nextChecklistItem([]), 'firstNote');
+  assert.equal(journey.nextChecklistItem(['firstNote', 'reminder']), 'firstCard');
+  assert.equal(journey.nextChecklistItem(['firstNote', 'firstCard', 'reminder', 'space']), null);
 });

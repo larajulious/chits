@@ -1,3 +1,4 @@
+import { NoteFormattedText } from '@/components/notes/note-rich-text';
 import { countLabel, tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -170,7 +171,7 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
               {title && !media ? <Text accessibilityRole="header" selectable style={[fonts.note, styles.title]}>{title}</Text> : null}
               {primaryThoughts.map((thought, index) => <View key={thought.messageId} style={[styles.thoughtSection, (index > 0 || (title && !media)) ? styles.thoughtDivider : null]}>
                 {thought.content
-                  ? <NoteContentView blocks={thought.content} maxImageHeight={180} gap={10} renderText={(text) => <Text selectable style={[fonts.note, styles.thought]}>{text}</Text>} />
+                  ? <NoteContentView blocks={thought.content} maxImageHeight={180} gap={10} renderText={(text, _key, block) => block ? <NoteFormattedText block={block} style={[fonts.note, styles.thought]} /> : <Text selectable style={[fonts.note, styles.thought]}>{text}</Text>} />
                   : <Text selectable style={[fonts.note, styles.thought]}>{thought.text}</Text>}
               </View>)}
             </>}
@@ -186,7 +187,7 @@ export function StickyViewSheet({ note, viewportHeight, onDismiss, onOpen, onOpt
         {moreThoughts.map((thought) => <View key={thought.messageId} style={styles.expandedThought}>
           <Text style={[fonts.uiSemi, styles.thoughtLabel]}>{tr("id.thought")}{' '}{thought.number}</Text>
           {thought.content
-            ? <NoteContentView blocks={thought.content} maxImageHeight={160} gap={8} renderText={(text) => <Text selectable style={[fonts.ui, styles.expandedThoughtText]}>{text}</Text>} />
+            ? <NoteContentView blocks={thought.content} maxImageHeight={160} gap={8} renderText={(text, _key, block) => block ? <NoteFormattedText block={block} style={[fonts.ui, styles.expandedThoughtText]} /> : <Text selectable style={[fonts.ui, styles.expandedThoughtText]}>{text}</Text>} />
             : <Text selectable style={[fonts.ui, styles.expandedThoughtText]}>{thought.text || tr("stickyviewsheet.emptyThought")}</Text>}
         </View>)}
       </View> : null}

@@ -2,9 +2,9 @@ import { HEADER_SCENE_LUMINANCE, HEADER_SCENE_TONE } from './header-scenes.gener
 
 // Default's header follows the local clock through six pictures of the same
 // room (drawn by scripts/generate-header-scenes.mjs). Neighboring scenes
-// crossfade minute by minute, and the header's ink and a light veil are
-// chosen from each picture's measured luminance, so titles, buttons and the
-// status bar stay readable at every minute, blends included.
+// crossfade minute by minute. A warm veil follows app appearance, while its
+// strength follows the pictures' measured luminance, so the room complements
+// the paper workspace and its ink stays readable throughout the day.
 //
 // Pure data and math (no React Native) so tests can walk the whole day.
 
@@ -43,11 +43,9 @@ export function sceneMixAt(minute: number): HeaderSceneMix {
 // ── Ink and veil ─────────────────────────────────────────────────────────────
 
 export type HeaderSceneInk = 'dark' | 'light';
-export type HeaderSceneLook = { ink: HeaderSceneInk; veil: { color: '#000000' | '#FFFFFF'; opacity: number } };
+export type HeaderSceneLook = { ink: HeaderSceneInk; veil: { color: '#FFFDF6' | '#221E18'; opacity: number } };
 /** Dark ink for the bright scenes; light scenes' ink is plain white. */
 export const HEADER_SCENE_DARK_INK = { text: '#24231F', muted: '#45423B' };
-/** The most dark mode dims a scene; under dark ink only as far as the ink allows. */
-const DARK_MODE_DIM = 0.12;
 
 const toLuminance = (value: number) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
 const toValue = (luminance: number) => luminance <= 0.0031308 ? luminance * 12.92 : 1.055 * luminance ** (1 / 2.4) - 0.055;
@@ -72,17 +70,26 @@ const FLOOR: Record<Region, number> = {
 export function sceneLook(mix: HeaderSceneMix, scheme: 'light' | 'dark'): HeaderSceneLook {
   // A crossfade mixes encoded values, so mix the percentiles the same way.
   const blend = (region: Region, end: 0 | 1) => Object.entries(mix).reduce((sum, [id, weight]) => sum + (weight ?? 0) * toValue(HEADER_SCENE_LUMINANCE[id as HeaderSceneId][region][end]), 0);
-  const dim = scheme === 'dark' ? DARK_MODE_DIM : 0;
-  // White ink: shade the brightest pixels down to the ceiling (dark mode then
-  // dims on top, so it always reads a touch darker than light mode).
-  const shade = Math.max(0, ...REGIONS.map((region) => 1 - CEILING[region] / blend(region, 1)));
-  // Dark ink: dim only while the darkest pixels stay above the floor, then
-  // lift whatever is still too dark toward white.
-  const lows = REGIONS.map((region) => [blend(region, 0), FLOOR[region]] as const);
-  const inkDim = Math.max(0, Math.min(dim, ...lows.map(([low, floor]) => 1 - floor / low)));
-  const lift = Math.max(0, ...lows.map(([low, floor]) => (floor - low * (1 - inkDim)) / (1 - low * (1 - inkDim))));
-  if (lift <= shade) return { ink: 'dark', veil: lift > 0 ? { color: '#FFFFFF', opacity: lift } : { color: '#000000', opacity: inkDim } };
-  return { ink: 'light', veil: { color: '#000000', opacity: 1 - (1 - dim) * (1 - shade) } };
+  if (scheme === 'light') {
+    // Lift evening blues toward the same cream as Chits' paper. Use the tint's
+    // darkest channel as the floor, leaving a contrast margin for its warmth.
+    const color = '#FFFDF6';
+    const tint = 246 / 255;
+    const lift = Math.max(0.16, ...REGIONS.map((region) => {
+      const low = blend(region, 0);
+      return (FLOOR[region] - low) / (tint - low);
+    }));
+    return { ink: 'dark', veil: { color, opacity: Math.min(1, lift) } };
+  }
+  // The desk's warm charcoal quiets bright daytime scenes as well as blue
+  // night scenes. Its brightest channel bounds the background under white ink.
+  const color = '#221E18';
+  const tint = 34 / 255;
+  const shade = Math.max(0.5, ...REGIONS.map((region) => {
+    const high = blend(region, 1);
+    return (high - CEILING[region]) / (high - tint);
+  }));
+  return { ink: 'light', veil: { color, opacity: Math.min(1, shade) } };
 }
 
 /** The mix's average color: the header's ground for the instant before its pictures decode. */

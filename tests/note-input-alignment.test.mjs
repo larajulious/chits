@@ -21,17 +21,25 @@ const attributes = { textAlignVertical: true, style: { textAlignVertical: true, 
 const source = readFileSync(new URL('../src/components/notes/note-blocks-editor.tsx', import.meta.url), 'utf8');
 const component = 'export ' + source.slice(source.indexOf('function BlockInput('), source.indexOf('const styles = StyleSheet.create'));
 const code = ts.transpileModule(component, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-function render(style, extra) {
+function render(style, extra, requestedSelection, keyboardSuppressed = false) {
   const context = {
-    exports: {}, contentTextStyle, languageDirection, useLocale: () => 'en', tr, require: () => ({ jsx: (type, props) => ({ type, props }) }),
-    useTheme: () => ({ tokens: {} }), useRef: current => ({ current }),
-    useCallback: callback => callback, useEffect: () => {}, TextInput: 'TextInput',
+    nativeNoteFormattingAvailable: false, syncNativeNoteFormatting: () => {}, detachNativeNoteFormatting: () => {}, useLayoutEffect: () => {},
+    exports: {}, noteHeadingStyle: () => undefined, noteTextSpans: block => block.text, contentTextStyle, languageDirection, useLocale: () => 'en', tr, require: () => ({ jsx: (type, props) => ({ type, props }) }),
+    useFontStyle: () => ({}), needsSystemFont: () => false, StyleSheet: { flatten: style => Array.isArray(style) ? Object.assign({}, ...style) : style }, useTheme: () => ({ tokens: {} }), useRef: current => ({ current }),
+    useCallback: callback => callback, useEffect: () => {}, TextInput: 'TextInput', Text: 'Text',
   };
   vm.runInNewContext(code, context);
-  return context.exports.BlockInput({ block: { key: 'active', type: 'text', text: '' }, style, extra }).props;
+  return context.exports.BlockInput({ block: { key: 'active', type: 'text', text: '' }, style, extra, requestedSelection, keyboardSuppressed }).props;
 }
 const rich = { padding: 0, minHeight: 26, textAlignVertical: 'top' };
 const plain = { flex: 1, padding: 16 };
+
+test('explicit range restoration reaches TextInput and releases native cursor ownership afterward', () => {
+  assert.deepEqual(render(plain, undefined, { start: 2, end: 7 }).selection, { start: 2, end: 7 });
+  assert.equal(render(plain).selection, undefined);
+  assert.equal(render(plain).value, undefined);
+  assert.equal(render(plain).children.props.children, '');
+});
 function nativeAlignmentAfter(before, after) {
   const initial = native.exports.create(before, attributes);
   const update = native.exports.diff(before, after, attributes);
@@ -56,4 +64,9 @@ test('compact Chat centers only when requested and returns to top when expanded'
   assert.equal(nativeAlignmentAfter(expanded, compact).alignment, 'center');
   assert.equal(compact.scrollEnabled, false);
   assert.equal(expanded.scrollEnabled, true);
+});
+
+test('native body input suppresses keyboard during formatting and enables typing afterward', () => {
+  assert.equal(render(plain, undefined, undefined, true).showSoftInputOnFocus, false);
+  assert.equal(render(plain, undefined, undefined, false).showSoftInputOnFocus, true);
 });

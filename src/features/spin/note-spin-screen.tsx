@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, Animated, AppState, Easing, ScrollView, StyleSheet, Switch, View, useWindowDimensions } from 'react-native';
+import { AccessibilityInfo, Animated, AppState, ScrollView, StyleSheet, Switch, View, useWindowDimensions } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useAudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
-import Reanimated, { FadeIn, FadeInDown, FadeOut, FadeOutDown, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
-import { AppHeader, Chip, EmptyState, HeaderIcon, Icon, IconButton, Screen } from '@/components/ui/primitives';
+import { useReducedMotion } from 'react-native-reanimated';
+import { AppHeader, Chip, HeaderIcon, Icon, IconButton, Screen } from '@/components/ui/primitives';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
 import { useDirection, useLocale } from '@/localization/provider';
@@ -14,18 +14,34 @@ import { createSpinRepository } from '@/db/spin-repository';
 import { createRevisitRepository } from '@/db/revisit-repository';
 import { AddNoteSheet, type NoteSubmission } from '@/components/boards/add-note-sheet';
 import { createMessageRepository, createBoardRepository } from '@/db/repositories';
+import { cardNoteRoute } from '@/services/card-note-route';
 import { subscribeToNoteChanges } from '@/services/note-changes';
-import { SPIN_CATEGORIES, SPIN_WHEEL_CATEGORIES, SPIN_DEFAULTS, spinOptions, spinOptionKey, selectSpin, spinLanding, spinSourceRoute, type SpinCandidate, type SpinPreferences, type SpinEnergy, type SpinWheelCategory } from '@/services/spin-engine';
+import { SPIN_CATEGORIES, SPIN_WHEEL_CATEGORIES, SPIN_DEFAULTS, spinOptions, spinOptionKey, selectSpin, spinLanding, spinSourceRoute, spinSummary, type SpinCandidate, type SpinPreferences, type SpinEnergy, type SpinWheelCategory } from '@/services/spin-engine';
 import type { RevisitNote } from '@/services/revisit-engine';
 import { FocusText as AppText, focusStyles } from '@/features/focus/focus-ui';
-import { SPIN_DURATION, SPIN_EASING, SpinWheel } from './spin-wheel';
-import { PAPER_INK, PAPER_INK_MUTED, PaperAction, PaperNote, PaperTab, PaperDesk, DeskMessage, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { SpinWheel, spinTo } from './spin-wheel';
+import { PAPER_INK, PAPER_INK_MUTED, PaperTab, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { SPIN_CATEGORY_PAPER } from './spin-paper';
+import { SpinEmpty } from './spin-empty';
+import { SpinOverdueChip } from './spin-overdue-chip';
+import { SPIN_CONFIRM_MS, SpinActions, SpinFact, SpinResultCard } from './spin-result';
+import { SpinStage, useSpinEntrance, useSpinWheelLayout } from './spin-stage';
+import { SpinWorkspace } from './spin-workspace';
 import { SpinCelebration } from './spin-celebration';
 import { FormSheet } from '@/components/ui/form-sheet';
 import { SPACES, resolveSpaceId } from '@/constants/spaces';
 
 type Result = { candidate: SpinCandidate; id: number; done: boolean; challenge?: boolean };
+const WELCOME_COPY = ['spin.hero.title', 'spin.hero.body'] as const;
+/** Chits' heading and line for each moment. The bubble speaks; these explain. */
+const HERO_COPY: Record<string, readonly [string, string]> = {
+  welcome: WELCOME_COPY, before: WELCOME_COPY, spinning: WELCOME_COPY,
+  result: ['spin.mascot.result', 'spin.hero.resultBody'],
+  focus: ['spin.mascot.focus', 'spin.hero.resultBody'],
+  completed: ['spin.mascot.completed', 'spin.mascot.before'],
+  skipped: ['spin.mascot.skipped', 'spin.hero.body'],
+  empty: ['spin.mascot.empty', 'spin.hero.emptyBody'],
+};
 let lastWheel: SpinWheelCategory[] = SPIN_WHEEL_CATEGORIES.filter(c => c !== 'suggestions' && SPIN_DEFAULTS.categories.includes(c));
 export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeAction: ReactNode; modeNotice: ReactNode; onBusyChange: (busy: boolean) => void }) {
   'use no memo';
@@ -38,10 +54,11 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
   const { handBold } = useHandwriting();
   const { rowStyle } = useDirection();
   const { confirm, actionSheet } = useAppDialog();
-  const { width, height, fontScale } = useWindowDimensions();
-  const [wheelBounds, setWheelBounds] = useState({ width: 0, height: 0 });
-  const landscape = width > height;
+  const { fontScale } = useWindowDimensions();
   const accessibleLayout = fontScale > 1.3;
+  const wheelLayout = useSpinWheelLayout();
+  const entrance = useSpinEntrance();
+  const scroll = useRef<ScrollView>(null);
   const reduced = useReducedMotion();
   const sound = useAudioPlayer(require('../../../assets/sounds/spin-land.wav'));
   const [preferences, setPreferences] = useState(SPIN_DEFAULTS);
@@ -63,7 +80,11 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
   const [spinning, setSpinning] = useState(false);
   const [celebration, setCelebration] = useState(0);
   const [frozenCategories, setFrozenCategories] = useState<SpinWheelCategory[]>([]);
-  const [mascotOffset] = useState(() => new Animated.Value(0));
+  // Which result just landed (a restored one rises into nothing), and Chits' cue for it.
+  const [revealKey, setRevealKey] = useState<string | null>(null);
+  const [landing, setLanding] = useState({ count: 0, repeat: false });
+  const [confirming, setConfirming] = useState(false);
+  const restoring = useRef(false);
   const [advanced, setAdvanced] = useState(false);
   const [details, setDetails] = useState(false);
   const [achievements, setAchievements] = useState<string[]>([]);
@@ -97,7 +118,10 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
       setCandidates(data.candidates); setOverdue(data.overdue); setAchievements(earned.map(a => a.id));
       if (previous && resultRef.current?.id === previous.id) {
         if (!fresh || !record) { assignResult(null); setMessage('empty'); setError(tr('spin.unavailable')); }
-        else assignResult({ ...previous, candidate: { ...previous.candidate, note: fresh }, done: record.completed_at !== null });
+        else {
+          if (record.completed_at !== null && !previous.done) setMessage('completed');
+          assignResult({ ...previous, candidate: { ...previous.candidate, note: fresh }, done: record.completed_at !== null });
+        }
       }
       setLoading(false);
     } catch (cause) { if (request === generation.current) { fail(cause); setLoading(false); } }
@@ -105,6 +129,8 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; animation.current?.stop(); rotation.removeAllListeners(); }; }, [rotation]);
   useFocusEffect(useCallback(() => {
     focused.current = true;
+    // Back from Focus: the same result, exactly where it was. Nothing rerolls.
+    setMessage(value => value === 'focus' ? 'result' : value);
     void Promise.all([repo.preferences(), restored.current ? null : repo.latest()]).then(([value, latest]) => {
       if (!focused.current) return;
       preferencesRef.current = value; setPreferences(value);
@@ -114,6 +140,7 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
         if (latest) {
           setMessage(latest.done ? 'completed' : 'result');
           setFrozenCategories([latest.candidate.category]); rotation.setValue(0); angle.current = 0;
+          restoring.current = true;
           challengeRef.current = latest.challenge; setChallenge(latest.challenge);
         }
       }
@@ -127,17 +154,6 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
     return () => { focused.current = false; generation.current++; stopNotes(); app.remove(); animation.current?.stop(); };
   }, [assignResult, fail, load, repo, rotation]));
 
-  useEffect(() => {
-    if (reduced || (!spinning && !(message === 'completed' && preferences.celebrations))) { mascotOffset.setValue(0); return; }
-    const bounce = Animated.sequence([
-      Animated.timing(mascotOffset, { toValue: -3, duration: 500, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      Animated.timing(mascotOffset, { toValue: 0, duration: 500, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-    ]);
-    const motion = spinning ? Animated.loop(bounce) : bounce;
-    motion.start();
-    return () => { motion.stop(); mascotOffset.setValue(0); };
-  }, [mascotOffset, message, preferences.celebrations, reduced, spinning]);
-
   const celebrate = () => {
     if (preferencesRef.current.celebrations && !reduced && AppState.currentState === 'active') {
       setCelebration(value => value + 1);
@@ -148,7 +164,7 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
     locked.current = true; setBusy(true); setError(null);
     try { await operation(); }
     catch (cause) { fail(cause); }
-    finally { locked.current = false; if (mounted.current) setBusy(false); }
+    finally { locked.current = false; if (mounted.current) { setBusy(false); setSpinning(false); } }
   };
   const updatePreferences = (value: SpinPreferences) => void run(async () => {
     setCelebration(0);
@@ -158,6 +174,14 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
   const eligible = spinOptions(candidates.filter(c => preferences.categories.includes(c.category)), preferences, suggestionSkippedAt);
   const categories = SPIN_WHEEL_CATEGORIES.filter(c => eligible.some(item => item.category === c));
   const availableCategories = SPIN_CATEGORIES.filter(c => candidates.some(item => item.category === c));
+  // A result restored at launch gets the wheel it could have come from, resting on its slice.
+  useEffect(() => {
+    if (!restoring.current || loading || !result) return;
+    restoring.current = false;
+    const wheel = SPIN_WHEEL_CATEGORIES.filter(c => c === result.candidate.category || categories.includes(c));
+    const rest = (360 - wheel.indexOf(result.candidate.category) * 360 / wheel.length) % 360;
+    setFrozenCategories(wheel); rotation.setValue(rest); angle.current = rest;
+  }, [categories, loading, result, rotation]);
   const spin = () => void run(async () => {
     const data = await repo.candidates(preferencesRef.current, challengeRef.current);
     const options = spinOptions(data.candidates, preferencesRef.current, suggestionSkippedAt);
@@ -168,8 +192,11 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
     setCandidates(data.candidates); setOverdue(data.overdue); setFrozenCategories(wheelCategories);
     const id = chosen.kind === 'suggestion' ? null : await repo.select(chosen, challengeRef.current);
     setCelebration(0);
+    const repeat = previousSelection.current === spinOptionKey(chosen);
     previousSelection.current = spinOptionKey(chosen);
-    setSuggestion(null); assignResult(null); setDetails(false); setSpinning(true); setMessage('spinning');
+    // The last result stays on the page until this one lands.
+    scroll.current?.scrollTo({ y: 0, animated: !reduced });
+    setDetails(false); setSpinning(true); setMessage('spinning');
     const target = spinLanding(angle.current, wheelCategories.indexOf(chosen.category), wheelCategories.length);
     if (!reduced) {
       let lastBoundary = -1; let lastTick = 0;
@@ -179,16 +206,17 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
         if (boundary !== lastBoundary && now - lastTick > 90 && AppState.currentState === 'active') { lastBoundary = boundary; lastTick = now; void Haptics.selectionAsync().catch(() => undefined); }
       });
       await new Promise<void>(resolve => {
-        animation.current = Animated.timing(rotation, { toValue: target, duration: SPIN_DURATION, easing: SPIN_EASING, useNativeDriver: true });
+        animation.current = spinTo(rotation, target, wheelCategories.length);
         animation.current.start(() => resolve());
       });
       rotation.removeListener(listener);
     }
     angle.current = target % 360; rotation.setValue(angle.current); animation.current = null;
     if (!mounted.current) return;
-    if (chosen.kind === 'suggestion') setSuggestion(chosen.action);
-    else if (id !== null) assignResult({ candidate: chosen, id, done: false, challenge: challengeRef.current });
-    setSpinning(false); setMessage('result'); celebrate();
+    setRevealKey(chosen.kind === 'suggestion' ? 'suggestion' : `result:${id}`);
+    if (chosen.kind === 'suggestion') { assignResult(null); setSuggestion(chosen.action); }
+    else if (id !== null) { setSuggestion(null); assignResult({ candidate: chosen, id, done: false, challenge: challengeRef.current }); }
+    setSpinning(false); setMessage('result'); setLanding(value => ({ count: value.count + 1, repeat }));
     AccessibilityInfo.announceForAccessibility(chosen.kind === 'suggestion'
       ? `${tr('spin.mascot.result')} ${tr('spin.newNote')}. ${tr('spin.newNotePrompt')}`
       : `${tr('spin.mascot.result')} ${chosen.note.title}. ${tr(`spin.reason.${chosen.reason}`)}`);
@@ -203,7 +231,8 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
     if (blocks) await messages.createNote({ blocks, attachment });
     else if (attachment) await messages.createAttachmentMessage(attachment, text || null);
     else await messages.createText(text);
-    setSuggestion('saved'); setMessage('completed'); celebrate();
+    // From the empty state there's no suggestion to finish: the wheel simply refills.
+    if (suggestion === 'new-note') { setSuggestion('saved'); setMessage('completed'); celebrate(); }
     AccessibilityInfo.announceForAccessibility(tr('calendar.noteAdded'));
     // The composer owns submission locking, attachment cleanup and error handling.
     // Saving succeeds independently of a subsequent refresh of wheel candidates.
@@ -214,10 +243,13 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
     if (!await revisit.get(current.candidate.note.key)) throw new Error(tr('spin.unavailable'));
     await repo.open(current.id);
     if (focus) {
-      setMessage('focus');
+      setMessage('focus'); setConfirming(true);
+      if (!reduced) await new Promise(resolve => setTimeout(resolve, SPIN_CONFIRM_MS));
+      setConfirming(false);
       router.push({ pathname: '/focus', params: { note: current.candidate.note.key, spin: String(current.id), minutes: String(current.challenge ? 5 : current.candidate.minutes ?? preferences.minutes ?? 25) } });
     } else {
-      router.push(spinSourceRoute(current.candidate.note.key));
+      const { key } = current.candidate.note;
+      router.push(key.startsWith('card:') ? await cardNoteRoute(createBoardRepository(db), key.slice(5)) : spinSourceRoute(key));
     }
   });
   const skip = () => void run(async () => {
@@ -269,29 +301,14 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
       { label: tr('spin.adjust'), onPress: () => { assignResult(null); setMessage('before'); void load(); } },
     ] });
   };
-  const mascotMessage = loading ? 'before' : !eligible.length && !hasResult && message === 'welcome' ? 'empty' : message;
+  const empty = !loading && !eligible.length && !hasResult && !spinning;
+  const [heroTitle, heroBody] = HERO_COPY[empty ? 'empty' : loading ? 'before' : message] ?? WELCOME_COPY;
   // While the wheel's notes load, it shows the last wheel this session (or the
   // default categories) rather than a blank paper.
   const displayedCategories = hasResult || spinning ? frozenCategories : loading ? lastWheel : categories;
   useEffect(() => { if (!loading && !hasResult && !spinning) lastWheel = categories; });
   const note = result?.candidate.note;
-  // A fresh result drops onto the desk; a restored one is simply there.
-  const drop = preferences.celebrations && !reduced ? FadeInDown.springify().damping(14).mass(0.8) : undefined;
   const landed = spinning ? null : result ? displayedCategories.indexOf(result.candidate.category) : suggestion ? displayedCategories.indexOf('suggestions') : null;
-  // Portrait keeps one fixed layout: on a result the wheel springs smaller and
-  // the result slides in over the faded controls, all as transforms and
-  // opacity, so nothing re-lays out mid-animation. Landscape and large text
-  // have room side by side or stacked, and crossfade instead.
-  const stacked = !landscape && !accessibleLayout;
-  const wheelSize = Math.max(48, Math.min(360, wheelBounds.width - 16, wheelBounds.height - 16));
-  const compactSize = Math.min(200, wheelSize);
-  const compact = useSharedValue(0);
-  useEffect(() => { const to = hasResult && stacked ? 1 : 0; compact.set(reduced ? to : withSpring(to, { damping: 22, stiffness: 150, mass: 1 })); }, [compact, hasResult, reduced, stacked]);
-  const wheelMotion = useAnimatedStyle(() => ({ transform: [
-    { translateY: (compactSize / 2 - (wheelBounds.height - 10) / 2) * compact.get() },
-    { scale: 1 + (compactSize / wheelSize - 1) * compact.get() },
-  ] }));
-  const controlsMotion = useAnimatedStyle(() => ({ opacity: 1 - compact.get(), transform: [{ translateY: 28 * compact.get() }] }));
   const labelsKey = displayedCategories.map(c => tr(`spin.category.${c}`)).join('\n');
   const wheelLabels = useMemo(() => labelsKey ? labelsKey.split('\n') : [], [labelsKey]);
   const papersKey = displayedCategories.map(c => SPIN_CATEGORY_PAPER[c]).join(',');
@@ -311,102 +328,60 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
     onPress: () => updatePreferences({ ...preferences, energy }),
   })) });
   const toggleChallenge = () => { const value = !challengeRef.current; challengeRef.current = value; setChallenge(value); setLoading(true); void load(); };
-  const resultBody = note && result ? <>
-          <ScrollView style={styles.flexShrink} contentContainerStyle={styles.resultContent}>
-            <Reanimated.View entering={drop}>
-              <PaperNote paper={SPIN_CATEGORY_PAPER[result.candidate.category]} tilt={-1} pin style={styles.resultNote}>
-                <View style={[styles.resultHeading,rowStyle]}>
-                  <AppText weight="700" style={styles.resultCategory}>{tr(`spin.category.${result.candidate.category}`)}</AppText>
-                  <IconButton label={tr('attachments.moreActions')} disabled={busy} onPress={moreResultActions}><Icon name="ellipsis-horizontal" size={21} color={PAPER_INK} /></IconButton>
-                </View>
-                <AppText accessibilityRole="header" style={[handBold, styles.resultTitle]}>{note.title}</AppText>
-                <View style={[styles.resultLine,rowStyle]}>
-                  <Icon name={note.boardId ? 'albums-outline' : 'document-text-outline'} size={14} color={PAPER_INK_MUTED} />
-                  <AppText style={styles.resultCaption}>{tr(note.boardId ? 'spin.source.card' : 'spin.source.note')} · {note.boardName ?? tr('index.unorganized')}{resolveSpaceId(result.candidate.space) ? ` · ${SPACES[resolveSpaceId(result.candidate.space)!].name}` : ''}</AppText>
-                </View>
-                <View style={[styles.resultMeta,rowStyle]}>
-                  <View style={[styles.resultLine,rowStyle]}><Icon name="time-outline" size={14} color={PAPER_INK_MUTED} /><AppText style={styles.resultCaption}>{result.candidate.minutes === null ? tr('spin.unestimated') : tr('focus.minutes', { minutes: result.candidate.minutes })}</AppText></View>
-                  <View style={[styles.resultLine,rowStyle]}><Icon name="flag-outline" size={14} color={PAPER_INK_MUTED} /><AppText style={styles.resultCaption}>{tr(`spin.priority.${result.candidate.priority}`)}</AppText></View>
-                </View>
-                {result.candidate.plannedAt ? <AppText style={styles.resultCaption}>{tr('spin.planned', { date: localizedDate(result.candidate.plannedAt, { dateStyle: 'medium' }) })}</AppText> : null}
-                {note.reminderAt ? <AppText style={styles.resultCaption}>{tr('spin.reminder', { date: localizedDate(note.reminderAt, { dateStyle: 'medium', timeStyle: 'short' }) })}</AppText> : null}
-                <View style={styles.resultReason}>
-                  <AppText style={styles.resultBody}>{tr(`spin.reason.${result.candidate.reason}`)}</AppText>
-                  {result.candidate.kind !== 'task' ? <AppText weight="600" style={styles.resultBody}>{tr(result.candidate.category === 'unorganized' ? 'spin.prompt.unorganized' : result.candidate.kind === 'creative' ? result.candidate.related ? 'spin.prompt.connect' : 'spin.prompt.write' : 'spin.prompt.review')}</AppText> : null}
-                </View>
-                {result.done ? <View style={[styles.resultLine,rowStyle]}><Icon name="checkmark-circle" size={20} color={PAPER_INK} /><AppText accessibilityLiveRegion="polite" style={[handBold, styles.doneText]}>{tr('spin.mascot.completed')}</AppText></View> : null}
-              </PaperNote>
-            </Reanimated.View>
-          </ScrollView>
-          <View style={styles.actions}>
-            {!result.done ? <>
-              <PaperAction primary label={tr('focus.start')} disabled={busy} onPress={() => open(true)} />
-              <View style={[styles.actionRow,rowStyle]}>
-                <PaperAction label={tr('spin.open')} disabled={busy} onPress={() => open()} containerStyle={styles.flex} />
-                <PaperAction label={tr('spin.again')} disabled={busy} onPress={spin} containerStyle={styles.flex} />
-              </View>
-            </> : <>
-              <PaperAction primary label={tr('spin.again')} disabled={busy} onPress={spin} />
-              <PaperAction label={tr('spin.adjust')} disabled={busy} onPress={() => { assignResult(null); setMessage('before'); void load(); }} />
-            </>}
-          </View>
-  </> : suggestion ? <>
-          <ScrollView style={styles.flexShrink} contentContainerStyle={styles.resultContent}>
-            <Reanimated.View entering={drop}>
-              <PaperNote paper={SPIN_CATEGORY_PAPER.suggestions} tilt={-1} pin style={styles.resultNote}>
-                <AppText weight="700" style={styles.resultCategory}>{tr('spin.category.suggestions')}</AppText>
-                <AppText accessibilityRole="header" style={[handBold, styles.resultTitle]}>{tr('spin.newNote')}</AppText>
-                <AppText style={styles.resultBody}>{tr(suggestion === 'saved' ? 'calendar.noteAdded' : 'spin.newNotePrompt')}</AppText>
-              </PaperNote>
-            </Reanimated.View>
-          </ScrollView>
-          <View style={styles.actions}>
-            {suggestion !== 'saved' ? <PaperAction primary label={tr('id.addNote')} disabled={busy} onPress={() => setAddNoteOpen(true)} /> : null}
-            <View style={[styles.actionRow,rowStyle]}>
-              <PaperAction primary={suggestion === 'saved'} label={tr('spin.again')} disabled={busy} onPress={spin} containerStyle={styles.flex} />
-              <PaperAction label={tr(suggestion === 'saved' ? 'spin.adjust' : 'spin.skip')} disabled={busy} containerStyle={styles.flex} onPress={() => { if (suggestion !== 'saved') setSuggestionSkippedAt(Date.now()); setSuggestion(null); setMessage(suggestion === 'saved' ? 'before' : 'skipped'); void load(); }} />
-            </View>
-          </View>
-  </> : null;
-  return <Screen edges={['top','left','right','bottom']} style={{ backgroundColor: desk.desk }}>
-    <AppHeader actionWidth={88} title={tr('spin.title')} subtitle={tr('spin.subtitle')} leading={<IconButton label={tr('search.goBack')} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} trailing={<View style={[styles.headerActions,rowStyle]}>{modeAction}<IconButton label={tr('spin.preferences')} onPress={() => setAdvanced(true)}><HeaderIcon name="options-outline" size={22} /></IconButton></View>} />
-    <PaperDesk>
-    <View style={[styles.viewport, landscape && styles.wideViewport]}>
-      {modeNotice}
-      <Animated.View style={{ transform: [{ translateY: mascotOffset }] }}><DeskMessage message={tr(`spin.mascot.${mascotMessage}`)} /></Animated.View>
-      {error ? <AppText accessibilityRole="alert" weight="600" style={[styles.deskText,{ color: desk.danger }]}>{error}</AppText> : null}
-      {overdue.length ? <View style={styles.overdue}><PaperTab paper={SPIN_CATEGORY_PAPER.unfinished} tilt={1} icon="alert-circle-outline" label={tr('spin.overdue', { count: overdue.length })} accessibilityRole="button" accessibilityHint={tr('spin.addressOverdue')} disabled={busy} onPress={() => actionSheet({ title: tr('spin.overdue', { count: overdue.length }), options: overdue.map(n => ({ label: n.title, onPress: () => void run(async () => { if (!await revisit.get(n.key)) throw new Error(tr('spin.unavailable')); router.push(spinSourceRoute(n.key)); }) })) })} /></View> : null}
-      <View style={[styles.workspace, landscape && styles.landscape]}>
-        <View style={[styles.wheelColumn, accessibleLayout && styles.accessibleWheel]} onLayout={({ nativeEvent }) => { const { width: nextWidth, height: nextHeight } = nativeEvent.layout; setWheelBounds(previous => previous.width === nextWidth && previous.height === nextHeight ? previous : { width: nextWidth, height: nextHeight }); }}>
-          {!loading && !eligible.length && !hasResult ? <ScrollView style={styles.flex} contentContainerStyle={styles.empty}><EmptyState title={tr('spin.mascot.empty')} description={tr('spin.emptyHelp')} /></ScrollView>
-            : wheelBounds.height > 0 ? <Reanimated.View style={wheelMotion}><SpinWheel size={wheelSize} rotation={rotation} labels={wheelLabels} papers={wheelPapers} spinning={spinning} highlight={landed !== null && landed >= 0 ? landed : null} onSpin={spinFromWheel} spinDisabled={busy || loading || !eligible.length} /></Reanimated.View> : null}
-        </View>
-        {stacked ? <>
-          <Reanimated.View style={[styles.panel, controlsMotion]} pointerEvents={hasResult ? 'none' : 'auto'} accessibilityElementsHidden={hasResult} importantForAccessibility={hasResult ? 'no-hide-descendants' : 'auto'}>
-          <ScrollView style={[styles.flexShrink, !landscape && !accessibleLayout && styles.fixedControls]} contentContainerStyle={styles.controlsContent} showsVerticalScrollIndicator={accessibleLayout || landscape}>
-            <View pointerEvents={busy ? 'none' : 'auto'} accessibilityElementsHidden={spinning} importantForAccessibility={spinning ? 'no-hide-descendants' : 'auto'} style={[styles.tabs,rowStyle]}>
-              <PaperTab paper={SPIN_CATEGORY_PAPER.unfinished} tilt={-2} icon="time-outline" label={timeLabel} accessibilityRole="button" accessibilityLabel={`${tr('spin.time')}: ${timeLabel}`} disabled={busy} onPress={chooseTime} />
-              <PaperTab paper={SPIN_CATEGORY_PAPER.revisit} tilt={1.5} icon="flash-outline" label={tr(`spin.energyShort.${preferences.energy}`)} accessibilityRole="button" accessibilityLabel={`${tr('spin.energy')}: ${tr(`spin.energyHelp.${preferences.energy}`)}`} disabled={busy} onPress={chooseEnergy} />
-              <PaperTab paper={challenge ? SPIN_CATEGORY_PAPER.tasks : SPIN_CATEGORY_PAPER.boards} tilt={-1} icon={challenge ? 'checkmark-circle' : 'timer-outline'} label={tr('spin.challenge')} accessibilityRole="switch" accessibilityState={{ checked: challenge, disabled: busy }} disabled={busy} onPress={toggleChallenge} />
-            </View>
-          </ScrollView>
-          <PaperAction primary label={tr(spinning ? 'spin.spinning' : 'spin.spin')} accessibilityState={{ disabled: busy || loading || !eligible.length, busy: spinning }} disabled={busy || loading || !eligible.length} onPress={spin} />
-          </Reanimated.View>
-          {hasResult && resultBody ? <Reanimated.View entering={reduced ? undefined : FadeIn.duration(240)} exiting={reduced ? undefined : FadeOutDown.duration(220)} style={[styles.resultOverlay, { top: compactSize + 28 }]}>{resultBody}</Reanimated.View> : null}
-        </> : !hasResult ? <Reanimated.View key="controls" entering={reduced ? undefined : FadeIn.duration(240)} exiting={reduced ? undefined : FadeOut.duration(160)} style={[styles.panel, styles.flex]}>
-          <ScrollView style={[styles.flexShrink, !landscape && !accessibleLayout && styles.fixedControls]} contentContainerStyle={styles.controlsContent} showsVerticalScrollIndicator={accessibleLayout || landscape}>
-            <View pointerEvents={busy ? 'none' : 'auto'} accessibilityElementsHidden={spinning} importantForAccessibility={spinning ? 'no-hide-descendants' : 'auto'} style={[styles.tabs,rowStyle]}>
-              <PaperTab paper={SPIN_CATEGORY_PAPER.unfinished} tilt={-2} icon="time-outline" label={timeLabel} accessibilityRole="button" accessibilityLabel={`${tr('spin.time')}: ${timeLabel}`} disabled={busy} onPress={chooseTime} />
-              <PaperTab paper={SPIN_CATEGORY_PAPER.revisit} tilt={1.5} icon="flash-outline" label={tr(`spin.energyShort.${preferences.energy}`)} accessibilityRole="button" accessibilityLabel={`${tr('spin.energy')}: ${tr(`spin.energyHelp.${preferences.energy}`)}`} disabled={busy} onPress={chooseEnergy} />
-              <PaperTab paper={challenge ? SPIN_CATEGORY_PAPER.tasks : SPIN_CATEGORY_PAPER.boards} tilt={-1} icon={challenge ? 'checkmark-circle' : 'timer-outline'} label={tr('spin.challenge')} accessibilityRole="switch" accessibilityState={{ checked: challenge, disabled: busy }} disabled={busy} onPress={toggleChallenge} />
-            </View>
-          </ScrollView>
-          <PaperAction primary label={tr(spinning ? 'spin.spinning' : 'spin.spin')} accessibilityState={{ disabled: busy || loading || !eligible.length, busy: spinning }} disabled={busy || loading || !eligible.length} onPress={spin} />
-        </Reanimated.View> : resultBody ? <Reanimated.View key="result" entering={reduced ? undefined : FadeIn.duration(240)} exiting={reduced ? undefined : FadeOut.duration(160)} style={[styles.flex, styles.resultPanel]}>{resultBody}</Reanimated.View> : null}
-      </View>
-      {celebration > 0 && hasResult && preferences.celebrations && !reduced ? <SpinCelebration key={celebration} /> : null}
+  const resultKey = result ? `result:${result.id}` : suggestion ? 'suggestion' : null;
+  const fresh = resultKey !== null && resultKey === revealKey;
+  const adjust = () => { assignResult(null); setSuggestion(null); setMessage('before'); void load(); };
+  const summary = note ? spinSummary(note) : '';
+  const space = result ? resolveSpaceId(result.candidate.space) : null;
+  const resultCard = note && result ? <SpinResultCard key={resultKey} paper={SPIN_CATEGORY_PAPER[result.candidate.category]} title={note.title} animate={fresh} confirming={confirming}
+    action={<IconButton label={tr('attachments.moreActions')} disabled={busy} onPress={moreResultActions}><Icon name="ellipsis-horizontal" size={21} color={PAPER_INK} /></IconButton>}>
+    <SpinFact icon={note.boardId ? 'albums-outline' : 'document-text-outline'}>{tr(note.boardId ? 'spin.source.card' : 'spin.source.note')} · {note.boardName ?? tr('index.unorganized')}{space ? ` · ${SPACES[space].name}` : ''}</SpinFact>
+    <View style={[styles.facts,rowStyle]}>
+      <SpinFact icon="time-outline">{result.candidate.minutes === null ? tr('spin.unestimated') : tr('focus.minutes', { minutes: result.candidate.minutes })}</SpinFact>
+      <SpinFact icon="flag-outline">{tr(`spin.priority.${result.candidate.priority}`)}</SpinFact>
+      <SpinFact icon="pie-chart-outline">{tr(`spin.category.${result.candidate.category}`)}</SpinFact>
+      {note.total > 0 ? <SpinFact icon="checkbox-outline">{tr('spin.checklist', { done: note.completed, total: note.total })}</SpinFact> : null}
     </View>
-    </PaperDesk>
+    {result.candidate.plannedAt ? <AppText style={styles.resultCaption}>{tr('spin.planned', { date: localizedDate(result.candidate.plannedAt, { dateStyle: 'medium' }) })}</AppText> : null}
+    {note.reminderAt ? <AppText style={styles.resultCaption}>{tr('spin.reminder', { date: localizedDate(note.reminderAt, { dateStyle: 'medium', timeStyle: 'short' }) })}</AppText> : null}
+    {summary ? <AppText numberOfLines={3} style={styles.resultBody}>{summary}</AppText> : null}
+    <View style={styles.resultReason}>
+      <AppText style={styles.resultBody}>{tr(`spin.reason.${result.candidate.reason}`)}</AppText>
+      {result.candidate.kind !== 'task' ? <AppText weight="600" style={styles.resultBody}>{tr(result.candidate.category === 'unorganized' ? 'spin.prompt.unorganized' : result.candidate.kind === 'creative' ? result.candidate.related ? 'spin.prompt.connect' : 'spin.prompt.write' : 'spin.prompt.review')}</AppText> : null}
+    </View>
+    {result.done ? <View style={[styles.done,rowStyle]}><Icon name="checkmark-circle" size={20} color={PAPER_INK} /><AppText accessibilityLiveRegion="polite" style={[handBold, styles.doneText]}>{tr('spin.mascot.completed')}</AppText></View> : null}
+  </SpinResultCard> : suggestion ? <SpinResultCard key={resultKey} paper={SPIN_CATEGORY_PAPER.suggestions} title={tr('spin.newNote')} animate={fresh}>
+    <SpinFact icon="pie-chart-outline">{tr('spin.category.suggestions')}</SpinFact>
+    <AppText style={styles.resultBody}>{tr(suggestion === 'saved' ? 'calendar.noteAdded' : 'spin.newNotePrompt')}</AppText>
+  </SpinResultCard> : null;
+  const startFocus = () => open(true);
+  const openOriginal = () => open();
+  const skipSuggestion = () => { setSuggestionSkippedAt(Date.now()); setSuggestion(null); setMessage('skipped'); void load(); };
+  // Actions stay under the thumb, unless large text needs that room for reading.
+  const actionProps = { animate: fresh && accessibleLayout, stacked: accessibleLayout };
+  const afterwards = <SpinActions {...actionProps} primary={{ label: tr('spin.again'), disabled: busy, onPress: spin }} secondary={[{ label: tr('spin.adjust'), disabled: busy, onPress: adjust }]} />;
+  const actions = result ? result.done ? afterwards
+    : <SpinActions {...actionProps} primary={{ label: tr('focus.start'), disabled: busy, onPress: startFocus }} secondary={[{ label: tr('spin.open'), disabled: busy, onPress: openOriginal }, { label: tr('spin.again'), disabled: busy, onPress: spin }]} />
+    : suggestion === 'saved' ? afterwards
+      : suggestion ? <SpinActions {...actionProps} primary={{ label: tr('id.addNote'), disabled: busy, onPress: () => setAddNoteOpen(true) }} secondary={[{ label: tr('spin.again'), disabled: busy, onPress: spin }, { label: tr('spin.skip'), disabled: busy, onPress: skipSuggestion }]} /> : null;
+  const tabs = <View pointerEvents={busy ? 'none' : 'auto'} accessibilityElementsHidden={spinning} importantForAccessibility={spinning ? 'no-hide-descendants' : 'auto'} style={[styles.tabs,rowStyle]}>
+    <PaperTab paper={SPIN_CATEGORY_PAPER.unfinished} tilt={-2} icon="time-outline" label={timeLabel} accessibilityRole="button" accessibilityLabel={`${tr('spin.time')}: ${timeLabel}`} disabled={busy} onPress={chooseTime} />
+    <PaperTab paper={SPIN_CATEGORY_PAPER.revisit} tilt={1.5} icon="flash-outline" label={tr(`spin.energyShort.${preferences.energy}`)} accessibilityRole="button" accessibilityLabel={`${tr('spin.energy')}: ${tr(`spin.energyHelp.${preferences.energy}`)}`} disabled={busy} onPress={chooseEnergy} />
+    <PaperTab paper={challenge ? SPIN_CATEGORY_PAPER.tasks : SPIN_CATEGORY_PAPER.boards} tilt={-1} icon={challenge ? 'checkmark-circle' : 'timer-outline'} label={tr('spin.challenge')} accessibilityRole="switch" accessibilityState={{ checked: challenge, disabled: busy }} disabled={busy} onPress={toggleChallenge} />
+  </View>;
+  return <Screen edges={['top','left','right']} style={{ backgroundColor: desk.desk }}>
+    <AppHeader actionWidth={100} title={tr('spin.title')} subtitle={tr('spin.subtitle')} leading={<IconButton label={tr('search.goBack')} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} trailing={<View style={[styles.headerActions,rowStyle]}>{modeAction}<IconButton label={tr('spin.preferences')} onPress={() => setAdvanced(true)}><HeaderIcon name="options-outline" size={22} /></IconButton></View>} />
+    <SpinStage scrollRef={scroll} title={tr(heroTitle)} body={tr(heroBody)} moment={hasResult ? 'result' : empty ? 'empty' : 'idle'} spinning={spinning} landing={landing.count} repeat={landing.repeat} celebrate={preferences.celebrations} entrance={entrance} footer={!accessibleLayout ? actions : null} footerFresh={fresh}>
+      {modeNotice}
+      {error ? <AppText accessibilityRole="alert" weight="600" style={[styles.deskText,{ color: desk.danger }]}>{error}</AppText> : null}
+      {overdue.length ? <SpinOverdueChip count={overdue.length} disabled={busy} onPress={() => actionSheet({ title: tr('spin.overdueShort', { count: overdue.length }), options: overdue.map(n => ({ label: n.title, onPress: () => void run(async () => { if (!await revisit.get(n.key)) throw new Error(tr('spin.unavailable')); router.push(spinSourceRoute(n.key)); }) })) })} /> : null}
+      <SpinWorkspace size={wheelLayout.size} compactSize={wheelLayout.compactSize} showResult={hasResult} fresh={fresh} entrance={entrance} waiting={spinning}
+        wheel={empty ? <SpinEmpty title={tr('spin.say.empty')} help={tr('spin.emptyHelp')} primary={{ label: tr('id.addNote'), onPress: () => setAddNoteOpen(true) }} secondary={{ label: tr('spin.adjust'), onPress: () => setAdvanced(true) }} />
+          : <SpinWheel size={wheelLayout.size} rotation={rotation} labels={wheelLabels} papers={wheelPapers} spinning={spinning} highlight={landed !== null && landed >= 0 ? landed : null} onSpin={spinFromWheel} spinDisabled={busy || loading || !eligible.length} />}
+        controls={tabs}
+        result={<View style={styles.result}>{resultCard}{accessibleLayout ? actions : null}</View>} />
+      {celebration > 0 && hasResult && preferences.celebrations && !reduced ? <SpinCelebration key={celebration} /> : null}
+    </SpinStage>
     <AddNoteSheet visible={addNoteOpen} onClose={() => setAddNoteOpen(false)} onSubmit={saveSuggestedNote} />
     <FormSheet visible={details && !!result} onRequestClose={() => setDetails(false)} closeAccessibilityLabel={tr('attachments.close')} maxHeightPercent={85} accessibilityViewIsModal header={<View style={[styles.sheetHeader,rowStyle]}><AppText weight="700" style={styles.flex}>{tr('spin.metadata')}</AppText><IconButton label={tr('attachments.close')} onPress={() => setDetails(false)}><Icon name="close" size={22} color={tokens.textPrimary} /></IconButton></View>}>
       {result ? <>
@@ -430,38 +405,18 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
   </Screen>;
 }
 const styles = StyleSheet.create({
-  headerActions: { alignItems: 'center', flexWrap: 'nowrap' },
-  viewport: { flex: 1, minHeight: 0, width: '100%', maxWidth: 620, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 10 },
-  wideViewport: { maxWidth: 980 },
+  headerActions: { alignItems: 'center', flexWrap: 'nowrap', gap: 8 },
   deskText: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
-  overdue: { alignItems: 'center' },
-  workspace: { flex: 1, minHeight: 0, gap: 14 },
-  landscape: { flexDirection: 'row', gap: 20 },
-  wheelColumn: { flex: 1, minHeight: 0, minWidth: 0, alignItems: 'center', justifyContent: 'center', paddingTop: 10 },
-  resultOverlay: { position: 'absolute', left: 0, right: 0, bottom: 0, gap: 14 },
-  accessibleWheel: { flex: 0, height: 150 },
-  empty: { flexGrow: 1, justifyContent: 'center' },
-  panel: { gap: 18 },
-  flexShrink: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
-  fixedControls: { flexShrink: 0 },
-  controlsContent: { paddingTop: 10, paddingBottom: 4 },
-  tabs: { flexWrap: 'wrap', justifyContent: 'center', gap: 10 },
+  tabs: { flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
   toggle: { alignItems: 'center', gap: 12, minHeight: 44 },
   flex: { flex: 1 },
   sheetControls: { gap: 8 },
-  resultPanel: { minHeight: 0, gap: 14 },
-  resultContent: { paddingTop: 14, paddingBottom: 8, paddingHorizontal: 4 },
-  resultNote: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, gap: 8 },
-  resultHeading: { alignItems: 'center', justifyContent: 'space-between', gap: 8, marginRight: -8 },
-  resultCategory: { flex: 1, color: PAPER_INK_MUTED, fontSize: 12, lineHeight: 16, letterSpacing: 0.6, textTransform: 'uppercase' },
-  resultTitle: { color: PAPER_INK, fontSize: 28, lineHeight: 36, marginTop: -6 },
-  resultLine: { alignItems: 'center', flexWrap: 'wrap', gap: 6 },
-  resultMeta: { flexWrap: 'wrap', alignItems: 'center', columnGap: 16, rowGap: 6 },
-  resultCaption: { color: PAPER_INK_MUTED, fontSize: 13, lineHeight: 18, flexShrink: 1 },
-  resultReason: { gap: 6, marginTop: 4, paddingTop: 10, borderTopWidth: 1, borderStyle: 'dashed', borderTopColor: 'rgba(43,38,32,0.25)' },
+  result: { gap: 10 },
+  facts: { flexWrap: 'wrap', alignItems: 'center', columnGap: 14, rowGap: 4 },
+  resultCaption: { color: PAPER_INK_MUTED, fontSize: 13, lineHeight: 18 },
+  resultReason: { gap: 6, marginTop: 2, paddingTop: 8, borderTopWidth: 1, borderStyle: 'dashed', borderTopColor: 'rgba(43,38,32,0.25)' },
   resultBody: { color: PAPER_INK, fontSize: 14, lineHeight: 20 },
+  done: { alignItems: 'center', gap: 6 },
   doneText: { color: PAPER_INK, fontSize: 20, lineHeight: 26 },
-  actions: { gap: 12, paddingBottom: 4 },
-  actionRow: { gap: 12, alignItems: 'stretch' },
   sheetHeader: { alignItems: 'center', paddingHorizontal: 16, paddingTop: 8 },
 });

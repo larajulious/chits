@@ -1,7 +1,7 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -22,6 +22,7 @@ import {
 } from '@/services/share-note';
 import { captureShareNote, discardShareNoteImage, saveShareNoteImage, shareNoteExportWidth, shareShareNoteImages, type ShareNoteImageFile } from '@/services/share-note-export';
 import { loadShareNoteSource } from '@/services/share-note-source';
+import { AppText } from '@/components/ui/app-text';
 
 type Busy = 'generating' | 'saving' | 'sharing' | null;
 const BUSY_LABEL: Record<Exclude<Busy, null>, string> = { get generating() { return tr("sharenote.generatingImage"); }, get saving() { return tr("sharenote.savingImage"); }, get sharing() { return tr("sharenote.openingShareSheet"); } };
@@ -213,9 +214,9 @@ export default function ShareNoteScreen() {
     return <Screen>{header}
       <View style={styles.center}>
         <View style={[styles.emptyIcon, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name="image-outline" size={26} color={theme.textMuted} /></View>
-        <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>{source ? tr("sharenote.nothingToShareYet") : tr("revisit.noteUnavailable")}</Text>
-        <Text style={[styles.emptyCopy, { color: theme.textSecondary }]}>{availability && !availability.ok ? availability.message : tr("id.itMayHaveBeenArchivedOrDeleted")}</Text>
-        <Pressable accessibilityRole="button" onPress={close} style={({ pressed }) => [styles.emptyButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}><Text style={[styles.emptyButtonText, { color: theme.textPrimary }]}>{tr("attachments.close")}</Text></Pressable>
+        <AppText style={[styles.emptyTitle, { color: theme.textPrimary }]}>{source ? tr("sharenote.nothingToShareYet") : tr("revisit.noteUnavailable")}</AppText>
+        <AppText style={[styles.emptyCopy, { color: theme.textSecondary }]}>{availability && !availability.ok ? availability.message : tr("id.itMayHaveBeenArchivedOrDeleted")}</AppText>
+        <Pressable accessibilityRole="button" onPress={close} style={({ pressed }) => [styles.emptyButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}><AppText style={[styles.emptyButtonText, { color: theme.textPrimary }]}>{tr("attachments.close")}</AppText></Pressable>
       </View>
     </Screen>;
   }
@@ -250,8 +251,8 @@ export default function ShareNoteScreen() {
     <View style={[styles.flex, { backgroundColor: theme.background }]}>
       {header}
       <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
-        <Text style={[styles.helper, { color: theme.textMuted }]}>{tr("sharenote.turnThisNoteIntoABeautifulImageYou")}</Text>
-        {hasChecklist && !rowsReady ? <Text style={[styles.helper, { color: theme.textMuted }]}>{tr("sharenote.preparingChecklistPreview")}</Text> : pages.map((page, index) => <View key={`preview:${renderKey}:${index}`} accessible accessibilityRole="image" accessibilityLabel={tr("sharenote.previewPageValueOfValueValueTheme", { value1: index + 1, value2: pages.length, value3: shareTheme.name })} style={[styles.preview, { width: previewWidth, backgroundColor: theme.surface }, !hasChecklist && !content.blocks?.length && { height: previewWidth * ratio }, index > 0 && { marginTop: spacing.md }]}>
+        <AppText style={[styles.helper, { color: theme.textMuted }]}>{tr("sharenote.turnThisNoteIntoABeautifulImageYou")}</AppText>
+        {hasChecklist && !rowsReady ? <AppText style={[styles.helper, { color: theme.textMuted }]}>{tr("sharenote.preparingChecklistPreview")}</AppText> : pages.map((page, index) => <View key={`preview:${renderKey}:${index}`} accessible accessibilityRole="image" accessibilityLabel={tr("sharenote.previewPageValueOfValueValueTheme", { value1: index + 1, value2: pages.length, value3: shareTheme.name })} style={[styles.preview, { width: previewWidth, backgroundColor: theme.surface }, !hasChecklist && !content.blocks?.length && { height: previewWidth * ratio }, index > 0 && { marginTop: spacing.md }]}>
           <ShareNoteTemplate content={page.content} theme={shareTheme} format={format} mode={page.mode} showBranding={showBranding} width={previewWidth} page={{ index, total: pages.length }} />
         </View>)}
         {oversizedPage ? <InfoLine icon="alert-circle-outline" tone="warning" message={tr("sharenote.aChecklistItemIsTooLongForOne")} /> : null}
@@ -281,15 +282,15 @@ export default function ShareNoteScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.sm), borderTopColor: theme.borderSubtle, backgroundColor: theme.background }]}>
-        {busy ? <View accessibilityLiveRegion="polite" style={styles.busyRow}><ChitsLoader size="small" /><Text style={[styles.busyText, { color: theme.textSecondary }]}>{BUSY_LABEL[busy]}</Text></View> : null}
+        {busy ? <View accessibilityLiveRegion="polite" style={styles.busyRow}><ChitsLoader size="small" /><AppText style={[styles.busyText, { color: theme.textSecondary }]}>{BUSY_LABEL[busy]}</AppText></View> : null}
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canExport || Boolean(busy) }} disabled={!canExport || Boolean(busy)} onPress={() => void run('save')} style={({ pressed }) => [styles.action, { backgroundColor: theme.surfaceElevated }, (!canExport || busy) && styles.disabled, pressed && styles.pressed]}>
             <Ionicons accessible={false} name="download-outline" size={19} color={theme.textPrimary} />
-            <Text style={[styles.actionText, { color: theme.textPrimary }]}>{pages.length > 1 ? tr("sharenote.saveImages") : tr("sharenote.saveImage")}</Text>
+            <AppText style={[styles.actionText, { color: theme.textPrimary }]}>{pages.length > 1 ? tr("sharenote.saveImages") : tr("sharenote.saveImage")}</AppText>
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canExport || Boolean(busy) }} disabled={!canExport || Boolean(busy)} onPress={() => void run('share')} style={({ pressed }) => [styles.action, { backgroundColor: theme.accent }, (!canExport || busy) && styles.disabled, pressed && styles.pressed]}>
             <Ionicons accessible={false} name={Platform.OS === 'ios' ? 'share-outline' : 'share-social-outline'} size={19} color={theme.accentText} />
-            <Text style={[styles.actionText, { color: theme.accentText }]}>{pages.length > 1 ? tr("sharenote.shareImages") : tr("sharenote.shareImage")}</Text>
+            <AppText style={[styles.actionText, { color: theme.accentText }]}>{pages.length > 1 ? tr("sharenote.shareImages") : tr("sharenote.shareImage")}</AppText>
           </Pressable>
         </View>
       </View>

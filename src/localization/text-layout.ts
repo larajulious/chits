@@ -11,7 +11,7 @@ export function firstStrongDirection(text: string, fallback: TextDirection = 'lt
   return fallback;
 }
 export function needsSystemFont(text: string, locale = ''): boolean {
-  return /^(ar|hi|ja|ko|vi)(?:-|$)/i.test(locale) || /[\p{Script=Arabic}\p{Script=Devanagari}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(text);
+  return /^(ar|hi|ta|te|bn|mr|kn|ml|gu|ja|ko|vi)(?:-|$)/i.test(locale) || /[\p{Script=Arabic}\p{Script=Devanagari}\p{Script=Tamil}\p{Script=Telugu}\p{Script=Bengali}\p{Script=Kannada}\p{Script=Malayalam}\p{Script=Gujarati}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(text);
 }
 export function contentTextStyle(text: string, fallback: TextDirection = 'ltr') {
   const direction = firstStrongDirection(text, fallback);

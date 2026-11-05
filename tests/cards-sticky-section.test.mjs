@@ -18,6 +18,15 @@ test('heading threshold accounts for measured list padding and filter height', (
   assert.equal(findStickySection(headers, 460, 60, 80, layout), 5);
 });
 
+test('the scrolling mascot header delays section promotion until the hero and heading clear the filters', () => {
+  const firstItemOffset = 190 + 44 + 12;
+  assert.equal(findStickySection(headers, 0, 44, firstItemOffset, layout), undefined);
+  assert.equal(findStickySection(headers, 241, 44, firstItemOffset, layout), undefined);
+  assert.equal(findStickySection(headers, 242, 44, firstItemOffset, layout), 0);
+  assert.equal(findStickySection(headers, 642, 44, firstItemOffset, layout), 5);
+  assert.equal(findStickySection(headers, 0, 44, firstItemOffset, layout), undefined);
+});
+
 test('empty filters and not-yet-measured sections stay safe', () => {
   assert.equal(findStickySection([], 200, 44, 44, layout), undefined);
   assert.equal(findStickySection(headers, 900, 44, 44, () => undefined), undefined);

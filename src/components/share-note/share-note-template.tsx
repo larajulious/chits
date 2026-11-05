@@ -1,3 +1,4 @@
+import { noteHeadingStyle, noteTextSpans } from '@/components/notes/note-rich-text';
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { memo, useEffect, useState, type ComponentProps } from 'react';
@@ -176,8 +177,14 @@ function InlineShareNoteTemplate({ content, theme, format, showBranding, width, 
     <View onLayout={({ nativeEvent }) => setBodyHeight(nativeEvent.layout.height)} style={{ marginHorizontal: frame.card.left * u, marginTop: frame.card.top * u, padding: frame.card.padding * u, borderRadius: 26 * u, backgroundColor: colors.surface, gap: 12 * u }}>
       {content.title ? <Text style={[...textStyle, { color: colors.accent, fontWeight: '800' }]}>{content.title}</Text> : null}
       {content.blocks?.map((block, index) => {
-        if (block.type === 'text' && block.list?.kind === 'checklist') return <ChecklistRows key={index} subtasks={[{ title: block.text, isCompleted: block.list.checked }]} theme={theme} u={u} />;
-        if (block.type === 'text') return block.marker ? <View key={index} style={{ flexDirection: 'row', gap: 8 * u }}><Text style={[...textStyle, { minWidth: 26 * u, textAlign: 'right' }]}>{block.marker}</Text><Text style={[...textStyle, { flex: 1, textAlign: 'left' }]}>{block.text}</Text></View> : <Text key={index} style={textStyle}>{block.text}</Text>;
+        if (block.type === 'text') {
+          const title = block.title ? <Text style={[...textStyle, { fontSize: 21 * u, fontWeight: '700', marginBottom: 12 * u }]}>{block.title}</Text> : null;
+          const bodyStyle = [...textStyle, noteHeadingStyle(block.heading, u)];
+          const body = <Text style={[...bodyStyle, { flexShrink: 1 }]}>{noteTextSpans(block, StyleSheet.flatten(bodyStyle)?.fontFamily)}</Text>;
+          return <View key={index}>{title}{block.list?.kind === 'checklist'
+            ? <View style={{ flexDirection: 'row', gap: 8 * u }}><Ionicons name={block.list.checked ? 'checkbox-outline' : 'square-outline'} size={18 * u} color={colors.accent} />{body}</View>
+            : block.marker ? <View style={{ flexDirection: 'row', gap: 8 * u }}><Text style={[...textStyle, { minWidth: 26 * u, textAlign: 'right' }]}>{block.marker}</Text>{body}</View> : body}</View>;
+        }
         const image = block.image;
         const ratio = image.width && image.height ? image.width / image.height : 4 / 3;
         const imageHeight = Math.min(220, frame.content.width / ratio);

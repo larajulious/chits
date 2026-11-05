@@ -1,0 +1,12 @@
+<resources>
+  <string name="anywhere_brand">Chits Anywhere</string>
+  <string name="anywhere_quick">త్వరిత గమనిక</string>
+  <string name="anywhere_recent">ఇటీవలి గమనికలు</string>
+  <string name="anywhere_empty">మీ తదుపరి ఆలోచన ఇక్కడ ప్రారంభమవుతుంది.</string>
+  <string name="anywhere_hidden">గమనిక సమాచారం దాచబడింది.</string>
+  <string name="anywhere_description">గమనికను సృష్టించండి లేదా మీ ఇటీవలి గమనికలను తెరవండి.</string>
+  <string name="anywhere_privacy">విడ్జెట్ గోప్యత</string>
+  <string name="anywhere_titles">గమనిక శీర్షికలను చూపించు</string>
+  <string name="anywhere_previews">చిన్న వచన ప్రివ్యూలను చూపు</string>
+  <string name="anywhere_warning">మీ పరికరాన్ని ఉపయోగించే ఎవరైనా హోమ్ స్క్రీన్ విడ్జెట్‌లను చూడగలరు. గమనిక సమాచారం డిఫాల్ట్‌గా దాచబడుతుంది.</string>
+</resources>

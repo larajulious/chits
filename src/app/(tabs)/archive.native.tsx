@@ -1,7 +1,7 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useCallback, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -71,7 +71,7 @@ export default function ArchiveScreen() {
       trailing={<IconButton label={tr("archive.closeArchive")} onPress={() => router.canGoBack() ? router.back() : router.navigate('/')}><HeaderIcon name="close" size={24} /></IconButton>}
     />
     <PaperDesk>
-    {restoreError ? <Text accessibilityRole="alert" style={[styles.errorBanner, { color: desk.danger }]}>{restoreError}</Text> : null}
+    {restoreError ? <AppText accessibilityRole="alert" style={[styles.errorBanner, { color: desk.danger }]}>{restoreError}</AppText> : null}
     {!ready || !handwriting.ready ? (showLoader ? <View style={styles.loaderWrap}><ChitsLoader /></View> : null) : items.length ? <ScrollView contentContainerStyle={[styles.list, { paddingBottom: tabBarHeight + spacing.md }]}>
       {items.map((item) => <PaperCard
         key={`${item.kind}-${item.id}`}

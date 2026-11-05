@@ -1,0 +1,15 @@
+<resources>
+  <string name="plan_widget_name">Rencana Hari Ini</string>
+  <string name="plan_widget_description">Rencana dan progres Anda hari ini.</string>
+  <string name="plan_widget_today">Hari ini</string>
+  <string name="plan_widget_none">Punya rencana kecil hari ini?</string>
+  <string name="plan_widget_action">Rencanakan Hariku</string>
+  <string name="plan_widget_keep_going">Terus semangat!</string>
+  <string name="plan_widget_all_done">Semua selesai hari ini!</string>
+  <string name="plan_widget_wrapped">Selesai sudah!</string>
+  <string name="plan_widget_hidden">Nama tugas disembunyikan. Anda dapat menampilkannya di Pengaturan.</string>
+  <string name="plan_widget_add">Tambah</string>
+  <string name="plan_widget_wrap">Akhiri</string>
+  <string name="plan_widget_view">Lihat Rencana Hari Ini</string>
+  <string name="plan_widget_recap">Lihat Rekap Hari</string>
+</resources>

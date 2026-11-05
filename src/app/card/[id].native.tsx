@@ -3,9 +3,10 @@ import { useDirection, useLocale } from '@/localization/provider';
 import { subscribeToNoteChanges } from '@/services/note-changes';
 import { ConnectedNotes } from '@/components/notes/connected-notes.native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
+import { AppState, Keyboard, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
@@ -30,9 +31,10 @@ import { NotePaper } from '@/components/notes/note-paper';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { AppHeader, EmptyState, IconButton, Screen, Toast, HeaderIcon } from '@/components/ui/primitives';
-import { PAPER_INK, PAPER_WHITE, PaperDesk, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { PAPER_INK, PaperDesk, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { radii, spacing, type ThemeTokens } from '@/constants/theme';
+import { contrast } from '@/constants/style-tokens';
 import { createBoardRepository } from '@/db/repositories';
 import { persistCardAttachment, removeCardAttachmentFile } from '@/services/card-attachment-storage';
 import { exportActionLabel, shareAttachment } from '@/services/attachment-export';
@@ -44,6 +46,9 @@ import { formatReminder, dateFormat } from '@/services/reminder-time';
 import { shareNoteHref } from '@/services/share-note-source';
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
 import type { AttachmentLike, CardAttachment, Message } from '@/db/types';
+import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
+import { KeyboardPane } from '@/components/ui/keyboard-pane';
+import { Reveal } from '@/features/onboarding/welcome/reveal';
 
 type Detail = { id: string; title: string | null; explicitTitle: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; pinned: number; attachmentCount: number };
 type Comment = { id: string; cardId: string; text: string; createdAt: number; updatedAt: number };
@@ -77,7 +82,9 @@ export default function CardDetailScreen() {
 
   useLocale();
   const database = useSQLiteContext();
-  const { rowStyle } = useDirection();
+  const { rowStyle, isRTL } = useDirection();
+  const reducedMotion = useReducedMotion();
+  const { width, fontScale } = useWindowDimensions();
   const { id, fromWidget } = useLocalSearchParams<{ id: string; fromWidget?: string }>();
   const goBack = () => {
     if (fromWidget === '1' && !router.canGoBack()) router.replace('/chat');
@@ -86,7 +93,7 @@ export default function CardDetailScreen() {
   const repository = useMemo(() => createBoardRepository(database), [database]);
   const { tokens: theme, styleTokens, styleColors } = useTheme();
   const sticky = useStickySurface();
-  const panel = sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.panel });
+  const panel = sticky({ fill: styleColors.controlFill, radius: styleTokens.button.radius, edge: false });
   const { confirm, actionSheet } = useAppDialog();
   const { openBackgroundPreview, isCurrentBackground } = useChatBackground();
   const attachmentDeletion = useAttachmentDeletion();
@@ -129,6 +136,8 @@ export default function CardDetailScreen() {
   // Refresh on focus/reminder changes; Date.now() inside render is impure.
   const [renderedAt, setRenderedAt] = useState(() => Date.now());
   const scrollRef = useRef<ScrollView>(null);
+  const commentScrollPending = useRef(false);
+  const scrollHeight = useRef(0);
   const commentInputRef = useRef<TextInput>(null);
 
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 1800); return () => clearTimeout(timer); }, [toast]);
@@ -242,9 +251,9 @@ export default function CardDetailScreen() {
     setNotice(null);
     try {
       const comment = await repository.addComment(id, text);
+      commentScrollPending.current = true;
       setComments((current) => [...current, comment]);
       setCommentDraft('');
-      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
     } catch {
       setNotice(tr("id.chitsCouldNotSaveThatComment"));
     } finally {
@@ -478,34 +487,41 @@ export default function CardDetailScreen() {
 
   if (detail === undefined || !handwriting.ready) return <Screen style={{ backgroundColor: desk.desk }}>{showCardLoader ? <View style={styles.cardLoader}><ChitsLoader label={tr("id.loadingCard")} /></View> : null}</Screen>;
   if (!detail) return <Screen style={{ backgroundColor: desk.desk }}>
-    <AppHeader title={tr("id.cardDetails")} leading={<IconButton label={tr("search.goBack")} onPress={() => goBack()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
+    <AppHeader showTitle={false} title={tr("id.cardDetails")} leading={<IconButton label={tr("search.goBack")} onPress={() => goBack()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
     <PaperDesk><EmptyState title={tr("id.cardUnavailable")} description={tr("id.itMayHaveBeenArchivedOrDeleted")} /></PaperDesk>
   </Screen>;
 
   const detailDate = (timestamp: number) => dateFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(timestamp);
   const createdLabel = detailDate(detail.createdAt);
   const editedAt = messages.reduce<number | null>((latest, message) => message.updatedAt !== message.createdAt ? Math.max(latest ?? 0, message.updatedAt) : latest, null);
-  const firstMessageTitle = messages[0] ? messages[0].text?.trim().slice(0, 120) || messageFallback(messages[0]) : null;
-  const displayTitle = messages.length === 1 && detail.explicitTitle?.trim() === firstMessageTitle ? null : detail.explicitTitle;
+  const explicitTitle = detail.explicitTitle?.trim();
+  const displayTitle = explicitTitle || tr('id.cardTitle');
 
   // A card is hidden when any of its thoughts is hidden in Chat — the same rule
   // the board uses — and stays covered here until revealed for this visit.
   const contentHidden = messages.some((message) => message.isHiddenContent);
   const covered = contentHidden && !temporarilyRevealed;
 
-  const contentAccentStrong = detail.boardAccent ?? theme.accentStrong;
+  const boardAccent = detail.boardAccent;
+  const contentAccentStrong = boardAccent && contrast(boardAccent, theme.cardPaper) >= 4.5 ? boardAccent : theme.accentStrong;
   // For solid fills (Save buttons) and the focused-input underline — the full
   // accent rather than the softer "strong" variant, matching what these already
   // used before they followed the board's color (tokens.accent, not accentStrong).
   const contentAccentSolid = detail.boardAccent ?? theme.accent;
-  const contentAccentOn = detail.boardAccent ? '#FFFFFF' : theme.accentText;
+  const contentAccentOn = !boardAccent ? theme.accentText : contrast(PAPER_INK, boardAccent) >= 4.5 ? PAPER_INK : contrast('#FFFFFF', boardAccent) >= 4.5 ? '#FFFFFF' : '#000000';
 
-  const handTitle = [handwriting.handBold, styles.handTitle, { color: desk.ink }];
-  const handSection = [styles.sectionTitle, handwriting.handBold, styles.handSection, { color: desk.ink }];
+  const handTitle = [handwriting.handBold, styles.handTitle, width / fontScale < 300 && styles.compactTitle, { color: desk.ink }];
+  const sectionHeading = [styles.sectionTitle, { color: desk.ink }];
+  const forward = isRTL ? 'chevron-back' : 'chevron-forward';
+  const openBoard = (column = false) => router.push({ pathname: '/board/[id]', params: { id: detail.boardId, ...(column ? { highlightColumnId: detail.columnId } : {}) } });
+  const detailRowStyle = [styles.detailRow, width / fontScale < 370 && styles.detailRowStacked];
   return <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: desk.desk }}>
+    <Stack.Screen options={{ animation: reducedMotion ? 'none' : 'fade_from_bottom', animationDuration: 240, contentStyle: { backgroundColor: desk.desk } }} />
     <AppHeader
+      showTitle={false}
       title={tr("id.cardDetails")}
-      actionWidth={covered ? 44 : 88}
+      leadingWidth={46}
+      actionWidth={covered ? 46 : 100}
       leading={<IconButton label={tr("search.goBack")} onPress={() => goBack()}><HeaderIcon name="chevron-back" size={24} /></IconButton>}
       trailing={<View style={[styles.headerActions, rowStyle]}>
         {!covered ? <IconButton label={tr('focus.action')} onPress={() => router.push({ pathname: '/focus', params: { note: `card:${id}` } })}><HeaderIcon name="timer-outline" size={22} /></IconButton> : null}
@@ -513,21 +529,32 @@ export default function CardDetailScreen() {
       </View>}
     />
     {viewingPhoto ? <PhotoAttachmentViewer attachment={viewingPhoto} onDismiss={() => setViewingPhoto(null)} /> : null}
-    <PaperDesk>
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView ref={scrollRef} style={styles.flex} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
-        <View style={styles.hero}>
+    <PaperDesk faint>
+    <KeyboardPane>
+      <ScrollView ref={scrollRef} onLayout={(event) => { scrollHeight.current = event.nativeEvent.layout.height; }} style={styles.flex} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={styles.content}>
+        <Reveal visible animate={!reducedMotion} style={styles.hero}>
           {covered ? <View style={styles.titleRow}><AppText variant="display" style={[styles.title, ...handTitle, styles.hiddenTitle]}>{tr("index.hiddenChit")}</AppText></View> : titleEditing ? <View style={styles.editor}>
-            <TextInput autoFocus accessibilityLabel={tr("id.cardTitle")} value={titleDraft} onChangeText={setTitleDraft} placeholder={tr("id.cardTitle")} placeholderTextColor={theme.textMuted} maxLength={120} returnKeyType="done" onSubmitEditing={() => void saveTitle()} style={[styles.titleInput, { borderColor: contentAccentSolid }]} />
+            <TextInput autoFocus multiline submitBehavior="submit" accessibilityLabel={tr("id.cardTitle")} value={titleDraft} onChangeText={setTitleDraft} placeholder={tr("id.cardTitle")} placeholderTextColor={theme.textMuted} maxLength={120} returnKeyType="done" onSubmitEditing={() => void saveTitle()} style={[styles.titleInput, { borderColor: contentAccentSolid, color: desk.ink }]} />
             <View style={styles.editActions}>
               <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => void saveTitle()} style={[styles.editSave, { backgroundColor: contentAccentSolid }, sticky({ fill: contentAccentSolid, radius: styleTokens.button.radius, edge: false }), savingEdit && styles.disabled]}><AppText style={[styles.editSaveText, { color: contentAccentOn }]}>{savingEdit ? tr("id.saving") : tr("id.saveTitle")}</AppText></Pressable>
               <Pressable accessibilityRole="button" disabled={savingEdit} onPress={() => { setTitleDraft(detail.explicitTitle ?? ''); setTitleEditing(false); }} style={styles.editCancel}><AppText style={styles.editCancelText}>{tr("chat.cancel")}</AppText></Pressable>
             </View>
-          </View> : displayTitle ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.editCardTitle")} onPress={startTitleEdit} style={({ pressed }) => [styles.titleRow, pressed && styles.pressed]}>
-            <AppText variant="display" style={[styles.title, ...handTitle]}>{displayTitle}</AppText>
+          </View> : <Pressable accessibilityRole="button" accessibilityLabel={`${displayTitle}. ${tr('id.editCardTitle')}`} onPress={startTitleEdit} style={({ pressed }) => [styles.titleRow, rowStyle, pressed && styles.pressed]}>
+            <AppText accessibilityRole="header" variant="display" style={[styles.title, ...handTitle, !explicitTitle && { color: desk.inkMuted }]}>{displayTitle}</AppText>
             <View style={styles.titleEditButton}><Icon name="create-outline" size={17} color={contentAccentStrong} /></View>
-          </Pressable> : <Pressable accessibilityRole="button" accessibilityLabel={detail.explicitTitle ? tr("id.editCardTitle") : tr("id.addACardTitle")} onPress={startTitleEdit} style={({ pressed }) => [styles.addTitle, pressed && styles.pressed]}><Icon name={detail.explicitTitle ? 'create-outline' : 'add'} size={17} color={contentAccentStrong} /><AppText style={[styles.editHint, { color: contentAccentStrong }]}>{detail.explicitTitle ? tr("id.editTitle") : tr("id.addTitle")}</AppText></Pressable>}
-        </View>
+          </Pressable>}
+          <View style={[styles.context, rowStyle]}>
+            <Pressable accessibilityRole="link" accessibilityLabel={tr('id.openBoardValue', { value1: detail.boardName })} hitSlop={{ top: 6, bottom: 6 }} onPress={() => openBoard()} style={({ pressed }) => [styles.contextLink, rowStyle, pressed && styles.pressed]}>
+              <View style={[styles.boardDot, { backgroundColor: detail.boardAccent ?? theme.accentStrong }]} />
+              <AppText style={[styles.contextText, { color: desk.inkMuted }]}>{detail.boardName}</AppText>
+            </Pressable>
+            <Icon name={forward} size={13} color={desk.inkMuted} />
+            <Pressable accessibilityRole="link" accessibilityLabel={tr('id.openColumnValueInValue', { value1: detail.columnName, value2: detail.boardName })} hitSlop={{ top: 6, bottom: 6 }} onPress={() => openBoard(true)} style={({ pressed }) => [styles.contextLink, pressed && styles.pressed]}>
+              <AppText style={[styles.contextText, { color: desk.inkMuted }]}>{detail.columnName}</AppText>
+            </Pressable>
+            {detail.pinned ? <Icon name="pin" size={14} color={desk.inkMuted} accessibilityLabel={tr('index.pinned')} /> : null}
+          </View>
+        </Reveal>
 
         {notice ? <View accessibilityRole="alert" style={styles.noticePanel}>
           <Icon name="information-circle-outline" size={19} color={theme.accent} />
@@ -535,20 +562,22 @@ export default function CardDetailScreen() {
         </View> : null}
 
         <View style={[styles.sectionHeader, styles.contentSectionHeader]}>
-          <AppText accessibilityRole="header" style={handSection}>{tr("id.content")}</AppText>
+          <AppText accessibilityRole="header" style={sectionHeading}>{tr("id.content")}</AppText>
+          {messages.length > 1 ? <View style={styles.countBadge}><AppText style={styles.countText}>{messages.length}</AppText></View> : null}
           <View style={styles.contentHeaderActions}>
+            {!covered && messages.length === 1 ? <Pressable accessibilityRole="button" accessibilityLabel={tr('id.editContent')} hitSlop={8} onPress={() => openContentEditor(messages[0])} style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}><Icon name="create-outline" size={17} color={desk.inkMuted} /></Pressable> : null}
             {!covered && messages.some((message) => message.text || message.content?.some((block) => block.type === 'text' && block.list)) ? <Pressable accessibilityRole="button" accessibilityLabel={tr('templates.saveAs')} hitSlop={8} onPress={() => {
               const candidates = messages.filter((message) => message.text || message.content?.some((block) => block.type === 'text' && block.list));
               if (candidates.length === 1) router.push({ pathname: '/templates', params: { sourceMessageId: candidates[0].id } });
               else actionSheet({ title: tr('templates.saveAs'), options: candidates.map((message, index) => ({ label: tr('id.thought') + ' ' + (index + 1), icon: 'document-text-outline', onPress: () => router.push({ pathname: '/templates', params: { sourceMessageId: message.id } }) })) });
-            }} style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}><Icon name="copy-outline" size={17} color={contentAccentStrong} /></Pressable> : null}
-            {!covered ? <Pressable accessibilityRole="button" accessibilityLabel={tr("index.shareNote")} hitSlop={8} onPress={openShareNote} style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}><Icon name="images-outline" size={17} color={contentAccentStrong} /></Pressable> : null}
+            }} style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}><Icon name="copy-outline" size={17} color={desk.inkMuted} /></Pressable> : null}
+            {!covered ? <Pressable accessibilityRole="button" accessibilityLabel={tr("index.shareNote")} hitSlop={8} onPress={openShareNote} style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}><Icon name="images-outline" size={17} color={desk.inkMuted} /></Pressable> : null}
             {contentHidden && !covered ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.hideAgain")} hitSlop={8} onPress={() => setTemporarilyRevealed(false)} style={styles.inlineEdit}><Icon name="eye-off-outline" size={16} color={theme.textMuted} /><AppText style={[styles.inlineEditText, { color: theme.textMuted }]}>{tr("id.hideAgain")}</AppText></Pressable> : null}
-            {messages.length > 1 ? <View style={styles.countBadge}><AppText style={styles.countText}>{messages.length}</AppText></View> : null}
           </View>
         </View>
 
-        <NotePaper accent={detail.boardAccent} minHeight={96} style={[styles.contentBody, styleTokens.elevation !== 'edge' && styles.contentBodyFlat]}>
+        <NotePaper accent={detail.boardAccent} minHeight={72} style={[styles.contentBody, { borderRadius: styleTokens.button.radius }, styleTokens.elevation !== 'edge' && styles.contentBodyFlat]}>
+          {!covered && !messages.length ? <AppText style={styles.emptyContent}>{tr('carddetails.emptyContent')}</AppText> : null}
           {covered ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.hiddenContentDoubleTapToReveal")} onPress={() => setTemporarilyRevealed(true)} style={({ pressed }) => [styles.hiddenCover, pressed && styles.pressed]}>
             <Icon name="eye-off-outline" size={24} color={theme.textMuted} />
             <AppText style={styles.hiddenCoverTitle}>{tr("id.contentHidden")}</AppText>
@@ -556,6 +585,7 @@ export default function CardDetailScreen() {
           </Pressable> : messages.map((message, index) => <View key={message.id} style={index > 0 && styles.thought}>
             {messages.length > 1 ? <View style={styles.thoughtHeader}>
               <AppText style={styles.thoughtLabel}>{tr("id.thought")}{' '}{index + 1}</AppText>
+              <Pressable accessibilityRole="button" accessibilityLabel={tr('id.editThoughtValue', { value1: index + 1 })} hitSlop={8} onPress={() => openContentEditor(message)} style={styles.headerAction}><Icon name="create-outline" size={17} color={contentAccentStrong} /></Pressable>
             </View> : null}
             <MessageContentRenderer message={message} mode="detail" accentColor={detail.boardAccent ?? undefined} onPressText={message.text ? () => openContentEditor(message) : undefined} textAccessibilityLabel={messages.length > 1 ? tr("id.editThoughtValue", { value1: index + 1 }) : tr("id.editContent")} onImageLongPress={openPhotoActions} renderAttachments={(items = message.attachments) => <View style={styles.attachmentList}>{items.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} onLongPress={attachment.type === 'photo' ? () => openPhotoActions(attachment) : undefined} overlay={attachment.type === 'photo' ? <AttachmentActionsButton onPress={() => openPhotoActions(attachment)} style={styles.attachmentActionsOverlay} iconColor="#FFFFFF" /> : undefined} /></View>)}</View>} />
             {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addADescriptionToValue", { value1: messageFallback(message) })} onPress={() => openContentEditor(message)} style={styles.addDescription}><Icon name="add" size={16} color={contentAccentStrong} /><AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>{tr("id.addDescription")}</AppText></Pressable> : null}
@@ -563,48 +593,49 @@ export default function CardDetailScreen() {
           </View>)}
         </NotePaper>
 
-        {!covered ? <CardSubtasks cardId={id} scrollRef={scrollRef} /> : null}
+        {!covered ? <CardSubtasks cardId={id} scrollRef={scrollRef} workspace /> : null}
 
-        {/* One quiet row: "Remind me", or the reminder's time once set. */}
+        {/* The status is read-only; changing a reminder still uses its existing sheet. */}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={reminder ? tr("id.reminderValueValueValueChangeOrRemove", { value1: reminder.scheduledAt < renderedAt ? 'Overdue. ' : '', value2: formatReminder(new Date(reminder.scheduledAt), new Date()), value3: notificationsAllowed ? '' : tr("id.notificationsAreOff2") }) : tr("id.remindMeGetNotifiedAboutThisCard")}
           onPress={openReminderSheet}
           style={({ pressed }) => [styles.reminderRow, panel, pressed && styles.pressed]}
         >
-          <View style={[styles.reminderIcon, { backgroundColor: theme.surfaceElevated }]}>
+          <View style={[styles.reminderIcon, { backgroundColor: theme.accentSoft }]}>
             <Icon name={reminder ? 'notifications' : 'notifications-outline'} size={17} color={reminder ? contentAccentStrong : theme.textSecondary} />
           </View>
           <View style={styles.flexCopy}>
-            <AppText style={styles.actionTitle}>{reminder ? formatReminder(new Date(reminder.scheduledAt), new Date()) : tr("id.remindMe")}</AppText>
-            <AppText style={styles.actionCopy}>{reminder ? reminder.scheduledAt < renderedAt ? tr("id.overdueChangeOrRemove") : notificationsAllowed ? tr("id.reminder") : tr("id.notificationsAreOff") : tr("id.getNotifiedAboutThisCard")}</AppText>
+            <AppText style={styles.actionTitle}>{tr("id.remindMe")}</AppText>
+            <AppText style={styles.actionCopy}>{reminder ? detailDate(reminder.scheduledAt) : tr("id.getNotifiedAboutThisCard")}</AppText>
+            {reminder && (reminder.scheduledAt < renderedAt || !notificationsAllowed) ? <AppText style={styles.reminderStatus}>{reminder.scheduledAt < renderedAt ? tr('id.overdueChangeOrRemove') : tr('id.notificationsAreOff')}</AppText> : null}
           </View>
-          <Icon name="chevron-forward" size={16} color={theme.textMuted} />
+          <Icon name={forward} size={16} color={theme.textMuted} />
         </Pressable>
 
-        <ConnectedNotes noteKey={`card:${id}`} style={styles.connectedNotes} />
-        <View style={styles.sectionHeader}><AppText accessibilityRole="header" style={handSection}>{tr("id.details")}</AppText></View>
+        <ConnectedNotes noteKey={`card:${id}`} panel style={[styles.connectedNotes, panel]} />
+        <View style={styles.sectionHeader}><AppText accessibilityRole="header" style={sectionHeading}>{tr("id.details")}</AppText></View>
         <View style={[styles.detailsCard, panel]}>
-          <View style={styles.detailGroup}>
-            <Pressable accessibilityRole="link" accessibilityLabel={tr("id.openBoardValue", { value1: detail.boardName })} onPress={() => router.push({ pathname: '/board/[id]', params: { id: detail.boardId } })} style={({ pressed }) => [styles.detailRow, styles.detailLinkRow, pressed && styles.pressed]}>
+          <View style={[styles.detailGroup, width / fontScale < 370 && styles.detailGroupStacked]}>
+            <Pressable accessibilityRole="link" accessibilityLabel={tr("id.openBoardValue", { value1: detail.boardName })} onPress={() => router.push({ pathname: '/board/[id]', params: { id: detail.boardId } })} style={({ pressed }) => [detailRowStyle, styles.detailLinkRow, pressed && styles.pressed]}>
               <AppText style={styles.detailLabel}>{tr("id.board")}</AppText><AppText style={[styles.detailValue, styles.detailLinkValue]}>{detail.boardName}</AppText>
-              <Icon name="chevron-forward" size={16} color={theme.textMuted} />
+              <Icon name={forward} size={16} color={theme.textMuted} style={styles.detailArrow} />
             </Pressable>
-            <Pressable accessibilityRole="link" accessibilityLabel={tr("id.openColumnValueInValue", { value1: detail.columnName, value2: detail.boardName })} onPress={() => router.push({ pathname: '/board/[id]', params: { id: detail.boardId, highlightColumnId: detail.columnId } })} style={({ pressed }) => [styles.detailRow, styles.detailLinkRow, pressed && styles.pressed]}>
+            <Pressable accessibilityRole="link" accessibilityLabel={tr("id.openColumnValueInValue", { value1: detail.columnName, value2: detail.boardName })} onPress={() => router.push({ pathname: '/board/[id]', params: { id: detail.boardId, highlightColumnId: detail.columnId } })} style={({ pressed }) => [detailRowStyle, styles.detailLinkRow, pressed && styles.pressed]}>
               <AppText style={styles.detailLabel}>{tr("id.column")}</AppText><AppText style={[styles.detailValue, styles.detailLinkValue]}>{detail.columnName}</AppText>
-              <Icon name="chevron-forward" size={16} color={theme.textMuted} />
+              <Icon name={forward} size={16} color={theme.textMuted} style={styles.detailArrow} />
             </Pressable>
           </View>
           <View style={styles.detailDivider} />
-          <View style={styles.detailGroup}>
-            <View style={styles.detailRow}><AppText style={styles.detailLabel}>{tr("id.created")}</AppText><AppText style={styles.detailValue}>{createdLabel}</AppText></View>
-            {editedAt ? <View style={styles.detailRow}><AppText style={styles.detailLabel}>{tr("id.edited")}</AppText><AppText style={styles.detailValue}>{detailDate(editedAt)}</AppText></View> : null}
-            {detail.pinned ? <View style={styles.detailRow}><AppText style={styles.detailLabel}>{tr("index.pinned")}</AppText><AppText style={styles.detailValue}>{tr("id.yes")}</AppText></View> : null}
+          <View style={[styles.detailGroup, width / fontScale < 370 && styles.detailGroupStacked]}>
+            <View style={detailRowStyle}><AppText style={styles.detailLabel}>{tr("id.created")}</AppText><AppText style={styles.detailValue}>{createdLabel}</AppText></View>
+            {editedAt ? <View style={detailRowStyle}><AppText style={styles.detailLabel}>{tr("id.edited")}</AppText><AppText style={styles.detailValue}>{detailDate(editedAt)}</AppText></View> : null}
+            {detail.pinned ? <View style={detailRowStyle}><AppText style={styles.detailLabel}>{tr("index.pinned")}</AppText><AppText style={styles.detailValue}>{tr("id.yes")}</AppText></View> : null}
           </View>
         </View>
 
         <View style={styles.sectionHeader}>
-          <AppText accessibilityRole="header" style={handSection}>{tr("id.attachments2")}</AppText>
+          <AppText accessibilityRole="header" style={sectionHeading}>{tr("id.attachments2")}</AppText>
           {cardAttachments.length ? <View style={styles.countBadge}><AppText style={styles.countText}>{cardAttachments.length}</AppText></View> : null}
         </View>
         {cardAttachments.length === 0 ? <View style={styles.commentsEmpty}>
@@ -627,14 +658,19 @@ export default function CardDetailScreen() {
         </>}
 
         <View style={styles.sectionHeader}>
-          <AppText accessibilityRole="header" style={handSection}>{tr("id.comments")}</AppText>
+          <AppText accessibilityRole="header" style={sectionHeading}>{tr("id.comments")}</AppText>
           {comments.length ? <View style={styles.countBadge}><AppText style={styles.countText}>{comments.length}</AppText></View> : null}
         </View>
         {comments.length === 0 ? <View style={styles.commentsEmpty}>
           <AppText style={styles.commentsEmptyTitle}>{tr("id.noCommentsYet")}</AppText>
           <AppText style={styles.commentsEmptyCopy}>{tr("id.addContextUpdatesOrNotesHere")}</AppText>
-        </View> : <View style={styles.commentList}>
-          {comments.map((comment, index) => { const isBeingEdited = editingCommentId === comment.id; return <View key={comment.id}>
+        </View> : <View style={styles.commentList} onLayout={(event) => {
+          if (!commentScrollPending.current) return;
+          commentScrollPending.current = false;
+          const { y, height } = event.nativeEvent.layout;
+          requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, y + height - scrollHeight.current + spacing.md), animated: !reducedMotion }));
+        }}>
+          {comments.map((comment) => { const isBeingEdited = editingCommentId === comment.id; return <View key={comment.id} style={[styles.commentCard, panel]}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={tr("id.commentValueValueValueValue", { value1: comment.text, value2: commentTimeLabel(comment.createdAt), value3: comment.updatedAt !== comment.createdAt ? '. Edited' : '', value4: isBeingEdited ? tr("id.currentlyEditing") : '' })}
@@ -643,25 +679,26 @@ export default function CardDetailScreen() {
               delayLongPress={350}
               style={({ pressed }) => [styles.commentBody, isBeingEdited && styles.commentBeingEdited, pressed && !isBeingEdited && styles.pressed]}
             >
+              <View style={[styles.commentSource, rowStyle]}><Icon name="person-circle-outline" size={18} color={theme.textMuted} /><AppText style={styles.commentAuthor}>{tr('carddetails.you')}</AppText></View>
               <AppText style={styles.commentText}>{comment.text}</AppText>
               <View style={styles.commentMetaRow}>
                 <AppText style={styles.commentMeta}>{isBeingEdited ? tr("id.editing") : `${commentTimeLabel(comment.createdAt)}${comment.updatedAt !== comment.createdAt ? ' · Edited' : ''}`}</AppText>
                 {isBeingEdited ? null : <Pressable accessibilityRole="button" accessibilityLabel={tr("id.commentOptions")} hitSlop={8} onPress={() => openCommentActions(comment)} style={styles.commentMore}><Icon name="ellipsis-horizontal" size={16} color={theme.textMuted} /></Pressable>}
               </View>
             </Pressable>
-            {index < comments.length - 1 ? <View style={styles.thoughtDivider} /> : null}
           </View>; })}
         </View>}
 
-        <View style={styles.sectionHeader}><AppText accessibilityRole="header" style={handSection}>{tr("id.cardActions")}</AppText></View>
-        <View style={[styles.cardActions, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.panel, clip: true })]}>
+        <View style={styles.sectionHeader}><AppText accessibilityRole="header" style={sectionHeading}>{tr("id.cardActions")}</AppText></View>
+        <View style={[styles.cardActions, panel]}>
           {!covered ? <>
+            <AppText style={styles.actionGroupLabel}>{tr('carddetails.sharing')}</AppText>
             <Pressable accessibilityRole="button" accessibilityHint={tr("id.turnThisCardIntoAnImageYouCan")} onPress={openShareNote} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
               <Icon name="images-outline" size={18} color={theme.textSecondary} />
               <View style={styles.flexCopy}><AppText style={styles.actionTitle}>{tr("index.shareNote")}</AppText><AppText style={styles.actionCopy}>{tr("id.turnThisCardIntoAnImageYouCan")}</AppText></View>
             </Pressable>
-            <View style={styles.actionDivider} />
           </> : null}
+          <AppText style={styles.actionGroupLabel}>{tr('carddetails.organization')}</AppText>
           {spaceAction ? <>
             <Pressable accessibilityRole="button" onPress={confirmSpaceAction} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
               <Icon name={spaceAction.icon} size={18} color={theme.textSecondary} />
@@ -678,12 +715,14 @@ export default function CardDetailScreen() {
             <Icon name="arrow-undo-outline" size={18} color={theme.textSecondary} />
             <View style={styles.flexCopy}><AppText style={styles.actionTitle}>{tr("index.moveBackToUnorganized")}</AppText><AppText style={styles.actionCopy}>{tr("id.keepsYourOriginalChitsJustRemovesThisCard")}</AppText></View>
           </Pressable>
-          <View style={styles.actionDivider} />
+          <AppText style={styles.actionGroupLabel}>{tr('carddetails.management')}</AppText>
           <Pressable accessibilityRole="button" onPress={archive} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
             <Icon name="archive-outline" size={18} color={theme.textSecondary} />
             <View style={styles.flexCopy}><AppText style={styles.actionTitle}>{tr("index.archiveCard")}</AppText><AppText style={styles.actionCopy}>{tr("id.hideItWhileKeepingItRecoverable")}</AppText></View>
           </Pressable>
-          <View style={styles.actionDivider} />
+        </View>
+        <View style={[styles.deleteCard, panel]}>
+          <AppText style={styles.actionGroupLabel}>{tr('carddetails.destructive')}</AppText>
           <Pressable accessibilityRole="button" onPress={destroy} style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}>
             <Icon name="trash-outline" size={18} color={theme.danger} />
             <View style={styles.flexCopy}><AppText style={styles.deleteTitle}>{tr("index.deleteCard")}</AppText><AppText style={styles.actionCopy}>{tr("id.originalThoughtsRemainAvailableInChat")}</AppText></View>
@@ -691,7 +730,7 @@ export default function CardDetailScreen() {
         </View>
       </ScrollView>
 
-      <View style={[styles.stickyComposer, { paddingBottom: insets.bottom + spacing.xs, backgroundColor: theme.background, borderTopColor: theme.borderSubtle }]}>
+      <View style={[styles.stickyComposer, { paddingBottom: insets.bottom + spacing.xs, backgroundColor: theme.cardPaper, borderTopColor: theme.borderSubtle }]}>
         {editingCommentId ? <View style={styles.composerEditBar}>
           <Pressable accessibilityRole="button" accessibilityLabel={tr("id.cancelEdit")} hitSlop={8} onPress={cancelCommentEdit} style={styles.composerEditCancel}><Icon name="close" size={16} color={theme.textMuted} /><AppText style={styles.composerEditCancelText}>{tr("chat.cancel")}</AppText></Pressable>
           <AppText style={[styles.composerEditLabel, { color: contentAccentStrong }]}>{tr("id.editingComment")}</AppText>
@@ -719,7 +758,7 @@ export default function CardDetailScreen() {
           </Pressable>
         </View>
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardPane>
     </PaperDesk>
     <AddCardAttachmentSheet visible={addAttachmentOpen} onClose={() => setAddAttachmentOpen(false)} onPick={(kind) => void pickCardAttachment(kind)} />
     <Toast message={attachmentDeletion.status ?? toast ?? download.status} />
@@ -727,130 +766,136 @@ export default function CardDetailScreen() {
   </Screen>;
 }
 
-const PAPER_SHADOW = '0px 4px 12px rgba(60,42,20,0.18)';
+const PAPER_SHADOW = '0px 2px 5px rgba(60,42,20,0.08)';
 const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
-  headerActions: { alignItems: 'center' },
+  headerActions: { alignItems: 'center', gap: 8 },
   flex: { flex: 1 },
   loading: { flex: 1, textAlign: 'center', textAlignVertical: 'center', color: tokens.textSecondary },
   cardLoader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.lg },
-  hero: { paddingTop: spacing.xs },
+  content: { width: '100%', maxWidth: 760, alignSelf: 'center', paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.lg },
+  hero: { paddingTop: 0 },
+  context: { flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs, marginTop: 2 },
+  contextLink: { minHeight: 32, maxWidth: '100%', flexShrink: 1, alignItems: 'center', justifyContent: 'center', gap: 7 },
+  contextText: { fontSize: 13, lineHeight: 19, flexShrink: 1 },
+  boardDot: { width: 8, height: 8, borderRadius: 4 },
   // 'center', not 'flex-start': flex-start pinned the edit button to the top of
   // the row, which read fine for a one-line title but left the button floating
   // above (rather than centered against) the whole block once a title wrapped
   // to two lines.
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, alignSelf: 'stretch' },
-  title: { flex: 1, color: tokens.textPrimary, fontSize: 30, lineHeight: 37, fontWeight: '800' },
-  handTitle: { fontSize: 32, lineHeight: 40, fontWeight: 'normal' },
-  handSection: { fontSize: 22, lineHeight: 29, fontWeight: 'normal', letterSpacing: 0 },
-  titleEditButton: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: tokens.surfaceElevated },
-  editHint: { color: tokens.accent, fontSize: 12, fontWeight: '700' },
-  addTitle: { minHeight: 40, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.xxs },
+  title: { flex: 1, color: tokens.textPrimary, fontSize: 26, lineHeight: 33, fontWeight: '800' },
+  handTitle: { fontSize: 26, lineHeight: 33, fontWeight: 'normal' },
+  compactTitle: { fontSize: 22, lineHeight: 28 },
+  titleEditButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: tokens.surfaceElevated },
   editor: { gap: spacing.sm },
   titleInput: { minHeight: 52, borderBottomWidth: 1, borderColor: tokens.accent, color: tokens.textPrimary, fontSize: 24, fontWeight: '700' },
   editActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  editSave: { minHeight: 42, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: 11 },
+  editSave: { minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: 11 },
   editSaveText: { fontWeight: '700' },
-  editCancel: { minHeight: 42, justifyContent: 'center', paddingHorizontal: spacing.sm },
+  editCancel: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.sm },
   editCancelText: { color: tokens.textSecondary, fontWeight: '600' },
-  noticePanel: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, padding: spacing.sm, marginTop: spacing.md, borderRadius: 12, backgroundColor: tokens.accentSoft },
+  noticePanel: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, padding: spacing.sm, marginTop: spacing.sm, borderRadius: 12, backgroundColor: tokens.accentSoft },
   noticeCopy: { flex: 1, gap: 4 },
   notice: { color: tokens.textSecondary, fontSize: 13, lineHeight: 18 },
   // Section rhythm: generous gap ABOVE each new section (it's a new object), tight
   // gap between a heading and its own content (they read as one unit).
-  sectionHeader: { minHeight: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginTop: spacing.xl },
-  sectionTitle: { color: tokens.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.9 },
-  connectedNotes: { paddingHorizontal: 0 },
+  sectionHeader: { minHeight: 24, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs, marginTop: spacing.md },
+  sectionTitle: { fontSize: 14, lineHeight: 20, fontWeight: '700' },
+  connectedNotes: { paddingHorizontal: 0, marginTop: spacing.sm, backgroundColor: tokens.cardPaper, boxShadow: PAPER_SHADOW },
   // Content follows directly under the title/hero, not a fresh "new section"
   // the way Details/Attachments/Comments/Card Actions do further down — a
   // tighter marginTop than the shared sectionHeader keeps it feeling like the
   // continuation of what the user is already reading rather than a jump.
-  contentSectionHeader: { marginTop: spacing.md },
+  contentSectionHeader: { marginTop: spacing.xs },
   // The shared note surface follows the active light/dark theme.
   // Sized to the note (a one-liner shouldn't float in an empty box); under
   // Classic it sits flat on a hairline like the Subtasks panel below it.
-  contentBody: { marginTop: spacing.sm, paddingTop: spacing.md, paddingBottom: spacing.md },
+  contentBody: { marginTop: spacing.xs, paddingTop: spacing.md, paddingBottom: spacing.md, backgroundColor: tokens.cardPaper, boxShadow: PAPER_SHADOW },
   contentBodyFlat: { shadowOpacity: 0, elevation: 0 },
-  contentHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  headerAction: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: tokens.surfaceElevated },
+  emptyContent: { color: tokens.textSecondary, fontSize: 15, lineHeight: 23 },
+  contentHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginStart: 'auto' },
+  headerAction: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18 },
   hiddenTitle: { color: tokens.textMuted },
-  hiddenCover: { minHeight: 132, alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: radii.contentCard, backgroundColor: tokens.surfaceElevated },
+  hiddenCover: { minHeight: 104, alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: radii.contentCard, backgroundColor: tokens.surfaceElevated },
   hiddenCoverTitle: { marginTop: spacing.xxs, color: tokens.textSecondary, fontSize: 15, fontWeight: '700' },
   hiddenCoverCopy: { color: tokens.textMuted, fontSize: 13 },
-  countBadge: { minWidth: 26, height: 22, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7, borderRadius: 2, backgroundColor: PAPER_WHITE, boxShadow: '0px 2px 4px rgba(80,60,30,0.18)', transform: [{ rotate: '3deg' }] },
-  countText: { color: PAPER_INK, fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  countBadge: { minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, borderRadius: 10, backgroundColor: tokens.surfaceElevated },
+  countText: { color: tokens.textSecondary, fontSize: 11, lineHeight: 14, fontWeight: '700', fontVariant: ['tabular-nums'] },
   flexCopy: { flex: 1, minWidth: 0 },
   thought: { paddingTop: spacing.xs },
   thoughtHeader: { minHeight: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
   thoughtLabel: { color: tokens.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
-  // Tighter than the shared `thoughtDivider` (which also separates comment rows
-  // below and needs its more generous spacing there) — scoped to just the CONTENT
-  // card's own between-thought dividers.
+  // Separate merged thoughts without changing their saved reading order.
   contentThoughtDivider: { height: StyleSheet.hairlineWidth, marginTop: spacing.sm, backgroundColor: tokens.borderSubtle },
-  inlineEdit: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing.xs },
+  inlineEdit: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing.xs },
   inlineEditText: { color: tokens.accent, fontSize: 12, fontWeight: '700' },
-  attachmentList: { gap: spacing.sm },
+  attachmentList: { gap: spacing.xs },
   cardAttachment: { overflow: 'hidden', borderRadius: radii.contentCard, borderWidth: StyleSheet.hairlineWidth, borderColor: tokens.borderSubtle, backgroundColor: tokens.surface },
   // 2-column grid for photo/video thumbnails; file rows stay full-width below
   // (a compact document row doesn't suit a half-width tile).
-  attachmentGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
-  attachmentGridItem: { width: '47%' },
-  attachmentFileList: { marginTop: spacing.sm },
+  attachmentGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
+  attachmentGridItem: { flexGrow: 1, flexBasis: '46%', minWidth: 130, maxWidth: '100%' },
+  attachmentFileList: { marginTop: spacing.xs },
   // Matches Chat's own attachment "•••" trigger exactly (see mediaActions in
   // message-row.native.tsx and `more` in message-note-cards.native.tsx) — an
   // overlay pill for media thumbnails, a plain inline button for file rows.
-  attachmentActionsOverlay: { position: 'absolute', top: spacing.xs, right: spacing.xs, width: 36, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.58)' },
-  attachmentActionsInline: { width: 36, minHeight: 32, alignItems: 'center', justifyContent: 'center' },
-  addAttachmentRow: { alignSelf: 'flex-start', minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.sm },
-  addDescription: { alignSelf: 'flex-start', minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  thoughtDivider: { height: StyleSheet.hairlineWidth, marginTop: spacing.lg, backgroundColor: tokens.borderSubtle },
-  // One compact card, two groups: Board/Column (what it belongs to — more
-  // important) separated from Created/Edited (metadata) by a single divider
-  // rather than a border under every row, which reads as a settings list.
-  // Panels are sheets of the theme's paper on the desk, so their theme ink stays readable.
-  reminderRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xl, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 4, backgroundColor: tokens.cardPaper, boxShadow: PAPER_SHADOW },
-  reminderIcon: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 17 },
-  detailsCard: { marginTop: spacing.sm, borderRadius: 4, backgroundColor: tokens.cardPaper, boxShadow: PAPER_SHADOW, paddingHorizontal: spacing.md },
-  detailGroup: { paddingVertical: spacing.xxs },
+  attachmentActionsOverlay: { position: 'absolute', top: spacing.xs, right: spacing.xs, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.58)' },
+  attachmentActionsInline: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  addAttachmentRow: { alignSelf: 'flex-start', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.xxs },
+  addDescription: { alignSelf: 'flex-start', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  // Supporting sheets follow the theme's paper and ink. Metadata becomes stacked
+  // on narrow screens or with enlarged text; only Board and Column are links.
+  reminderRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 12, backgroundColor: tokens.cardPaper, boxShadow: PAPER_SHADOW },
+  reminderIcon: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
+  reminderStatus: { fontSize: 12, lineHeight: 18, color: tokens.textSecondary, marginTop: 3 },
+  detailsCard: { marginTop: spacing.xs, borderRadius: 12, backgroundColor: tokens.cardPaper, boxShadow: PAPER_SHADOW, paddingHorizontal: spacing.md, paddingVertical: spacing.xxs },
+  detailGroup: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, paddingVertical: spacing.xxs },
+  detailGroupStacked: { flexDirection: 'column', gap: spacing.xxs },
   detailDivider: { height: StyleSheet.hairlineWidth, backgroundColor: tokens.borderSubtle },
-  detailRow: { minHeight: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
-  detailLabel: { width: 72, color: tokens.textMuted, fontSize: 12, fontWeight: '600' },
-  detailValue: { flex: 1, color: tokens.textSecondary, fontSize: 14, lineHeight: 20 },
-  detailLinkRow: { minHeight: 44 },
+  detailRow: { flex: 1, minWidth: 0, gap: 2, paddingVertical: spacing.xxs },
+  detailRowStacked: { flex: 0 },
+  detailLabel: { color: tokens.textMuted, fontSize: 12, fontWeight: '600' },
+  detailValue: { color: tokens.textSecondary, fontSize: 14, lineHeight: 20 },
+  detailLinkRow: { minHeight: 44, paddingEnd: 20 },
+  detailArrow: { position: 'absolute', end: 0, top: 14 },
   detailLinkValue: { color: tokens.accentStrong },
-  // Deliberately quieter than the card's own content: no icon chips, smaller
-  // type, a plain bordered list rather than a prominent surfaced card.
-  cardActions: { marginTop: spacing.sm, borderRadius: 4, backgroundColor: tokens.cardPaper, boxShadow: PAPER_SHADOW },
-  actionRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md },
+  // Small purpose labels keep card operations quieter than the note itself.
+  cardActions: { marginTop: spacing.xs, borderRadius: 12, backgroundColor: tokens.cardPaper, paddingBottom: spacing.xxs },
+  deleteCard: { marginTop: spacing.sm, borderRadius: 12, backgroundColor: tokens.cardPaper, paddingBottom: spacing.xxs },
+  actionGroupLabel: { color: tokens.textMuted, fontSize: 12, fontWeight: '700', paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: 0 },
+  actionRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
   actionTitle: { color: tokens.textPrimary, fontSize: 14, fontWeight: '600' },
   deleteTitle: { color: tokens.danger, fontSize: 14, fontWeight: '600' },
   actionCopy: { color: tokens.textMuted, fontSize: 12, lineHeight: 16, marginTop: 1 },
   actionDivider: { height: StyleSheet.hairlineWidth, marginLeft: spacing.md + 18 + spacing.sm, backgroundColor: tokens.borderSubtle },
-  commentsEmpty: { marginTop: spacing.sm, gap: 3 },
+  commentsEmpty: { marginTop: spacing.xs, gap: 3, padding: spacing.sm, borderRadius: 12, backgroundColor: tokens.cardPaper },
   commentsEmptyTitle: { color: tokens.textSecondary, fontSize: 14, fontWeight: '600' },
   commentsEmptyCopy: { color: tokens.textMuted, fontSize: 13, lineHeight: 18 },
-  commentList: { marginTop: spacing.sm },
-  commentBody: { paddingVertical: spacing.sm, borderRadius: 10 },
-  commentBeingEdited: { backgroundColor: tokens.accentSoft, marginHorizontal: -spacing.xs, paddingHorizontal: spacing.xs },
+  commentList: { marginTop: spacing.xs, gap: spacing.xs },
+  commentCard: { borderRadius: 12, backgroundColor: tokens.cardPaper },
+  commentSource: { alignItems: 'center', gap: 5, marginBottom: spacing.xxs },
+  commentAuthor: { color: tokens.textSecondary, fontSize: 12, fontWeight: '700' },
+  commentBody: { padding: spacing.sm, borderRadius: 12 },
+  commentBeingEdited: { backgroundColor: tokens.accentSoft },
   commentText: { color: tokens.textPrimary, fontSize: 15, lineHeight: 21 },
-  commentMetaRow: { minHeight: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
-  commentMeta: { color: tokens.textMuted, fontSize: 12 },
-  commentMore: { width: 28, height: 24, alignItems: 'center', justifyContent: 'center' },
+  commentMetaRow: { minHeight: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
+  commentMeta: { flex: 1, minWidth: 0, color: tokens.textMuted, fontSize: 12 },
+  commentMore: { width: 36, height: 32, alignItems: 'center', justifyContent: 'center' },
   // Persistent footer, not scrollable content — a plain flex sibling of the
-  // ScrollView inside the KeyboardAvoidingView, so it can never be covered by
-  // (or need manual padding to avoid) the keyboard or its own height. Editing an
+  // ScrollView inside the shared KeyboardPane, which keeps it above the keyboard.
+  // Editing an
   // existing comment reuses this same input/row (see composerEditBar) instead of
   // opening a second one inline in the list.
-  stickyComposer: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth },
+  stickyComposer: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth },
   // Cancel sits on the LEFT, deliberately away from Send/Save (bottom-right of the
   // row below) so they're never stacked close enough to mis-tap between them.
   composerEditBar: { minHeight: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xxs },
-  composerEditCancel: { flexDirection: 'row', alignItems: 'center', gap: 3, minHeight: 28, paddingRight: spacing.xs },
+  composerEditCancel: { flexDirection: 'row', alignItems: 'center', gap: 3, minHeight: 44, paddingRight: spacing.xs },
   composerEditCancelText: { color: tokens.textMuted, fontSize: 12, fontWeight: '600' },
   composerEditLabel: { color: tokens.accent, fontSize: 12, fontWeight: '700' },
   stickyComposerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs },
-  commentInput: { flex: 1, minHeight: 36, maxHeight: 120, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: 18, backgroundColor: tokens.surfaceElevated, color: tokens.textPrimary, fontSize: 15, lineHeight: 20 },
-  commentSend: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18 },
+  commentInput: { flex: 1, minHeight: 44, maxHeight: 140, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 16, backgroundColor: tokens.surfaceElevated, color: tokens.textPrimary, fontSize: 15, lineHeight: 22 },
+  commentSend: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
   pressed: { opacity: 0.62 },
   disabled: { opacity: 0.55 },
 });

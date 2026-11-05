@@ -20,6 +20,7 @@ import { observeReminderNotifications, registerReminderDatabase, requestReminder
 import { OnboardingLayer } from '@/features/onboarding/onboarding-layer';
 import { updateMascotAppState } from '@/services/mascot-session';
 import { FocusCoordinator } from '@/features/focus/focus-coordinator';
+import { PlanCoordinator } from '@/features/plan/plan-coordinator';
 
 // Shows the message a reset asked for (e.g. "Restore complete") once the fresh
 // tree — with its reopened database — has mounted.
@@ -79,6 +80,7 @@ function ThemedApp() {
         <ReminderCoordinator />
         <AnywhereCoordinator />
         <FocusCoordinator />
+        <PlanCoordinator />
         <AppDrawerProvider><StatusBar style={statusBarStyle} />
           <Stack screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: tokens.background } }}>
             <Stack.Screen name="(tabs)" />
@@ -91,6 +93,8 @@ function ThemedApp() {
             <Stack.Screen name="card/edit-content" getId={({ params }) => typeof params?.messageId === 'string' ? params.messageId : undefined} />
             <Stack.Screen name="focus" options={{ animation: 'fade', gestureEnabled: false }} />
             <Stack.Screen name="spin" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="plan" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="plan-history" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="focus-history" />
             <Stack.Screen name="focus-settings" />
             <Stack.Screen name="templates" options={{ animation: 'slide_from_right', gestureEnabled: false }} />

@@ -11,6 +11,6 @@ test('Recent and Pinned share one row, telling cards from boards by icon alone',
   // No text badge: the icon already says which kind it is.
   assert.doesNotMatch(drawer, />CARD</);
   assert.doesNotMatch(drawer, />BOARD</);
-  assert.match(drawer, /styles\.contextIcon/);
+  assert.match(drawer, /styles\.iconTile/);
   assert.match(drawer, /name=\{isBoard \? 'grid-outline' : 'document-text-outline'\}/);
 });

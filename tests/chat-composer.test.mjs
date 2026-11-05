@@ -3,8 +3,23 @@ import test from 'node:test';
 import { loadModule, migration, runtime } from './helpers/backup-runtime.mjs';
 
 const { createMessageRepository } = await loadModule('src/db/repositories.ts');
-const { saveChatComposer, readChatDraft, writeChatDraft } = await loadModule('src/services/chat-composer.ts');
-const { draftContentForStorage, draftFromNote, draftPlainText } = await loadModule('src/services/note-content.ts');
+const { prefillChatDraft, saveChatComposer, readChatDraft, writeChatDraft } = await loadModule('src/services/chat-composer.ts');
+const { draftContentForStorage, draftFromNote, draftPlainText, textDraft } = await loadModule('src/services/note-content.ts');
+
+test('onboarding samples retain the native input identity and never replace an existing draft', () => {
+  const empty = textDraft();
+  const filled = prefillChatDraft(empty, 'Buy milk and eggs');
+  assert.equal(filled[0].key, empty[0].key, 'the editor keeps the same mounted text input');
+  assert.equal(draftPlainText(filled), 'Buy milk and eggs');
+  assert.equal(empty[0].text, '', 'the previous draft is not mutated');
+  assert.equal(prefillChatDraft(filled, 'Another sample'), filled);
+  const typed = textDraft('My own words');
+  assert.equal(prefillChatDraft(typed, 'Sample'), typed);
+  const checklist = [{ key: 'task', type: 'text', text: '', list: { id: 'tasks', kind: 'checklist', checked: false } }];
+  assert.equal(prefillChatDraft(checklist, 'Sample'), checklist);
+  const photo = [{ key: 'photo', type: 'image', attachmentId: 'saved-photo', image: { storagePath: 'photo.jpg' } }];
+  assert.equal(prefillChatDraft(photo, 'Sample'), photo);
+});
 
 async function setup(t) {
   const env = runtime();

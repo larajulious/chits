@@ -1,24 +1,25 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useEffect, useState } from 'react';
-import { FlatList, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '@/components/ui/icon';
 import { useSQLiteContext } from 'expo-sqlite';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { IconButton } from '@/components/ui/primitives';
+import { HeaderIcon, IconButton } from '@/components/ui/primitives';
 import { spacing } from '@/constants/theme';
 import { createSpaceRepository } from '@/db/repositories';
 import type { SpaceCandidate } from '@/db/types';
 import { useSpaceFonts } from './space-fonts';
 import { useSpaceStyles, useSpaceUI, type SpaceUI } from '@/components/spaces/ink-surface';
+import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
 
 /**
  * "Stick a note": every card and unorganized thought that isn't on a space
  * yet, newest first, searchable. Hidden notes are listed as Hidden Chit and
  * never found by their words.
  */
-export function NotePicker({ visible, spaceName, onClose, onPick, onCreate, onClosed }: { visible: boolean; spaceName: string; onClose: () => void; onPick: (candidate: SpaceCandidate) => void; onCreate?: () => void; onClosed?: () => void }) {
+export function NotePicker({ visible, spaceName, title, loadCandidates, onClose, onPick, onCreate, onClosed }: { visible: boolean; spaceName: string; /** Replaces "Stick on your…" for other uses. */ title?: string; /** Replaces the Spaces list. */ loadCandidates?: (term: string) => Promise<SpaceCandidate[]>; onClose: () => void; onPick: (candidate: SpaceCandidate) => void; onCreate?: () => void; onClosed?: () => void }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -32,9 +33,9 @@ export function NotePicker({ visible, spaceName, onClose, onPick, onCreate, onCl
     if (!visible) return;
     let cancelled = false;
     // A short pause while typing, so each keystroke doesn't query.
-    const timer = setTimeout(() => { void createSpaceRepository(database).listCandidates(query).then((next) => { if (!cancelled) setItems(next); }); }, query ? 150 : 0);
+    const timer = setTimeout(() => { void (loadCandidates ? loadCandidates(query) : createSpaceRepository(database).listCandidates(query)).then((next) => { if (!cancelled) setItems(next); }); }, query ? 150 : 0);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [database, query, visible]);
+  }, [database, loadCandidates, query, visible]);
   // Opens fresh next time: no leftover search or list.
   const close = () => { setQuery(''); setItems(null); onClose(); };
   const pick = (candidate: SpaceCandidate) => { setQuery(''); setItems(null); onPick(candidate); };
@@ -42,8 +43,8 @@ export function NotePicker({ visible, spaceName, onClose, onPick, onCreate, onCl
   return <Modal visible={visible} animationType="slide" presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : undefined} onRequestClose={close} onDismiss={onClosed}>
     <SafeAreaView edges={Platform.OS === 'ios' ? ['bottom'] : ['top', 'bottom']} style={styles.screen}>
       <View style={styles.header}>
-        <Text accessibilityRole="header" style={[fonts.uiHeavy, styles.title]}>{tr("notepicker.stickOnYour")}{' '}{spaceName}</Text>
-        <IconButton label={tr("attachments.close")} onPress={close}><Icon name="close" size={24} color={ui.paper} /></IconButton>
+        <Text accessibilityRole="header" style={[fonts.uiHeavy, styles.title]}>{title ?? `${tr("notepicker.stickOnYour")} ${spaceName}`}</Text>
+        <IconButton chrome label={tr("attachments.close")} onPress={close}><HeaderIcon name="close" size={24} /></IconButton>
       </View>
       <View style={styles.search}>
         <Icon name="search-outline" size={17} color={ui.textMuted} />

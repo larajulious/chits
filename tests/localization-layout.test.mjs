@@ -10,7 +10,7 @@ test('native, English, locale and accent-insensitive language search', () => {
   assert.equal(filterLanguageOptions('العربية')[0].id, 'ar');
   assert.equal(languageSearchText('Türkçe'), 'turkce');
   assert.equal(filterLanguageOptions('missing').length, 0);
-  assert.equal(filterLanguageOptions('').length, 14);
+  assert.equal(filterLanguageOptions('').length, LANGUAGES.length);
 });
 test('all regional device languages resolve; unsupported locales fall back safely', () => {
   for (const locale of LANGUAGES) assert.equal(resolveLanguage('system', [locale]), locale);
@@ -23,7 +23,7 @@ test('content direction and font fallback depend on the actual script', () => {
   assert.equal(firstStrongDirection('2026 مرحبا URL'), 'rtl');
   assert.equal(firstStrongDirection('https://example.com مرحبا'), 'ltr');
   assert.equal(contentTextStyle('مرحبا').textAlign, 'right');
-  for (const text of ['日本語', '한국어', 'हिन्दी', 'العربية']) assert.equal(needsSystemFont(text), true);
+  for (const text of ['日本語', '한국어', 'हिन्दी', 'العربية', 'தமிழ்', 'తెలుగు', 'বাংলা', 'मराठी', 'ಕನ್ನಡ', 'മലയാളം', 'ગુજરાતી']) assert.equal(needsSystemFont(text), true);
   assert.equal(needsSystemFont('Tiếng Việt', 'vi'), true);
   assert.equal(navigationIconName('arrow-back', 'rtl'), 'arrow-forward');
   assert.equal(navigationIconName('play', 'rtl'), 'play');

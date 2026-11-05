@@ -1,0 +1,15 @@
+<resources>
+  <string name="plan_widget_name">ಇಂದಿನ ಯೋಜನೆ</string>
+  <string name="plan_widget_description">ಇಂದಿನ ನಿಮ್ಮ ಯೋಜನೆ ಮತ್ತು ಪ್ರಗತಿ.</string>
+  <string name="plan_widget_today">ಇಂದು</string>
+  <string name="plan_widget_none">ಇಂದು ಸ್ವಲ್ಪ ಯೋಜನೆ ಇದೆಯೇ?</string>
+  <string name="plan_widget_action">ನನ್ನ ದಿನವನ್ನು ಯೋಜಿಸಿ</string>
+  <string name="plan_widget_keep_going">ಮುಂದುವರಿಸಿ!</string>
+  <string name="plan_widget_all_done">ಇಂದಿಗೆ ಎಲ್ಲಾ ಮುಗಿದಿದೆ!</string>
+  <string name="plan_widget_wrapped">ಇಂದಿನ ದಿನ ಮುಗಿಯಿತು!</string>
+  <string name="plan_widget_hidden">ಕಾರ್ಯದ ಹೆಸರುಗಳನ್ನು ಮರೆಮಾಡಲಾಗಿದೆ. ನೀವು ಅವುಗಳನ್ನು ಸೆಟ್ಟಿಂಗ್‌ಗಳಲ್ಲಿ ತೋರಿಸಬಹುದು.</string>
+  <string name="plan_widget_add">ಸೇರಿಸಿ</string>
+  <string name="plan_widget_wrap">ಮುಗಿಸಿ</string>
+  <string name="plan_widget_view">ಇಂದಿನ ಯೋಜನೆಯನ್ನು ವೀಕ್ಷಿಸಿ</string>
+  <string name="plan_widget_recap">ದಿನದ ರೀಕ್ಯಾಪ್ ವೀಕ್ಷಿಸಿ</string>
+</resources>

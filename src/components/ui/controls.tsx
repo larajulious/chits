@@ -1,26 +1,65 @@
 import { createContext, useContext, type PropsWithChildren, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 
 import { useTheme } from '@/components/theme-provider';
 import { layout, spacing } from '@/constants/theme';
 import { AppText } from './app-text';
-import { PressableSurface, surfaceStyle } from './surface';
+import { PressableSurface, surfaceStyle, useStickySurface } from './surface';
 
 /** True inside a screen header, so its icon buttons dress as header chrome. */
 export const HeaderChromeContext = createContext(false);
 /** The ink for a glyph on an icon-button tile; null when there's no tile. */
 export const TileInkContext = createContext<string | null>(null);
 
+/** Layout and touch size; the smaller filled surface sits inside it. */
+export const HEADER_ICON_BUTTON_SIZE = layout.minimumTouchTarget;
+const HEADER_ICON_SURFACE_SIZE = 40;
+type HeaderIconButtonProps = Omit<PressableProps, 'style' | 'children' | 'disabled' | 'accessibilityLabel'> & {
+  label: string;
+  children: ReactNode;
+  disabled?: boolean;
+  accent?: boolean;
+  style?: StyleProp<ViewStyle>;
+};
+
+/** One filled header control for screen headers, viewers and custom top bars. */
+export function HeaderIconButton({ label, children, disabled = false, accent = false, style, accessibilityState, ...props }: HeaderIconButtonProps) {
+  const { tokens, styleTokens, styleColors } = useTheme();
+  const sticky = useStickySurface();
+  const reduced = useReducedMotion();
+  const ink = accent ? (styleTokens.elevation === 'edge' ? styleColors.onAccent : tokens.accentText) : tokens.textPrimary;
+  const radius = Math.min(styleTokens.header.iconButton.radius, HEADER_ICON_SURFACE_SIZE / 2);
+  return <Pressable
+    {...props}
+    accessibilityRole="button"
+    accessibilityLabel={label}
+    accessibilityState={{ ...accessibilityState, disabled }}
+    disabled={disabled}
+    style={({ pressed }) => [
+      styles.headerIconButton,
+      style,
+      disabled && styles.disabled,
+      pressed && styles.headerPressed,
+      pressed && !reduced && styles.headerPressedScale,
+    ]}
+  >{({ pressed }) => <View pointerEvents="none" style={[
+    styles.headerIconSurface,
+    { backgroundColor: accent ? tokens.accent : tokens.surfaceElevated, borderRadius: radius },
+    sticky({ fill: accent ? styleColors.accentFill : styleColors.controlFill, radius, edge: styleTokens.header.iconButton.edge }, pressed),
+  ]}>
+    <View style={styles.headerIconContent}><TileInkContext.Provider value={ink}>{children}</TileInkContext.Provider></View>
+  </View>}</Pressable>;
+}
+
 /**
- * A 44pt icon button. Classic: a bare glyph that dims when pressed. Sticky,
- * in a screen header (`chrome`): an outlined tile on a solid edge, filled
- * with the accent for the screen's main action (`accent`).
+ * Screen headers use the shared filled control. Other inline controls retain
+ * their existing 44pt target and unfilled appearance.
  */
 export function IconButton({ label, children, onPress, disabled = false, chrome, accent = false }: PropsWithChildren<{ label: string; onPress?: () => void; disabled?: boolean; chrome?: boolean; accent?: boolean }>) {
-  const { tokens, styleTokens: t, styleColors } = useTheme();
   const inHeader = useContext(HeaderChromeContext);
-  const tile = (chrome ?? inHeader) && t.header.iconButton.filled;
-  const size = tile ? t.header.iconButton.size : layout.minimumTouchTarget;
+  if (chrome ?? inHeader) return <HeaderIconButton label={label} onPress={onPress} disabled={disabled} accent={accent}>{children}</HeaderIconButton>;
+  const size = layout.minimumTouchTarget;
   return <PressableSurface
     accessibilityRole="button"
     accessibilityLabel={label}
@@ -28,16 +67,16 @@ export function IconButton({ label, children, onPress, disabled = false, chrome,
     disabled={disabled}
     hitSlop={8}
     onPress={onPress}
-    fill={tile ? (accent ? styleColors.accentFill : styleColors.controlFill) : undefined}
-    radius={tile ? t.header.iconButton.radius : size / 2}
-    outline={tile ? undefined : false}
-    edge={tile ? t.header.iconButton.edge : false}
+    radius={size / 2}
+    outline={false}
+    edge={false}
     style={[styles.iconButton, { width: size, height: size }, disabled && styles.disabled]}
-  ><TileInkContext.Provider value={tile ? (accent ? styleColors.onAccent : tokens.textPrimary) : null}>{children}</TileInkContext.Provider></PressableSurface>;
+  ><TileInkContext.Provider value={null}>{children}</TileInkContext.Provider></PressableSurface>;
 }
 
 /** A filled call-to-action in the accent. `size="large"` is an empty state's. */
 export function Button({ label, onPress, disabled = false, size = 'regular', style }: { label: string; onPress: () => void; disabled?: boolean; size?: 'regular' | 'large'; style?: StyleProp<ViewStyle> }) {
+  "use no memo"; // Refresh native label rendering across palette/script changes.
   const { tokens, styleTokens: t, styleColors } = useTheme();
   const shape = size === 'large' ? t.emptyState.button : { height: layout.minimumTouchTarget, ...t.button };
   const sticky = t.elevation === 'edge';
@@ -62,6 +101,7 @@ export function Button({ label, onPress, disabled = false, size = 'regular', sty
  */
 export function Chip({ label, count, selected, onPress, accessibilityLabel }: { label: string; count?: number; selected: boolean; onPress: () => void; accessibilityLabel: string }) {
   const { tokens, styleTokens: t, styleColors } = useTheme();
+  const { fontScale } = useWindowDimensions();
   const sticky = t.elevation === 'edge';
   const fill = sticky ? (selected ? styleColors.accentFill : styleColors.controlFill) : selected ? tokens.accentSoft : 'transparent';
   const ink = sticky ? (selected ? styleColors.onAccent : tokens.textPrimary) : selected ? tokens.accentStrong : tokens.textSecondary;
@@ -76,7 +116,7 @@ export function Chip({ label, count, selected, onPress, accessibilityLabel }: { 
     border={selected ? tokens.accentBorder : 'transparent'}
     edge={selected && t.chip.activeEdge ? t.chip.activeEdge : false}
     pressedStyle={null}
-    style={[styles.chip, { height: t.chip.height, paddingHorizontal: t.chip.paddingHorizontal }]}
+    style={[styles.chip, { height: chipHeight(t.chip.height, t.chip.labelSize, fontScale), paddingHorizontal: t.chip.paddingHorizontal }]}
   >
     <AppText numberOfLines={1} weight={sticky ? '800' : '600'} style={{ fontSize: t.chip.labelSize, color: ink }}>
       {label}{count !== undefined ? <>{' '}<AppText weight={sticky ? '700' : '500'} style={{ fontSize: t.chip.countSize, color: countInk, opacity: sticky ? 0.8 : 0.72 }}>{count}</AppText></> : null}
@@ -87,7 +127,13 @@ export function Chip({ label, count, selected, onPress, accessibilityLabel }: { 
 /** A horizontally scrolling row of chips, sized to the chips (plus Sticky's edge). */
 export function ChipRow({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const { styleTokens: t } = useTheme();
-  return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.chipScroll, { height: t.chip.height + t.chip.activeEdge }, style]} contentContainerStyle={[styles.chipRow, { gap: t.elevation === 'edge' ? spacing.xs : 6 }]}>{children}</ScrollView>;
+  const { fontScale } = useWindowDimensions();
+  return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.chipScroll, { height: chipHeight(t.chip.height, t.chip.labelSize, fontScale) + t.chip.activeEdge }, style]} contentContainerStyle={[styles.chipRow, { gap: t.elevation === 'edge' ? spacing.xs : 6 }]}>{children}</ScrollView>;
+}
+
+// Leave room for scaled complex-script ascenders/descenders; retain normal size.
+function chipHeight(minimum: number, labelSize: number, fontScale: number) {
+  return Math.max(minimum, Math.ceil(labelSize * 1.5 * fontScale + 8));
 }
 
 /**
@@ -127,6 +173,11 @@ export function SegmentedControl<Key extends string>({ options, value, onChange 
 }
 
 const styles = StyleSheet.create({
+  headerIconButton: { width: HEADER_ICON_BUTTON_SIZE, height: HEADER_ICON_BUTTON_SIZE, minWidth: HEADER_ICON_BUTTON_SIZE, minHeight: HEADER_ICON_BUTTON_SIZE, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  headerIconSurface: { width: HEADER_ICON_SURFACE_SIZE, height: HEADER_ICON_SURFACE_SIZE, alignItems: 'center', justifyContent: 'center' },
+  headerIconContent: { alignItems: 'center', justifyContent: 'center', transform: [{ scale: 0.9 }] },
+  headerPressed: { opacity: 0.58 },
+  headerPressedScale: { transform: [{ scale: 0.96 }] },
   iconButton: { alignItems: 'center', justifyContent: 'center' },
   disabled: { opacity: 0.35 },
   button: { alignItems: 'center', justifyContent: 'center' },

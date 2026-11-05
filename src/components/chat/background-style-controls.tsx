@@ -1,9 +1,10 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useRef, useState } from 'react';
-import { StyleSheet, Switch, Text, View } from 'react-native';
+import { StyleSheet, Switch, View } from 'react-native';
 import { useTheme } from '@/components/theme-provider';
 import { backgroundDim } from '@/services/chat-background';
+import { AppText } from '@/components/ui/app-text';
 
 // A dependency-free continuous slider, with native adjustable accessibility actions.
 export function BackgroundStyleControls({ dim, blur, onDimChange, onDimCommit, onBlurChange, disabled = false }: { dim: number; blur: boolean; onDimChange: (value: number) => void; onDimCommit?: (value: number) => void; onBlurChange: (value: boolean) => void; disabled?: boolean }) {
@@ -18,7 +19,7 @@ export function BackgroundStyleControls({ dim, blur, onDimChange, onDimCommit, o
   const percent = Math.round(dim * 100);
   const move = (pageX: number) => { latestValue.current = backgroundDim(((pageX - geometry.current.x) / geometry.current.width) * 0.85); onDimChange(latestValue.current); };
   return <View style={styles.controls}>
-    <View style={styles.labelRow}><Text style={[styles.label, { color: tokens.textPrimary }]}>{tr("backgroundstylecontrols.dimBackground")}</Text><Text style={[styles.value, { color: tokens.textSecondary }]}>{percent}%</Text></View>
+    <View style={styles.labelRow}><AppText style={[styles.label, { color: tokens.textPrimary }]}>{tr("backgroundstylecontrols.dimBackground")}</AppText><AppText style={[styles.value, { color: tokens.textSecondary }]}>{percent}%</AppText></View>
     <View ref={track} accessibilityRole="adjustable" accessible accessibilityLabel={tr("backgroundstylecontrols.dimBackground")} accessibilityState={{ disabled }} accessibilityValue={{ min: 0, max: 85, now: percent, text: `${percent}%` }} accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]} onAccessibilityAction={(event) => { if (!disabled) { const next = backgroundDim(dim + (event.nativeEvent.actionName === 'increment' ? 0.05 : -0.05)); onDimChange(next); onDimCommit?.(next); } }}
       onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)} onStartShouldSetResponder={() => !disabled} onMoveShouldSetResponder={() => !disabled} onResponderTerminationRequest={() => false}
       onResponderGrant={(event) => { const pageX = event.nativeEvent.pageX; track.current?.measureInWindow((x, _y, width) => { geometry.current = { x, width }; move(pageX); }); }} onResponderMove={(event) => move(event.nativeEvent.pageX)} onResponderRelease={() => onDimCommit?.(latestValue.current)} style={styles.slider}>
@@ -26,7 +27,7 @@ export function BackgroundStyleControls({ dim, blur, onDimChange, onDimCommit, o
       <View style={[styles.thumb, { left: Math.max(0, Math.min(trackWidth - 24, (dim / 0.85) * (trackWidth - 24))), backgroundColor: tokens.surface, borderColor: tokens.accent }]} />
     </View>
     <View style={styles.labelRow}>
-      <Text style={[styles.label, { color: tokens.textPrimary }]}>{tr("backgroundstylecontrols.blurBackground")}</Text><Switch accessibilityLabel={tr("backgroundstylecontrols.blurBackground")} disabled={disabled} value={blur} onValueChange={onBlurChange} trackColor={{ true: tokens.accent }} />
+      <AppText style={[styles.label, { color: tokens.textPrimary }]}>{tr("backgroundstylecontrols.blurBackground")}</AppText><Switch accessibilityLabel={tr("backgroundstylecontrols.blurBackground")} disabled={disabled} value={blur} onValueChange={onBlurChange} trackColor={{ true: tokens.accent }} />
     </View>
   </View>;
 }

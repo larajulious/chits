@@ -18,7 +18,7 @@ module.exports = config => withXcodeProject(config, config => {
   for (const file of fs.readdirSync(locales).filter(file => file.endsWith('.json'))) {
     const language = file.replace('.json', '');
     const catalog = JSON.parse(fs.readFileSync(path.join(locales, file), 'utf8'));
-    for (const [source, key] of [['Chits Anywhere', 'anywhere.brand'], ['Quick Note and your recent notes.', 'anywhere.description']]) {
+    for (const [source, key] of [['Chits Anywhere', 'anywhere.brand'], ['Quick Note and your recent notes.', 'anywhere.description'], ["Today's Plan", 'plan.widget.name'], ["Your plan and progress for today.", 'plan.widget.description']]) {
       strings[source] ??= { localizations: {} };
       strings[source].localizations[language] = { stringUnit: { state: 'translated', value: catalog[key] } };
     }

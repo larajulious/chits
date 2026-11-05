@@ -1,0 +1,15 @@
+<resources>
+  <string name="plan_widget_name">నేటి ప్రణాళిక</string>
+  <string name="plan_widget_description">ఈ రోజు మీ ప్రణాళిక మరియు పురోగతి.</string>
+  <string name="plan_widget_today">ఈరోజు</string>
+  <string name="plan_widget_none">ఈ రోజు కోసం కొంచెం ప్లాన్ ఉందా?</string>
+  <string name="plan_widget_action">నా రోజును ప్లాన్ చేయండి</string>
+  <string name="plan_widget_keep_going">కొనసాగించు!</string>
+  <string name="plan_widget_all_done">ఈరోజుకి అంతా పూర్తయింది!</string>
+  <string name="plan_widget_wrapped">ఈ రోజు పూర్తయింది!</string>
+  <string name="plan_widget_hidden">టాస్క్ పేర్లు దాచబడ్డాయి. మీరు వాటిని సెట్టింగ్‌లలో చూపవచ్చు.</string>
+  <string name="plan_widget_add">జోడించు</string>
+  <string name="plan_widget_wrap">ముగించండి</string>
+  <string name="plan_widget_view">నేటి ప్రణాళికను వీక్షించండి</string>
+  <string name="plan_widget_recap">డే రీక్యాప్ చూడండి</string>
+</resources>

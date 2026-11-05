@@ -1,0 +1,15 @@
+<resources>
+  <string name="plan_widget_name">இன்றைய திட்டம்</string>
+  <string name="plan_widget_description">இன்றைய உங்கள் திட்டமும் முன்னேற்றமும்.</string>
+  <string name="plan_widget_today">இன்று</string>
+  <string name="plan_widget_none">இன்று ஒரு சிறிய திட்டம் உள்ளதா?</string>
+  <string name="plan_widget_action">எனது நாளை திட்டமிடுங்கள்</string>
+  <string name="plan_widget_keep_going">தொடருங்கள்!</string>
+  <string name="plan_widget_all_done">இன்றைக்கு எல்லாம் முடிந்தது!</string>
+  <string name="plan_widget_wrapped">இன்றைய நாள் நிறைவடைந்தது!</string>
+  <string name="plan_widget_hidden">பணிப் பெயர்கள் மறைக்கப்பட்டுள்ளன. அவற்றை அமைப்புகளில் காட்டலாம்.</string>
+  <string name="plan_widget_add">சேர்</string>
+  <string name="plan_widget_wrap">நிறைவு செய்</string>
+  <string name="plan_widget_view">இன்றைய திட்டத்தைப் பார்க்கவும்</string>
+  <string name="plan_widget_recap">நாள் மறுதொடக்கத்தைக் காண்க</string>
+</resources>

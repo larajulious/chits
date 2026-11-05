@@ -11,10 +11,11 @@ test('native boundary/paste binding follows mounted input layout and focus, then
   const compiled = ts.transpileModule(component, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const effects = [], operations = [];
   const context = {
-    exports: {}, contentTextStyle, languageDirection, useLocale: () => 'en', require: () => ({ jsx: (type, props) => ({ type, props }) }),
-    useTheme: () => ({ tokens: {} }), useRef: value => ({ current: value }),
+    nativeNoteFormattingAvailable: false, syncNativeNoteFormatting: () => {}, detachNativeNoteFormatting: () => {}, useLayoutEffect: () => {},
+    exports: {}, noteHeadingStyle: () => undefined, noteTextSpans: block => block.text, contentTextStyle, languageDirection, useLocale: () => 'en', require: () => ({ jsx: (type, props) => ({ type, props }) }),
+    useFontStyle: () => ({}), needsSystemFont: () => false, StyleSheet: { flatten: style => Array.isArray(style) ? Object.assign({}, ...style) : style }, useTheme: () => ({ tokens: {} }), useRef: value => ({ current: value }),
     useCallback: callback => callback, useEffect: callback => effects.push(callback),
-    TextInput: 'TextInput', setTimeout, clearTimeout,
+    TextInput: 'TextInput', Text: 'Text', setTimeout, clearTimeout,
     bindNativeImagePaste: (input, key) => { operations.push(['attach', input, key]); return () => operations.push(['detach', input, key]); },
     subscribeNativeBoundaryBackspace: () => () => {},
   };

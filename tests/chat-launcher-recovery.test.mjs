@@ -47,8 +47,10 @@ function launcher() {
   const transition = { buttonHidden: shared(false), calls: [], openChat(...args) { this.calls.push(args); } };
   let measurement = [20, 700, 58, 58];
   let deliverMeasurement = true;
+  let homeView = 'cards';
   const view = component('src/components/navigation/bottom-nav.tsx', 'BottomNav', {
     useLocale: () => 'en', tr: key => key, useTheme: theme, useContext: () => () => {},
+    useHomeView: () => homeView, NotesShortcut: 'NotesShortcut',
     useChatTransition: () => ({ ...transition, openChat: transition.openChat.bind(transition) }),
     measuredChatOrigin,
     View: 'View', Pressable: 'Pressable', ChatButtonFace: 'ChatButtonFace',
@@ -63,8 +65,10 @@ function launcher() {
     measure: value => { measurement = value; },
     deliver: value => { deliverMeasurement = value; },
     route: name => { props.state.routes[0].name = name; },
+    homeView: value => { homeView = value; },
+    controls: () => [view.render(props).props.children].flat().filter(Boolean),
     button() {
-      const button = view.render(props).props.children;
+      const button = [view.render(props).props.children].flat().filter(Boolean).pop();
       button.props.ref.current = { measureInWindow(callback) { if (deliverMeasurement) callback(...measurement); } };
       return button;
     },
@@ -186,4 +190,17 @@ test('unmount invalidates visual callbacks without issuing a navigation action',
   h.state().openChat(origin, '/'); h.state(); h.view.commit();
   h.view.unmount(); h.animations[0](true);
   assert.deepEqual(h.navigations, ['/chat']);
+});
+
+test('the Notes shortcut sits before Chat everywhere except the Notes view itself', () => {
+  const nav = launcher();
+  assert.equal(nav.controls().length, 1, 'already on Notes');
+  nav.homeView('boards');
+  assert.equal(nav.controls().length, 2, 'Home showing Boards');
+  assert.equal(nav.controls()[0].type, 'NotesShortcut');
+  nav.homeView('cards');
+  for (const name of ['attachments', 'calendar', 'archive', 'search']) {
+    nav.route(name);
+    assert.equal(nav.controls()[0].type, 'NotesShortcut', name);
+  }
 });

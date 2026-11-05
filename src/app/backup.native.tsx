@@ -6,7 +6,7 @@ import * as FS from 'expo-file-system/legacy';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
@@ -19,6 +19,7 @@ import { triggerAppReset } from '@/services/app-reset';
 import type { BackupProgress } from '@/services/backup-operation';
 // eslint-disable-next-line import/no-unresolved -- Expo selects the native service on iOS/Android.
 import { backupErrorMessage, createBackup, discardCreatedBackup, discardValidatedBackup, RestoreError, restoreBackup, saveBackupFile, validateBackup, type CreatedBackup, type ValidatedBackup } from '@/services/backup-service';
+import { AppText } from '@/components/ui/app-text';
 
 function sizeLabel(bytes: number) { return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`; }
 function quantity(count: number, noun: string) { return countLabel(noun, count); }
@@ -144,28 +145,28 @@ export default function BackupScreen() {
   };
   const disabled = progress !== null || pending !== null;
   return <SafeAreaView style={[styles.screen, { backgroundColor: desk.desk }]}>
-    <View style={styles.header}><TopBarBackground /><IconButton label={tr("backup.backToSettings")} disabled={disabled} onPress={() => router.back()}><HeaderIcon name="arrow-back-outline" size={23} /></IconButton><Text accessibilityRole="header" style={[styles.title, { color: headerInk.ink, fontFamily: headingFontFamily(look.headingFont) }]}>{tr("backup.backupRestore")}</Text><View style={{ width: 44 }} /></View>
+    <View style={styles.header}><TopBarBackground /><IconButton chrome label={tr("backup.backToSettings")} disabled={disabled} onPress={() => router.back()}><HeaderIcon name="arrow-back-outline" size={23} /></IconButton><AppText accessibilityRole="header" style={[styles.title, { color: headerInk.ink, fontFamily: headingFontFamily(look.headingFont) }]}>{tr("backup.backupRestore")}</AppText><View style={{ width: 46 }} /></View>
     <PaperDesk>
     <ScrollView contentContainerStyle={styles.content}>
       <PaperNote paper={PAPER_WHITE} tilt={-0.6} tape style={styles.section}>
-        <Text accessibilityRole="header" style={[handBold, styles.heading]}>{tr("backup.backupYourChits")}</Text>
-        <Text style={styles.body}>{tr("backup.createACopyOfYourChatsBoardsSettings")}</Text>
+        <AppText accessibilityRole="header" style={[handBold, styles.heading]}>{tr("backup.backupYourChits")}</AppText>
+        <AppText style={styles.body}>{tr("backup.createACopyOfYourChatsBoardsSettings")}</AppText>
         <PaperAction primary label={tr("backup.createBackup")} accessibilityState={{ disabled }} disabled={disabled} onPress={() => void create()} containerStyle={styles.action} />
         {created ? <View accessibilityLiveRegion="polite" style={styles.result}>
-          <Text style={[handBold, styles.resultTitle]}>{created.manifest.missingAttachments.length ? tr('backup.missing', { count: created.manifest.missingAttachments.length }) : tr("backup.backupCreated")}</Text>
-          <Text style={styles.body}>{created.manifest.missingAttachments.length ? tr("backup.allAvailableFilesAreIncludedFilesAlreadyMissing") : tr("backup.yourChitsDataAndAttachmentsAreSafelyIncluded")}</Text>
-          <Text style={styles.detail}>{sizeLabel(created.size)} · {quantity(created.manifest.attachmentCount, 'attachment')} · {new Date(created.manifest.createdAt).toLocaleString(getFormattingLocale())}</Text>
-          {needsSave ? <Pressable accessibilityRole="button" disabled={disabled} onPress={() => void saveAgain()} style={styles.save}><Text style={[handBold, styles.saveText]}>{tr("backup.saveBackupFile")}</Text></Pressable> : null}
+          <AppText style={[handBold, styles.resultTitle]}>{created.manifest.missingAttachments.length ? tr('backup.missing', { count: created.manifest.missingAttachments.length }) : tr("backup.backupCreated")}</AppText>
+          <AppText style={styles.body}>{created.manifest.missingAttachments.length ? tr("backup.allAvailableFilesAreIncludedFilesAlreadyMissing") : tr("backup.yourChitsDataAndAttachmentsAreSafelyIncluded")}</AppText>
+          <AppText style={styles.detail}>{sizeLabel(created.size)} · {quantity(created.manifest.attachmentCount, 'attachment')} · {new Date(created.manifest.createdAt).toLocaleString(getFormattingLocale())}</AppText>
+          {needsSave ? <Pressable accessibilityRole="button" disabled={disabled} onPress={() => void saveAgain()} style={styles.save}><AppText style={[handBold, styles.saveText]}>{tr("backup.saveBackupFile")}</AppText></Pressable> : null}
         </View> : null}
       </PaperNote>
       <PaperNote paper={PAPERS[3]} tilt={0.5} style={styles.section}>
-        <Text accessibilityRole="header" style={[handBold, styles.heading]}>{tr("backup.restoreFromBackup")}</Text>
-        <Text style={styles.body}>{tr("backup.restoreChitsFromAPreviouslyCreatedBackupFile")}</Text>
+        <AppText accessibilityRole="header" style={[handBold, styles.heading]}>{tr("backup.restoreFromBackup")}</AppText>
+        <AppText style={styles.body}>{tr("backup.restoreChitsFromAPreviouslyCreatedBackupFile")}</AppText>
         <PaperAction label={tr("backup.chooseBackupFile")} accessibilityState={{ disabled }} disabled={disabled} onPress={() => void choose()} containerStyle={styles.action} />
-        <Text style={styles.detail}>{tr("backup.restoringABackupReplacesTheDataCurrentlyStored")}</Text>
+        <AppText style={styles.detail}>{tr("backup.restoringABackupReplacesTheDataCurrentlyStored")}</AppText>
       </PaperNote>
-      {notice ? <Text accessibilityLiveRegion="polite" style={[styles.deskText, { color: desk.ink }]}>{notice}</Text> : null}
-      {error ? <Text accessibilityRole="alert" style={[styles.deskText, { color: desk.danger }]}>{error}</Text> : null}
+      {notice ? <AppText accessibilityLiveRegion="polite" style={[styles.deskText, { color: desk.ink }]}>{notice}</AppText> : null}
+      {error ? <AppText accessibilityRole="alert" style={[styles.deskText, { color: desk.danger }]}>{error}</AppText> : null}
     </ScrollView>
     </PaperDesk>
     {progress ? <ChitsLoaderOverlay label={progress.total ? tr("backup.valueValueOfValue", { value1: progress.label, value2: progress.completed ?? 0, value3: progress.total }) : progress.label} /> : null}

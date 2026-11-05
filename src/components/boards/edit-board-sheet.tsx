@@ -1,7 +1,7 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { useTheme } from '@/components/theme-provider';
 import { useStickyControls } from '@/components/ui/surface';
@@ -11,6 +11,7 @@ import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
 import { spacing } from '@/constants/theme';
 import { resolveBoardIcon, type BoardIconName } from '@/constants/board-appearance';
 import { BoardAppearanceFields } from '@/components/boards/board-appearance-fields';
+import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
 
 type BoardAppearance = { name: string; icon: BoardIconName | null; accent: string | null };
 

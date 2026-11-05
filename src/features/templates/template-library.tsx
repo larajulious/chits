@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurTargetView, BlurView } from 'expo-blur';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useTheme } from '@/components/theme-provider';
+import { ChitsLoader } from '@/components/ui/chits-loader';
 import { AppHeader, Button, Chip, ChipRow, HeaderIcon, IconButton, useFontStyle } from '@/components/ui/primitives';
 import { DeskPage, PAPERS, PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PaperAction, PaperCard, PaperDesk, PaperNote, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { stableTilt } from '@/constants/style-tokens';
@@ -10,7 +12,8 @@ import { SearchField } from '@/components/ui/search-field';
 import { useStickyControls } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
-import { NoteBlocksEditor, NoteListButtons, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
+import { NoteBlocksEditor, noteEditorStyles, NoteToolbar, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
+import { KeyboardPane } from '@/components/ui/keyboard-pane';
 import { NoteContentView } from '@/components/notes/note-content-view';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { contentTextStyle, languageDirection } from '@/localization/text-layout';
@@ -19,6 +22,7 @@ import { tr } from '@/localization/runtime';
 import { spacing } from '@/constants/theme';
 import { textDraft, type NoteDraftBlock, type NoteText } from '@/services/note-content';
 import { createSingleFlight, createTemplateRepository, documentFromTemplateDraft, instantiateTemplate, templateDraft, templateSearchText, type NoteTemplate } from '@/services/note-templates';
+import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
 
 export type TemplateLibraryHandle = { back: () => void };
 type Edit = { id?: string; renameOnly?: boolean; title: string; description: string; blocks: NoteDraftBlock[] };
@@ -33,6 +37,7 @@ export function TemplateLibrary({ ref, onClose, onSelect, initialDocument, initi
   const repository = useMemo(() => createTemplateRepository(database), [database]);
   const { tokens: theme, styleTokens, styleColors, scheme } = useTheme();
   const desk = useDesk();
+  const insets = useSafeAreaInsets();
   const { handBold } = useHandwriting();
   const galleryTarget = useRef<View | null>(null);
   const [filterHeight, setFilterHeight] = useState(styleTokens.chip.height + styleTokens.chip.activeEdge + 16);
@@ -100,7 +105,8 @@ export function TemplateLibrary({ ref, onClose, onSelect, initialDocument, initi
   ] });
   const filtered = useMemo(() => (items ?? []).filter((item) => (filter === 'favorites' ? item.favorite : item.source === (filter === 'mine' ? 'custom' : 'builtin')) && templateSearchText(item, locale).includes(query.trim().toLocaleLowerCase(locale))), [items, filter, query, locale]);
   const preview = useMemo(() => selected ? instantiateTemplate(selected.document) : [], [selected]);
-  return <KeyboardAvoidingView style={[styles.root, { backgroundColor: desk.desk }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+  // Its hosts keep the bottom safe area clear below it.
+  return <KeyboardPane reservedBottom={insets.bottom} style={[styles.root, { backgroundColor: desk.desk }]}>
     <AppHeader
       title={edit ? tr(edit.id ? 'templates.edit' : 'templates.create') : selected ? tr('templates.preview') : tr('templates.title')}
       leading={<IconButton label={tr('templates.back')} disabled={busy} onPress={back}><HeaderIcon name={isRTL ? 'chevron-forward' : 'chevron-back'} size={24} /></IconButton>}
@@ -108,14 +114,14 @@ export function TemplateLibrary({ ref, onClose, onSelect, initialDocument, initi
     />
     {error ? <View accessibilityRole="alert" style={styles.error}><AppText style={{ color: desk.danger }}>{error}</AppText><Button label={tr('id.tryAgain')} onPress={() => void load()} disabled={busy} /></View> : null}
     {busy ? <ActivityIndicator accessibilityLabel={tr('id.saving')} color={theme.accentStrong} /> : null}
-    {edit ? <PaperDesk><DeskPage style={styles.editPage}>
+    {edit ? <PaperDesk><DeskPage style={noteEditorStyles.page}>
       <ScrollView keyboardShouldPersistTaps="handled" style={styles.fields} contentContainerStyle={styles.fieldContent}>
         <View style={[styles.titleField, rowStyle]}><AppText style={[styles.fieldLabel, { color: theme.textSecondary }]}>{tr('templates.titleLabel')}</AppText>
         <TextInput autoFocus={!initialDocument} accessibilityLabel={tr('templates.titleLabel')} maxLength={120} value={edit.title} onChangeText={(title) => setEdit((current) => current && { ...current, title })} editable={!busy} style={[styles.field, styles.titleInput, { borderRadius: styleTokens.radius.control }, controls.input, inputFont, contentTextStyle(edit.title, languageDirection(locale)), { color: theme.textPrimary, backgroundColor: styleColors.controlFill }]} /></View>
         {!edit.renameOnly ? <><View style={[styles.fieldHeading, rowStyle]}><AppText style={[styles.fieldLabel, { color: theme.textSecondary }]}>{tr('templates.descriptionLabel')}</AppText><IconButton label={tr('templates.dateHint', { date: '{{date}}' })} onPress={() => alert({ title: tr('templates.descriptionLabel'), message: tr('templates.attachmentNotice') + '\n\n' + tr('templates.dateHint', { date: '{{date}}' }) })}><Icon name="information-circle-outline" size={19} color={theme.textMuted} /></IconButton></View><TextInput accessibilityLabel={tr('templates.descriptionLabel')} maxLength={240} multiline value={edit.description} onChangeText={(description) => setEdit((current) => current && { ...current, description })} editable={!busy} textAlignVertical="top" style={[styles.field, styles.descriptionInput, { borderRadius: styleTokens.radius.control }, controls.input, inputFont, contentTextStyle(edit.description, languageDirection(locale)), { color: theme.textPrimary, backgroundColor: styleColors.controlFill }]} />{initialDocument ? <AppText style={[styles.hint, { color: theme.textSecondary }]}>{tr('templates.attachmentNotice')}</AppText> : null}</> : null}
       </ScrollView>
-      {!edit.renameOnly ? <><NoteBlocksEditor ref={editor} blocks={edit.blocks} onChangeBlocks={(update) => setEdit((current) => current && { ...current, blocks: update(current.blocks) })} editable={!busy} placeholder={tr('editcontent.startWriting')} maxLength={10000} singleInputStyle={[styles.singleInput, inputFont, { color: theme.textPrimary }]} blockContainerStyle={styles.blockContainer} blockInputStyle={[styles.blockInput, inputFont, { color: theme.textPrimary }]} fillViewport contentContainerStyle={styles.editorContent} maxImageHeight={360} accessibilityLabel={tr('editcontent.noteContent')} /><View style={[styles.toolbar, { borderTopColor: theme.borderSubtle }]}><NoteListButtons editor={editor} disabled={busy} /></View></> : null}
-    </DeskPage></PaperDesk> : selected ? <PaperDesk>
+      {!edit.renameOnly ? <><NoteBlocksEditor ref={editor} blocks={edit.blocks} onChangeBlocks={(update) => setEdit((current) => current && { ...current, blocks: update(current.blocks) })} editable={!busy} placeholder={tr('editcontent.startWriting')} maxLength={10000} singleInputStyle={[noteEditorStyles.input, inputFont, { color: theme.textPrimary }]} blockContainerStyle={noteEditorStyles.blocks} blockInputStyle={[noteEditorStyles.blockInput, inputFont, { color: theme.textPrimary }]} fillViewport contentContainerStyle={styles.editorContent} maxImageHeight={360} accessibilityLabel={tr('editcontent.noteContent')} /></> : null}
+    </DeskPage>{!edit.renameOnly ? <NoteToolbar editor={editor} disabled={busy} /> : null}</PaperDesk> : selected ? <PaperDesk>
       <ScrollView contentContainerStyle={styles.preview}>
         <View style={[styles.previewHeading, rowStyle]}><AppText accessibilityRole="header" style={[handBold, styles.previewTitle, { color: desk.ink }]}>{selected.title}</AppText><Pressable accessibilityRole="button" accessibilityLabel={tr('id.cardActions')} disabled={busy} onPress={() => actions(selected)} style={styles.iconButton}><Icon name="ellipsis-horizontal" size={22} color={desk.inkMuted} /></Pressable></View>
         {selected.description ? <AppText style={[styles.description, { color: desk.inkMuted }]}>{selected.description}</AppText> : null}
@@ -128,7 +134,7 @@ export function TemplateLibrary({ ref, onClose, onSelect, initialDocument, initi
         <BlurTargetView ref={galleryTarget} style={styles.flex}>
       {/* The desk starts under the filter row, so the row itself looks as it always has. */}
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, { top: filterHeight, backgroundColor: theme.background }]}><PaperDesk>{null}</PaperDesk></View>
-      <FlatList data={filtered} keyExtractor={(item) => item.id} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.gallery, { paddingTop: filterHeight + spacing.xs }]} ListEmptyComponent={<View style={styles.empty}>{!items && !error ? <ActivityIndicator accessibilityLabel={tr('templates.loading')} color={desk.ink} /> : <AppText style={[styles.description, { color: desk.inkMuted }]}>{tr(query ? 'templates.noResults' : filter === 'favorites' ? 'templates.emptyFavorites' : 'templates.empty')}</AppText>}</View>} renderItem={({ item, index }) => <PaperCard paper={item.source === 'custom' ? PAPERS[0] : PAPERS[[3, 2, 5, 4, 1][index % 5]]} tilt={stableTilt(`template:${item.id}`, 0.8)} style={[styles.card, rowStyle]}>
+      <FlatList data={filtered} keyExtractor={(item) => item.id} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.gallery, { paddingTop: filterHeight + spacing.xs }]} ListEmptyComponent={<View style={styles.empty}>{!items && !error ? <ChitsLoader /> : <AppText style={[styles.description, { color: desk.inkMuted }]}>{tr(query ? 'templates.noResults' : filter === 'favorites' ? 'templates.emptyFavorites' : 'templates.empty')}</AppText>}</View>} renderItem={({ item, index }) => <PaperCard paper={item.source === 'custom' ? PAPERS[0] : PAPERS[[3, 2, 5, 4, 1][index % 5]]} tilt={stableTilt(`template:${item.id}`, 0.8)} style={[styles.card, rowStyle]}>
         <Pressable accessibilityRole="button" accessibilityLabel={`${tr('templates.preview')}: ${item.title}`} onPress={() => setSelected(item)} style={({ pressed }) => [styles.cardMain, rowStyle, pressed && styles.pressed]}><View style={[styles.templateIcon, { boxShadow: `0px 2px 4px ${desk.shadow}` }]}><Icon name={item.source === 'custom' ? 'document-text-outline' : templateIcons[item.category as keyof typeof templateIcons] ?? 'document-text-outline'} size={20} color={PAPER_INK} /></View><View style={styles.cardCopy}><AppText numberOfLines={2} style={[handBold, styles.cardTitle]}>{item.title}</AppText><AppText numberOfLines={1} style={[styles.description, { color: PAPER_INK_MUTED }]}>{item.description || tr('templates.mine')}</AppText></View></Pressable>
         <View style={[styles.cardActions, rowStyle]}><Pressable accessibilityRole="button" accessibilityLabel={`${tr(item.favorite ? 'templates.unfavorite' : 'templates.favorite')}: ${item.title}`} accessibilityState={{ selected: item.favorite, disabled: busy }} disabled={busy} onPress={() => mutate(() => repository.favorite(item.id, !item.favorite))} style={styles.iconButton}><Icon name={item.favorite ? 'star' : 'star-outline'} size={19} color={item.favorite ? STAR : PAPER_INK_MUTED} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`${tr('id.cardActions')}: ${item.title}`} disabled={busy} onPress={() => actions(item)} style={styles.iconButton}><Icon name="ellipsis-horizontal" size={20} color={PAPER_INK_MUTED} /></Pressable></View>
       </PaperCard>} />
@@ -142,7 +148,7 @@ export function TemplateLibrary({ ref, onClose, onSelect, initialDocument, initi
         </View>
       </View>
     </>}
-  </KeyboardAvoidingView>;
+  </KeyboardPane>;
 }
 // A gold star that still reads on every paper.
 const STAR = '#A87A00';
@@ -153,6 +159,6 @@ const styles = StyleSheet.create({
   chips: { marginVertical: spacing.xs },
   filterOverlay: { position: 'absolute', top: 0, left: 0, right: 0 },
   gallery: { paddingHorizontal: spacing.md, paddingBottom: spacing.md, gap: 16 }, card: { minHeight: 64, alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, gap: 4 }, cardMain: { flex: 1, minHeight: 44, flexDirection: 'row', gap: 10, alignItems: 'center' }, templateIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: PAPER_WHITE }, cardCopy: { flex: 1, minWidth: 0, gap: 1 }, cardTitle: { color: PAPER_INK, fontSize: 19, lineHeight: 25 }, description: { fontSize: 13, lineHeight: 19 }, cardActions: { alignItems: 'center' }, empty: { padding: spacing.md },
-  preview: { padding: spacing.md, gap: spacing.sm }, previewHeading: { flexDirection: 'row', alignItems: 'center' }, previewTitle: { flex: 1, fontSize: 26, lineHeight: 33 }, document: { padding: 14, marginTop: 8 }, documentText: { fontSize: 15, lineHeight: 23 }, bottom: { paddingHorizontal: spacing.md, paddingTop: 12, paddingBottom: 14 }, editPage: { flex: 1, margin: 12 },
-  fields: { flexGrow: 0, flexShrink: 1, maxHeight: 240 }, fieldContent: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm, gap: 4 }, titleField: { alignItems: 'center', gap: 10 }, titleInput: { flex: 1, minWidth: 0 }, fieldLabel: { fontSize: 13, lineHeight: 19 }, fieldHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, descriptionInput: { minHeight: 48, maxHeight: 88 }, field: { fontSize: 16, lineHeight: 24, minHeight: 44, paddingHorizontal: 10, paddingVertical: 8 }, hint: { fontSize: 12, lineHeight: 18 }, singleInput: { flex: 1, paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 16, lineHeight: 25 }, blockContainer: { flex: 1, padding: spacing.md }, editorContent: { paddingBottom: 12 }, blockInput: { padding: 0, minHeight: 25, fontSize: 16, lineHeight: 25, textAlignVertical: 'top' }, toolbar: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12 }, error: { padding: spacing.sm, gap: spacing.xs }, pressed: { opacity: 0.65 },
+  preview: { padding: spacing.md, gap: spacing.sm }, previewHeading: { flexDirection: 'row', alignItems: 'center' }, previewTitle: { flex: 1, fontSize: 26, lineHeight: 33 }, document: { padding: 14, marginTop: 8 }, documentText: { fontSize: 15, lineHeight: 23 }, bottom: { paddingHorizontal: spacing.md, paddingTop: 12, paddingBottom: 14 },
+  fields: { flexGrow: 0, flexShrink: 1, maxHeight: 240 }, fieldContent: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.sm, gap: 4 }, titleField: { alignItems: 'center', gap: 10 }, titleInput: { flex: 1, minWidth: 0 }, fieldLabel: { fontSize: 13, lineHeight: 19 }, fieldHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, descriptionInput: { minHeight: 48, maxHeight: 88 }, field: { fontSize: 16, lineHeight: 24, minHeight: 44, paddingHorizontal: 10, paddingVertical: 8 }, hint: { fontSize: 12, lineHeight: 18 }, editorContent: { paddingBottom: 12 }, error: { padding: spacing.sm, gap: spacing.xs }, pressed: { opacity: 0.65 },
 });

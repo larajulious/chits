@@ -1,3 +1,4 @@
+import { readRichText, replaceNoteText } from './note-rich-text';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { tr, localizedDate } from '@/localization/runtime';
 import { newBlockKey, noteBlocksText, textDraft, type NoteText, type NoteDraftBlock, type NoteList } from './note-content';
@@ -22,7 +23,7 @@ export function normalizeTemplateDocument(value: unknown): NoteText[] {
       if (!groups.has(data.id)) groups.set(data.id, `g${groups.size}`);
       list = data.kind === 'checklist' ? { kind: 'checklist', id: groups.get(data.id)!, checked: false } : { kind: data.kind, id: groups.get(data.id)! };
     }
-    return { type: 'text', text: item.text, ...(list ? { list } : {}) };
+    return { type: 'text', text: item.text, ...(list ? { list } : {}), ...readRichText(item, item.text.length) };
   });
   if (!result.some((block) => block.text.trim() || block.list)) throw new Error(tr('templates.invalidDocument'));
   return result;
@@ -37,7 +38,12 @@ export function instantiateTemplate(document: NoteText[], now = new Date()): Not
   const expanded = normalizeTemplateDocument(document).map((block) => {
     const list = block.list;
     if (list && !groups.has(list.id)) groups.set(list.id, newBlockKey());
-    return { ...block, key: newBlockKey(), text: block.text.replaceAll('{{date}}', date), ...(list ? { list: { ...list, id: groups.get(list.id)! } } : {}) };
+    let expanded = block, offset = 0;
+    for (let index = expanded.text.indexOf('{{date}}', offset); index >= 0; index = expanded.text.indexOf('{{date}}', offset)) {
+      expanded = replaceNoteText(expanded, expanded.text.slice(0, index) + date + expanded.text.slice(index + 8), undefined, { start: index, end: index + 8 });
+      offset = index + date.length;
+    }
+    return { ...expanded, key: newBlockKey(), ...(list ? { list: { ...list, id: groups.get(list.id)! } } : {}) };
   });
   normalizeTemplateDocument(expanded);
   return expanded;

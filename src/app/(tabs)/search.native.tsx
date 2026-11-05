@@ -13,6 +13,7 @@ import { SearchField } from '@/components/ui/search-field';
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { spacing } from '@/constants/theme';
 import { createBoardRepository } from '@/db/repositories';
+import { useOpenCardNote } from '@/components/notes/use-open-card-note';
 
 type Result = { id: string; title: string; context: string; kind: 'message' | 'card' | 'board' | 'file' };
 
@@ -35,6 +36,7 @@ function SearchContent({ scopedBoardId, boardName }: { scopedBoardId?: string; b
   const handwriting = useHandwriting();
   const tabBarHeight = useBottomTabBarHeight();
   const repository = useMemo(() => createBoardRepository(database), [database]);
+  const openCardNote = useOpenCardNote();
   const [term, setTerm] = useState('');
   const [archived, setArchived] = useState(false);
   const [results, setResults] = useState<Result[]>([]);
@@ -63,7 +65,7 @@ function SearchContent({ scopedBoardId, boardName }: { scopedBoardId?: string; b
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); ++requestId.current; }, []);
 
-  const open = (result: Result) => router.push(result.kind === 'board' ? `/board/${result.id}` : result.kind === 'card' ? `/card/${result.id}` : result.kind === 'message' || result.kind === 'file' ? `/chat?messageId=${result.id}` : '/search');
+  const open = (result: Result) => result.kind === 'card' ? void openCardNote(result.id) : router.push(result.kind === 'board' ? `/board/${result.id}` : result.kind === 'message' || result.kind === 'file' ? `/chat?messageId=${result.id}` : '/search');
   const goBack = () => router.canGoBack() ? router.back() : router.navigate('/');
 
   return <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: desk.desk }}>

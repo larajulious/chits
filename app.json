@@ -2,7 +2,7 @@
   "expo": {
     "name": "Chits",
     "slug": "Chits",
-    "version": "1.0.8",
+    "version": "1.0.10",
     "orientation": "portrait",
     "icon": "./assets/images/app_icon.png",
     "scheme": "chits",
@@ -10,8 +10,8 @@
     "ios": {
       "icon": "./assets/images/app_icon.png",
       "bundleIdentifier": "com.larajulious.chitsapp",
-      "version": "1.0.8",
-      "buildNumber": "21",
+      "version": "1.0.10",
+      "buildNumber": "23",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryAddUsageDescription": "Chits saves a copy of a photo, video or Share Note image to your photo library only when you choose to save it.",
@@ -123,7 +123,14 @@
               "vi",
               "hi",
               "tr",
-              "ar"
+              "ar",
+              "ta",
+              "te",
+              "bn",
+              "mr",
+              "kn",
+              "ml",
+              "gu"
             ],
             "android": [
               "en",
@@ -139,7 +146,14 @@
               "vi",
               "hi",
               "tr",
-              "ar"
+              "ar",
+              "ta",
+              "te",
+              "bn",
+              "mr",
+              "kn",
+              "ml",
+              "gu"
             ]
           },
           "allowDynamicLocaleChangesAndroid": true,
@@ -155,6 +169,18 @@
               "name": "ChitsAnywhere",
               "displayName": "Chits Anywhere",
               "description": "Quick Note and your recent notes.",
+              "ios": {
+                "supportedFamilies": [
+                  "systemSmall",
+                  "systemMedium",
+                  "systemLarge"
+                ]
+              }
+            },
+            {
+              "name": "ChitsPlan",
+              "displayName": "Today's Plan",
+              "description": "Your plan and progress for today.",
               "ios": {
                 "supportedFamilies": [
                   "systemSmall",
@@ -191,7 +217,14 @@
       "vi": "./src/localization/native/vi.json",
       "hi": "./src/localization/native/hi.json",
       "tr": "./src/localization/native/tr.json",
-      "ar": "./src/localization/native/ar.json"
+      "ar": "./src/localization/native/ar.json",
+      "ta": "./src/localization/native/ta.json",
+      "te": "./src/localization/native/te.json",
+      "bn": "./src/localization/native/bn.json",
+      "mr": "./src/localization/native/mr.json",
+      "kn": "./src/localization/native/kn.json",
+      "ml": "./src/localization/native/ml.json",
+      "gu": "./src/localization/native/gu.json"
     }
   }
 }

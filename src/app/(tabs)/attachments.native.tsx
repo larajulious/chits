@@ -1,15 +1,7 @@
 import { countLabel, tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  FlatList,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { FlatList, Modal, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -22,7 +14,8 @@ import { PhotoAttachmentViewer } from '@/components/attachments/photo-attachment
 import { subscribeToAttachmentChanges } from '@/services/attachment-changes';
 import { AttachmentContent } from '@/components/chat/message-row';
 import { isPdfAttachment } from '@/services/pdf-attachment';
-import { AppHeader, AppText, Chip, ChipRow, EmptyState, Icon, IconButton, PrimaryButton, Screen, SecondaryButton, Toast, HeaderIcon, MenuIcon } from '@/components/ui/primitives';
+import { AppHeader, AppText, EmptyState, Icon, IconButton, PrimaryButton, Screen, SecondaryButton, Toast, HeaderIcon, MenuIcon } from '@/components/ui/primitives';
+import { FilterRail } from '@/components/boards/filter-rail';
 import { DeskHeading, PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW, PaperCard, PaperDesk, PaperTab, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { stableTilt } from '@/constants/style-tokens';
 import type { IconName } from '@/components/ui/icon';
@@ -86,16 +79,14 @@ function fileTileIcon(item: AttachmentSummary): IconName {
   return 'document-outline';
 }
 
-function TypeFilterChips({ filter, onChange }: { filter: TypeFilter; onChange: (next: TypeFilter) => void }) {
+function TypeFilterRail({ filter, onChange }: { filter: TypeFilter; onChange: (next: TypeFilter) => void }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
   return (
-    <ChipRow style={styles.chipScroll}>
-      {TYPE_FILTERS.map((chip) => (
-        <Chip key={chip.key} label={chip.label} selected={chip.key === filter} accessibilityLabel={tr("attachments.filterByValue", { value1: chip.label })} onPress={() => onChange(chip.key)} />
-      ))}
-    </ChipRow>
+    <View style={styles.filterRail}>
+      <FilterRail value={filter} onChange={onChange} options={TYPE_FILTERS.map((option) => ({ ...option, accessibilityLabel: tr("attachments.filterByValue", { value1: option.label }) }))} />
+    </View>
   );
 }
 
@@ -183,7 +174,7 @@ function AttachmentDetailModal({ item, onClose, onViewCard }: { item: Attachment
             <View style={[styles.detailMediaWrap, { borderRadius: styleTokens.radius.panel }]}>
               <AttachmentContent attachment={attachment} variant="detail" />
             </View>
-            <Text numberOfLines={2} style={[styles.detailFileName, { color: theme.textSecondary }]}>{exportFileName(attachment)}{item.size ? ` · ${formatFileSize(item.size)}` : ''}</Text>
+            <AppText numberOfLines={2} style={[styles.detailFileName, { color: theme.textSecondary }]}>{exportFileName(attachment)}{item.size ? ` · ${formatFileSize(item.size)}` : ''}</AppText>
             <SecondaryButton label={tr("attachments.share")} onPress={() => void shareAttachment(attachment).then((shared) => setShareFailed(!shared))} />
             {item.cardId ? <PrimaryButton label={tr("attachments.viewCard")} onPress={() => onViewCard(item.cardId!)} /> : null}
           </ScrollView>
@@ -322,8 +313,9 @@ export default function AttachmentsScreen() {
   return (
     <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: desk.desk }}>
       <AppHeader
+        showTitle={choosingBackground}
         title={choosingBackground ? tr("attachments.chooseABackground") : tr("attachments.attachments")}
-        subtitle={ready ? pluralize(totalCount, 'item') : undefined}
+        subtitle={choosingBackground && ready ? pluralize(totalCount, 'item') : undefined}
         leading={<IconButton label={choosingBackground ? tr("attachments.cancelBackgroundSelection") : tr("archive.openNavigation")} onPress={() => { if (choosingBackground) returnToAppearance('current'); else openDrawer(); }}>{choosingBackground ? <HeaderIcon name="close" size={24} /> : <MenuIcon />}</IconButton>}
       />
       <PaperDesk>
@@ -338,7 +330,7 @@ export default function AttachmentsScreen() {
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <SearchField accessibilityLabel={tr("attachments.searchAttachments")} value={searchInput} onChangeText={setSearchInput} placeholder={tr("attachments.searchAttachments")} />
-            {choosingBackground ? <AppText weight="700" style={[styles.sectionLabel, { color: desk.inkMuted }]}>{tr("attachments.photosChooseAPhotoToPreview")}</AppText> : <TypeFilterChips filter={filter} onChange={setFilter} />}
+            {choosingBackground ? <AppText weight="700" style={[styles.sectionLabel, { color: desk.inkMuted }]}>{tr("attachments.photosChooseAPhotoToPreview")}</AppText> : <TypeFilterRail filter={filter} onChange={setFilter} />}
             {items.length && handwriting.ready ? <DeskHeading title={tr("attachments.recent")} style={styles.recent} /> : null}
           </View>
         }
@@ -373,7 +365,7 @@ const styles = StyleSheet.create({
   // The grid content already supplies the field's horizontal inset.
   listHeader: { paddingBottom: spacing.xs },
   // Bleeds to the screen edges so chips scroll edge to edge (like the Cards tab), while resting at the same inset.
-  chipScroll: { marginTop: 8, marginBottom: 2, marginHorizontal: -spacing.md },
+  filterRail: { marginTop: 4, marginBottom: 8, marginHorizontal: -spacing.md },
   sectionLabel: { fontSize: 11, letterSpacing: 0.5, marginTop: spacing.md, marginBottom: spacing.xs },
   gridContent: { paddingHorizontal: spacing.md, flexGrow: 1 },
   gridRow: { gap: GRID_GAP, marginBottom: GRID_GAP },

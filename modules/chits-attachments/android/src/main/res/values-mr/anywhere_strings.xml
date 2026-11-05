@@ -1,0 +1,12 @@
+<resources>
+  <string name="anywhere_brand">Chits Anywhere</string>
+  <string name="anywhere_quick">द्रुत टीप</string>
+  <string name="anywhere_recent">अलीकडील नोट्स</string>
+  <string name="anywhere_empty">तुमचा पुढचा विचार इथून सुरू होतो.</string>
+  <string name="anywhere_hidden">टीप माहिती लपविली आहे.</string>
+  <string name="anywhere_description">एक टीप तयार करा किंवा तुमच्या अलीकडील टिपा उघडा.</string>
+  <string name="anywhere_privacy">विजेट गोपनीयता</string>
+  <string name="anywhere_titles">टीप शीर्षके दाखवा</string>
+  <string name="anywhere_previews">लहान मजकूर पूर्वावलोकन दर्शवा</string>
+  <string name="anywhere_warning">होम स्क्रीन विजेट्स तुमचे डिव्हाइस वापरणाऱ्या कोणीही पाहू शकतात. टीप माहिती डीफॉल्टनुसार लपविली जाते.</string>
+</resources>

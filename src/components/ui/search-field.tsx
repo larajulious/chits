@@ -2,19 +2,22 @@ import { contentTextStyle } from '@/localization/text-layout';
 import { tr } from '@/localization/runtime';
 import { useDirection } from '@/localization/provider';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useTheme } from '@/components/theme-provider';
 import { radii, spacing } from '@/constants/theme';
 
-export function SearchField({ value, onChangeText, placeholder, accessibilityLabel }: { value: string; onChangeText: (value: string) => void; placeholder: string; accessibilityLabel: string }) {
+export function SearchField({ value, onChangeText, placeholder, accessibilityLabel, autoFocus, onSubmitEditing, style }: { value: string; onChangeText: (value: string) => void; placeholder: string; accessibilityLabel: string; autoFocus?: boolean; onSubmitEditing?: () => void; style?: StyleProp<ViewStyle> }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   const { direction, rowStyle } = useDirection();
-  const { tokens: theme } = useTheme();
-  return <View style={[styles.field, rowStyle, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
+  const { tokens: theme, scheme } = useTheme();
+  // On a dark page the plain surface nearly matches what's behind it.
+  return <View style={[styles.field, rowStyle, { backgroundColor: scheme === 'dark' ? theme.surfaceElevated : theme.surface, borderColor: theme.borderSubtle }, style]}>
     <Ionicons accessible={false} name="search" size={16} color={theme.textMuted} />
     <TextInput
       accessibilityLabel={accessibilityLabel}
+      autoFocus={autoFocus}
+      onSubmitEditing={onSubmitEditing}
       value={value}
       onChangeText={onChangeText}
       placeholder={placeholder}

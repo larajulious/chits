@@ -33,6 +33,43 @@ test('a fresh install starts the welcome tour once, with onboarding.version = 1'
   assert.ok((await settings(db))['onboarding.completedAt']);
 });
 
+test('an interrupted Welcome picks up at the same step, once it got past the first', async (t) => {
+  const db = await freshDatabase(t);
+  const now = 1_000_000_000;
+  await tour.prepareLaunch(db, true, now);
+  await tour.saveTourStep(db, 3, now + 1000);
+  assert.equal(await tour.prepareLaunch(db, true, now + 5000), true, 'it opens Welcome again');
+  const resumed = await tour.readTour(db);
+  assert.equal(resumed.welcomeStep, 3);
+  assert.equal(resumed.mode, 'first-run');
+  assert.equal((await settings(db))['onboarding.completedAt'], undefined, 'an interruption is not a finish');
+});
+
+test('a tour left for a day, or past Welcome, or met on a deep link is ended as before', async (t) => {
+  const now = 1_000_000_000;
+  const interrupted = async (patch) => {
+    const db = await freshDatabase(t);
+    await tour.prepareLaunch(db, true, now);
+    await tour.saveTourStep(db, 2, now);
+    if (patch) await tour.updateTour(db, patch, now);
+    return db;
+  };
+  const stale = await interrupted();
+  assert.equal(await tour.prepareLaunch(stale, true, now + tour.TOUR_RESUME_MS), false);
+  assert.equal(await tour.readTour(stale), null);
+  const onChat = await interrupted({ stage: 'first-note' });
+  assert.equal(await tour.prepareLaunch(onChat, true, now + 1000), false, 'never behind an overlay');
+  const deepLink = await interrupted();
+  assert.equal(await tour.prepareLaunch(deepLink, false, now + 1000), false);
+  assert.equal(await tour.readTour(deepLink), null);
+});
+
+test('an older tour row without a step still reads, and does not resume', () => {
+  const old = tour.parseTour(JSON.stringify({ mode: 'first-run', stage: 'welcome', since: 5 }));
+  assert.equal(old.welcomeStep, 0);
+  assert.equal(tour.canResumeTour(old, 6), false);
+});
+
 test('an existing user — any note, board or setting — never sees onboarding after updating', async (t) => {
   for (const seed of [
     (db) => repositories.createMessageRepository(db).createText('Buy milk'),

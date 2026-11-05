@@ -1,7 +1,7 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Sharing from 'expo-sharing';
 import { getContentUriAsync, getInfoAsync } from 'expo-file-system/legacy';
@@ -17,6 +17,8 @@ import { resolveAttachmentUri } from '@/services/attachment-storage';
 import { pdfDisplayName } from '@/services/pdf-attachment';
 import { exportActionLabel } from '@/services/attachment-export';
 import { useAttachmentExport } from '@/components/attachments/use-attachment-export';
+import { AppText } from '@/components/ui/app-text';
+import { HeaderIconButton } from '@/components/ui/controls';
 
 type Status = 'loading' | 'ready' | 'error';
 type Action = 'share' | 'open';
@@ -112,16 +114,16 @@ function PdfViewerContent({ attachment, onDismiss, theme, dark }: { attachment: 
   return <View style={styles.flex}>
     <View style={[styles.header, { borderBottomColor: headerInk.border }]}>
       <TopBarBackground />
-      <Pressable accessibilityRole="button" accessibilityLabel={tr("pdfviewer.closePdf")} hitSlop={8} onPress={onDismiss} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
+      <HeaderIconButton label={tr("pdfviewer.closePdf")} hitSlop={8} onPress={onDismiss}>
         <HeaderIcon name="chevron-back" size={24} />
-      </Pressable>
+      </HeaderIconButton>
       <View style={styles.headerCopy}>
-        <Text accessibilityRole="header" numberOfLines={1} ellipsizeMode="middle" style={[styles.title, { color: headerInk.ink }]}>{name}</Text>
-        <Text numberOfLines={1} style={[styles.subtitle, { color: headerInk.inkMuted }]}>{status === 'ready' && pageCount ? tr("pdfviewer.pdfValueValue", { value1: pageCount, value2: pageCount === 1 ? 'page' : 'pages' }) : 'PDF'}</Text>
+        <AppText accessibilityRole="header" numberOfLines={1} ellipsizeMode="middle" style={[styles.title, { color: headerInk.ink }]}>{name}</AppText>
+        <AppText numberOfLines={1} style={[styles.subtitle, { color: headerInk.inkMuted }]}>{status === 'ready' && pageCount ? tr("pdfviewer.pdfValueValue", { value1: pageCount, value2: pageCount === 1 ? 'page' : 'pages' }) : 'PDF'}</AppText>
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel={tr("pdfviewer.pdfActions")} accessibilityState={{ expanded: menuOpen }} hitSlop={8} onPress={() => setMenuOpen((open) => !open)} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
+      <HeaderIconButton label={tr("pdfviewer.pdfActions")} accessibilityState={{ expanded: menuOpen }} hitSlop={8} onPress={() => setMenuOpen((open) => !open)}>
         <HeaderIcon name="ellipsis-horizontal" size={22} />
-      </Pressable>
+      </HeaderIconButton>
     </View>
 
     <View style={[styles.flex, { backgroundColor: canvasColor }]}>
@@ -140,21 +142,21 @@ function PdfViewerContent({ attachment, onDismiss, theme, dark }: { attachment: 
 
       {status === 'error' || !uri ? <View style={[StyleSheet.absoluteFill, styles.center, styles.errorWrap, { backgroundColor: theme.background }]}>
         <View style={[styles.errorIcon, { backgroundColor: theme.surfaceElevated }]}><Ionicons accessible={false} name="document-text-outline" size={28} color={theme.textMuted} /></View>
-        <Text accessibilityRole="alert" style={[styles.errorTitle, { color: theme.textPrimary }]}>{unableToPreviewMessage()}</Text>
-        <Text style={[styles.errorCopy, { color: theme.textSecondary }]}>{tr("pdfviewer.youCanStillTryAgainOrOpenIt")}</Text>
-        <Pressable accessibilityRole="button" onPress={retry} style={({ pressed }) => [styles.primaryButton, { backgroundColor: theme.accent }, pressed && styles.pressed]}><Text style={[styles.primaryButtonText, { color: theme.accentText }]}>{tr("pdfviewer.tryAgain")}</Text></Pressable>
+        <AppText accessibilityRole="alert" style={[styles.errorTitle, { color: theme.textPrimary }]}>{unableToPreviewMessage()}</AppText>
+        <AppText style={[styles.errorCopy, { color: theme.textSecondary }]}>{tr("pdfviewer.youCanStillTryAgainOrOpenIt")}</AppText>
+        <Pressable accessibilityRole="button" onPress={retry} style={({ pressed }) => [styles.primaryButton, { backgroundColor: theme.accent }, pressed && styles.pressed]}><AppText style={[styles.primaryButtonText, { color: theme.accentText }]}>{tr("pdfviewer.tryAgain")}</AppText></Pressable>
         <View style={styles.errorActions}>
-          <Pressable accessibilityRole="button" disabled={busy !== null} onPress={() => void runAction('open')} style={({ pressed }) => [styles.secondaryButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}><Text style={[styles.secondaryButtonText, { color: theme.textPrimary }]}>{tr("pdfviewer.openInAnotherApp")}</Text></Pressable>
-          <Pressable accessibilityRole="button" disabled={busy !== null} onPress={() => void runAction('share')} style={({ pressed }) => [styles.secondaryButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}><Text style={[styles.secondaryButtonText, { color: theme.textPrimary }]}>{tr("attachments.share")}</Text></Pressable>
+          <Pressable accessibilityRole="button" disabled={busy !== null} onPress={() => void runAction('open')} style={({ pressed }) => [styles.secondaryButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}><AppText style={[styles.secondaryButtonText, { color: theme.textPrimary }]}>{tr("pdfviewer.openInAnotherApp")}</AppText></Pressable>
+          <Pressable accessibilityRole="button" disabled={busy !== null} onPress={() => void runAction('share')} style={({ pressed }) => [styles.secondaryButton, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}><AppText style={[styles.secondaryButtonText, { color: theme.textPrimary }]}>{tr("attachments.share")}</AppText></Pressable>
         </View>
       </View> : null}
 
       {status === 'ready' && pageCount > 1 ? <View pointerEvents="none" style={[styles.pageIndicator, { bottom: insets.bottom + spacing.md }]}>
-        <Text accessibilityLiveRegion="polite" style={styles.pageIndicatorText}>{page} / {pageCount}</Text>
+        <AppText accessibilityLiveRegion="polite" style={styles.pageIndicatorText}>{page} / {pageCount}</AppText>
       </View> : null}
 
       {toast ? <View pointerEvents="none" style={[styles.notice, { bottom: insets.bottom + spacing.md + (status === 'ready' && pageCount > 1 ? 44 : 0), backgroundColor: theme.textPrimary }]}>
-        <Text accessibilityLiveRegion="polite" style={[styles.noticeText, { color: theme.background }]}>{toast}</Text>
+        <AppText accessibilityLiveRegion="polite" style={[styles.noticeText, { color: theme.background }]}>{toast}</AppText>
       </View> : null}
     </View>
 
@@ -177,7 +179,7 @@ function MenuRow({ icon, label, theme, busy, onPress }: { icon: React.ComponentP
   useLocale();
   return <Pressable accessibilityRole="menuitem" accessibilityLabel={label} disabled={busy} onPress={onPress} style={({ pressed }) => [styles.menuRow, pressed && { backgroundColor: theme.surfaceElevated }]}>
     <Ionicons accessible={false} name={icon} size={19} color={theme.textSecondary} />
-    <Text style={[styles.menuText, { color: theme.textPrimary }]}>{label}</Text>
+    <AppText style={[styles.menuText, { color: theme.textPrimary }]}>{label}</AppText>
   </Pressable>;
 }
 
@@ -188,7 +190,6 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
   pressed: { opacity: 0.6 },
   header: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.xs, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
   headerCopy: { flex: 1, minWidth: 0, alignItems: 'center' },
   title: { fontSize: 16, lineHeight: 21, fontWeight: '700' },
   subtitle: { fontSize: 12, lineHeight: 16, fontWeight: '500' },

@@ -5,6 +5,7 @@ import { LayoutAnimation, Pressable, StyleSheet, TextInput, View } from 'react-n
 import { useTheme } from '@/components/theme-provider';
 import { useFontStyle } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
+import { HeaderIconButton } from '@/components/ui/controls';
 import { useStickySurface } from '@/components/ui/surface';
 import { useChatTransition } from '@/components/navigation/chat-transition';
 
@@ -43,17 +44,15 @@ export const ChatHeaderSurface = forwardRef<TextInput, Omit<Props, 'onCloseSearc
   const { tokens, styleTokens, styleColors } = useTheme();
   const sticky = useStickySurface();
   const inputFont = useFontStyle('body');
-  // Sticky: the header's buttons are outlined tiles, the search an outlined field.
-  const tile = (pressed: boolean) => sticky({ fill: styleColors.controlFill, radius: styleTokens.header.iconButton.radius, edge: styleTokens.header.iconButton.edge }, pressed);
   return <View style={[styles.row, rowStyle]}>
     {searchOpen ? (
-      <Pressable accessibilityRole="button" accessibilityLabel={tr("search.closeSearch")} onPress={onBack} style={({ pressed }) => [styles.iconButton, { backgroundColor: tokens.surface }, pressed && { backgroundColor: tokens.surfaceElevated }, tile(pressed)]}>
+      <HeaderIconButton label={tr("search.closeSearch")} onPress={onBack}>
         <Icon name="arrow-back" size={20} color={tokens.textPrimary} />
-      </Pressable>
+      </HeaderIconButton>
     ) : (
-      <Pressable accessibilityRole="button" accessibilityLabel={tr("unorganized.back")} accessibilityHint={tr("chatheader.closesChatAndReturnsToWhereYouCame")} onPress={onBack} style={({ pressed }) => [styles.iconButton, { backgroundColor: tokens.surface }, pressed && { backgroundColor: tokens.surfaceElevated }, tile(pressed)]}>
+      <HeaderIconButton label={tr("unorganized.back")} accessibilityHint={tr("chatheader.closesChatAndReturnsToWhereYouCame")} onPress={onBack}>
         <Icon name="arrow-back" size={20} color={tokens.textPrimary} />
-      </Pressable>
+      </HeaderIconButton>
     )}
     <View style={[styles.searchField, rowStyle, { backgroundColor: tokens.surfaceElevated }, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.control, edge: false })]}>
       <Icon name="search-outline" size={17} color={tokens.textMuted} />
@@ -73,15 +72,14 @@ export const ChatHeaderSurface = forwardRef<TextInput, Omit<Props, 'onCloseSearc
       />
       {searchQuery ? <Pressable accessibilityRole="button" accessibilityLabel={tr("unorganized.clearSearch")} hitSlop={8} onPress={() => onSearchChange('')}><Icon name="close-circle" size={16} color={tokens.textMuted} /></Pressable> : null}
     </View>
-    <Pressable accessibilityRole="button" accessibilityLabel={tr("settings.settings")} onPress={onOpenSettings} style={({ pressed }) => [styles.iconButton, { backgroundColor: tokens.surface }, pressed && { backgroundColor: tokens.surfaceElevated }, tile(pressed)]}>
+    <HeaderIconButton label={tr("settings.settings")} onPress={onOpenSettings}>
       <Icon name="ellipsis-horizontal" size={20} color={tokens.textPrimary} />
-    </Pressable>
+    </HeaderIconButton>
   </View>;
 });
 
 const styles = StyleSheet.create({
   row: { minHeight: 48, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 4, gap: 8 },
-  iconButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   searchField: { flex: 1, minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 20 },
   searchInput: { flex: 1, fontSize: 15, paddingVertical: 0 },
 });

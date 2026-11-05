@@ -389,7 +389,7 @@ function InlineNoteMessage({ message, content, focused, onLongPress, onHideAgain
   const { height: screenHeight } = useWindowDimensions();
   return <MediaMessageSurface focused={focused} onLongPress={() => onLongPress(message)}>
     {content.leading.map((attachment) => <AttachmentContent key={attachment.id} attachment={attachment} />)}
-    <SavedNoteContentView message={message} blocks={content.blocks} style={styles.inlineNote} maxImageHeight={Math.round(screenHeight * 0.45)} onImageLongPress={() => onLongPress(message)} renderText={(text) => <NoteText text={text} mode="compact" />} />
+    <SavedNoteContentView message={message} blocks={content.blocks} style={styles.inlineNote} maxImageHeight={Math.round(screenHeight * 0.45)} onImageLongPress={() => onLongPress(message)} renderText={(text, _key, block) => <NoteText text={text} block={block} mode="compact" />} />
     <View style={styles.inlineMetadata}><MessageMetadata message={message} inside onActions={() => onLongPress(message)} onHideAgain={onHideAgain} /></View>
   </MediaMessageSurface>;
 }

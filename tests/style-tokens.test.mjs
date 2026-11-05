@@ -40,7 +40,7 @@ test('Classic draws nothing new: no outline, edges, tape or mascot', () => {
   assert.deepEqual(classic.card, { tape: false, fold: false, tinted: false, tilt: 0 });
   assert.equal(classic.chatButton, 'circle');
   assert.equal(classic.mascotEmptyStates, false);
-  assert.deepEqual(classic.font, { display: null, body: null, paragraph: null });
+  assert.deepEqual(classic.font, STYLE_PRESETS.sticky.font, 'one type across the app, in either style');
 });
 
 test('mix blends toward the second color by the given amount', () => {

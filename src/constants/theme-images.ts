@@ -13,8 +13,8 @@ export const THEME_IMAGES: Record<ThemeImageId, number> = {
 // Default's header when no custom photo is chosen: the time-of-day scene
 // (header-scene-layer.tsx), framed through the same photo math and a little
 // right of center so the window stays in view on taller headers. Its ink
-// follows the hour, so the header and status bar read dark by day and white
-// by night (see header-scenes.ts).
+// follows app appearance: dark over the light-mode paper wash, white over
+// dark mode's warm charcoal wash (see header-scenes.ts).
 export const HEADER_SCENE_IMAGES: Record<HeaderSceneId, number> = {
   dawn: require('@/assets/images/header-scenes/dawn.webp'),
   morning: require('@/assets/images/header-scenes/morning.webp'),

@@ -1,3 +1,6 @@
+import { noteTitle } from '@/services/note-rich-text';
+import { AppText } from '@/components/ui/app-text';
+import { useTheme } from '@/components/theme-provider';
 import { useLocale } from '@/localization/provider';
 import { firstStrongDirection } from '@/localization/text-layout';
 import { tr } from '@/localization/runtime';
@@ -8,16 +11,16 @@ import { NoteCheckbox } from './note-checkbox';
 import { NoteImage } from '@/components/notes/note-image';
 import { spacing } from '@/constants/theme';
 import type { AttachmentLike } from '@/db/types';
-import { imageRows, noteListMarkers, type NoteRenderBlock } from '@/services/note-content';
+import { imageRows, noteListMarkers, type NoteRenderBlock, type NoteText } from '@/services/note-content';
 
-type Segment = { key: string; type: 'text'; text: string; checked?: boolean; marker?: string | null } | { key: string; type: 'images'; images: { key: string; attachment: AttachmentLike }[] };
+type Segment = { key: string; type: 'text'; text: string; block: NoteText; checked?: boolean; marker?: string | null } | { key: string; type: 'images'; images: { key: string; attachment: AttachmentLike }[] };
 
 function segmentsOf(blocks: NoteRenderBlock[]): Segment[] {
   const segments: Segment[] = [];
   const markers = noteListMarkers(blocks);
   for (const [index, block] of blocks.entries()) {
     const previous = segments[segments.length - 1];
-    if (block.type === 'text') segments.push({ key: block.key, type: 'text', text: block.text, marker: markers[index], checked: block.list?.kind === 'checklist' ? block.list.checked : undefined });
+    if (block.type === 'text') segments.push({ key: block.key, type: 'text', text: block.text, block, marker: markers[index], checked: block.list?.kind === 'checklist' ? block.list.checked : undefined });
     else if (previous?.type === 'images') previous.images.push({ key: block.key, attachment: block.attachment });
     else segments.push({ key: block.key, type: 'images', images: [{ key: block.key, attachment: block.attachment }] });
   }
@@ -28,7 +31,7 @@ type Props = {
   blocks: NoteRenderBlock[];
   // Each surface keeps its own typography (chat bubble, card paper, sticky
   // handwriting…): it draws the words, this lays them out with the images.
-  renderText: (text: string, key: string) => ReactNode;
+  renderText: (text: string, key: string, block?: NoteText) => ReactNode;
   maxImageHeight?: number;
   gap?: number;
   style?: StyleProp<ViewStyle>;
@@ -45,22 +48,25 @@ type Props = {
 export function NoteContentView({ blocks, renderText, maxImageHeight = 360, gap = spacing.sm, style, onImageLongPress, onToggleChecklist }: Props) {
   "use no memo"; // Global translation labels follow locale changes.
   useLocale();
+  const { tokens } = useTheme();
+  const title = noteTitle(blocks);
   const [width, setWidth] = useState(0);
   const segments = segmentsOf(blocks);
   const imageNumbers = new Map(blocks.filter((block) => block.type === 'image').map((block, index) => [block.key, index + 1]));
   const imageCount = imageNumbers.size;
   return <View style={style} onLayout={({ nativeEvent }) => { const next = Math.floor(nativeEvent.layout.width); setWidth((current) => current === next ? current : next); }}>
+    {title ? <AppText style={{ fontSize: 21, lineHeight: 29, fontWeight: '700', color: tokens.textPrimary, marginBottom: 12 }}>{title}</AppText> : null}
     {segments.map((segment, index) => {
       const previous = segments[index - 1];
       const consecutiveTasks = segment.type === 'text' && segment.checked !== undefined && previous?.type === 'text' && previous.checked !== undefined;
       const spaceBefore = { marginTop: index ? (consecutiveTasks ? Math.min(gap, spacing.xxs) : gap) : 0 };
       if (segment.type === 'text' && segment.checked !== undefined) return <View key={segment.key} style={[styles.listRow, { flexDirection: firstStrongDirection(segment.text) === 'rtl' ? 'row-reverse' : 'row' }, spaceBefore]}>
         <NoteCheckbox checked={segment.checked} label={segment.text} onPress={onToggleChecklist ? () => onToggleChecklist(segment.key) : undefined} />
-        <View style={[styles.listBody, segment.checked && { opacity: 0.6 }]}>{renderText(segment.text, segment.key)}</View>
+        <View style={[styles.listBody, segment.checked && { opacity: 0.6 }]}>{renderText(segment.text, segment.key, segment.block)}</View>
       </View>;
       if (segment.type === 'text') return segment.marker
-        ? <View key={segment.key} style={[styles.listRow, { flexDirection: firstStrongDirection(segment.text) === 'rtl' ? 'row-reverse' : 'row' }, spaceBefore]}><View style={styles.listMarker}>{renderText(segment.marker, `${segment.key}:marker`)}</View><View style={styles.listBody}>{renderText(segment.text, segment.key)}</View></View>
-        : <View key={segment.key} style={spaceBefore}>{renderText(segment.text, segment.key)}</View>;
+        ? <View key={segment.key} style={[styles.listRow, { flexDirection: firstStrongDirection(segment.text) === 'rtl' ? 'row-reverse' : 'row' }, spaceBefore]}><View style={styles.listMarker}>{renderText(segment.marker, `${segment.key}:marker`)}</View><View style={styles.listBody}>{renderText(segment.text, segment.key, segment.block)}</View></View>
+        : <View key={segment.key} style={spaceBefore}>{renderText(segment.text, segment.key, segment.block)}</View>;
       // Until the width is known, hold roughly the space the images will take.
       if (!width) return <View key={segment.key} style={[spaceBefore, { height: Math.min(maxImageHeight, 160) }]} />;
       return <View key={segment.key} style={[styles.run, spaceBefore]}>

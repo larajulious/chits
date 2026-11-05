@@ -5,6 +5,7 @@ import { TEMPLATE_SCHEMA } from './template-schema';
 import { REVISIT_SCHEMA } from './revisit-schema';
 import { FOCUS_SCHEMA } from './focus-schema';
 import { SPIN_SCHEMA, SPIN_UNORGANIZED_SCHEMA } from './spin-schema';
+import { PLAN_SCHEMA } from './plan-schema';
 
 type Migration = { version: number; up: (database: SQLiteDatabase) => Promise<void> };
 
@@ -299,6 +300,9 @@ const migrations: Migration[] = [{
 }, {
   version: 32,
   up: async (database) => { await database.execAsync(SPIN_UNORGANIZED_SCHEMA); },
+}, {
+  version: 33,
+  up: async (database) => { await database.execAsync(PLAN_SCHEMA); },
 }];
 
 /** The schema version this build of Chits understands (the last migration). */

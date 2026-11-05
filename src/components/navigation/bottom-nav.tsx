@@ -10,11 +10,13 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from '
 import { useTheme } from '@/components/theme-provider';
 import { useChatTransition } from '@/components/navigation/chat-transition';
 import { ChatButtonFace } from '@/components/navigation/chat-button-face';
+import { NotesShortcut } from '@/components/navigation/notes-shortcut';
+import { useHomeView } from '@/services/home-view';
 import { measuredChatOrigin, type ChatOrigin } from '@/services/chat-transition-motion';
 import { spacing } from '@/constants/theme';
 
-// The tab navigator retains its screens and history. Its only floating control
-// is Chat; other destinations remain reachable through the side panel.
+// The tab navigator retains its screens and history. Its floating controls are
+// Chat and a way back to Notes; other destinations stay in the side panel.
 export function BottomNav({ state, insets }: BottomTabBarProps) {
   "use no memo"; // Global i18next copy follows the locale subscription.
   useLocale();
@@ -26,6 +28,8 @@ export function BottomNav({ state, insets }: BottomTabBarProps) {
   const measuredOrigin = useRef<ChatOrigin | null>(null);
   const pressScale = useSharedValue(1);
   const activeName = state.routes[state.index]?.name;
+  const homeView = useHomeView();
+  const onNotes = activeName === 'index' && homeView === 'cards';
 
   const openChatBalloon = () => {
     const fromPath = activeName === 'attachments' ? '/attachments'
@@ -52,11 +56,12 @@ export function BottomNav({ state, insets }: BottomTabBarProps) {
     entering={enterRise}
     pointerEvents="box-none"
     style={[styles.wrap, {
-      paddingLeft: Math.max(spacing.lg, insets.left + spacing.sm),
+      paddingRight: Math.max(spacing.lg, insets.right + spacing.sm),
       paddingBottom: floatingChatBottom(insets.bottom),
     }]}
     onLayout={(event) => reportHeight?.(event.nativeEvent.layout.height)}
   >
+        {onNotes ? null : <NotesShortcut />}
         <Pressable
           ref={chatButtonRef}
           collapsable={false}
@@ -94,7 +99,7 @@ function enterButtonSettle() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { position: 'absolute', left: 0, right: 0, bottom: 0, direction: 'ltr', alignItems: 'flex-start', backgroundColor: 'transparent', paddingTop: spacing.xs },
+  wrap: { position: 'absolute', left: 0, right: 0, bottom: 0, direction: 'ltr', flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: spacing.sm, backgroundColor: 'transparent', paddingTop: spacing.xs },
   chatButtonHit: { flexShrink: 0 },
   chatButton: { width: '100%', height: '100%' },
 });

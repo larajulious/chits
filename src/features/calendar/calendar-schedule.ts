@@ -219,3 +219,8 @@ export function formatScheduleTime(schedule: Pick<CalendarSchedule, 'startMinute
   if (schedule.endMinute === null || schedule.endMinute === schedule.startMinute) return formatMinute(schedule.startMinute, locale);
   return `${formatMinute(schedule.startMinute, locale)} – ${formatMinute(schedule.endMinute % DAY_MINUTES, locale)}`;
 }
+
+/** When the date changes, a selection still on the old today moves with it; a day the reader chose stays put. */
+export function followToday(selectedKey: string, previousToday: string, today: string): string {
+  return selectedKey === previousToday ? today : selectedKey;
+}

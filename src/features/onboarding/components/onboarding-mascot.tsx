@@ -19,7 +19,7 @@ function loadMascotHtml(): Promise<string> {
 }
 
 /** The supplied SVG's own CSS animation plays locally, with a still SVG fallback. */
-export function OnboardingMascot({ size, style, accessible = true }: { size: number; style?: StyleProp<ViewStyle>; accessible?: boolean }) {
+export function OnboardingMascot({ size, style, accessible = true, still = false }: { size: number; style?: StyleProp<ViewStyle>; accessible?: boolean; /** The drawing alone, with no animation. */ still?: boolean }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -27,9 +27,10 @@ export function OnboardingMascot({ size, style, accessible = true }: { size: num
   const [ready, setReady] = useState(false);
   useEffect(() => {
     let mounted = true;
+    if (still) return;
     void loadMascotHtml().then((next) => { if (mounted) setHtml(next); }).catch(() => undefined);
     return () => { mounted = false; };
-  }, []);
+  }, [still]);
 
   return <View accessible={accessible} accessibilityRole="image" accessibilityLabel={tr("onboarding.chitsMascot")} pointerEvents="none" style={[{ width: size, height: size }, style]}>
     {!ready ? <Image source={MASCOT} contentFit="contain" style={StyleSheet.absoluteFill} /> : null}

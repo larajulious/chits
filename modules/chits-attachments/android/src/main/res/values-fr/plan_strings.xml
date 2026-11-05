@@ -1,0 +1,15 @@
+<resources>
+  <string name="plan_widget_name">Plan du jour</string>
+  <string name="plan_widget_description">Votre plan et vos progrès du jour.</string>
+  <string name="plan_widget_today">Aujourd’hui</string>
+  <string name="plan_widget_none">Un petit plan pour aujourd’hui ?</string>
+  <string name="plan_widget_action">Planifier ma journée</string>
+  <string name="plan_widget_keep_going">Continuez !</string>
+  <string name="plan_widget_all_done">Tout est fait pour aujourd’hui !</string>
+  <string name="plan_widget_wrapped">C’est bouclé !</string>
+  <string name="plan_widget_hidden">Les noms des tâches sont masqués. Vous pouvez les afficher dans Réglages.</string>
+  <string name="plan_widget_add">Ajouter</string>
+  <string name="plan_widget_wrap">Terminer</string>
+  <string name="plan_widget_view">Voir le plan du jour</string>
+  <string name="plan_widget_recap">Voir le bilan du jour</string>
+</resources>

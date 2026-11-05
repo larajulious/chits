@@ -1,8 +1,13 @@
-import { contentTextStyle, firstStrongDirection, languageDirection } from '@/localization/text-layout';
+import { formattingText } from './note-formatting-copy';
+import { noteHeadingStyle, noteTextSpans } from './note-rich-text';
+import { NoteFormattingSheet } from './note-formatting-sheet';
+import { formatRange, marksAt, cleanMarks, replaceNoteText, setNoteHeading, splitNoteHeading, continueNoteParagraph, type NoteParagraphContinuation, noteTitle, withNoteTitle, type NoteMarks, type NoteFormat } from '@/services/note-rich-text';
+import { contentTextStyle, firstStrongDirection, languageDirection, needsSystemFont } from '@/localization/text-layout';
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
-import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ComponentType, type Ref, type RefObject } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode, type Ref, type RefObject } from 'react';
+import { ActivityIndicator, Keyboard, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ImagePlusGlyph from 'lucide-react-native/icons/image-plus';
 import ListGlyph from 'lucide-react-native/icons/list';
@@ -13,15 +18,19 @@ import { createNoteEditHistory } from '@/services/note-edit-history';
 import { backspaceNoteBlock, editNoteListItem, toggleNoteList, toggleNoteChecklist } from '@/services/note-lists';
 
 import { bindNativeImagePaste, subscribeNativeImagePaste, subscribeNativeBoundaryBackspace } from '@/services/native-image-paste';
+import { nativeNoteFormattingAvailable, syncNativeNoteFormatting, detachNativeNoteFormatting } from '@/services/native-note-formatting';
 import { pickAndStageMedia, type AttachmentDraft } from '@/services/attachment-import';
 import { NoteImage } from '@/components/notes/note-image';
+import { useDesk } from '@/components/desk/paper-desk';
+import { useKeyboardInset } from '@/hooks/use-keyboard-inset';
 import { useTheme } from '@/components/theme-provider';
 import { useStickyControls } from '@/components/ui/surface';
-import { AppText } from '@/components/ui/app-text';
+import { AppText, useFontStyle } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { spacing } from '@/constants/theme';
 import { pasteClipboardImage, useClipboardHasImage } from '@/services/clipboard-image';
-import { draftHasRichContent, isEmptyNoteDraft, noteListMarkers, draftImageCount, insertImageAtCursor, MAX_NOTE_IMAGES, newBlockKey, removeImageBlock, updateTextBlock, type NoteList, type NoteCursor, type NoteDraftBlock } from '@/services/note-content';
+import { isEmptyNoteDraft, noteListMarkers, draftImageCount, insertImageAtCursor, MAX_NOTE_IMAGES, newBlockKey, removeImageBlock, type NoteList, type NoteCursor, type NoteDraftBlock } from '@/services/note-content';
+import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
 
 type ToolbarGlyph = ComponentType<{ size: number; color: string; strokeWidth: number }>;
 const ImagePlus = ImagePlusGlyph as ToolbarGlyph;
@@ -29,7 +38,7 @@ const List = ListGlyph as ToolbarGlyph;
 const ListOrdered = ListOrderedGlyph as ToolbarGlyph;
 const SquareCheck = SquareCheckGlyph as ToolbarGlyph;
 
-export type NoteBlocksEditorHandle = { focus: () => void; blur: () => void };
+export type NoteBlocksEditorHandle = { focus: () => void; blur: () => void; setKeyboardSuppressed: (suppressed: boolean) => void };
 
 /** Deletes images pasted in this session but never saved — call when a draft is discarded. */
 export function discardPastedImages(blocks: NoteDraftBlock[]) {
@@ -137,7 +146,7 @@ export function InsertImageButton({ disabled, busy, onPress }: { disabled?: bool
   </Pressable>;
 }
 
-export type NoteBlocksEditorControl = NoteBlocksEditorHandle & { cursor: () => NoteCursor; focusAt: (cursor: NoteCursor) => void; toggleList: (kind: NoteList['kind'], selection?: NoteCursor) => void; undo: () => void; redo: () => void; canUndo: () => boolean; canRedo: () => boolean; subscribeFormat: (listener: (kind: NoteList['kind'] | null) => void) => () => void };
+export type NoteBlocksEditorControl = NoteBlocksEditorHandle & { cursor: () => NoteCursor; focusAt: (cursor: NoteCursor, revealBlock?: boolean) => void; toggleList: (kind: NoteList['kind'], selection?: NoteCursor) => void; undo: () => void; redo: () => void; canUndo: () => boolean; canRedo: () => boolean; format: (patch: NoteMarks, selection?: NoteCursor) => void; setHeading: (heading: 0 | 1 | 2, selection?: NoteCursor) => void; subscribeRichFormat: (listener: (format: NoteFormat) => void) => () => void; subscribeFormat: (listener: (kind: NoteList['kind'] | null) => void) => () => void };
 
 /** The context-aware "Paste image" chip: only shown while the clipboard holds an image. */
 export function PasteImageButton({ visible, pasting, disabled, onPress, style }: { visible: boolean; pasting: boolean; disabled?: boolean; onPress: () => void; style?: StyleProp<ViewStyle> }) {
@@ -166,6 +175,7 @@ type Props = {
   blocks: NoteDraftBlock[];
   onChangeBlocks: (update: (current: NoteDraftBlock[]) => NoteDraftBlock[]) => void;
   editable: boolean;
+  showTitle?: boolean;
   placeholder: string;
   maxLength: number;
   // A plain note is one native TextInput (style:
@@ -196,7 +206,7 @@ type Props = {
  * text back together. The shared structural engine handles list/paragraph
  * boundaries; native inputs retain character editing and composition.
  */
-export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeholder, maxLength, singleInputStyle, blockContainerStyle, blockInputStyle, maxImageHeight, accessibilityLabel, onRemovePastedImage, onReplaceImage, onFocus, onBlur, singleInputProps, fillViewport = false, contentContainerStyle }: Props) {
+export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeholder, maxLength, singleInputStyle, blockContainerStyle, blockInputStyle, maxImageHeight, accessibilityLabel, onRemovePastedImage, onReplaceImage, onFocus, onBlur, singleInputProps, fillViewport = false, contentContainerStyle, showTitle = true }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   const locale = useLocale();
@@ -217,18 +227,31 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
   const pendingFocus = useRef<NoteCursor>(null);
   const pendingScroll = useRef<string | null>(null);
   const [focusRequest, setFocusRequest] = useState(0);
+  const [focusTarget, setFocusTarget] = useState<NoteCursor>(null);
+  const [keyboardSuppressed, setKeyboardSuppressed] = useState(false);
+  const keyboardSuppressedRef = useRef(false);
+  const formattingCursor = useRef<NoteCursor>(null);
   const scroll = useRef<ScrollView>(null);
   const positions = useRef(new Map<string, number>());
   const [width, setWidth] = useState(0);
-  const richLayout = draftHasRichContent(blocks);
+  const richLayout = blocks.length > 1 || blocks.some(block => block.type === 'image' || block.list || block.heading);
   const fillPlainViewport = fillViewport && !richLayout;
   const emptyDocument = isEmptyNoteDraft(blocks);
   const singleLayout = StyleSheet.flatten(singleInputStyle);
-  const singleContainer = !richLayout ? { flex: singleLayout?.flex, flexGrow: singleLayout?.flexGrow, flexShrink: 1 as const, maxHeight: singleLayout?.maxHeight } : undefined;
+  // External text (such as an onboarding sample) can expand an unfocused
+  // composer. Bound the viewport too, so its ScrollView cannot shrink the
+  // mounted TextInput to zero while the composer changes layout.
+  const singleContainer = !richLayout ? { flex: singleLayout?.flex, flexGrow: singleLayout?.flexGrow, flexShrink: 1 as const, minHeight: singleLayout?.minHeight ?? singleLayout?.height, maxHeight: singleLayout?.maxHeight } : undefined;
   const markers = noteListMarkers(blocks);
+  const headingContinuation = useRef<NoteParagraphContinuation | null>(null);
+  const pendingMarks = useRef<{ key: string; at: number; marks: NoteMarks } | null>(null);
+  const richListeners = useRef(new Set<(format: NoteFormat) => void>());
   const formatListeners = useRef(new Set<(kind: NoteList['kind'] | null) => void>());
   const notifyFormat = useCallback((key: string | null) => {
     const block = liveBlocks.current.find((item) => item.key === key);
+    const selection = key ? formattingCursor.current?.key === key ? formattingCursor.current : selections.current.get(key) : null;
+    const marks = pendingMarks.current?.key === key ? pendingMarks.current.marks : block?.type === 'text' ? marksAt(block, selection?.start ?? 0, selection?.end ?? 0) : {};
+    for (const listener of richListeners.current) listener({ marks, heading: block?.type === 'text' ? block.heading ?? 0 : 0, list: block?.type === 'text' ? block.list?.kind ?? null : null });
     for (const listener of formatListeners.current) listener(block?.type === 'text' ? block.list?.kind ?? null : null);
   }, []);
   useEffect(() => { notifyFormat(lastFocused.current); }, [blocks, notifyFormat]);
@@ -237,16 +260,37 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
   const lastTextKey = textBlocks[textBlocks.length - 1]?.key ?? null;
 
   const focusBlock = useCallback((key: string | null) => { if (key) inputs.current.get(key)?.focus(); }, []);
-  const scheduleFocus = useCallback((cursor: NoteCursor) => { pendingFocus.current = cursor; pendingScroll.current = cursor?.key ?? null; setFocusRequest((value) => value + 1); }, []);
+  const scheduleFocus = useCallback((cursor: NoteCursor, revealBlock = true) => {
+    if (keyboardSuppressedRef.current) formattingCursor.current = cursor;
+    pendingFocus.current = cursor;
+    setFocusTarget(cursor);
+    pendingScroll.current = revealBlock ? cursor?.key ?? null : null;
+    setFocusRequest((value) => value + 1);
+  }, []);
   const currentCursor = useCallback((): NoteCursor => {
+    if (formattingCursor.current) return formattingCursor.current;
     const block = liveBlocks.current.find((item) => item.type === 'text' && item.key === lastFocused.current)
       ?? liveBlocks.current.findLast((item) => item.type === 'text');
     if (block?.type !== 'text') return null;
     const selection = selections.current.get(block.key);
     return { key: block.key, start: Math.min(selection?.start ?? block.text.length, block.text.length), end: Math.min(selection?.end ?? block.text.length, block.text.length) };
   }, []);
-  const commit = useCallback((next: NoteDraftBlock[], cursor?: NoteCursor) => {
+  const suppressKeyboard = useCallback((suppressed: boolean) => {
+    const cursor = suppressed ? currentCursor() : null;
+    keyboardSuppressedRef.current = suppressed;
+    formattingCursor.current = cursor;
+    setKeyboardSuppressed(suppressed);
+  }, [currentCursor]);
+  const releaseRequestedSelection = useCallback(() => {
+    formattingCursor.current = null;
+    pendingFocus.current = null;
+    pendingScroll.current = null;
+    setFocusTarget(null);
+  }, []);
+  const commit = useCallback((next: NoteDraftBlock[], cursor?: NoteCursor, titleEdit = false) => {
     if (next === liveBlocks.current) { if (cursor) scheduleFocus(cursor); return; }
+    const title = noteTitle(liveBlocks.current);
+    if (!titleEdit && title && noteTitle(next) !== title) next = withNoteTitle(next, title);
     history.record({ blocks: liveBlocks.current, cursor: currentCursor() });
     liveBlocks.current = next;
     onChangeBlocks(() => next);
@@ -254,6 +298,8 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
   }, [currentCursor, history, onChangeBlocks, scheduleFocus]);
   const travel = useCallback((direction: 'undo' | 'redo') => {
     if (!editable) return;
+    pendingMarks.current = null;
+    headingContinuation.current = null;
     const entry = history.travel(direction, { blocks: liveBlocks.current, cursor: currentCursor() });
     if (!entry) return;
     liveBlocks.current = entry.blocks;
@@ -265,10 +311,29 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
     const result = toggleNoteList(liveBlocks.current, selection ?? currentCursor(), kind);
     commit(result.blocks, result.cursor);
   }, [commit, currentCursor, editable]);
+  const formatAction = useCallback((patch: NoteMarks, selection?: NoteCursor) => {
+    if (!editable) return;
+    const cursor = selection ?? currentCursor();
+    const block = liveBlocks.current.find(item => item.key === cursor?.key);
+    if (!cursor || block?.type !== 'text') return;
+    if (cursor.start === cursor.end) {
+      const base = pendingMarks.current?.key === block.key ? pendingMarks.current.marks : marksAt(block, cursor.start);
+      pendingMarks.current = { key: block.key, at: cursor.start, marks: cleanMarks({ ...base, ...patch }) };
+      notifyFormat(block.key);
+    } else {
+      commit(liveBlocks.current.map(item => item.key === block.key ? { ...formatRange(block, cursor.start, cursor.end, patch), key: block.key } : item));
+      notifyFormat(block.key);
+    }
+    // Android can collapse its selection when a toolbar Pressable takes the
+    // touch. Restore the range captured before that touch, after React commits.
+    scheduleFocus(cursor, false);
+  }, [commit, currentCursor, editable, notifyFormat, scheduleFocus]);
   useImperativeHandle(ref, () => ({
     focus: () => focusBlock(lastFocused.current && inputs.current.has(lastFocused.current) ? lastFocused.current : lastTextKey),
     blur: () => { for (const input of inputs.current.values()) input.blur(); },
+    setKeyboardSuppressed: suppressKeyboard,
     cursor: () => {
+      if (formattingCursor.current) return formattingCursor.current;
       const key = lastFocused.current;
       if (!key || !blocks.some((block) => block.key === key)) return null;
       const selection = selections.current.get(key);
@@ -278,6 +343,9 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
     },
     focusAt: scheduleFocus,
     toggleList: listAction,
+    format: formatAction,
+    setHeading: (heading, selection) => { if (editable) { const result = setNoteHeading(liveBlocks.current, selection ?? currentCursor(), heading); commit(result.blocks, result.cursor); } },
+    subscribeRichFormat: (listener) => { richListeners.current.add(listener); notifyFormat(lastFocused.current); return () => { richListeners.current.delete(listener); }; },
     undo: () => travel('undo'),
     redo: () => travel('redo'),
     canUndo: history.canUndo,
@@ -288,9 +356,9 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
       listener(block?.type === 'text' ? block.list?.kind ?? null : null);
       return () => { formatListeners.current.delete(listener); };
     },
-  }), [blocks, focusBlock, history, lastTextKey, listAction, scheduleFocus, travel]);
+  }), [blocks, commit, currentCursor, editable, focusBlock, formatAction, history, lastTextKey, listAction, notifyFormat, scheduleFocus, suppressKeyboard, travel]);
 
-  // Restore only structural selections, after native refs have committed. Ordinary
+  // Restore explicit formatting/structural selections after native refs commit. Ordinary
   // typing never controls selection or schedules a later cursor overwrite.
   useLayoutEffect(() => {
     const target = pendingFocus.current;
@@ -300,9 +368,10 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
     pendingFocus.current = null;
     lastFocused.current = target.key;
     selections.current.set(target.key, { start: target.start, end: target.end });
-    focusBlock(target.key);
-    input.setNativeProps({ selection: { start: target.start, end: target.end } });
-  }, [blocks, focusBlock, focusRequest, editable]);
+    if (!keyboardSuppressed && !input.isFocused()) focusBlock(target.key);
+    // BlockInput receives a transient selection prop. RN 0.86 Fabric applies
+    // selection through TextInput commands, not a native view selection prop.
+  }, [blocks, focusBlock, focusRequest, editable, keyboardSuppressed]);
   const resetEmptyScroll = useCallback(() => {
     if (!isEmptyNoteDraft(liveBlocks.current)) return;
     // An old row coordinate must never scroll a newly cleared document. Native
@@ -338,16 +407,52 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
       if (![...inputs.current.values()].some((input) => input.isFocused())) onBlur?.();
     }, 0);
   }, [onBlur]);
-  const selected = useCallback((key: string, selection: { start: number; end: number }) => { selections.current.set(key, selection); }, []);
+  const selected = useCallback((key: string, selection: { start: number; end: number }) => {
+    // Dismissing Android's keyboard can emit a collapsed selection *after*
+    // acknowledging the requested range. Retain the formatting session's range
+    // until the user touches/types in the body or closes the sheet.
+    const held = formattingCursor.current;
+    if (held && (key !== held.key || selection.start !== held.start || selection.end !== held.end)) return;
+    // Structural splits can emit one final selection from the previous input.
+    // Only the focused input can change the active typing marks.
+    const requested = pendingFocus.current ?? focusTarget;
+    if (requested && (key !== requested.key || selection.start !== requested.start || selection.end !== requested.end)) return;
+    selections.current.set(key, selection);
+    if (key !== lastFocused.current) return;
+    setFocusTarget(target => target?.key === key && target.start === selection.start && target.end === selection.end ? null : target);
+    if (pendingMarks.current && (pendingMarks.current.key !== key || selection.start !== pendingMarks.current.at || selection.end !== selection.start)) pendingMarks.current = null;
+    notifyFormat(key);
+  }, [focusTarget, notifyFormat]);
   const changed = useCallback((key: string, value: string) => {
+    formattingCursor.current = null;
+    setFocusTarget(null);
     const current = liveBlocks.current;
+    const continued = continueNoteParagraph(current, key, value, headingContinuation.current, pendingMarks.current?.key === headingContinuation.current?.targetKey ? pendingMarks.current?.marks : undefined);
+    if (continued) {
+      headingContinuation.current = continued.continuation;
+      if (pendingMarks.current) pendingMarks.current.at = continued.cursor.start;
+      commit(continued.blocks, continued.cursor);
+      return;
+    }
+    if (headingContinuation.current?.sourceKey !== key) headingContinuation.current = null;
     const block = current.find((item) => item.key === key);
     if (block?.type !== 'text' || block.text === value) return;
+    const selection = selections.current.get(key);
+    const typingMarks = pendingMarks.current?.key === key ? pendingMarks.current.marks : marksAt(block, selection?.start ?? block.text.length, selection?.end ?? block.text.length);
+    const replacement = replaceNoteText(block, value, pendingMarks.current?.key === key ? pendingMarks.current.marks : undefined, selections.current.get(key));
+    if (pendingMarks.current?.key === key) pendingMarks.current.at = Math.max(0, value.length - block.text.length + (selections.current.get(key)?.end ?? block.text.length));
     if (block?.type === 'text' && block.list) {
-      const result = editNoteListItem(current, key, value, selections.current.has(key) ? { key, ...selections.current.get(key)! } : null);
+      const result = editNoteListItem(current, key, value, selections.current.has(key) ? { key, ...selections.current.get(key)! } : null, replacement);
+      if (result.cursor) pendingMarks.current = { key: result.cursor.key, at: result.cursor.start, marks: typingMarks };
+      commit(result.blocks, result.cursor);
+    } else if (block.heading && value.includes('\n')) {
+      const result = splitNoteHeading(current, replacement, selections.current.get(key));
+      pendingMarks.current = result.cursor ? { key: result.cursor.key, at: result.cursor.start, marks: typingMarks } : null;
+      const newline = value.indexOf('\n');
+      if (result.cursor && value.indexOf('\n', newline + 1) < 0 && result.cursor.key !== key) headingContinuation.current = { sourceKey: key, targetKey: result.cursor.key, prefix: value.slice(0, newline + 1), nativeValue: value, caret: result.cursor.start };
       commit(result.blocks, result.cursor);
     } else {
-      const next = updateTextBlock(current, key, value);
+      const next = current.map(item => item.key === key ? replacement : item);
       commit(next);
     }
   }, [commit]);
@@ -361,12 +466,16 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
   const textInput = (block: Extract<NoteDraftBlock, { type: 'text' }>, single: boolean) => <BlockInput
     key={block.key}
     block={block}
+    onTouchBlock={() => { headingContinuation.current = null; releaseRequestedSelection(); }}
+    onKeyBlock={releaseRequestedSelection}
+    requestedSelection={focusTarget?.key === block.key ? { start: focusTarget.start, end: focusTarget.end } : undefined}
     register={register}
     onFocusBlock={focused}
     onSelectBlock={selected}
     onChangeBlock={changed}
     onBoundaryBackspace={backspace}
     onBlurBlock={blurred}
+    keyboardSuppressed={keyboardSuppressed}
     extra={single ? singleInputProps : undefined}
     accessibilityLabel={accessibilityLabel}
     placeholder={single || (block.key === blocks[0]?.key && !totalText) ? placeholder : undefined}
@@ -381,7 +490,7 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
     if (!block.attachmentId && !blocks.some((other) => other.key !== block.key && other.type === 'image' && other.image.storagePath === block.image.storagePath)) { void block.remove?.().catch(() => undefined); onRemovePastedImage?.(); }
     const index = blocks.findIndex((item) => item.key === block.key);
     const before = blocks[index - 1];
-    if (before?.type === 'text') pendingFocus.current = { key: before.key, start: before.text.length, end: before.text.length };
+    if (before?.type === 'text') scheduleFocus({ key: before.key, start: before.text.length, end: before.text.length });
     onChangeBlocks((current) => removeImageBlock(current, block.key));
   };
 
@@ -391,7 +500,8 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
   // Keep the trailing input so text can still be added below the image.
   const leadingImageSlot = blocks[0]?.type === 'text' && blocks[0].text === '' && !blocks[0].list && blocks[1]?.type === 'image';
   const imageNumbers = new Map(blocks.filter((block) => block.type === 'image').map((block, index) => [block.key, index + 1]));
-  return <ScrollView ref={scroll} style={richLayout ? blockContainerStyle : singleContainer} scrollEnabled={richLayout} contentContainerStyle={[styles.scrollContent, fillPlainViewport && styles.fillViewport, contentContainerStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="none" onLayout={resetEmptyScroll} onContentSizeChange={resetEmptyScroll}>
+  return <ScrollView ref={scroll} style={richLayout ? blockContainerStyle : singleContainer} scrollEnabled={richLayout || showTitle} contentContainerStyle={[styles.scrollContent, fillPlainViewport && styles.fillViewport, contentContainerStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="none" onLayout={resetEmptyScroll} onContentSizeChange={resetEmptyScroll}>
+    {showTitle ? <TextInput showSoftInputOnFocus={!keyboardSuppressed} accessibilityLabel={formattingText("titleLabel")} placeholder={formattingText("titlePlaceholder")} value={noteTitle(blocks)} onChangeText={title => commit(withNoteTitle(liveBlocks.current, title), undefined, true)} editable={editable} maxLength={200} placeholderTextColor={theme.textMuted} style={{ color: theme.textPrimary, fontSize: 20, fontWeight: '700', flexShrink: 0, minHeight: 48, paddingHorizontal: richLayout ? 0 : singleLayout?.paddingHorizontal ?? 0, paddingVertical: spacing.xs, marginBottom: spacing.xs, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.borderSubtle }} /> : null}
     <View style={[styles.blocks, !richLayout && styles.singleBlocks, fillPlainViewport && styles.fillViewport]} onLayout={({ nativeEvent }) => { const next = Math.floor(nativeEvent.layout.width); setWidth((current) => current === next ? current : next); }}>
     {blocks.map((block, blockIndex) => {
       if (blockIndex === 0 && leadingImageSlot) return null;
@@ -430,7 +540,11 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
 }
 
 type BlockInputProps = {
+  keyboardSuppressed?: boolean;
   block: Extract<NoteDraftBlock, { type: 'text' }>;
+  onTouchBlock?: () => void;
+  onKeyBlock?: () => void;
+  requestedSelection?: { start: number; end: number };
   register: (key: string, input: TextInput | null) => void;
   onFocusBlock: (key: string) => void;
   onSelectBlock: (key: string, selection: { start: number; end: number }) => void;
@@ -448,7 +562,7 @@ type BlockInputProps = {
 
 // One run of the note's words. Alone (no images) it scrolls itself like any
 // note field; between images it grows with its text inside the editor's column.
-function BlockInput({ block, register, onFocusBlock, onSelectBlock, onChangeBlock, onBoundaryBackspace, onBlurBlock, extra, accessibilityLabel, placeholder, single, maxLength, editable, style }: BlockInputProps) {
+function BlockInput({ block, onTouchBlock, onKeyBlock, requestedSelection, register, onFocusBlock, onSelectBlock, onChangeBlock, onBoundaryBackspace, onBlurBlock, extra, accessibilityLabel, placeholder, single, maxLength, editable, style, keyboardSuppressed = false }: BlockInputProps) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   const locale = useLocale();
@@ -457,8 +571,19 @@ function BlockInput({ block, register, onFocusBlock, onSelectBlock, onChangeBloc
   // rich-input style makes RN clear native gravity when that style is removed,
   // even though the top-level prop is unchanged. Compact Chat can still center.
   const { textAlignVertical = 'top', ...inputProps } = extra ?? {};
+  const font = useFontStyle('body');
+  const baseFamily = needsSystemFont(block.text, locale) ? undefined : StyleSheet.flatten(style)?.fontFamily ?? font.fontFamily;
   const { key } = block;
   const inputRef = useRef<TextInput | null>(null);
+  const registerInput = useCallback((input: TextInput | null) => {
+    if (inputRef.current && inputRef.current !== input) detachNativeNoteFormatting(inputRef.current);
+    inputRef.current = input;
+    register(key, input);
+  }, [key, register]);
+  const syncFormatting = useCallback(() => {
+    if (inputRef.current) syncNativeNoteFormatting(inputRef.current, block, baseFamily);
+  }, [baseFamily, block]);
+  useLayoutEffect(syncFormatting, [syncFormatting]);
   const nativeBinding = useRef<(() => void) | null>(null);
   const bindMountedInput = useCallback(() => {
     nativeBinding.current?.();
@@ -485,11 +610,19 @@ function BlockInput({ block, register, onFocusBlock, onSelectBlock, onChangeBloc
     onBoundaryBackspace(key, block, event);
   }), [block, editable, key, onBoundaryBackspace]);
   return <TextInput
-    ref={(input) => { inputRef.current = input; register(key, input); }}
+    ref={registerInput}
     accessibilityLabel={accessibilityLabel}
-    value={block.text}
+    scriptText={block.text}
+    selection={requestedSelection}
+    showSoftInputOnFocus={!keyboardSuppressed}
+    onTouchStart={onTouchBlock}
+    // Android owns one ordinary controlled text buffer. Native spans style it
+    // without replacing characters, selection or composing text. Other runtimes
+    // keep the attributed fallback; a runtime never switches modes per mark.
+    value={nativeNoteFormattingAvailable ? block.text : undefined}
     onChangeText={(value) => { cancelBoundaryBackspace(); onChangeBlock(key, value); }}
     onKeyPress={({ nativeEvent }) => {
+      onKeyBlock?.();
       if (nativeEvent.key === 'Backspace' && selection.current.start === 0 && selection.current.end === 0) {
         cancelBoundaryBackspace();
         // IMEs can send a deletion before committing composed/pasted text.
@@ -497,8 +630,8 @@ function BlockInput({ block, register, onFocusBlock, onSelectBlock, onChangeBloc
         boundaryBackspace.current = setTimeout(() => { boundaryBackspace.current = null; onBoundaryBackspace(key, block); }, 0);
       }
     }}
-    onLayout={bindMountedInput}
-    onFocus={() => { bindMountedInput(); onFocusBlock(key); }}
+    onLayout={() => { bindMountedInput(); syncFormatting(); }}
+    onFocus={() => { bindMountedInput(); syncFormatting(); onFocusBlock(key); }}
     onBlur={onBlurBlock}
     onSelectionChange={({ nativeEvent }) => { selection.current = nativeEvent.selection; onSelectBlock(key, nativeEvent.selection); }}
     placeholder={placeholder}
@@ -509,9 +642,9 @@ function BlockInput({ block, register, onFocusBlock, onSelectBlock, onChangeBloc
     scrollEnabled={single}
     maxLength={maxLength}
     editable={editable}
-    style={[style, contentTextStyle(block.text, languageDirection(locale)), { textAlignVertical }]}
+    style={[style, noteHeadingStyle(block.heading), contentTextStyle(block.text, languageDirection(locale)), { textAlignVertical }]}
     {...inputProps}
-  />;
+  >{nativeNoteFormattingAvailable ? undefined : <Text>{noteTextSpans(block, baseFamily)}</Text>}</TextInput>;
 }
 
 const styles = StyleSheet.create({
@@ -536,6 +669,78 @@ const styles = StyleSheet.create({
   chipLabel: { fontSize: 14, fontWeight: '600' },
   disabled: { opacity: 0.36 },
   pressed: { opacity: 0.64 },
+});
+
+/**
+ * Shared editor geometry. Fullscreen Chat/Add/Edit use a continuous page via
+ * `fullscreenPage`; embedded Focus/template editors keep their inset `page`.
+ * `input` is a plain note's text; `blocks` and `blockInput` lay out rich content.
+ */
+export const noteEditorStyles = StyleSheet.create({
+  // Fullscreen hosts use the whole page; no inset paper panel around the input.
+  fullscreenPage: { flex: 1 },
+  page: { flex: 1, marginHorizontal: spacing.sm, marginTop: spacing.xs, marginBottom: spacing.xs },
+  input: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.md, fontSize: 17, lineHeight: 27 },
+  blocks: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  blockInput: { minHeight: 27, padding: 0, fontSize: 17, lineHeight: 27, textAlignVertical: 'top' },
+});
+
+/** What the toolbar needs from useNoteImagePaste. */
+export type NoteImagePaste = Pick<ReturnType<typeof useNoteImagePaste>, 'canPaste' | 'pasting' | 'picking' | 'paste' | 'pick'>;
+
+/**
+ * The one formatting bar under every full note editor: photo, lists,
+ * undo/redo and, while the clipboard holds an image, Paste image, in a single
+ * row that scrolls sideways rather than wrapping, on a hairline. Extra actions
+ * go at its end (`children`). With `safeBottom` it clears the home indicator
+ * or navigation bar while the keyboard is closed; with the keyboard open it
+ * sits right on top of it (see KeyboardPane).
+ */
+export function NoteToolbar({ editor, images, disabled, safeBottom = false, children }: { editor: RefObject<NoteBlocksEditorControl | null>; images?: NoteImagePaste; disabled?: boolean; safeBottom?: boolean; children?: ReactNode }) {
+  "use no memo";
+  useLocale();
+  const desk = useDesk();
+  const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardInset();
+  const [formatting, setFormatting] = useState(false);
+  const [sheetReady, setSheetReady] = useState(false);
+  const formattingSelection = useRef<NoteCursor>(null);
+  const formatDisabled = Boolean(disabled || images?.pasting);
+  const formatRequested = formatting && !formatDisabled;
+  const sheetOpen = formatRequested && sheetReady;
+  useLayoutEffect(() => {
+    const control = editor.current;
+    setSheetReady(false);
+    control?.setKeyboardSuppressed(formatRequested);
+    let hidden: ReturnType<typeof Keyboard.addListener> | undefined;
+    if (formatRequested) {
+      // Retain the range before dismissing native focus. Formatting restores
+      // selection without reopening the keyboard, including new list inputs.
+      if (formattingSelection.current) control?.focusAt(formattingSelection.current, false);
+      // Let the keyboard finish changing the viewport before moving controls
+      // into it. A user can then tap a swatch without it moving mid-press.
+      if (Keyboard.isVisible()) hidden = Keyboard.addListener('keyboardDidHide', () => setSheetReady(true));
+      else setSheetReady(true);
+      Keyboard.dismiss();
+    }
+    return () => { hidden?.remove(); control?.setKeyboardSuppressed(false); };
+  }, [editor, formatRequested]);
+  const { tokens: theme } = useTheme();
+  return <View style={[toolbarStyles.bar, { borderTopColor: desk.rule, paddingBottom: safeBottom && !keyboard ? insets.bottom : 0 }]}>
+    <NoteFormattingSheet editor={editor} open={sheetOpen} onClose={() => setFormatting(false)} />
+    <ScrollView horizontal keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false} contentContainerStyle={toolbarStyles.row}>
+      <Pressable accessibilityRole="button" accessibilityLabel={formattingText("open")} accessibilityState={{ expanded: sheetOpen, disabled: formatDisabled }} disabled={formatDisabled} onPressIn={() => { formattingSelection.current = editor.current?.cursor() ?? null; }} onPress={() => setFormatting(value => !value)} style={[styles.formattingAction, sheetOpen && { backgroundColor: theme.accentSoft }]}><AppText style={{ fontSize: 21, fontWeight: '700', color: theme.textPrimary }}>Aa</AppText></Pressable>
+      {images ? <InsertImageButton disabled={disabled} busy={images.pasting} onPress={() => void images.pick()} /> : null}
+      <NoteListButtons editor={editor} disabled={disabled || images?.pasting} />
+      {images ? <PasteImageButton visible={images.canPaste} pasting={images.pasting && !images.picking} disabled={disabled || images.picking} onPress={() => void images.paste()} /> : null}
+      {children}
+    </ScrollView>
+  </View>;
+}
+
+const toolbarStyles = StyleSheet.create({
+  bar: { flexGrow: 0, flexShrink: 0, borderTopWidth: StyleSheet.hairlineWidth },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.xxs, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs },
 });
 
 /** List controls share the native selection retained by the block editor. */

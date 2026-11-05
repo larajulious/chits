@@ -1,0 +1,544 @@
+{
+  "date": "2026-11-05",
+  "status": "Implementation complete; linguistic and release acceptance pending",
+  "bundledLanguages": [
+    "en",
+    "fil",
+    "pt-BR",
+    "es",
+    "id",
+    "fr",
+    "de",
+    "ja",
+    "ko",
+    "it",
+    "vi",
+    "hi",
+    "tr",
+    "ar",
+    "ta",
+    "te",
+    "bn",
+    "mr",
+    "kn",
+    "ml",
+    "gu"
+  ],
+  "translationProvenance": {
+    "method": "Google Translate drafts plus editorial context/token/English cleanup",
+    "input": "App-owned English UI, permission descriptions, greeting text and glossary only",
+    "runtimeNetworkTranslation": false,
+    "nativeSpeakerApproved": false
+  },
+  "indianLocales": {
+    "hi": {
+      "deviceLocale": "hi-IN",
+      "bundledLocale": "hi",
+      "canonicalKeys": 2048,
+      "coverage": 1,
+      "nativeSpeakerReview": "Required for all keys, native permissions, glossary and mascot copy",
+      "englishIdenticalExceptions": {
+        "chat.chitsValueValueValue": {
+          "value": "Chits: {{value1}}{{value2}}. {{value3}}",
+          "reason": "Product name and variables only"
+        },
+        "chat.chitsValueValue": {
+          "value": "Chits: {{value1}}. {{value2}}",
+          "reason": "Product name and variables only"
+        },
+        "dates.withTime": {
+          "value": "{{day}}, {{time}}",
+          "reason": "Variables and punctuation only"
+        },
+        "common.withMoreAttachments": {
+          "value": "{{label}} {{more}}",
+          "reason": "Variables only"
+        },
+        "calendar.daySummary": {
+          "value": "{{date}}, {{entries}}",
+          "reason": "Variables and punctuation only"
+        },
+        "common.withDuration": {
+          "value": "{{title}}, {{duration}}",
+          "reason": "Variables and punctuation only"
+        },
+        "focus.title": {
+          "value": "Chits Focus",
+          "reason": "Product name Chits Focus"
+        },
+        "spin.title": {
+          "value": "Chits Spin",
+          "reason": "Product name Chits Spin"
+        }
+      }
+    },
+    "ta": {
+      "deviceLocale": "ta-IN",
+      "bundledLocale": "ta",
+      "canonicalKeys": 2048,
+      "coverage": 1,
+      "nativeSpeakerReview": "Required for all keys, native permissions, glossary and mascot copy",
+      "englishIdenticalExceptions": {
+        "chat.chitsValueValueValue": {
+          "value": "Chits: {{value1}}{{value2}}. {{value3}}",
+          "reason": "Product name and variables only"
+        },
+        "chat.chitsValueValue": {
+          "value": "Chits: {{value1}}. {{value2}}",
+          "reason": "Product name and variables only"
+        },
+        "pdfviewer.pdfValueValue": {
+          "value": "PDF · {{value1}} {{value2}}",
+          "reason": "Intentional technical format name PDF and variables"
+        },
+        "dates.withTime": {
+          "value": "{{day}}, {{time}}",
+          "reason": "Variables and punctuation only"
+        },
+        "common.withMoreAttachments": {
+          "value": "{{label}} {{more}}",
+          "reason": "Variables only"
+        },
+        "calendar.daySummary": {
+          "value": "{{date}}, {{entries}}",
+          "reason": "Variables and punctuation only"
+        },
+        "common.withDuration": {
+          "value": "{{title}}, {{duration}}",
+          "reason": "Variables and punctuation only"
+        },
+        "focus.title": {
+          "value": "Chits Focus",
+          "reason": "Product name Chits Focus"
+        },
+        "anywhere.brand": {
+          "value": "Chits Anywhere",
+          "reason": "Product name Chits Anywhere"
+        },
+        "spin.title": {
+          "value": "Chits Spin",
+          "reason": "Product name Chits Spin"
+        }
+      }
+    },
+    "te": {
+      "deviceLocale": "te-IN",
+      "bundledLocale": "te",
+      "canonicalKeys": 2048,
+      "coverage": 1,
+      "nativeSpeakerReview": "Required for all keys, native permissions, glossary and mascot copy",
+      "englishIdenticalExceptions": {
+        "chat.chitsValueValueValue": {
+          "value": "Chits: {{value1}}{{value2}}. {{value3}}",
+          "reason": "Product name and variables only"
+        },
+        "chat.chitsValueValue": {
+          "value": "Chits: {{value1}}. {{value2}}",
+          "reason": "Product name and variables only"
+        },
+        "pdfviewer.pdfValueValue": {
+          "value": "PDF · {{value1}} {{value2}}",
+          "reason": "Intentional technical format name PDF and variables"
+        },
+        "dates.withTime": {
+          "value": "{{day}}, {{time}}",
+          "reason": "Variables and punctuation only"
+        },
+        "common.withMoreAttachments": {
+          "value": "{{label}} {{more}}",
+          "reason": "Variables only"
+        },
+        "calendar.daySummary": {
+          "value": "{{date}}, {{entries}}",
+          "reason": "Variables and punctuation only"
+        },
+        "common.withDuration": {
+          "value": "{{title}}, {{duration}}",
+          "reason": "Variables and punctuation only"
+        },
+        "focus.title": {
+          "value": "Chits Focus",
+          "reason": "Product name Chits Focus"
+        },
+        "anywhere.brand": {
+          "value": "Chits Anywhere",
+          "reason": "Product name Chits Anywhere"
+        },
+        "spin.title": {
+          "value": "Chits Spin",
+          "reason": "Product name Chits Spin"
+        }
+      }
+    },
+    "bn": {
+      "deviceLocale": "bn-IN",
+      "bundledLocale": "bn",
+      "canonicalKeys": 2048,
+      "coverage": 1,
+      "nativeSpeakerReview": "Required for all keys, native permissions, glossary and mascot copy",
+      "englishIdenticalExceptions": {
+        "chat.chitsValueValueValue": {
+          "value": "Chits: {{value1}}{{value2}}. {{value3}}",
+          "reason": "Product name and variables only"
+        },
+        "chat.chitsValueValue": {
+          "value": "Chits: {{value1}}. {{value2}}",
+          "reason": "Product name and variables only"
+        },
+        "pdfviewer.pdfValueValue": {
+          "value": "PDF · {{value1}} {{value2}}",
+          "reason": "Intentional technical format name PDF and variables"
+        },
+        "dates.withTime": {
+          "value": "{{day}}, {{time}}",
+          "reason": "Variables and punctuation only"
+        },
+        "common.withMoreAttachments": {
+          "value": "{{label}} {{more}}",
+          "reason": "Variables only"
+        },
+        "calendar.daySummary": {
+          "value": "{{date}}, {{entries}}",
+          "reason": "Variables and punctuation only"
+        },
+        "common.withDuration": {
+          "value": "{{title}}, {{duration}}",
+          "reason": "Variables and punctuation only"
+        },
+        "focus.title": {
+          "value": "Chits Focus",
+          "reason": "Product name Chits Focus"
+        },
+        "anywhere.brand": {
+          "value": "Chits Anywhere",
+          "reason": "Product name Chits Anywhere"
+        },
+        "spin.title": {
+          "value": "Chits Spin",
+          "reason": "Product name Chits Spin"
+        }
+      }
+    },
+    "mr": {
+      "deviceLocale": "mr-IN",
+      "bundledLocale": "mr",
+      "canonicalKeys": 2048,
+      "coverage": 1,
+      "nativeSpeakerReview": "Required for all keys, native permissions, glossary and mascot copy",
+      "englishIdenticalExceptions": {
+        "chat.chitsValueValueValue": {
+          "value": "Chits: {{value1}}{{value2}}. {{value3}}",
+          "reason": "Product name and variables only"
+        },
+        "chat.chitsValueValue": {
+          "value": "Chits: {{value1}}. {{value2}}",
+          "reason": "Product name and variables only"
+        },
+        "pdfviewer.pdfValueValue": {
+          "value": "PDF · {{value1}} {{value2}}",
+          "reason": "Intentional technical format name PDF and variables"
+        },
+        "dates.withTime": {
+          "value": "{{day}}, {{time}}",
+          "reason": "Variables and punctuation only"
+        },
+        "common.withMoreAttachments": {
+          "value": "{{label}} {{more}}",
+          "reason": "Variables only"
+        },
+        "calendar.daySummary": {
+          "value": "{{date}}, {{entries}}",
+          "reason": "Variables and punctuation only"
+        },
+        "common.withDuration": {
+          "value": "{{title}}, {{duration}}",
+          "reason": "Variables and punctuation only"
+        },
+        "focus.title": {
+          "value": "Chits Focus",
+          "reason": "Product name Chits Focus"
+        },
+        "anywhere.brand": {
+          "value": "Chits Anywhere",
+          "reason": "Product name Chits Anywhere"
+        },
+        "spin.title": {
+          "value": "Chits Spin",
+          "reason": "Product name Chits Spin"
+        }
+      }
+    },
+    "kn": {
+      "deviceLocale": "kn-IN",
+      "bundledLocale": "kn",
+      "canonicalKeys": 2048,
+      "coverage": 1,
+      "nativeSpeakerReview": "Required for all keys, native permissions, glossary and mascot copy",
+      "englishIdenticalExceptions": {
+        "chat.chitsValueValueValue": {
+          "value": "Chits: {{value1}}{{value2}}. {{value3}}",
+          "reason": "Product name and variables only"
+        },
+        "chat.chitsValueValue": {
+          "value": "Chits: {{value1}}. {{value2}}",
+          "reason": "Product name and variables only"
+        },
+        "pdfviewer.pdfValueValue": {
+          "value": "PDF · {{value1}} {{value2}}",
+          "reason": "Intentional technical format name PDF and variables"
+        },
+        "dates.withTime": {
+          "value": "{{day}}, {{time}}",
+          "reason": "Variables and punctuation only"
+        },
+        "common.withMoreAttachments": {
+          "value": "{{label}} {{more}}",
+          "reason": "Variables only"
+        },
+        "calendar.daySummary": {
+          "value": "{{date}}, {{entries}}",
+          "reason": "Variables and punctuation only"
+        },
+        "common.withDuration": {
+          "value": "{{title}}, {{duration}}",
+          "reason": "Variables and punctuation only"
+        },
+        "focus.title": {
+          "value": "Chits Focus",
+          "reason": "Product name Chits Focus"
+        },
+        "anywhere.brand": {
+          "value": "Chits Anywhere",
+          "reason": "Product name Chits Anywhere"
+        },
+        "spin.title": {
+          "value": "Chits Spin",
+          "reason": "Product name Chits Spin"
+        }
+      }
+    },
+    "ml": {
+      "deviceLocale": "ml-IN",
+      "bundledLocale": "ml",
+      "canonicalKeys": 2048,
+      "coverage": 1,
+      "nativeSpeakerReview": "Required for all keys, native permissions, glossary and mascot copy",
+      "englishIdenticalExceptions": {
+        "chat.chitsValueValueValue": {
+          "value": "Chits: {{value1}}{{value2}}. {{value3}}",
+          "reason": "Product name and variables only"
+        },
+        "chat.chitsValueValue": {
+          "value": "Chits: {{value1}}. {{value2}}",
+          "reason": "Product name and variables only"
+        },
+        "pdfviewer.pdfValueValue": {
+          "value": "PDF · {{value1}} {{value2}}",
+          "reason": "Intentional technical format name PDF and variables"
+        },
+        "dates.withTime": {
+          "value": "{{day}}, {{time}}",
+          "reason": "Variables and punctuation only"
+        },
+        "common.withMoreAttachments": {
+          "value": "{{label}} {{more}}",
+          "reason": "Variables only"
+        },
+        "calendar.daySummary": {
+          "value": "{{date}}, {{entries}}",
+          "reason": "Variables and punctuation only"
+        },
+        "common.withDuration": {
+          "value": "{{title}}, {{duration}}",
+          "reason": "Variables and punctuation only"
+        },
+        "focus.title": {
+          "value": "Chits Focus",
+          "reason": "Product name Chits Focus"
+        },
+        "anywhere.brand": {
+          "value": "Chits Anywhere",
+          "reason": "Product name Chits Anywhere"
+        },
+        "spin.title": {
+          "value": "Chits Spin",
+          "reason": "Product name Chits Spin"
+        }
+      }
+    },
+    "gu": {
+      "deviceLocale": "gu-IN",
+      "bundledLocale": "gu",
+      "canonicalKeys": 2048,
+      "coverage": 1,
+      "nativeSpeakerReview": "Required for all keys, native permissions, glossary and mascot copy",
+      "englishIdenticalExceptions": {
+        "chat.chitsValueValueValue": {
+          "value": "Chits: {{value1}}{{value2}}. {{value3}}",
+          "reason": "Product name and variables only"
+        },
+        "chat.chitsValueValue": {
+          "value": "Chits: {{value1}}. {{value2}}",
+          "reason": "Product name and variables only"
+        },
+        "pdfviewer.pdfValueValue": {
+          "value": "PDF · {{value1}} {{value2}}",
+          "reason": "Intentional technical format name PDF and variables"
+        },
+        "dates.withTime": {
+          "value": "{{day}}, {{time}}",
+          "reason": "Variables and punctuation only"
+        },
+        "common.withMoreAttachments": {
+          "value": "{{label}} {{more}}",
+          "reason": "Variables only"
+        },
+        "calendar.daySummary": {
+          "value": "{{date}}, {{entries}}",
+          "reason": "Variables and punctuation only"
+        },
+        "common.withDuration": {
+          "value": "{{title}}, {{duration}}",
+          "reason": "Variables and punctuation only"
+        },
+        "focus.title": {
+          "value": "Chits Focus",
+          "reason": "Product name Chits Focus"
+        },
+        "anywhere.brand": {
+          "value": "Chits Anywhere",
+          "reason": "Product name Chits Anywhere"
+        },
+        "spin.title": {
+          "value": "Chits Spin",
+          "reason": "Product name Chits Spin"
+        }
+      }
+    }
+  },
+  "preservation": {
+    "unchangedExistingCatalogs": [
+      "src/localization/locales/tr.json",
+      "src/localization/locales/ja.json",
+      "src/localization/locales/de.json",
+      "src/localization/locales/fil.json",
+      "src/localization/locales/en.json",
+      "src/localization/locales/it.json",
+      "src/localization/locales/fr.json",
+      "src/localization/locales/pt-BR.json",
+      "src/localization/locales/ko.json",
+      "src/localization/locales/vi.json",
+      "src/localization/locales/id.json",
+      "src/localization/locales/es.json",
+      "src/localization/locales/ar.json"
+    ],
+    "hindiRetainedKeys": 2048,
+    "hindiEditedKeys": {
+      "calendar.itLeavesItsBoardAndTheCalendarYou": {
+        "before": "यह अपना बोर्ड और कैलेंडर छोड़ देता है। आप इसे Archive से पुनर्स्थापित कर सकते हैं।",
+        "after": "यह अपने बोर्ड और कैलेंडर से हट जाएगा। आप इसे संग्रह से वापस ला सकते हैं।"
+      },
+      "focus.saveChat": {
+        "before": "Chat में सहेजें",
+        "after": "चैट में सहेजें"
+      },
+      "focus.conflict": {
+        "before": "यह नोट कहीं और बदला गया है। मसौदा सुरक्षित है। दोबारा लोड करें या Chat में प्रति सहेजें।",
+        "after": "यह नोट कहीं और बदला गया है। आपका मसौदा सुरक्षित है। दोबारा लोड करें या चैट में एक प्रति सहेजें।"
+      },
+      "focus.recoverChat": {
+        "before": "मसौदे की प्रति Chat में सहेजें",
+        "after": "मसौदे की प्रति चैट में सहेजें"
+      },
+      "spin.reason.revisit": {
+        "before": "यह नोट आपकी Revisit प्राथमिकताओं के अनुसार समीक्षा योग्य है।",
+        "after": "यह नोट आपकी फिर से देखने की प्राथमिकताओं के अनुसार समीक्षा के लिए तैयार है।"
+      },
+      "spin.achievementHelp.revisit": {
+        "before": "Revisit Roulette से योग्य पुराना नोट खोला।",
+        "after": "फिर से देखने वाले स्पिन से एक योग्य पुराना नोट खोला।"
+      },
+      "spin.reason.planned": {
+        "before": "इस आइटम की Calendar में पिछली या आगामी तारीख है। नियोजित तारीख काम की अंतिम तारीख नहीं है।",
+        "after": "इस आइटम की कैलेंडर में पिछली या आने वाली तारीख है। नियोजित तारीख काम पूरा करने की समय-सीमा नहीं है।"
+      },
+      "spin.planned": {
+        "before": "Calendar में नियोजित: {{date}}",
+        "after": "कैलेंडर में नियोजित: {{date}}"
+      },
+      "settings.showChitsSpinHelp": {
+        "before": "पात्र नोट्स या कस्टम आइटम उपलब्ध होने पर Cards और Focus में Spin दिखाएँ।",
+        "after": "योग्य नोट्स या अपने जोड़े हुए आइटम उपलब्ध होने पर कार्ड और Chits Focus में Chits Spin दिखाएँ।"
+      }
+    },
+    "databaseOrBusinessLogicChanges": false,
+    "newDependencies": false
+  },
+  "automatedValidation": {
+    "localizationAudit": {
+      "languages": 21,
+      "canonicalKeys": 2048,
+      "staticReferences": 2606,
+      "errors": []
+    },
+    "duplicateJsonKeys": 0,
+    "localizationTests": {
+      "passed": 44,
+      "failed": 0
+    },
+    "fullTests": {
+      "passed": 732,
+      "failed": 1,
+      "unrelatedFailure": "tests/settings-screen.test.mjs: every header title gets the paper tag, and only with a title; source assertion against existing shared header changes"
+    },
+    "typeScript": "Pass",
+    "scopedEslint": "Pass",
+    "fullEslint": "No errors; two existing unused-import/variable warnings in board/[id].native.tsx and card/edit-content.native.tsx",
+    "nativePrebuild": "Pass; isolated directory /tmp/chits-indian-prebuild",
+    "nativeVerifier": "Pass for both fresh isolated and existing ignored native projects; all 21 locales",
+    "androidResourceCompile": "Pass; aapt2 compiled the local module resources",
+    "iosWidgetStringCompile": "Pass; xcstringstool emitted 21 locale resources",
+    "hermesExports": "Pass; final iOS and Android bundles in /tmp/chits-indian-export-final",
+    "scopedWhitespace": "Pass",
+    "fullWhitespace": "Existing trailing blank line in src/components/notes/note-blocks-editor.tsx",
+    "focusedWithStyleTokenTests": {
+      "passed": 51,
+      "failed": 0
+    }
+  },
+  "performance": {
+    "baseline14": {
+      "node": "v24.15.0",
+      "languages": 14,
+      "catalogBytes": 2094295,
+      "gzipCatalogBytes": 542911,
+      "initializationMedianMs": 4.86375000000001,
+      "initializationP95Ms": 15.173333
+    },
+    "expanded21": {
+      "node": "v24.15.0",
+      "languages": 21,
+      "catalogBytes": 3767357,
+      "gzipCatalogBytes": 854765,
+      "initializationMedianMs": 7.353082999999998,
+      "initializationP95Ms": 19.357417000000027
+    },
+    "scope": "Node resource parsing/i18next initialization only; not mobile startup performance"
+  },
+  "nativeSmoke": {
+    "android": "All eight Indian language names and selected UI copy in the shared-component in-memory fixture; light/dark screenshots. Tamil 2x-font chip clipping reproduced and corrected. Not full production-flow acceptance. Shared Button theme-switch label redraw repaired using the existing React Compiler opt-out boundary and recaptured. Native-name picker checked through the final Gujarati row. Emulator font scale and temporary packager preferences were restored; QA databases were in memory only.",
+    "screenshots": "/tmp/chits-indian-localization/screenshots",
+    "ios": "Tamil fixture rendered; OS dialogs blocked clean full visual acceptance. Native resources and widget string compilation pass.",
+    "physicalDeviceAcceptance": false
+  },
+  "pending": [
+    "Native-speaker review for every key in all eight Indian languages",
+    "Production-flow matrix on fresh iOS and Android builds",
+    "Physical-device native-script IME, cursor/selection and Unicode round-trip tests",
+    "VoiceOver/TalkBack and maximum-font coverage across all production screens",
+    "Installed Home Screen widgets and notification delivery tests",
+    "Signed release IPA/AAB and OS language-picker verification",
+    "Release-device startup/memory performance",
+    "Store publication and public Languages display"
+  ]
+}

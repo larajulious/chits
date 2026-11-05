@@ -8,13 +8,13 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { FadeIn, FadeOut, runOnJS } from 'react-native-reanimated';
 import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
+import { useOpenCardNote } from '@/components/notes/use-open-card-note';
 import { StatusBar } from 'expo-status-bar';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DraggableSticky, RaisedSticky } from '@/components/spaces/draggable-sticky';
 import { LabelTape } from '@/components/spaces/label-tape';
-import { MagnetButton } from '@/components/spaces/magnet-button';
 import { AddNoteSheet } from '@/components/boards/add-note-sheet';
 import { textDraft } from '@/services/note-content';
 import { AppText } from '@/components/ui/app-text';
@@ -29,7 +29,7 @@ import { StickyViewSheet } from '@/components/spaces/sticky-view-sheet';
 import { ReminderSheet } from '@/components/reminders/reminder-sheet';
 import { removeCardReminder, removeMessageReminder, setCardReminder, setMessageReminder } from '@/services/reminders';
 import { useTheme } from '@/components/theme-provider';
-import { Toast } from '@/components/ui/primitives';
+import { HeaderIconButton, HeaderIcon, Toast } from '@/components/ui/primitives';
 import { DEFAULT_STICKY_COLOR, SPACE_CAPACITY, SPACE_IDS, SPACE_LIST, SPACES, resolveSpaceId, toUnit, type SpaceId, type SpacePaperStyle } from '@/constants/spaces';
 import { DARK_SURFACE, DOCK_ICONS, DOCK_LABELS, noteSeed } from '@/constants/spaces-theme';
 import { createSpaceRepository } from '@/db/repositories';
@@ -39,9 +39,6 @@ import { ChitsGuide } from '@/components/mascot/chits-guide.native';
 import { useInkSurface, useSpaceStyles, useSpaceUI, type SpaceUI } from '@/components/spaces/ink-surface';
 
 const EMPTY_COUNTS = Object.fromEntries(SPACE_IDS.map((id) => [id, 0])) as Record<SpaceId, number>;
-
-// A card opens its details; a thought opens the board it was organized into, else Chat.
-const openNote = (note: Pick<PinnedNote, 'kind' | 'noteId' | 'boardId'>) => router.push(note.kind === 'card' ? `/card/${note.noteId}` : note.boardId ? `/board/${note.boardId}` : `/chat?messageId=${note.noteId}`);
 
 /**
  * Spaces (chits://spaces, also chits://pinned). Opens on the saved space, or
@@ -68,6 +65,9 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
   const ui = useSpaceUI();
   const styles = useSpaceStyles(createStyles);
   const repository = useMemo(() => createSpaceRepository(database), [database]);
+  const openCardNote = useOpenCardNote();
+  // A card opens its note; a thought opens the board it was organized into, else Chat.
+  const openNote = (note: Pick<PinnedNote, 'kind' | 'noteId' | 'boardId'>) => note.kind === 'card' ? void openCardNote(note.noteId) : router.push(note.boardId ? `/board/${note.boardId}` : `/chat?messageId=${note.noteId}`);
   const insets = useSafeAreaInsets();
   const fonts = useSpaceFonts();
   const noteSpaceName = useNoteSpaceName();
@@ -292,7 +292,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
   // Controls float over the surface, inside the safe areas; notes live between them.
   const top = insets.top + 16;
   const dockBottom = insets.bottom + 16;
-  const boardTop = top + 44 + 26;
+  const boardTop = top + 46 + 26;
   const boardBottom = dockBottom + DOCK_HEIGHT + 8;
   return <GestureDetector gesture={swipe}><View style={styles.root} onLayout={({ nativeEvent: { layout } }) => setScreenSize((current) => (current.width === layout.width && current.height === layout.height ? current : { width: layout.width, height: layout.height }))}>
     <StatusBar style={DARK_SURFACE[spaceId] ? 'light' : 'dark'} />
@@ -318,7 +318,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
     <View pointerEvents="box-none" style={[styles.topBar, { top }]}>
       {/* Each side is two buttons wide (the right has Chat and Share) so the name stays centered. */}
       <View style={styles.sideGroup}>
-        <MagnetButton size={44} icon="add" accessibilityLabel={tr("spaces.stickANote")} onPress={openPicker} />
+        <HeaderIconButton label={tr("spaces.stickANote")} onPress={openPicker}><HeaderIcon name="add" size={24} /></HeaderIconButton>
       </View>
       <View style={styles.middle}>
         <View accessible accessibilityRole="header" accessibilityLabel={tr("spaces.valueValueOfValueNotes", { value1: space.name, value2: count, value3: SPACE_CAPACITY })} style={styles.titles}>
@@ -327,8 +327,8 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
         </View>
       </View>
       <View style={[styles.sideGroup, styles.sideGroupEnd]}>
-        <RoundButton icon="chatbox-outline" label={tr("spaces.openChat")} onPress={() => { void Haptics.selectionAsync(); router.navigate('/chat'); }} />
-        <RoundButton icon="share-outline" label={tr("spaces.shareYourValue", { value1: space.name })} disabled={!notes?.length} onPress={() => router.push({ pathname: '/spaces/share', params: { space: spaceId } })} />
+        <HeaderIconButton label={tr("spaces.openChat")} onPress={() => { void Haptics.selectionAsync(); router.navigate('/chat'); }}><HeaderIcon name="chatbox-outline" size={22} /></HeaderIconButton>
+        <HeaderIconButton label={tr("spaces.shareYourValue", { value1: space.name })} disabled={!notes?.length} onPress={() => router.push({ pathname: '/spaces/share', params: { space: spaceId } })}><HeaderIcon name="share-outline" size={22} /></HeaderIconButton>
       </View>
     </View>
 
@@ -412,7 +412,7 @@ const createStyles = (ui: SpaceUI) => StyleSheet.create({
   board: { position: 'absolute', left: 0, right: 0 },
   emptyWrap: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' },
   topBar: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  sideGroup: { width: 44 * 2 + 8, flexDirection: 'row', gap: 8 },
+  sideGroup: { width: 46 * 2 + 8, flexDirection: 'row', gap: 8 },
   sideGroupEnd: { justifyContent: 'flex-end' },
   middle: { flex: 1, alignItems: 'center' },
   titles: { alignItems: 'center', paddingTop: 4 },

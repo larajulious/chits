@@ -2,20 +2,23 @@ import { countLabel, tr } from '@/localization/runtime';
 import { FocusRevisit } from '@/features/focus/focus-revisit';
 import { useLocale } from '@/localization/provider';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, ScrollView, StyleSheet, Switch, View, useWindowDimensions } from 'react-native';
+import { AppState, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { useTheme } from '@/components/theme-provider';
 import { AppHeader, EmptyState, HeaderIcon, Icon, IconButton, Screen } from '@/components/ui/primitives';
-import { PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PaperDesk, PaperNote, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PaperAction, PaperDesk, PaperNote, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { SettingsRow, SettingsSection, SettingsToggleRow } from '@/components/settings/settings-rows';
+import { RevisitStage } from '@/features/revisit/revisit-stage';
 import { SearchField } from '@/components/ui/search-field';
 import { ChitsLoader } from '@/components/ui/chits-loader';
 import { spacing } from '@/constants/theme';
 import { CHITS_REVISIT_ENABLED } from '@/constants/revisit';
 import { createRevisitRepository, type CompletionPlan, type Relationship } from '@/db/revisit-repository';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
+import { cardNoteRoute } from '@/services/card-note-route';
 import { subscribeToNoteChanges } from '@/services/note-changes';
 import { subscribeToReminderChanges, requestReminderSync } from '@/services/reminders';
 import { DAY, keywords, pairKey, type ConnectionSuggestion, type NoteKey, type RevisitNote } from '@/services/revisit-engine';
@@ -23,11 +26,11 @@ import { getNoteConnections, getRevisitReport, parseNoteKey, type RevisitReport 
 import RevisitUnavailable from '@/features/revisit/unavailable';
 import { RevisitAction as Action, RevisitActions as CardActions, RevisitBody as CardBody, RevisitCaption as Caption, RevisitEmpty as InlineEmpty, RevisitFooter as CardFooter, RevisitHeading as Heading, RevisitMore as More, RevisitNoteContent as NoteContent, RevisitPaper as Paper, RevisitText as AppText, RevisitTitle as CardTitle } from '@/features/revisit/revisit-components';
 
-function ReviewHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+function ReviewHeader({ title, subtitle, showTitle }: { title: string; subtitle?: string; showTitle?: boolean }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  return <AppHeader title={title} subtitle={subtitle} leading={<IconButton label={tr("search.goBack")} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />;
+  return <AppHeader title={title} subtitle={subtitle} showTitle={showTitle} leading={<IconButton label={tr("search.goBack")} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />;
 }
 
 function RevisitExperience() {
@@ -36,7 +39,7 @@ function RevisitExperience() {
   useLocale();
   const database = useSQLiteContext();
   const repository = useMemo(() => createRevisitRepository(database), [database]);
-  const { styleTokens } = useTheme();
+  const { styleTokens, tokens } = useTheme();
   const desk = useDesk();
   // Notes here are handwritten: the loader covers the moment the face takes, so nothing reflows.
   const handwriting = useHandwriting();
@@ -110,7 +113,7 @@ function RevisitExperience() {
     if (revisit) await repository.review(note.key, 'revisit');
     else await repository.opened(note.key);
     const id = note.key.slice(note.key.indexOf(':') + 1);
-    if (note.key.startsWith('card:')) router.navigate({ pathname: '/card/[id]', params: { id } });
+    if (note.key.startsWith('card:')) router.navigate(await cardNoteRoute(createBoardRepository(database), id));
     else router.push({ pathname: '/card/edit-content', params: { messageId: id, autoFocus: '0' } });
   });
   const snooze = (note: RevisitNote) => actionSheet({ title: tr("revisit.remindLater"), message: tr("revisit.hideThisSuggestionInChitsUntil"), options: [1, 7, 30].map((days) => ({ label: days === 1 ? tr("remindertime.tomorrow") : `In ${days} days`, onPress: () => { void run(() => repository.review(note.key, 'snooze', Date.now() + days * DAY)); } })) });
@@ -166,15 +169,14 @@ function RevisitExperience() {
   );
 
   const headerTitle = params.browse ? (params.browse === 'excluded' ? tr("revisit.excludedNotes") : tr("revisit.yourNotes")) : pickKey ? tr("revisit.linkANote") : aKey && bKey ? tr("revisit.compareNotes") : noteKey ? tr("connectednotes.connectedNotes") : tr("revisit.revisit");
-  // Reserve the subtitle row used by the loaded screen without announcing a
-  // count before it is known. Compare has no subtitle in either state.
+  // Reserve the loaded count's row so the header stays level while loading.
   const loadingSubtitle = aKey && bKey ? undefined : '\u00a0';
   const deskScreen = { backgroundColor: desk.desk };
   if (!report || !handwriting.ready) return <Screen style={deskScreen}><ReviewHeader title={headerTitle} subtitle={loadingSubtitle} /><PaperDesk><View style={styles.loadingContent}>{error ? <><AppText accessibilityRole="alert" style={{ color: desk.danger }}>{error}</AppText><Action onPress={() => void load()}>{tr("id.tryAgain")}</Action></> : <ChitsLoader label={tr("revisit.findingNotesToRevisit")} />}</View></PaperDesk></Screen>;
   const note = noteKey ? byKey.get(noteKey) : null;
   const a = aKey ? byKey.get(aKey) : null, b = bKey ? byKey.get(bKey) : null;
   const unavailable = (noteKey && !note) || (aKey && bKey && (!a || !b)) || (pickKey && !byKey.has(pickKey));
-  const errorBanner = error ? <PaperNote paper={ALERT_PAPER} tilt={-0.6} style={styles.error}><AppText accessibilityRole="alert" weight="600" style={[styles.helper, { color: PAPER_INK }]}>{error}</AppText></PaperNote> : null;
+  const errorBanner = error ? <PaperNote paper={ALERT_PAPER} style={[styles.error, { borderRadius: styleTokens.button.radius }]}><AppText accessibilityRole="alert" weight="600" style={[styles.helper, { color: PAPER_INK }]}>{error}</AppText></PaperNote> : null;
   if (unavailable) return <Screen style={deskScreen}><ReviewHeader title={headerTitle} /><PaperDesk><EmptyState title={tr("revisit.noteUnavailable")} description={tr("revisit.itMayHaveBeenArchivedHiddenOrganizedOr")} /></PaperDesk></Screen>;
   if (pickKey || params.browse) {
     return <Screen style={deskScreen}>
@@ -214,7 +216,39 @@ function RevisitExperience() {
   const noteLinks = note ? links.filter((link) => link.note_a === note.key || link.note_b === note.key) : [];
   const focusedConnections = note ? noteConnections.filter((pair) => pair.a.key === note.key || pair.b.key === note.key) : [];
   const sharedTerms = a && b ? keywords(`${a.title}\n${a.text}`).filter((term) => keywords(`${b.title}\n${b.text}`).includes(term)).slice(0, 5) : [];
-  return <Screen style={deskScreen}><ReviewHeader title={headerTitle} subtitle={note ? countLabel('link', noteLinks.length) : a && b ? undefined : countLabel('note', visibleReviews.length)} />
+  const enabled = report.preferences.enabled;
+  const nothingToReview = !visibleReviews.length && !visibleConnections.length;
+  const heroBody = !enabled ? tr("revisit.suggestionsAreOff") : nothingToReview ? tr("revisit.nothingNeedsARevisitRightNow") : tr("revisit.aFreshLookAtYourSavedThoughts");
+  // The overview is Chits' page, like Spin and Getting Started: only what has something in it, then the settings.
+  if (!note && !(a && b)) return <Screen edges={['top', 'left', 'right']} style={deskScreen}>
+    <ReviewHeader title={headerTitle} showTitle={false} />
+    <RevisitStage title={headerTitle} body={heroBody} scrollRef={reviewScroll} footer={<PaperAction primary paper={tokens.accent} ink={tokens.accentText} label={tr("revisit.browseNotes")} accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => router.push({ pathname: '/revisit', params: { browse: 'all' } })} />}>
+      {errorBanner}
+      <FocusRevisit />
+      {enabled ? <>
+        {(['worth', 'progress'] as const).map((kind) => {
+          const suggestions = visibleReviews.filter((item) => item.kind === kind);
+          if (!suggestions.length) return null;
+          return <View key={kind} style={styles.section}><Heading count={suggestions.length}>{kind === 'worth' ? tr("revisit.worthRevisiting") : tr("revisit.stillInProgress")}</Heading>
+            <View style={styles.connectedList}>{suggestions.map((item) => <Paper key={item.note.key} note={item.note}>
+                <NoteContent note={item.note} titleFirst previewLines={2} />
+                <View style={styles.connectedFooter}><View style={styles.flex}><Caption>{item.kind === 'progress' ? item.reason.split(' · ').slice(1).join(' · ') : item.reason}</Caption></View><Action primary disabled={busy} label={`${kind === 'progress' ? tr("revisit.continue") : tr("revisit.revisit")} ${item.note.title}`} onPress={() => openOriginal(item.note, true)}>{kind === 'progress' ? tr("revisit.continue") : tr("revisit.revisit")}</Action><More disabled={busy} label={tr("revisit.reviewActionsForValue", { value1: item.note.title })} onPress={() => noteActions(item)} /></View>
+              </Paper>)}</View>
+          </View>;
+        })}
+        {visibleConnections.length ? <View style={styles.section}><Heading count={visibleConnections.length}>{tr("revisit.possibleConnections")}</Heading>
+          {visibleConnections.map((connection) => <View key={pairKey(connection.a.key, connection.b.key)} style={styles.connectionSpace}>{connectionCard(connection)}</View>)}
+        </View> : null}
+        {pendingSuggestions > 0 ? <Action disabled={busy || refreshing} onPress={startNewReview}>{tr("revisit.newReview")} · {pendingSuggestions}</Action> : null}
+      </> : <InlineEmpty compact icon="pause-circle-outline">{tr("revisit.yourNotesAndExistingConnectionsAreKeptEnable")}</InlineEmpty>}
+      <SettingsSection title={tr("revisit.revisitSuggestions")}>
+        <SettingsToggleRow label={tr("revisit.enableRevisitSuggestions")} value={enabled} disabled={busy} onChange={(next) => { sessionRef.current = null; void run(() => repository.setPreferences({ ...report.preferences, enabled: next })); }} />
+        <SettingsRow label={tr("revisit.minimumInactivity")} value={`${report.preferences.inactivityDays} ${tr("revisit.days")}`} disabled={busy} onPress={() => actionSheet({ title: tr("revisit.minimumInactivity"), options: [7, 14, 30].map((days) => ({ label: tr("revisit.valueDaysValue", { value1: days, value2: report.preferences.inactivityDays === days ? ' · ' + tr('customheadersettings.selected') : '' }), onPress: () => { sessionRef.current = null; void run(() => repository.setPreferences({ ...report.preferences, inactivityDays: days })); } })) })} />
+      </SettingsSection>
+      {report.notes.some((item) => item.excluded) ? <Action quiet disabled={busy} onPress={() => router.push({ pathname: '/revisit', params: { browse: 'excluded' } })}>{tr("revisit.manageExcludedNotes")}</Action> : null}
+    </RevisitStage>
+  </Screen>;
+  return <Screen style={deskScreen}><ReviewHeader title={headerTitle} subtitle={note ? countLabel('link', noteLinks.length) : undefined} />
     <PaperDesk>
     <ScrollView ref={reviewScroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {errorBanner}
@@ -225,7 +259,7 @@ function RevisitExperience() {
           <CardFooter note={source}><Action disabled={busy} label={tr("revisit.openValue", { value1: source.title })} onPress={() => openOriginal(source)}>{tr("revisit.openNote")}</Action></CardFooter>
         </Paper>)}
         <Heading>{tr("revisit.connection")}</Heading>
-        <PaperNote paper={PAPER_WHITE} tilt={-0.5} style={styles.panel}>
+        <PaperNote paper={PAPER_WHITE} style={[styles.panel, { borderRadius: styleTokens.button.radius }]}>
           <View style={styles.summaryRow}><Icon name="link-outline" size={18} color={PAPER_INK_MUTED} /><AppText weight="600" style={[styles.label, { color: PAPER_INK }]}>{connected(a.key, b.key) ? tr("revisit.connectedValue", { value1: connected(a.key, b.key)!.relationship_type }) : tr("revisit.theseNotesAreNotLinked")}</AppText></View>
           <AppText style={[styles.helper, { color: PAPER_INK_MUTED }]}>{sharedTerms.length ? tr("revisit.sharedTermsValue", { value1: sharedTerms.join(', ') }) : tr("revisit.noDistinctiveOverlapFound")}</AppText>
           <Action primary={!connected(a.key, b.key)} disabled={busy} onPress={() => void run(() => connected(a.key, b.key) ? repository.unlink(a.key, b.key) : repository.link(a.key, b.key))}>{connected(a.key, b.key) ? tr("revisit.removeConnection") : tr("revisit.linkNotes")}</Action>
@@ -253,39 +287,14 @@ function RevisitExperience() {
         </View>
         {focusedConnections.length ? <View style={styles.section}><Heading count={focusedConnections.length}>{tr("revisit.possibleConnections")}</Heading>{focusedConnections.map((connection) => <View key={pairKey(connection.a.key, connection.b.key)} style={styles.connectionSpace}>{connectionCard(connection)}</View>)}</View> : null}
         <Action quiet disabled={busy} onPress={() => void run(() => repository.review(note.key, note.excluded ? 'include' : 'exclude'))}>{note.excluded ? tr("revisit.includeInSuggestions") : tr("revisit.excludeFromSuggestions")}</Action>
-      </> : <>
-        <PaperNote paper={PAPER_WHITE} style={styles.reviewPreferences}>
-          <View style={styles.preference}><View style={styles.flex}><AppText weight="600" style={[styles.label, { color: PAPER_INK }]}>{tr("revisit.revisitSuggestions")}</AppText></View>
-            <Switch hitSlop={8} accessibilityLabel={tr("revisit.enableRevisitSuggestions")} value={report.preferences.enabled} disabled={busy} onValueChange={(enabled) => { sessionRef.current = null; void run(() => repository.setPreferences({ ...report.preferences, enabled })); }} trackColor={{ true: SWITCH_ON, false: 'rgba(43,38,32,0.18)' }} thumbColor={PAPER_WHITE} ios_backgroundColor="rgba(43,38,32,0.18)" />
-          </View>
-          <View style={[styles.preference, styles.preferenceRule]}><AppText style={[styles.helper, { color: PAPER_INK_MUTED }]}>{tr("revisit.minimumInactivity")}</AppText><Action quiet disabled={busy} onPress={() => actionSheet({ title: tr("revisit.minimumInactivity"), options: [7, 14, 30].map((days) => ({ label: tr("revisit.valueDaysValue", { value1: days, value2: report.preferences.inactivityDays === days ? ' · ' + tr('customheadersettings.selected') : '' }), onPress: () => { sessionRef.current = null; void run(() => repository.setPreferences({ ...report.preferences, inactivityDays: days })); } })) })}>{report.preferences.inactivityDays} {' '}{tr("revisit.days")}</Action></View>
-        </PaperNote>
-        <View style={styles.reviewActions}><Action primary disabled={busy} onPress={() => router.push({ pathname: '/revisit', params: { browse: 'all' } })}>{tr("revisit.browseNotes")}</Action>{report.preferences.enabled && pendingSuggestions > 0 ? <Action disabled={busy || refreshing} onPress={startNewReview}>{tr("revisit.newReview")} · {pendingSuggestions}</Action> : null}</View>
-        <FocusRevisit />
-        {report.preferences.enabled ? <>
-          {(['worth', 'progress'] as const).map((kind) => {
-            const suggestions = visibleReviews.filter((item) => item.kind === kind);
-            return <View key={kind} style={styles.section}><Heading count={suggestions.length}>{kind === 'worth' ? tr("revisit.worthRevisiting") : tr("revisit.stillInProgress")}</Heading>
-              {suggestions.length ? <View style={styles.connectedList}>{suggestions.map((item) => <Paper key={item.note.key} note={item.note}>
-                <NoteContent note={item.note} titleFirst previewLines={2} />
-                <View style={styles.connectedFooter}><View style={styles.flex}><Caption>{item.kind === 'progress' ? item.reason.split(' · ').slice(1).join(' · ') : item.reason}</Caption></View><Action primary disabled={busy} label={`${kind === 'progress' ? tr("revisit.continue") : tr("revisit.revisit")} ${item.note.title}`} onPress={() => openOriginal(item.note, true)}>{kind === 'progress' ? tr("revisit.continue") : tr("revisit.revisit")}</Action><More disabled={busy} label={tr("revisit.reviewActionsForValue", { value1: item.note.title })} onPress={() => noteActions(item)} /></View>
-              </Paper>)}</View> : <InlineEmpty compact icon={kind === 'worth' ? 'refresh-outline' : 'checkbox-outline'}>{kind === 'worth' ? tr("revisit.nothingNeedsARevisitRightNow") : tr("revisit.noStalledChecklistsRightNow")}</InlineEmpty>}
-            </View>;
-          })}
-          <View style={styles.section}><Heading count={visibleConnections.length}>{tr("revisit.possibleConnections")}</Heading>
-            {visibleConnections.length ? visibleConnections.map((connection) => <View key={pairKey(connection.a.key, connection.b.key)} style={styles.connectionSpace}>{connectionCard(connection)}</View>) : <InlineEmpty compact icon="link-outline">{tr("revisit.noStrongConnectionsToSuggestRightNow")}</InlineEmpty>}
-          </View>
-        </> : <EmptyState title={tr("revisit.suggestionsAreOff")} description={tr("revisit.yourNotesAndExistingConnectionsAreKeptEnable")} style={styles.disabledEmpty} />}
-        {report.notes.some((item) => item.excluded) ? <Action quiet disabled={busy} onPress={() => router.push({ pathname: '/revisit', params: { browse: 'excluded' } })}>{tr("revisit.manageExcludedNotes")}</Action> : null}
-      </>}
+      </> : null}
     </ScrollView>
     </PaperDesk>
   </Screen>;
 }
 
-// A pink slip for errors on the desk, and a deeper yellow so an "on" switch still reads on white paper.
+// A pink slip for errors on the desk.
 const ALERT_PAPER = '#F6C9C2';
-const SWITCH_ON = '#E2B52C';
 
 export default function RevisitScreen() {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
@@ -299,15 +308,11 @@ const styles = StyleSheet.create({
   connectedList: { gap: 18 },
   connectedFooter: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingLeft: 14, paddingRight: 6, paddingTop: spacing.xs, paddingBottom: spacing.xs },
   browseContent: { paddingHorizontal: spacing.md - 7, paddingTop: spacing.md, paddingBottom: 36 }, browseCell: { paddingHorizontal: 7, paddingBottom: 18 }, searchArea: { paddingHorizontal: spacing.md, marginBottom: spacing.xs },
-  listEmpty: { minHeight: 240, width: '100%' }, disabledEmpty: { minHeight: 160, paddingVertical: 16 },
+  listEmpty: { minHeight: 240, width: '100%' },
   panel: { paddingHorizontal: 12, paddingVertical: 10, gap: 10 },
   label: { fontSize: 14, lineHeight: 20, flexShrink: 1 }, helper: { fontSize: 12, lineHeight: 18 },
-  preference: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   preferenceBottom: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 4 }, flex: { flex: 1, minWidth: 0 },
   sectionActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  reviewActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  reviewPreferences: { paddingHorizontal: 14, paddingVertical: 4 },
-  preferenceRule: { borderTopWidth: 1, borderStyle: 'dashed', borderTopColor: 'rgba(43,38,32,0.18)' },
   connectionTitles: { gap: 4 },
   connectionSpace: { marginBottom: 18 }, connectionDivider: { flexDirection: 'row', alignItems: 'center', gap: 8 }, divider: { height: StyleSheet.hairlineWidth, flex: 1 },
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 8 }, tileArrow: { minWidth: 32, minHeight: 44, alignItems: 'center', justifyContent: 'center' },

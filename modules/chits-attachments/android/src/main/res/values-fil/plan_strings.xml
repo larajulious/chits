@@ -1,0 +1,15 @@
+<resources>
+  <string name="plan_widget_name">Plano Ngayon</string>
+  <string name="plan_widget_description">Ang plano at progreso mo ngayon.</string>
+  <string name="plan_widget_today">Ngayon</string>
+  <string name="plan_widget_none">May munting plano ka ba ngayon?</string>
+  <string name="plan_widget_action">Planuhin ang Araw Ko</string>
+  <string name="plan_widget_keep_going">Tuloy lang!</string>
+  <string name="plan_widget_all_done">Tapos na lahat ngayon!</string>
+  <string name="plan_widget_wrapped">Tapos na!</string>
+  <string name="plan_widget_hidden">Nakatago ang mga gawain. Maipapakita mo ang mga ito sa Settings.</string>
+  <string name="plan_widget_add">Idagdag</string>
+  <string name="plan_widget_wrap">Tapusin</string>
+  <string name="plan_widget_view">Tingnan ang Plano Ngayon</string>
+  <string name="plan_widget_recap">Tingnan ang Buod ng Araw</string>
+</resources>

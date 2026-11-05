@@ -39,19 +39,20 @@ export function RevisitText({ style, ...props }: ComponentProps<typeof Text>) {
 
 /**
  * A note on the desk, as in Notes → Cards: a board's notes on a pastel of the
- * board's color, others on cream, each with its own fixed tilt and some taped.
+ * board's color, others on cream, in the same rounded paper, some taped.
  * Everything inside writes in the paper's ink.
  */
 export function RevisitPaper({ children, note, id, onPress, label }: PropsWithChildren<{ note?: RevisitNote; id?: string; onPress?: () => void; label?: string }>) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
+  const { styleTokens } = useTheme();
   const accent = note?.boardAccent;
   const colors = accent ? noteColors(accent) : null;
   const fill = colors?.cardTint ?? PAPER_WHITE;
   const key = id ?? note?.key ?? 'revisit';
   const ink = { primary: PAPER_INK, secondary: colors?.cardInkMuted ?? PAPER_INK_MUTED, fill, frame: 'rgba(43,38,32,0.16)', progress: PAPER_INK };
-  return <PaperInk.Provider value={ink}><PaperCard paper={fill} tilt={stableTilt(`revisit:${key}`, 0.8)} tape={stableTilt(`revisit:${key}:tape`, 1) > 0.35}
+  return <PaperInk.Provider value={ink}><PaperCard paper={fill} tape={stableTilt(`revisit:${key}:tape`, 1) > 0.35} style={{ borderRadius: styleTokens.button.radius }}
     accessible={!!onPress} accessibilityRole={onPress ? 'button' : undefined} accessibilityLabel={label} onPress={onPress}>
     {children}
   </PaperCard></PaperInk.Provider>;
@@ -73,7 +74,7 @@ export function RevisitAction({ children, onPress, disabled = false, label, prim
     if (quiet) return <PaperButton paper="transparent" accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} hitSlop={2} style={[styles.action, styles.quietPaper]}>
       <Text style={[handBold, styles.paperActionText, { color: ink.primary }]}>{children}</Text>
     </PaperButton>;
-    return <PaperButton paper={primary ? PAPER_YELLOW : PAPER_WHITE} tilt={primary ? -1 : 0.8} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} hitSlop={2} style={styles.action}>
+    return <PaperButton paper={primary ? PAPER_YELLOW : PAPER_WHITE} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} hitSlop={2} style={[styles.action, { borderRadius: styleTokens.button.radius }]}>
       <Text style={[handBold, styles.paperActionText, { color: PAPER_INK }]}>{children}</Text>
     </PaperButton>;
   }

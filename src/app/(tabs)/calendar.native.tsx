@@ -1,12 +1,12 @@
 import { tr } from '@/localization/runtime';
-import { useLocale } from '@/localization/provider';
+import { useDirection, useLocale } from '@/localization/provider';
 import { getCalendars } from 'expo-localization';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Keyboard, Pressable, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, Keyboard, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { AddNoteSheet, type NoteSubmission } from '@/components/boards/add-note-sheet';
 import { DayPanel } from '@/components/calendar/calendar-entry';
@@ -22,14 +22,16 @@ import { floatingCompanionBottom } from '@/components/navigation/floating-chat-l
 import { showPermissionSettingsPrompt } from '@/components/permissions/permission-settings-prompt';
 import { ReminderSheet } from '@/components/reminders/reminder-sheet';
 import { useTheme } from '@/components/theme-provider';
-import { HeaderChromeContext, IconButton, TileInkContext } from '@/components/ui/controls';
+import { HEADER_ICON_BUTTON_SIZE, HeaderIconButton, IconButton, TileInkContext } from '@/components/ui/controls';
 import { Icon } from '@/components/ui/icon';
-import { AppText, HeaderIcon, MenuIcon, Screen, Toast, TopBarBackground, useHeaderInk } from '@/components/ui/primitives';
-import { PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW, PaperDesk, PaperRound, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { AppHeader, AppText, HeaderIcon, MenuIcon, Screen, Toast, useHeaderInk } from '@/components/ui/primitives';
+import { SearchField } from '@/components/ui/search-field';
+import { PAPER_YELLOW, PaperDesk, PaperRound, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { spacing } from '@/constants/theme';
 import { SPACE_LIST } from '@/constants/spaces';
 import type { SpaceCandidate } from '@/db/types';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
+import { useOpenCardNote } from '@/components/notes/use-open-card-note';
 import { applySchedule, createCalendarNote, reminderInPast, reminderOutcomeMessage, type CalendarDestination, type ReminderOutcome, type ScheduleDraft } from '@/features/calendar/calendar-actions';
 import {
   getCalendarItems, groupByDay, matchesCalendarSearch, removeCalendarEntry, subscribeToCalendarChanges, type CalendarItem, type CalendarNoteRef, type CalendarRange,
@@ -37,6 +39,7 @@ import {
 import {
   addLocalDays, addLocalMonths, DEFAULT_DURATION_MINUTES, DAY_MINUTES, localDayKey, minuteOfDay, monthFromIndex, monthGridRange, monthIndex,
   formatScheduleTime, parseDayKey, reminderPresetLabel, startOfLocalDay, startOfWeek, weekStartFromLocale,
+  followToday,
 } from '@/features/calendar/calendar-schedule';
 import { completeReminder, removeCardReminder, removeMessageReminder, requestReminderSync, setCardReminder, setMessageReminder, subscribeToReminderChanges } from '@/services/reminders';
 import { openReminderAlarmSettings } from '@/services/reminder-alarm-access';
@@ -91,13 +94,14 @@ export default function CalendarScreen() {
   useLocale();
   const database = useSQLiteContext();
   const router = useRouter();
+  const openCardNote = useOpenCardNote();
   const { openDrawer } = useAppDrawer();
   const { actionSheet, confirm } = useAppDialog();
   const { tokens: theme, styleTokens } = useTheme();
   const desk = useDesk();
   // Entries are handwritten: hold the body for the moment the bundled face takes, so lists never reflow.
   const handwriting = useHandwriting();
-  const { ink } = useHeaderInk();
+  const { rowStyle, isRTL } = useDirection();
   const tabBarHeight = useBottomTabBarHeight();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -109,7 +113,8 @@ export default function CalendarScreen() {
   const [view, setView] = useState<CalendarView>('month');
   const [selectedKey, setSelectedKey] = useState(todayKey);
   const [visibleMonth, setVisibleMonth] = useState(() => monthIndex(today));
-  const [panelOpen, setPanelOpen] = useState(false);
+  // Opens on today, selected, as if its date had just been tapped.
+  const [panelOpen, setPanelOpen] = useState(true);
   const [items, setItems] = useState<CalendarItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
@@ -176,6 +181,16 @@ export default function CalendarScreen() {
     }, 60_000);
     return () => { for (const stop of stops) stop(); clearInterval(clock); };
   }, [reload]));
+
+  // Left open past midnight, the selection follows the date.
+  const seenToday = useRef(todayKey);
+  useEffect(() => {
+    const previous = seenToday.current;
+    if (previous === todayKey) return;
+    seenToday.current = todayKey;
+    const next = followToday(selectedKey, previous, todayKey);
+    if (next !== selectedKey) { setSelectedKey(next); setVisibleMonth(monthIndex(today)); }
+  }, [selectedKey, today, todayKey]);
 
   // Search lists each note once, on its planned day (not again on its reminder's day).
   const visibleItems = useMemo(() => (searchOpen ? items.filter((item) => item.occurrence === 'plan' && matchesCalendarSearch(item, query)) : items), [items, searchOpen, query]);
@@ -295,12 +310,11 @@ export default function CalendarScreen() {
   // ---------------------------------------------------------------------------
   // Entry actions.
 
-  // Tapping an entry opens its details: the card (a Chat note's card once it's
-  // organized into one), or the note itself for an unorganized thought.
+  // Tapping an entry opens the note, through its card once it's organized into one.
   const openItem = useCallback((item: CalendarItem) => {
-    if (item.cardId) router.push({ pathname: '/card/[id]', params: { id: item.cardId } });
+    if (item.cardId) void openCardNote(item.cardId);
     else router.push({ pathname: '/card/edit-content', params: { messageId: item.id, autoFocus: '0' } });
-  }, [router]);
+  }, [openCardNote, router]);
   // Where the note lives, from the entry menu.
   const openSource = useCallback((item: CalendarItem) => {
     if (item.spaceId) router.push({ pathname: '/spaces', params: { spaceId: item.spaceId, noteId: item.id } });
@@ -349,31 +363,27 @@ export default function CalendarScreen() {
   const stepUnit = view === 'month' ? 'month' : view === 'week' ? 'week' : 'day';
   const pickerMonth = view === 'month' ? visible : { year: selectedDate.getFullYear(), month: selectedDate.getMonth() };
 
-  const header = (
-    <HeaderChromeContext.Provider value>
-      <View style={[styles.header, { minHeight: styleTokens.header.minHeight }]}>
-        <TopBarBackground />
-        <View style={styles.menuSlot}>
-          <IconButton label={tr("archive.openNavigation")} onPress={openDrawer}><MenuIcon /></IconButton>
-        </View>
-        {view !== 'agenda' ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={tr("calendar.valueChooseMonth", { value1: title })} onPress={() => { sheetKey.current += 1; setMonthPicker(sheetKey.current); }} style={({ pressed }) => [styles.titleButton, pressed && styles.pressed]}>
-            <AppText accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.title, { color: ink }]}>{title}</AppText>
-            <Icon name="chevron-down" size={16} color={ink} />
-          </Pressable>
-        ) : <AppText accessibilityRole="header" numberOfLines={1} style={[styles.title, styles.titleButton, { color: ink }]}>{title}</AppText>}
-        {view !== 'agenda' ? <>
-          <Pressable accessibilityRole="button" accessibilityLabel={tr("calendar.previousValue", { value1: stepUnit })} hitSlop={{ top: 4, bottom: 4 }} onPress={() => step(-1)} style={({ pressed }) => [styles.chevron, pressed && styles.pressed]}><Icon name="chevron-back" size={20} color={ink} /></Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={tr("calendar.nextValue", { value1: stepUnit })} hitSlop={{ top: 4, bottom: 4 }} onPress={() => step(1)} style={({ pressed }) => [styles.chevron, pressed && styles.pressed]}><Icon name="chevron-forward" size={20} color={ink} /></Pressable>
-        </> : null}
-        <IconButton label={searchOpen ? tr("search.closeSearch") : tr("calendar.searchCalendar")} onPress={toggleSearch}><HeaderIcon name={searchOpen ? 'close' : 'search-outline'} size={21} /></IconButton>
-        <IconButton label={tr("calendar.todayValue", { value1: dateFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(today) })} onPress={goToday}>
-          <TodayGlyph day={today.getDate()} />
-        </IconButton>
-        <IconButton label={tr("calendar.viewValueChangeView", { value1: VIEW_OPTIONS.find((option) => option.key === view)!.label })} onPress={chooseView}><HeaderIcon name={VIEW_OPTIONS.find((option) => option.key === view)!.icon} size={21} /></IconButton>
-      </View>
-    </HeaderChromeContext.Provider>
-  );
+  // The same header as every other screen; only the room's height of it. The
+  // month navigator lives on the paper below, where its words can be read.
+  const header = <AppHeader actionWidth={HEADER_ACTIONS_WIDTH} title={view === 'agenda' ? title : tr('appdrawer.calendar')}
+    leading={<View style={[styles.headerActions, rowStyle]}>
+      <IconButton label={tr("archive.openNavigation")} onPress={openDrawer}><MenuIcon /></IconButton>
+      <IconButton label={tr("calendar.viewValueChangeView", { value1: VIEW_OPTIONS.find((option) => option.key === view)!.label })} onPress={chooseView}><HeaderIcon name={VIEW_OPTIONS.find((option) => option.key === view)!.icon} size={21} /></IconButton>
+    </View>}
+    trailing={<View style={[styles.headerActions, rowStyle]}>
+      <IconButton label={tr("calendar.todayValue", { value1: dateFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(today) })} onPress={goToday}>
+        <TodayGlyph day={today.getDate()} />
+      </IconButton>
+      <IconButton label={searchOpen ? tr("search.closeSearch") : tr("calendar.searchCalendar")} onPress={toggleSearch}><HeaderIcon name={searchOpen ? 'close' : 'search-outline'} size={21} /></IconButton>
+    </View>} />;
+  const dateNavigation = view !== 'agenda' && !searchOpen ? <View style={[styles.dateNavigation, rowStyle]}>
+    <HeaderIconButton label={tr("calendar.previousValue", { value1: stepUnit })} onPress={() => step(-1)} style={styles.dateStep}><Icon name={isRTL ? 'chevron-forward' : 'chevron-back'} size={20} color={theme.textPrimary} /></HeaderIconButton>
+    <Pressable accessibilityRole="button" accessibilityLabel={tr("calendar.valueChooseMonth", { value1: title })} onPress={() => { sheetKey.current += 1; setMonthPicker(sheetKey.current); }} style={({ pressed }) => [styles.titleButton, rowStyle, pressed && styles.pressed]}>
+      <AppText accessibilityRole="header" variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.title, { color: desk.ink }]}>{title}</AppText>
+      <Icon name="chevron-down" size={16} color={desk.ink} />
+    </Pressable>
+    <HeaderIconButton label={tr("calendar.nextValue", { value1: stepUnit })} onPress={() => step(1)} style={styles.dateStep}><Icon name={isRTL ? 'chevron-back' : 'chevron-forward'} size={20} color={theme.textPrimary} /></HeaderIconButton>
+  </View> : null;
 
   // ---------------------------------------------------------------------------
   // Body.
@@ -391,7 +401,7 @@ export default function CalendarScreen() {
     body = (
       <View style={[styles.flex, { paddingBottom: panelOpen ? 0 : tabBarHeight }]}>
         <View style={panelOpen ? styles.gridWithPanel : styles.flex}>
-          <MonthView month={visibleMonth} onMonthChange={changeMonth} itemsByDay={itemsByDay} selectedKey={panelOpen ? selectedKey : null} todayKey={todayKey} weekStart={weekStart} reduceMotion={reduceMotion} onPressDay={pressDay} onLongPressDay={longPressDay} />
+          <MonthView month={visibleMonth} onMonthChange={changeMonth} itemsByDay={itemsByDay} selectedKey={selectedKey} todayKey={todayKey} weekStart={weekStart} reduceMotion={reduceMotion} onPressDay={pressDay} onLongPressDay={longPressDay} />
         </View>
         {panelOpen ? (
           <View style={[styles.panel, { paddingBottom: tabBarHeight }]}>
@@ -412,12 +422,8 @@ export default function CalendarScreen() {
   return <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: desk.desk }}>
     {header}
     <PaperDesk>
-    {searchOpen ? (
-      <View style={[styles.search, { boxShadow: `0px 4px 10px ${desk.shadow}` }]}>
-        <Icon name="search-outline" size={17} color={PAPER_INK_MUTED} />
-        <TextInput autoFocus accessibilityLabel={tr("calendar.searchNotesAndReminders")} value={query} onChangeText={setQuery} placeholder={tr("calendar.searchNotesAndReminders")} placeholderTextColor={PAPER_INK_MUTED} returnKeyType="search" onSubmitEditing={Keyboard.dismiss} selectionColor={PAPER_INK} style={[styles.searchInput, { color: PAPER_INK }]} />
-      </View>
-    ) : null}
+    {searchOpen ? <SearchField autoFocus accessibilityLabel={tr("calendar.searchNotesAndReminders")} value={query} onChangeText={setQuery} placeholder={tr("calendar.searchNotesAndReminders")} onSubmitEditing={Keyboard.dismiss} style={styles.search} /> : null}
+    {dateNavigation}
     <View style={styles.flex}>{body}</View>
     {showFab ? (
       <View style={[styles.fab, { bottom: floatingCompanionBottom(insets.bottom, styleTokens.chat.height, FAB_SIZE), right: Math.max(spacing.lg, insets.right + spacing.sm) }]}>
@@ -529,19 +535,21 @@ function TodayGlyph({ day }: { day: number }) {
   return <View style={[styles.todayBadge, { borderColor: ink }]}><AppText maxFontSizeMultiplier={1} style={[styles.todayBadgeText, { color: ink }]}>{day}</AppText></View>;
 }
 
+/** Two header buttons and the gap between them. */
+const HEADER_ACTIONS_WIDTH = HEADER_ICON_BUTTON_SIZE * 2 + 8;
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
   pressed: { opacity: 0.64 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: spacing.md, flexShrink: 0 },
-  menuSlot: { width: 44, flexShrink: 0, alignItems: 'flex-start', justifyContent: 'center' },
-  titleButton: { flex: 1, minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: spacing.xxs },
-  title: { flexShrink: 1, fontSize: 19, fontWeight: '700' },
-  chevron: { width: 34, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerActions: { alignItems: 'center', gap: 8 },
+  dateNavigation: { alignItems: 'center', gap: 8, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
+  dateStep: { width: 40, height: 40 },
+  titleButton: { flex: 1, minWidth: 0, minHeight: 44, alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: spacing.xxs },
+  title: { flexShrink: 1, fontSize: 19 },
   todayBadge: { width: 22, height: 22, borderWidth: 1.5, borderRadius: 5, alignItems: 'center', justifyContent: 'center' },
   todayBadgeText: { fontSize: 11, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  search: { minHeight: 44, marginHorizontal: spacing.md, marginTop: spacing.sm, marginBottom: spacing.xs, borderRadius: 3, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm, backgroundColor: PAPER_WHITE },
-  searchInput: { flex: 1, fontSize: 15, minHeight: 42 },
+  search: { marginBottom: spacing.xs, marginHorizontal: spacing.md },
   gridWithPanel: { flex: 55 },
   panel: { flex: 45 },
   fab: { position: 'absolute', right: spacing.md },

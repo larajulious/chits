@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { View, Switch } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
 import { useTheme } from '@/components/theme-provider';
+import { SettingsNote, SettingsToggleRow } from '@/components/settings/settings-rows';
 import { AppText } from '@/components/ui/primitives';
 import { widgetPrivacy, WIDGET_PRIVACY_KEY, type WidgetPrivacy } from './snapshot';
 export function WidgetPrivacySettings() {
@@ -30,12 +30,11 @@ export function WidgetPrivacySettings() {
     } catch { setError(true); }
     finally { setBusy(false); }
   };
-  return <View style={{ gap: 12 }}>
-    <AppText style={{ color: tokens.textSecondary }}>{tr('anywhere.warning')}</AppText>
-    {(['titles', 'previews'] as const).map(key => <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 }}>
-      <AppText style={{ flex: 1, color: tokens.textPrimary }}>{tr(`anywhere.${key}`)}</AppText>
-      <Switch accessibilityLabel={tr(`anywhere.${key}`)} disabled={busy || (key === 'previews' && privacy === 'hidden')} value={key === 'titles' ? privacy !== 'hidden' : privacy === 'previews'} onValueChange={enabled => { void change(key === 'titles' ? enabled ? 'titles' : 'hidden' : enabled ? 'previews' : 'titles'); }} />
-    </View>)}
-    {error ? <AppText accessibilityRole="alert" style={{ color: tokens.danger }}>{tr('settings.thatSettingCouldNotBeSavedPleaseTry')}</AppText> : null}
-  </View>;
+  // Previews only exist alongside titles, so turning titles off turns both off.
+  return <>
+    <SettingsNote>{tr('anywhere.warning')}</SettingsNote>
+    <SettingsToggleRow label={tr('anywhere.titles')} value={privacy !== 'hidden'} disabled={busy} onChange={(enabled) => { void change(enabled ? 'titles' : 'hidden'); }} />
+    <SettingsToggleRow label={tr('anywhere.previews')} value={privacy === 'previews'} disabled={busy || privacy === 'hidden'} onChange={(enabled) => { void change(enabled ? 'previews' : 'titles'); }} />
+    {error ? <AppText accessibilityRole="alert" style={{ color: tokens.danger, paddingHorizontal: 14, paddingVertical: 10 }}>{tr('settings.thatSettingCouldNotBeSavedPleaseTry')}</AppText> : null}
+  </>;
 }

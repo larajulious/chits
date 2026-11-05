@@ -11,7 +11,7 @@ const moduleUrls = new Map();
 function moduleUrl(path) {
   if (moduleUrls.has(path)) return moduleUrls.get(path);
   let code = ts.transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-  code = code.replace(/from ['"](\.\.?\/[^'"]+)['"]/g, (_match, specifier) => `from '${moduleUrl(resolve(dirname(path), `${specifier}.ts`))}'`);
+  code = code.replace(/from ['"](\.\.?\/[^'"]+)['"]/g, (_match, specifier) => `from '${moduleUrl(resolve(dirname(path), specifier.endsWith('.ts') ? specifier : `${specifier}.ts`))}'`);
   const url = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
   moduleUrls.set(path, url);
   return url;

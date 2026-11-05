@@ -1,12 +1,13 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { useTheme } from '@/components/theme-provider';
 import { spacing } from '@/constants/theme';
 import type { Attachment, Message } from '@/db/types';
 import { dateFormat } from '@/services/reminder-time';
+import { AppText } from '@/components/ui/app-text';
 
 export function AttachmentContent(_: { attachment: Attachment }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
@@ -24,7 +25,7 @@ function MessageRowComponent({ message, onLongPress, focused = false }: { messag
 
   useLocale();
   const { tokens } = useTheme();
-  return <Pressable accessibilityRole="button" accessibilityLabel={tr("messagerow.thoughtFromValueLongPressForActions", { value1: formatTime(message.createdAt) })} onLongPress={() => onLongPress(message)} delayLongPress={350} style={({ pressed }) => [styles.container, pressed && styles.pressed]}><View style={[styles.message, { backgroundColor: tokens.surfaceElevated }, focused && { borderWidth: 1, borderColor: tokens.accent }]}><Text style={[styles.text, { color: tokens.textPrimary }]}>{message.text}</Text><View style={styles.meta}><Text style={[styles.time, { color: tokens.textMuted }]}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? tr("messagenotecards.edited") : ''}</Text>{message.pinned && <Text accessibilityLabel={tr("index.pinned")} style={[styles.pin, { color: tokens.textMuted }]}>⌖</Text>}</View></View></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={tr("messagerow.thoughtFromValueLongPressForActions", { value1: formatTime(message.createdAt) })} onLongPress={() => onLongPress(message)} delayLongPress={350} style={({ pressed }) => [styles.container, pressed && styles.pressed]}><View style={[styles.message, { backgroundColor: tokens.surfaceElevated }, focused && { borderWidth: 1, borderColor: tokens.accent }]}><AppText style={[styles.text, { color: tokens.textPrimary }]}>{message.text}</AppText><View style={styles.meta}><AppText style={[styles.time, { color: tokens.textMuted }]}>{formatTime(message.createdAt)}{message.updatedAt !== message.createdAt ? tr("messagenotecards.edited") : ''}</AppText>{message.pinned && <AppText accessibilityLabel={tr("index.pinned")} style={[styles.pin, { color: tokens.textMuted }]}>⌖</AppText>}</View></View></Pressable>;
 }
 
 export const MessageRow = memo(MessageRowComponent);

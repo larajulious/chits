@@ -1,0 +1,15 @@
+<resources>
+  <string name="plan_widget_name">Heutiger Plan</string>
+  <string name="plan_widget_description">Ihr Plan und Fortschritt für heute.</string>
+  <string name="plan_widget_today">Heute</string>
+  <string name="plan_widget_none">Ein kleiner Plan für heute?</string>
+  <string name="plan_widget_action">Meinen Tag planen</string>
+  <string name="plan_widget_keep_going">Weiter so!</string>
+  <string name="plan_widget_all_done">Für heute alles erledigt!</string>
+  <string name="plan_widget_wrapped">Das war’s!</string>
+  <string name="plan_widget_hidden">Aufgabennamen sind ausgeblendet. Sie können sie in den Einstellungen anzeigen.</string>
+  <string name="plan_widget_add">Hinzufügen</string>
+  <string name="plan_widget_wrap">Abschließen</string>
+  <string name="plan_widget_view">Heutigen Plan ansehen</string>
+  <string name="plan_widget_recap">Tagesrückblick ansehen</string>
+</resources>

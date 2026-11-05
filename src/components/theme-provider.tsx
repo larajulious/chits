@@ -1,21 +1,21 @@
 import { tr } from '@/localization/runtime';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
-import { Appearance, useColorScheme } from 'react-native';
+import { Appearance, useColorScheme, View } from 'react-native';
 import { isLoaded, loadAsync } from 'expo-font';
 import { useSQLiteContext, type SQLiteDatabase } from 'expo-sqlite';
 import { chatThemes, getThemeTokens, type ChatThemeKey, type ThemeTokens } from '@/constants/theme';
 import { CHITS_THEMES, resolveThemeIdentity, THEME_SETTING_KEY, topBarForIdentity, type ChitsLook, type ChitsThemeIdentity, type TopBarStyle } from '@/constants/chits-themes';
-import { resolveAppStyle, STICKY_FONT_FAMILIES, STYLE_PRESETS, STYLE_SETTING_KEY, styleColors, type AppStyle, type StyleColors, type StyleTokens } from '@/constants/style-tokens';
+import { resolveAppStyle, STICKY_FONT_FAMILIES, STYLE_PRESETS, STYLE_SETTING_KEY, SYSTEM_FACES, styleColors, type AppStyle, type StyleColors, type StyleTokens } from '@/constants/style-tokens';
 import { attachmentExists, deleteAttachment } from '@/services/attachment-storage';
 import { HEADER_PHOTO_KEY, parseHeaderPhoto, type HeaderPhoto } from '@/services/header-photo';
 import { headerPhotoCanDelete, writeHeaderPhoto } from '@/db/header-photo';
 import { STICKY_FONTS } from '@/constants/style-fonts';
-import { HEADER_SCENE_PHOTO } from '@/constants/theme-images';
-import { useSceneInk } from '@/hooks/use-scene-clock';
 
 export type AppAppearance = 'system' | 'light' | 'dark';
 type ThemeContextValue = {
   customHeader: HeaderPhoto | null; setCustomHeader: (photo: HeaderPhoto | null) => Promise<void>;
+  /** The header is the plain desk, under Default with no photo of the reader's own. */
+  deskHeader: boolean;
   headerPhotoFailed: boolean; failHeaderPhoto: () => void;
   /** What every screen header shows: the custom photo, else Default's time-of-day scene, else null (the theme's band). */
   headerPhoto: HeaderPhoto | null;
@@ -34,6 +34,8 @@ type ThemeContextValue = {
   styleColors: StyleColors;
 };
 const ThemeContext = createContext<ThemeContextValue | null>(null);
+/** The most the app waits on its bundled fonts before opening anyway. */
+const FONT_WAIT_MS = 1200;
 const isThemeKey = (value: string | null): value is ChatThemeKey => Boolean(value && value in chatThemes);
 const isAppearance = (value: string | null): value is AppAppearance => value === 'system' || value === 'light' || value === 'dark';
 
@@ -87,19 +89,22 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       try { if (await headerPhotoCanDelete(database, previous.storagePath)) await deleteAttachment(previous.storagePath); } catch { /* Keep the unreferenced copy. */ }
     }
   }, [database]);
-  // Sticky's faces are bundled with the app; they register the first time
-  // Sticky is worn, and the platform faces stand in for that frame or two.
+  // The app's faces are bundled, so this takes moments. The app waits for them
+  // rather than painting the system face and jumping, but never for long: past
+  // the timeout it opens in the system face and swaps when they arrive.
   const [stickyFontsReady, setStickyFontsReady] = useState(() => STICKY_FONT_FAMILIES.every((family) => isLoaded(family)));
+  const [fontWaitOver, setFontWaitOver] = useState(stickyFontsReady);
   useEffect(() => {
-    if (style !== 'sticky' || stickyFontsReady) return;
+    if (stickyFontsReady) return;
     let active = true;
-    void loadAsync(STICKY_FONTS).then(() => { if (active) setStickyFontsReady(true); }, () => {});
-    return () => { active = false; };
-  }, [style, stickyFontsReady]);
+    const timer = setTimeout(() => { if (active) setFontWaitOver(true); }, FONT_WAIT_MS);
+    void loadAsync(STICKY_FONTS).then(() => { if (active) setStickyFontsReady(true); }, () => undefined).finally(() => { clearTimeout(timer); if (active) setFontWaitOver(true); });
+    return () => { active = false; clearTimeout(timer); };
+  }, [stickyFontsReady]);
   const systemScheme = useColorScheme();
   const scheme = appearance === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : appearance;
-  const showsScene = identity === 'default' && !(customHeader && !headerPhotoFailed);
-  const sceneInk = useSceneInk(scheme, showsScene);
+  // Default's header is the desk Chits sits on, so the two read as one surface. A custom photo replaces it.
+  const deskHeader = identity === 'default' && !(customHeader && !headerPhotoFailed);
   useEffect(() => { Appearance.setColorScheme(appearance === 'system' ? 'unspecified' : appearance); }, [appearance]);
   // Applied first, saved second: the whole app re-themes in place (no remount,
   // no lost scroll position), and a failed write rolls it back.
@@ -119,16 +124,16 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   const value = useMemo(() => {
     const tokens = getThemeTokens(identity, themeKey, scheme);
     const preset = STYLE_PRESETS[style];
-    const styleTokens = preset.font.display && !stickyFontsReady ? { ...preset, font: STYLE_PRESETS.classic.font } : preset;
-    const headerPhoto = customHeader && !headerPhotoFailed ? customHeader : showsScene ? HEADER_SCENE_PHOTO[sceneInk] : null;
+    const styleTokens = stickyFontsReady ? preset : { ...preset, font: SYSTEM_FACES };
+    const headerPhoto = customHeader && !headerPhotoFailed ? customHeader : null;
     return {
-      customHeader, setCustomHeader, headerPhotoFailed, failHeaderPhoto, headerPhoto,
+      customHeader, setCustomHeader, headerPhotoFailed, failHeaderPhoto, headerPhoto, deskHeader,
       appearance, setAppearance, scheme, identity, setIdentity, themeKey, setThemeKey,
       tokens, look: CHITS_THEMES[identity].look, themes: chatThemes, topBar: topBarForIdentity(identity),
       style, setStyle, styleTokens, styleColors: styleColors(tokens),
     };
-  }, [customHeader, setCustomHeader, headerPhotoFailed, failHeaderPhoto, showsScene, sceneInk, appearance, setAppearance, scheme, identity, setIdentity, setThemeKey, themeKey, style, setStyle, stickyFontsReady]);
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  }, [customHeader, setCustomHeader, headerPhotoFailed, failHeaderPhoto, deskHeader, appearance, setAppearance, scheme, identity, setIdentity, setThemeKey, themeKey, style, setStyle, stickyFontsReady]);
+  return <ThemeContext.Provider value={value}>{fontWaitOver ? children : <View style={{ flex: 1, backgroundColor: value.tokens.background }} />}</ThemeContext.Provider>;
 }
 export function useTheme() {
   const value = useContext(ThemeContext); if (!value) throw new Error('useTheme must be used within ThemeProvider.'); return value; }

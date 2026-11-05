@@ -2,7 +2,7 @@ import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
-import { FlatList, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { FlatList, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
@@ -12,6 +12,7 @@ import { Icon } from '@/components/ui/icon';
 import { radii, spacing } from '@/constants/theme';
 import { listNoteCandidates } from '@/db/repositories';
 import type { SpaceCandidate } from '@/db/types';
+import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
 
 /**
  * "Existing note": every card and Chat note that isn't on the calendar yet
@@ -53,7 +54,7 @@ export function CalendarNotePicker({ visible, dayLabel, onClose, onPick }: { vis
             <AppText accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>{tr("calendarnotepicker.addAnExistingNote")}</AppText>
             <AppText style={[styles.subtitle, { color: theme.textSecondary }]}>{tr("calendarnotepicker.to")}{' '}{dayLabel}</AppText>
           </View>
-          <IconButton label={tr("attachments.close")} onPress={close}><Icon name="close" size={24} color={theme.textPrimary} /></IconButton>
+          <IconButton chrome label={tr("attachments.close")} onPress={close}><Icon name="close" size={24} color={theme.textPrimary} /></IconButton>
         </View>
         <View style={[styles.search, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
           <Icon name="search-outline" size={17} color={theme.textMuted} />

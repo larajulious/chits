@@ -1,19 +1,20 @@
 import { tr } from '@/localization/runtime';
 import { useDirection, useLocale } from '@/localization/provider';
 import type { PropsWithChildren, ReactNode } from 'react';
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { useTheme } from '@/components/theme-provider';
 import { layout, spacing, tokens } from '@/constants/theme';
 import { AppText } from './app-text';
 import { ChitsLoader } from './chits-loader';
-import { HeaderChromeContext, IconButton } from './controls';
+import { HeaderChromeContext, HEADER_ICON_BUTTON_SIZE, IconButton } from './controls';
 import { PressableSurface, Surface, useStickySheet } from './surface';
-import { HeaderGlyph, TopBarBackground, useHeaderInk } from './top-bar';
+import { PAPER_INK, PAPER_INK_MUTED } from '@/constants/paper';
+import { HeaderIcon, HeaderTitleTag, TopBarBackground, useHeaderInk } from './top-bar';
 
-export { HeaderGlyph, HeaderIcon, MenuIcon, TopBarBackground, useHeaderInk } from './top-bar';
+export { HeaderGlyph, HeaderIcon, HeaderTitleTag, MenuIcon, TopBarBackground, useHeaderInk } from './top-bar';
 export { AppText, useFontStyle } from './app-text';
-export { Button, Chip, ChipRow, IconButton, SegmentedControl } from './controls';
+export { Button, Chip, ChipRow, HeaderIconButton, IconButton, SegmentedControl } from './controls';
 export { EmptyState } from './empty-state';
 export { Icon } from './icon';
 export { NoteCard, NoteCategory } from './note-card';
@@ -29,7 +30,7 @@ export const AppScreen = Screen;
  * Sticky: a large left-aligned title with the subtitle (a count) beside it,
  * and the side actions as outlined tiles.
  */
-export function AppHeader({ title, subtitle, leading, trailing, actionWidth = layout.minimumTouchTarget }: { title: string; subtitle?: string; leading?: ReactNode; trailing?: ReactNode; actionWidth?: number }) {
+export function AppHeader({ title, subtitle, showTitle = true, titleStyle, leading, trailing, actionWidth = HEADER_ICON_BUTTON_SIZE, leadingWidth = actionWidth }: { title: string; subtitle?: string; showTitle?: boolean; titleStyle?: StyleProp<TextStyle>; leading?: ReactNode; trailing?: ReactNode; actionWidth?: number; leadingWidth?: number }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   const { rowStyle } = useDirection();
@@ -40,18 +41,18 @@ export function AppHeader({ title, subtitle, leading, trailing, actionWidth = la
     <View style={[styles.header, styles.headerLeft, rowStyle, { minHeight: h.minHeight }]}><TopBarBackground />
       {leading}
       <View style={[styles.headerCopyLeft, rowStyle, { flexWrap: 'wrap' }]}>
-        <AppText accessibilityRole="header" accessibilityLabel={title} variant="title" numberOfLines={1} ellipsizeMode="tail" style={[styles.headerTitleLeft, { color: ink, fontSize: h.titleSize, lineHeight: h.titleLineHeight }]}>{title}</AppText>
+        {showTitle ? <AppText accessibilityRole="header" accessibilityLabel={title} variant="title" numberOfLines={1} ellipsizeMode="tail" style={[styles.headerTitleLeft, { color: ink, fontSize: h.titleSize, lineHeight: h.titleLineHeight }, titleStyle]}>{title}</AppText> : null}
         {subtitle ? <AppText accessibilityLabel={subtitle} weight="700" numberOfLines={1} style={[styles.headerCount, { color: banded ? inkMuted : styleColors.textSecondary, fontSize: h.countSize }]}>{subtitle}</AppText> : null}
       </View>
       {trailing}
     </View>
   </HeaderChromeContext.Provider>;
-  return <View style={[styles.header, rowStyle, { minHeight: h.minHeight, borderBottomColor: border, borderBottomWidth: StyleSheet.hairlineWidth }]}><TopBarBackground /><View style={[styles.headerSide, { width: actionWidth }]}>{leading}</View><View style={styles.headerCopy}><AppText accessibilityRole="header" accessibilityLabel={title} variant="title" numberOfLines={1} ellipsizeMode="tail" style={[styles.headerTitle, { color: ink, fontSize: h.titleSize }]}>{title}</AppText>{subtitle ? <AppText accessibilityLabel={subtitle} style={[styles.headerSubtitle, { color: inkMuted, fontSize: h.countSize }]}>{subtitle}</AppText> : null}</View><View style={[styles.headerSide, styles.headerSideTrailing, { width: actionWidth }]}>{trailing}</View></View>;
+  return <HeaderChromeContext.Provider value><View style={[styles.header, rowStyle, { minHeight: h.minHeight, borderBottomColor: border, borderBottomWidth: border === 'transparent' ? 0 : StyleSheet.hairlineWidth }]}><TopBarBackground /><View style={[styles.headerSide, { width: leadingWidth }]}>{leading}</View><View style={styles.headerCopy}>{title && (showTitle || subtitle) ? <HeaderTitleTag>{showTitle ? <AppText accessibilityRole="header" accessibilityLabel={title} variant="title" numberOfLines={1} ellipsizeMode="tail" style={[styles.headerTitle, { color: banded ? PAPER_INK : ink, fontSize: h.titleSize }, titleStyle]}>{title}</AppText> : null}{subtitle ? <AppText accessibilityLabel={subtitle} style={[styles.headerSubtitle, { color: banded ? PAPER_INK_MUTED : inkMuted, fontSize: h.countSize }]}>{subtitle}</AppText> : null}</HeaderTitleTag> : null}</View><View style={[styles.headerSide, styles.headerSideTrailing, { width: actionWidth }]}>{trailing}</View></View></HeaderChromeContext.Provider>;
 }
 export function BackHeader({ title, onBack, trailing }: { title: string; onBack: () => void; trailing?: ReactNode }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
-  useLocale(); return <AppHeader title={title} leading={<IconButton label={tr("search.goBack")} onPress={onBack}><HeaderGlyph style={styles.backIcon}>‹</HeaderGlyph></IconButton>} trailing={trailing} />; }
+  useLocale(); return <AppHeader title={title} leading={<IconButton label={tr("search.goBack")} onPress={onBack}><HeaderIcon name="chevron-back" size={24} /></IconButton>} trailing={trailing} />; }
 export function Divider() {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 

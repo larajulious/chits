@@ -201,3 +201,8 @@ test('a planned note whose reminder is on another day shows on both days, and on
   assert.deepEqual(items.map((item) => item.key), ['message:m1']);
   assert.equal(items[0].reminderAt, new Date(2026, 9, 13, 8).getTime());
 });
+
+test('a selection on today follows the date past midnight; a day the reader chose stays', () => {
+  assert.equal(schedule.followToday('2026-11-04', '2026-11-04', '2026-11-05'), '2026-11-05');
+  assert.equal(schedule.followToday('2026-11-20', '2026-11-04', '2026-11-05'), '2026-11-20');
+});

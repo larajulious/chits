@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
+import { ChitsLoader } from '@/components/ui/chits-loader';
 import { AppHeader, HeaderIcon, IconButton, Screen } from '@/components/ui/primitives';
 import { FocusAction, FocusText } from '@/features/focus/focus-ui';
 import { useLocale } from '@/localization/provider';
@@ -47,8 +48,8 @@ export default function SpinScreen() {
   })}><HeaderIcon name={mode === 'custom' ? 'pie-chart-outline' : 'documents-outline'} size={22} /></IconButton>;
   const modeNotice = error ? <FocusText accessibilityRole="alert" style={{ color: tokens.danger }}>{tr('spin.error')}</FocusText> : null;
   if (mode === null) return <Screen><AppHeader title={tr('spin.title')} leading={<IconButton label={tr('search.goBack')} onPress={() => router.back()}><HeaderIcon name="chevron-back" size={24} /></IconButton>} />
-    {error ? <View style={styles.control}><FocusText accessibilityRole="alert" style={{ color: tokens.danger }}>{tr('spin.error')}</FocusText><FocusAction onPress={() => { setError(false); void repo.mode().then(setMode).catch(() => setError(true)); }}>{tr('spin.again')}</FocusAction></View> : <ActivityIndicator color={tokens.accent} />}
+    {error ? <View style={styles.control}><FocusText accessibilityRole="alert" style={{ color: tokens.danger }}>{tr('spin.error')}</FocusText><FocusAction onPress={() => { setError(false); void repo.mode().then(setMode).catch(() => setError(true)); }}>{tr('spin.again')}</FocusAction></View> : <View style={styles.loading}><ChitsLoader /></View>}
   </Screen>;
   return mode === 'custom' ? <CustomSpinScreen modeAction={modeAction} modeNotice={modeNotice} onBusyChange={setBusy} /> : <NoteSpinScreen modeAction={modeAction} modeNotice={modeNotice} onBusyChange={setBusy} />;
 }
-const styles = StyleSheet.create({ control: { gap: 8 } });
+const styles = StyleSheet.create({ control: { gap: 8 }, loading: { flex: 1, alignItems: 'center', justifyContent: 'center' } });

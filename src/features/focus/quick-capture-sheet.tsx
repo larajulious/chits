@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Keyboard, StyleSheet, TextInput, View } from 'react-native';
+import { Keyboard, StyleSheet, View } from 'react-native';
 import { useDirection, useLocale } from '@/localization/provider';
 import { contentTextStyle, languageDirection } from '@/localization/text-layout';
 import { tr } from '@/localization/runtime';
@@ -9,6 +9,7 @@ import { useStickyControls } from '@/components/ui/surface';
 import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
 import { spacing } from '@/constants/theme';
 import { FocusAction, FocusText } from './focus-ui';
+import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
 
 type Props = {
   visible: boolean;

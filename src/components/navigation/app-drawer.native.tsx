@@ -15,20 +15,23 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePathname, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
-import { useStickySurface } from '@/components/ui/surface';
+import { DeskDots, PAPER_INK, PAPER_WHITE, PAPER_YELLOW, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
-import { LabelTape } from '@/components/spaces/label-tape';
 import { SegmentedControl, Toast } from '@/components/ui/primitives';
-import { DrawerBackground } from './drawer-background';
-import { APP_STYLE_NAMES, APP_STYLES, type AppStyle } from '@/constants/style-tokens';
+import { DrawerHero } from './drawer-hero';
+import { APP_STYLE_NAMES, APP_STYLES, mix, type AppStyle } from '@/constants/style-tokens';
 import { spacing } from '@/constants/theme';
 import { CHITS_REVISIT_ENABLED } from '@/constants/revisit';
 import { createBoardRepository, createSpaceRepository } from '@/db/repositories';
+import { useOpenCardNote } from '@/components/notes/use-open-card-note';
+import { createSpinRepository } from '@/db/spin-repository';
 import { getCalendarItems } from '@/features/calendar/calendar-data';
+import { useWelcomeFonts } from '@/features/onboarding/welcome/welcome-fonts';
+import { welcomeSurfaces } from '@/features/onboarding/welcome/welcome-surfaces';
 import { subscribeToReminderChanges } from '@/services/reminders';
 import { subscribeToSpaceChanges } from '@/services/space-changes';
 import { dateFormat } from '@/services/reminder-time';
@@ -46,17 +49,17 @@ type ContextItem = {
   accessibilityContext: string | null;
 };
 type IconName = ComponentProps<typeof Ionicons>['name'];
-type Destination = { label: string; path: '/' | '/spaces/pick' | '/attachments' | '/calendar' | '/archive' | '/settings' | '/onboarding' | '/revisit'; icon: IconName };
+type Destination = { label: string; path: '/' | '/spaces/pick' | '/attachments' | '/calendar' | '/archive' | '/settings' | '/onboarding' | '/revisit' | '/focus' | '/spin'; icon: IconName };
 
 const styleOptions = () => APP_STYLES.map((key: AppStyle) => ({ key, label: APP_STYLE_NAMES[key], accessibilityLabel: tr("settings.valueStyle", { value1: APP_STYLE_NAMES[key] }) }));
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
-// True for rows on a Classic card, which supplies their side margin.
-const InCardContext = createContext(false);
 // Main destinations live in the side panel; Chat remains a floating button.
 const spacesDestination: Destination = { get label() { return tr("pick.spaces"); }, path: '/spaces/pick', icon: 'magnet-outline' };
 const notesDestination: Destination = { get label() { return tr('index.notes'); }, path: '/', icon: 'reader-outline' };
 const calendarDestination: Destination = { get label() { return tr("appdrawer.calendar"); }, path: '/calendar', icon: 'calendar-outline' };
+const focusDestination: Destination = { get label() { return tr('focus.title'); }, path: '/focus', icon: 'timer-outline' };
+const spinDestination: Destination = { get label() { return tr('spin.title'); }, path: '/spin', icon: 'shuffle-outline' };
 const attachmentsDestination: Destination = { get label() { return tr('attachments.attachments'); }, path: '/attachments', icon: 'attach-outline' };
 const archiveDestination: Destination = { get label() { return tr("archive.archive"); }, path: '/archive', icon: 'archive-outline' };
 const revisitDestination: Destination = { get label() { return tr("revisit.revisit"); }, path: '/revisit', icon: 'refresh-outline' };
@@ -78,13 +81,22 @@ function isDestinationActive(pathname: string, destination: Destination) {
   return pathname === destination.path;
 }
 
-function DrawerIcon({ name, color }: { name: IconName; color: string }) {
+/** The paper below the panel's hero and the ink on it, from the same kit as every page's sheet. */
+function useDrawerSurfaces() {
+  const { scheme } = useTheme();
+  const desk = useDesk();
+  return welcomeSurfaces(scheme, desk, { white: PAPER_WHITE, ink: PAPER_INK, yellow: PAPER_YELLOW });
+}
+
+/** A row's icon on a small rounded tile, as in the Boards list. */
+function DrawerIcon({ name, color, fill }: { name: IconName; color: string; fill: string }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
+  const { styleTokens } = useTheme();
   return (
-    <View accessible={false} style={styles.iconSlot}>
-      <Icon name={name} size={21} color={color} />
+    <View accessible={false} style={[styles.iconTile, { backgroundColor: fill, borderRadius: styleTokens.button.radius }]}>
+      <Icon name={name} size={19} color={color} />
     </View>
   );
 }
@@ -94,12 +106,12 @@ function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'n
 
   const { rowStyle } = useDirection();
   const router = useRouter();
-  const { tokens, styleTokens, styleColors } = useTheme();
-  const sticky = useStickySurface();
-  const inCard = useContext(InCardContext);
+  const { tokens, styleTokens } = useTheme();
+  const desk = useDesk();
+  const fonts = useWelcomeFonts();
+  const surfaces = useDrawerSurfaces();
   const active = isDestinationActive(pathname, destination);
-  // Sticky: the current screen is an outlined accent tile, like the nav's active pill.
-  const tile = active && styleTokens.outline.width > 0;
+  const ink = active ? tokens.accentText : surfaces.ink;
   return (
     <Pressable
       accessibilityRole="button"
@@ -110,16 +122,15 @@ function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'n
         router.navigate(destination.path);
       }}
       style={({ pressed }) => [
-        styles.item, rowStyle, inCard && styles.inCard,
-        active && { backgroundColor: tokens.accentSoft },
-        { borderRadius: styleTokens.radius.control - 2 },
-        active && sticky({ fill: styleColors.accentFill, radius: styleTokens.radius.control, edge: false }),
+        styles.item, rowStyle,
+        { borderRadius: styleTokens.button.radius },
+        active && { backgroundColor: tokens.accent, boxShadow: `0px 3px 8px ${desk.shadow}` },
         pressed && styles.pressed,
       ]}>
-      <DrawerIcon name={destination.icon} color={tile ? styleColors.onAccent : active ? tokens.accentStrong : tokens.textPrimary} />
-      <AppText style={[styles.itemText, { color: tile ? styleColors.onAccent : tokens.textPrimary }, active && styles.itemTextSelected]}>{destination.label}</AppText>
-      {/* A tiny red label-maker tape, like the ones in Spaces; the count is in the row's label. */}
-      {badge > 0 ? <LabelTape text={String(badge)} variant="red" size="sm" rotation={-3} decorative style={styles.badge} /> : null}
+      <DrawerIcon name={destination.icon} color={ink} fill={active ? mix(tokens.accent, PAPER_WHITE, 0.55) : surfaces.control} />
+      <AppText numberOfLines={1} family={active ? fonts.display : fonts.text} style={[styles.itemText, { color: ink }]}>{destination.label}</AppText>
+      {/* The same small paper tag as a section's count; the number is in the row's label. */}
+      {badge > 0 ? <View style={[styles.badge, { boxShadow: `0px 2px 4px ${desk.shadow}` }]}><AppText weight="700" style={styles.badgeText}>{badge}</AppText></View> : null}
     </Pressable>
   );
 }
@@ -131,12 +142,12 @@ function StyleRow({ value, onChange }: { value: AppStyle; onChange: (next: AppSt
 
   useLocale();
   const { rowStyle } = useDirection();
-  const { tokens } = useTheme();
-  const inCard = useContext(InCardContext);
+  const fonts = useWelcomeFonts();
+  const surfaces = useDrawerSurfaces();
   return (
-    <View accessibilityRole="radiogroup" accessibilityLabel={tr("settings.style")} style={[styles.item, rowStyle, inCard && styles.inCard]}>
-      <DrawerIcon name="color-palette-outline" color={tokens.textPrimary} />
-      <AppText numberOfLines={1} style={[styles.itemText, styles.styleLabel, { color: tokens.textPrimary }]}>{tr("settings.style")}</AppText>
+    <View accessibilityRole="radiogroup" accessibilityLabel={tr("settings.style")} style={[styles.item, rowStyle]}>
+      <DrawerIcon name="color-palette-outline" color={surfaces.ink} fill={surfaces.control} />
+      <AppText numberOfLines={1} family={fonts.text} style={[styles.itemText, { color: surfaces.ink }]}>{tr("settings.style")}</AppText>
       <View style={styles.styleSwitch}><SegmentedControl options={styleOptions()} value={value} onChange={onChange} /></View>
     </View>
   );
@@ -149,9 +160,10 @@ function ShortcutRow({ item, close, onUnpin }: { item: ContextItem; close: () =>
 
   useLocale();
   const router = useRouter();
-  const { tokens, styleTokens, styleColors } = useTheme();
-  const sticky = useStickySurface();
-  const inCard = useContext(InCardContext);
+  const openCardNote = useOpenCardNote();
+  const { styleTokens } = useTheme();
+  const fonts = useWelcomeFonts();
+  const surfaces = useDrawerSurfaces();
   const isBoard = item.kind === 'board';
   const accessibilityLabel = isBoard
     ? tr('appdrawer.boardShortcut', { title: item.title })
@@ -163,15 +175,13 @@ function ShortcutRow({ item, close, onUnpin }: { item: ContextItem; close: () =>
       onPress={() => {
         close();
         if (isBoard) router.push({ pathname: '/board/[id]', params: { id: item.id } });
-        else router.push({ pathname: '/card/[id]', params: { id: item.id } });
+        else void openCardNote(item.id);
       }}
-      style={({ pressed }) => [styles.contextRow, inCard && styles.inCard, { borderRadius: styleTokens.radius.control - 2 }, onUnpin && styles.pinnedRow, pressed && styles.pressed]}>
-      <View accessible={false} style={[styles.contextIcon, { borderRadius: styleTokens.radius.control - 3, backgroundColor: isBoard ? tokens.accentSoft : tokens.surfaceElevated, borderColor: isBoard ? tokens.accentBorder : tokens.borderSubtle }, sticky({ fill: isBoard ? styleColors.cardTint : styleColors.controlFill, radius: styleTokens.radius.control - 4, edge: false })]}>
-        <Icon name={isBoard ? 'grid-outline' : 'document-text-outline'} size={17} color={styleTokens.outline.width ? (isBoard ? styleColors.cardInk : tokens.textSecondary) : isBoard ? tokens.accentStrong : tokens.textSecondary} />
-      </View>
+      style={({ pressed }) => [styles.contextRow, { borderRadius: styleTokens.button.radius }, onUnpin && styles.pinnedRow, pressed && styles.pressed]}>
+      <DrawerIcon name={isBoard ? 'grid-outline' : 'document-text-outline'} color={surfaces.inkMuted} fill={surfaces.control} />
       <View style={styles.contextCopy}>
-        <AppText numberOfLines={1} ellipsizeMode="tail" style={[styles.contextTitle, { color: tokens.textPrimary }]}>{item.title}</AppText>
-        <AppText numberOfLines={1} ellipsizeMode="tail" style={[styles.contextMeta, { color: tokens.textSecondary }]}>{isBoard ? tr('id.board') : item.context}</AppText>
+        <AppText numberOfLines={1} ellipsizeMode="tail" family={fonts.text} style={[styles.contextTitle, { color: surfaces.ink }]}>{item.title}</AppText>
+        <AppText numberOfLines={1} ellipsizeMode="tail" family={fonts.text} style={[styles.contextMeta, { color: surfaces.inkMuted }]}>{isBoard ? tr('id.board') : item.context}</AppText>
       </View>
       {/* Nested Pressable, not the row's own onPress — stopPropagation keeps this
           from also opening the row underneath it. Neutral color throughout: this
@@ -183,33 +193,17 @@ function ShortcutRow({ item, close, onUnpin }: { item: ContextItem; close: () =>
           hitSlop={10}
           onPress={(event) => { event.stopPropagation(); onUnpin(); }}
           style={({ pressed }) => [styles.unpinButton, pressed && styles.unpinPressed]}>
-          <Icon name="close" size={16} color={tokens.textMuted} />
+          <Icon name="close" size={16} color={surfaces.inkMuted} />
         </Pressable>
       ) : null}
     </Pressable>
   );
 }
 
-// Classic groups each part of the panel on its own card; Sticky keeps its
-// flat list, so there this renders just the rows.
-function DrawerCard({ children }: PropsWithChildren) {
-  const { tokens, scheme, style, styleTokens } = useTheme();
-  if (style !== 'classic') return <>{children}</>;
-  return (
-    <InCardContext.Provider value>
-      <View style={[styles.card, { backgroundColor: scheme === 'dark' ? tokens.surfaceElevated : tokens.surface, borderColor: tokens.borderSubtle, borderRadius: styleTokens.radius.panel }]}>{children}</View>
-    </InCardContext.Provider>
-  );
-}
-
 const MINUTE = 60_000;
 // Today's date and time under the title, in the user's language and clock;
 // it ticks over on each new minute while the panel is open.
-function TodayLine() {
-  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
-
-  useLocale();
-  const { tokens } = useTheme();
+function useTodayLine() {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -219,7 +213,7 @@ function TodayLine() {
   }, []);
   const day = dateFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(now);
   const time = dateFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(now);
-  return <AppText numberOfLines={1} style={[styles.today, { color: tokens.textSecondary }]}>{`${day} · ${time}`}</AppText>;
+  return `${day} · ${time}`;
 }
 
 // Shared header row for every drawer section.
@@ -227,10 +221,11 @@ function SectionHeader({ label }: { label: string }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const { tokens } = useTheme();
+  const { handBold } = useHandwriting();
+  const surfaces = useDrawerSurfaces();
   return (
     <View style={styles.sectionHeader}>
-      <AppText accessibilityRole="header" style={[styles.sectionLabel, { color: tokens.textMuted }]}>{label}</AppText>
+      <AppText accessibilityRole="header" style={[handBold, styles.sectionLabel, { color: surfaces.ink }]}>{label}</AppText>
     </View>
   );
 }
@@ -250,8 +245,8 @@ function RecentSection({ items, close }: { items: ContextItem[]; close: () => vo
   if (!items.length) return null;
   return (
     <View style={styles.section}>
-      <SectionHeader label={tr("unorganized.recent")} />
-      <DrawerCard>{items.map((item) => <ShortcutRow key={`${item.kind}-${item.id}`} item={item} close={close} />)}</DrawerCard>
+      <SectionHeader label={tr("attachments.recent")} />
+      {items.map((item) => <ShortcutRow key={`${item.kind}-${item.id}`} item={item} close={close} />)}
     </View>
   );
 }
@@ -263,8 +258,8 @@ function PinnedSection({ items, close, onUnpin }: { items: ContextItem[]; close:
   if (!items.length) return null;
   return (
     <View style={styles.section}>
-      <SectionHeader label={tr("appdrawer.pinned")} />
-      <DrawerCard>{items.map((item) => <ShortcutRow key={`${item.kind}-${item.id}`} item={item} close={close} onUnpin={() => onUnpin(item)} />)}</DrawerCard>
+      <SectionHeader label={tr("index.pinned")} />
+      {items.map((item) => <ShortcutRow key={`${item.kind}-${item.id}`} item={item} close={close} onUnpin={() => onUnpin(item)} />)}
     </View>
   );
 }
@@ -276,8 +271,11 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   const database = useSQLiteContext();
   const repository = useMemo(() => createBoardRepository(database), [database]);
   const pathname = usePathname();
-  const { tokens, styleTokens, styleColors, style, setStyle } = useTheme();
-  const sticky = useStickySurface();
+  const { style, setStyle } = useTheme();
+  const desk = useDesk();
+  const surfaces = useDrawerSurfaces();
+  const insets = useSafeAreaInsets();
+  const today = useTodayLine();
   const [pinned, setPinned] = useState<ContextItem[]>([]);
   const [recent, setRecent] = useState<ContextItem[]>([]);
   // Same single source of truth as Chat's own header (app_settings.chat_title) and
@@ -287,6 +285,10 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   const spaces = useMemo(() => createSpaceRepository(database), [database]);
   const [stuckCount, setStuckCount] = useState(0);
   const [incomingReminderCount, setIncomingReminderCount] = useState(0);
+  // Settings' "Show Chits Spin". Unlike Spin's shortcuts this row doesn't wait
+  // for eligible notes: a place in the panel stays put, and Spin's own empty
+  // state explains what to do.
+  const [showSpin, setShowSpin] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const loadReminderCount = useCallback(async () => {
@@ -295,13 +297,15 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   }, [database]);
 
   const load = useCallback(async () => {
-    const [nextPinned, nextRecent, titleRow, spaceCounts] = await Promise.all([
+    const [nextPinned, nextRecent, titleRow, spaceCounts, spinVisible] = await Promise.all([
       repository.listPinned(),
       repository.listRecent(),
       database.getFirstAsync<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', 'chat_title'),
       spaces.counts(),
+      createSpinRepository(database).visibility(),
       loadReminderCount(),
     ]);
+    setShowSpin(spinVisible);
     setPinned(nextPinned);
     setStuckCount(Object.values(spaceCounts).reduce((sum, count) => sum + count, 0));
     setRecent(nextRecent);
@@ -345,41 +349,31 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   // just doubles the list.
   const pinnedKeys = new Set(pinned.map((item) => `${item.kind}-${item.id}`));
   const recentUnpinned = recent.filter((item) => !pinnedKeys.has(`${item.kind}-${item.id}`));
-  const hasShortcuts = pinned.length > 0 || recentUnpinned.length > 0;
-  const classic = style === 'classic';
-  const footer = <DrawerCard>
-    <StyleRow value={style} onChange={changeStyle} />
-    <NavigationRow destination={gettingStartedDestination} pathname={pathname} close={close} />
-    <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
-  </DrawerCard>;
   return (
-    <SafeAreaView accessibilityViewIsModal style={[styles.drawer, { backgroundColor: tokens.surface, borderColor: tokens.borderSubtle }, styleTokens.outline.width ? [{ borderRightWidth: styleTokens.outline.width, borderColor: styleColors.outline }, sticky({ edge: styleTokens.nav.edge, edgeSide: 'right', outline: false })] : null]}>
-      <DrawerBackground />
-      <View style={styles.top}>
-        <View style={styles.titleBlock}>
-          <AppText accessibilityRole="header" variant="display" style={[styles.title, { color: tokens.textPrimary }]}>{appTitle}</AppText>
-          <TodayLine />
-        </View>
-      </View>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.drawerContent, classic && styles.drawerContentClassic]}>
-        <DrawerCard>
+    <SafeAreaView edges={['top']} accessibilityViewIsModal style={[styles.drawer, { backgroundColor: desk.desk, boxShadow: `0px 0px 16px ${desk.shadow}` }]}>
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}><DeskDots /></View>
+      <DrawerHero title={appTitle} today={today} paper={surfaces.paper} />
+      <View style={[styles.sheet, { backgroundColor: surfaces.paper }]}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
           <NavigationRow destination={notesDestination} pathname={pathname} close={close} />
           <NavigationRow destination={spacesDestination} pathname={pathname} close={close} badge={stuckCount} />
           <NavigationRow destination={calendarDestination} pathname={pathname} close={close} badge={incomingReminderCount} badgeNoun="reminder" />
+          <NavigationRow destination={focusDestination} pathname={pathname} close={close} />
+          {showSpin ? <NavigationRow destination={spinDestination} pathname={pathname} close={close} /> : null}
           <NavigationRow destination={attachmentsDestination} pathname={pathname} close={close} />
           <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />
           {CHITS_REVISIT_ENABLED ? <NavigationRow destination={revisitDestination} pathname={pathname} close={close} /> : null}
-        </DrawerCard>
-        {hasShortcuts && !classic ? <View style={[styles.divider, { backgroundColor: tokens.borderSubtle }, styleTokens.outline.width ? { height: styleTokens.outline.width, backgroundColor: styleColors.outline } : null]} /> : null}
-        <PinnedSection items={pinned} close={close} onUnpin={unpinItem} />
-        <RecentSection items={recentUnpinned.slice(0, 5)} close={close} />
-        {/* Classic scrolls as one page, with Settings and the rest at its
-            foot (pushed to the bottom when the list is short). */}
-        {classic ? <View style={styles.footerClassic}>{footer}</View> : null}
-      </ScrollView>
-      {/* Settings is app chrome, not a place your notes live — it stays pinned
-          to the bottom instead of sitting in the list of destinations. */}
-      {classic ? null : <View style={[styles.footer, { borderTopColor: tokens.borderSubtle }, styleTokens.outline.width ? { borderTopWidth: styleTokens.outline.width, borderTopColor: styleColors.outline } : null]}>{footer}</View>}
+          <PinnedSection items={pinned} close={close} onUnpin={unpinItem} />
+          <RecentSection items={recentUnpinned.slice(0, 5)} close={close} />
+        </ScrollView>
+        {/* Settings is app chrome, not a place your notes live: it stays at the
+            foot of the panel instead of sitting in the list of destinations. */}
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.xs), backgroundColor: surfaces.paper, boxShadow: `0px -3px 8px ${desk.shadow}` }]}>
+          <StyleRow value={style} onChange={changeStyle} />
+          <NavigationRow destination={gettingStartedDestination} pathname={pathname} close={close} />
+          <NavigationRow destination={settingsDestination} pathname={pathname} close={close} />
+        </View>
+      </View>
       <Toast message={toast} />
     </SafeAreaView>
   );
@@ -456,54 +450,23 @@ const styles = StyleSheet.create({
   },
   backdropShell: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   backdrop: { flex: 1 },
-  drawer: { flex: 1, borderRightWidth: StyleSheet.hairlineWidth },
-  top: {
-    minHeight: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
-  },
-  title: { fontSize: 21, fontWeight: '600' },
-  titleBlock: { flex: 1, minWidth: 0 },
-  today: { fontSize: 13, marginTop: 1 },
-  drawerContent: { paddingTop: spacing.sm, paddingBottom: spacing.lg },
-  drawerContentClassic: { flexGrow: 1, paddingBottom: spacing.md },
-  card: { marginHorizontal: spacing.sm, paddingVertical: spacing.xxs, borderWidth: StyleSheet.hairlineWidth },
-  inCard: { marginHorizontal: spacing.xxs },
-  footerClassic: { marginTop: 'auto', paddingTop: spacing.lg },
-  item: {
-    minHeight: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginHorizontal: spacing.sm,
-    paddingHorizontal: spacing.sm,
-  },
-  itemText: { fontSize: 16 },
-  itemTextSelected: { fontWeight: '700' },
-  badge: { marginLeft: 'auto', alignSelf: 'center' },
-  // Same width as contextIcon so destination labels and shortcut titles share one text column.
-  iconSlot: { width: 30, alignItems: 'center', justifyContent: 'center' },
-  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.lg, marginTop: spacing.sm },
-  footer: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: spacing.xs },
-  styleLabel: { flex: 1, minWidth: 0 },
+  drawer: { flex: 1 },
+  sheet: { flex: 1, minHeight: 0 },
+  drawerContent: { paddingTop: spacing.xs, paddingHorizontal: spacing.xs, paddingBottom: spacing.md, gap: 2 },
+  item: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xs },
+  itemText: { flex: 1, minWidth: 0, fontSize: 16, lineHeight: 21 },
+  iconTile: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  badge: { minWidth: 26, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 2, alignItems: 'center', backgroundColor: PAPER_WHITE, transform: [{ rotate: '3deg' }] },
+  badgeText: { color: PAPER_INK, fontSize: 12, lineHeight: 17, fontVariant: ['tabular-nums'] },
+  footer: { paddingTop: spacing.xs, paddingHorizontal: spacing.xs, gap: 2 },
   styleSwitch: { width: 148 },
-  section: { paddingTop: spacing.sm },
-  sectionHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg },
-  sectionLabel: { flex: 1, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-  contextRow: {
-    minHeight: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginHorizontal: spacing.sm,
-    paddingHorizontal: spacing.sm,
-  },
-  contextIcon: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
+  section: { paddingTop: spacing.sm, gap: 2 },
+  sectionHeader: { minHeight: 36, justifyContent: 'center', paddingHorizontal: spacing.xs },
+  sectionLabel: { fontSize: 18, lineHeight: 24 },
+  contextRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xs },
   contextCopy: { flex: 1, minWidth: 0 },
-  contextTitle: { fontSize: 15, fontWeight: '500' },
-  contextMeta: { fontSize: 12, marginTop: 2 },
+  contextTitle: { fontSize: 15, lineHeight: 20 },
+  contextMeta: { fontSize: 12, lineHeight: 16 },
   pinnedRow: { paddingRight: spacing.xxs },
   // Icon stays visually compact (16dp); hitSlop below brings the actual touch
   // target up to the 44dp minimum without the row looking crowded.

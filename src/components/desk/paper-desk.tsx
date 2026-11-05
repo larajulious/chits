@@ -1,15 +1,16 @@
 import { createContext, useContext, type ReactNode } from 'react';
-import { Image as RNImage, Pressable, StyleSheet, View, type PressableProps, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, View, type PressableProps, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
 import { loadAsync, useFonts } from 'expo-font';
-import { Kalam_400Regular } from '@expo-google-fonts/kalam/400Regular';
-import { Kalam_700Bold } from '@expo-google-fonts/kalam/700Bold';
 import Animated, { FadeIn, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useTheme } from '@/components/theme-provider';
+import { DeskDots, useDesk } from './desk-surface';
 import { AppText, Icon } from '@/components/ui/primitives';
 import type { IconName } from '@/components/ui/icon';
+import { PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW } from '@/constants/paper';
 import { useDirection } from '@/localization/provider';
+import { STICKY_FONTS, WORKSPACE_FONT_FAMILIES } from '@/constants/style-fonts';
 
 // The desk look Spin and Focus share: a dotted desk with paper notes on it.
 // The papers are always light whatever the appearance (like Sticky notes), so
@@ -17,42 +18,36 @@ import { useDirection } from '@/localization/provider';
 // a theme page that holds editable content, follow dark mode and the theme.
 // Motion is transforms and opacity only, so nothing re-lays out mid-animation.
 
-export const PAPER_INK = '#2B2620';
-export const PAPER_INK_MUTED = '#574E41';
-export const PAPER_WHITE = '#FFFDF6';
-export const PAPER_YELLOW = '#FBE47E';
+export { PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW };
+export { DeskDots, useDesk };
 /** The pastel papers, in the order a set of notes takes them. */
 export const PAPERS = ['#FBE47E', '#F9C6CF', '#C7EAD3', '#C9DCF5', '#FFD9B5', '#DECFF5', '#F3EAD8', '#DDEFB6'];
 /** Deeper cuts of the papers, for confetti and marks that must show on the desk. */
 export const PAPER_CONFETTI = ['#F2C230', '#EE7F97', '#4DBE8C', '#5B9BEA', '#F29A55', '#A98BE8'];
 
-const DESKS = {
-  light: { desk: '#EADFCB', dot: '#785A32', dotOpacity: 0.16, rule: 'rgba(43,38,32,0.14)', ink: '#2B2620', inkMuted: '#5E5444', danger: '#9E2B25', rim: '#C9A27A', shadow: 'rgba(80,60,30,0.2)' },
-  dark: { desk: '#221E18', dot: '#FFF0D2', dotOpacity: 0.08, rule: 'rgba(241,233,218,0.14)', ink: '#F1E9DA', inkMuted: '#C9BEAA', danger: '#F19A90', rim: '#8A6A48', shadow: 'rgba(0,0,0,0.45)' },
-};
-export function useDesk() {
-  return DESKS[useTheme().scheme];
-}
-
-/** Kalam, the handwriting Spaces writes notes in; system faces stand in while it registers. */
+/** Shared workspace type; the legacy style names keep existing callers intact. */
 export function useHandwriting(): { hand: TextStyle; handBold: TextStyle; ready: boolean } {
-  const [loaded, error] = useFonts({ Kalam_400Regular, Kalam_700Bold });
+  const [loaded, error] = useFonts(STICKY_FONTS);
   // A face that cannot load settles on the system faces, so nothing waiting on `ready` waits forever.
   return loaded ? HAND : error ? HAND_FAILED : HAND_FALLBACK;
 }
-/** Loads Kalam ahead of time (once; repeat calls share the load), so desk screens open already in handwriting. */
+/** Loads the same bundled type as the heroes before opening a desk screen. */
 export function preloadHandwriting() {
-  void loadAsync({ Kalam_400Regular, Kalam_700Bold }).catch(() => undefined);
+  void loadAsync(STICKY_FONTS).catch(() => undefined);
 }
-const HAND = { hand: { fontFamily: 'Kalam_400Regular' }, handBold: { fontFamily: 'Kalam_700Bold' }, ready: true };
+const HAND = {
+  hand: { fontFamily: WORKSPACE_FONT_FAMILIES.text, fontWeight: 'normal' as const },
+  handBold: { fontFamily: WORKSPACE_FONT_FAMILIES.display, fontWeight: 'normal' as const },
+  ready: true,
+};
 const HAND_FALLBACK = { hand: {}, handBold: { fontWeight: '700' as const }, ready: false };
 const HAND_FAILED = { ...HAND_FALLBACK, ready: true };
 
-/** The dotted desk: one small dot tile, repeated. */
-export function PaperDesk({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+/** The dotted desk. */
+export function PaperDesk({ children, style, faint = false }: { children: ReactNode; style?: StyleProp<ViewStyle>; faint?: boolean }) {
   const desk = useDesk();
   return <View style={[styles.flex, { backgroundColor: desk.desk }, style]}>
-    <RNImage accessible={false} source={DESK_DOT} resizeMode="repeat" tintColor={desk.dot} style={[StyleSheet.absoluteFill, { opacity: desk.dotOpacity }]} />
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}><DeskDots faint={faint} /></View>
     <OnDesk.Provider value>{children}</OnDesk.Provider>
   </View>;
 }
@@ -61,7 +56,10 @@ export function PaperDesk({ children, style }: { children: ReactNode; style?: St
 // or screen), so shared controls can dress as paper only where paper belongs.
 const OnDesk = createContext(false);
 export const useOnDesk = () => useContext(OnDesk);
-const DESK_DOT = require('@/assets/images/spin-desk-dot.png');
+/** For a page that lies on the desk without being drawn by `PaperDesk`, like the sheet on a mascot stage. */
+export function OnTheDesk({ children }: { children: ReactNode }) {
+  return <OnDesk.Provider value>{children}</OnDesk.Provider>;
+}
 
 /** A strip of translucent tape across a paper's top edge. */
 export function Tape({ width = 72, angle = 3 }: { width?: number; angle?: number }) {
@@ -124,8 +122,8 @@ export function DeskMessage({ message }: { message: string }) {
   </View>;
 }
 
-/** A small paper tab for one choice: an icon and its value, handwritten. A selected tab is yellow and lifted. */
-export function PaperTab({ paper, tilt, icon, label, selected, ...props }: Omit<PressableProps, 'style' | 'children'> & { paper?: string; tilt: number; icon: IconName; label: string; selected?: boolean }) {
+/** A small paper tab for one choice: an icon and its value. A selected tab is yellow and lifted. */
+export function PaperTab({ paper, tilt, icon, label, selected, ...props }: Omit<PressableProps, 'style' | 'children'> & { paper?: string; tilt: number; icon: IconName; label: string; selected?: boolean; containerStyle?: StyleProp<ViewStyle> }) {
   const { handBold } = useHandwriting();
   const { rowStyle } = useDirection();
   const chosen = selected === undefined ? undefined : { selected };
@@ -181,7 +179,7 @@ export function DeskPage({ style, children }: { style?: StyleProp<ViewStyle>; ch
   return <View style={[styles.page, { backgroundColor: tokens.cardPaper, boxShadow: `0px 6px 14px ${desk.shadow}` }, style]}><OnDesk.Provider value={false}>{children}</OnDesk.Provider></View>;
 }
 
-/** A section's name handwritten on the desk, with its count on a small tilted paper tag. */
+/** A section's name in the workspace display face, with its count on a small paper tag. */
 export function DeskHeading({ title, count, pinned = false, label, tone, style }: { title: string; count?: number; pinned?: boolean; label?: string; tone?: string; style?: StyleProp<ViewStyle> }) {
   const desk = useDesk();
   const { handBold } = useHandwriting();
@@ -196,10 +194,10 @@ export function DeskHeading({ title, count, pinned = false, label, tone, style }
 }
 
 /** A full-width paper action: the taped yellow one leads, white ones follow. */
-export function PaperAction({ label, primary = false, containerStyle, ...props }: Omit<PressableProps, 'style' | 'children'> & { label: string; primary?: boolean; containerStyle?: StyleProp<ViewStyle> }) {
+export function PaperAction({ label, primary = false, paper, ink, containerStyle, ...props }: Omit<PressableProps, 'style' | 'children'> & { label: string; primary?: boolean; /** The paper and its text, for an action that follows the reader's accent. */ paper?: string; ink?: string; containerStyle?: StyleProp<ViewStyle> }) {
   const { handBold } = useHandwriting();
-  return <PaperButton paper={primary ? PAPER_YELLOW : PAPER_WHITE} tilt={primary ? -0.8 : 0.6} tape={primary} accessibilityRole="button" containerStyle={containerStyle} style={primary ? styles.primary : styles.secondary} {...props}>
-    <AppText numberOfLines={primary ? 1 : 2} adjustsFontSizeToFit={primary} minimumFontScale={0.7} style={[handBold, primary ? styles.primaryText : styles.secondaryText]}>{label}</AppText>
+  return <PaperButton paper={paper ?? (primary ? PAPER_YELLOW : PAPER_WHITE)} tilt={primary ? -0.8 : 0.6} tape={primary} accessibilityRole="button" containerStyle={containerStyle} style={primary ? styles.primary : styles.secondary} {...props}>
+    <AppText numberOfLines={primary ? 1 : 2} adjustsFontSizeToFit={primary} minimumFontScale={0.7} style={[handBold, primary ? styles.primaryText : styles.secondaryText, ink ? { color: ink } : null]}>{label}</AppText>
   </PaperButton>;
 }
 

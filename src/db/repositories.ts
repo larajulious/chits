@@ -1,3 +1,4 @@
+import { readRichText, hasTextFormatting } from '../services/note-rich-text';
 import { tr } from '@/localization/runtime';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { clearChatBackgroundForPaths, unreferencedAttachmentPaths } from './chat-background';
@@ -201,7 +202,7 @@ function planNoteContent(blocks: NoteContentInput) {
   const inserts: { id: string; image: NoteImageDetails }[] = [];
   const imageIds: string[] = [];
   for (const block of blocks) {
-    if (block.type === 'text') { stored.push({ type: 'text', text: block.text, ...readList(block.list) }); continue; }
+    if (block.type === 'text') { stored.push({ type: 'text', text: block.text, ...readList(block.list), ...readRichText(block, block.text.length) }); continue; }
     if (!block.attachmentId && !isStoredAttachmentPath(block.image.storagePath)) throw new Error('Insert this image again before saving. Its file is not in Chits storage.');
     const id = block.attachmentId ?? newId();
     if (!block.attachmentId) inserts.push({ id, image: block.image });
@@ -378,7 +379,7 @@ export function createMessageRepository(database: SQLiteDatabase) {
         const photoIds = attachments.filter((attachment) => attachment.type === 'photo').map((attachment) => attachment.id);
         const firstText = plan.stored.findIndex((block) => block.type === 'text' && block.text.trim());
         const imagesLead = firstText < 0 || plan.stored.slice(firstText).every((block) => block.type === 'text');
-        const legacyLayout = !plan.stored.some((block) => block.type === 'text' && block.list) && !row.content_json && !plan.inserts.length && imagesLead && plan.imageIds.join() === photoIds.join();
+        const legacyLayout = !plan.stored.some((block) => block.type === 'text' && (block.list || hasTextFormatting(block))) && !row.content_json && !plan.inserts.length && imagesLead && plan.imageIds.join() === photoIds.join();
         const type: MessageType = remaining.find((attachment) => attachment.type !== 'photo')?.type ?? (remaining.length || plan.inserts.length ? 'photo' : 'text');
         if (removed.length) {
           const paths = removed.map((attachment) => attachment.storagePath);
@@ -551,7 +552,7 @@ export function createMessageRepository(database: SQLiteDatabase) {
           await transaction.runAsync('UPDATE messages SET text = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL', text, updatedAt, id);
           return;
         }
-        if (content.some((block) => block.type === 'text' && block.list)) throw new Error('Open the note editor to edit formatted content.');
+        if (content.some((block) => block.type === 'text' && (block.list || hasTextFormatting(block)))) throw new Error('Open the note editor to edit formatted content.');
         const runs = content.filter((block) => block.type === 'text');
         // A flattened string cannot safely describe edits around several images.
         if (runs.length > 1) throw new Error('Open Edit Note to edit text around inline images.');
@@ -706,7 +707,20 @@ export function createBoardRepository(database: SQLiteDatabase) {
       WHERE b.archived_at IS NULL
       ORDER BY b.updated_at DESC
     `),
-    async setPinned(kind: 'board' | 'card', id: string, pinned: boolean) { const table = kind === 'board' ? 'boards' : 'cards'; const result = await database.runAsync(`UPDATE ${table} SET pinned = ?, updated_at = ? WHERE id = ?`, pinned ? 1 : 0, Date.now(), id); if (result.changes !== 1) throw new Error('That item is no longer available.'); },
+    async setPinned(kind: 'board' | 'card', id: string, pinned: boolean) {
+      const table = kind === 'board' ? 'boards' : 'cards';
+      const now = Date.now();
+      await database.withExclusiveTransactionAsync(async (transaction) => {
+        const result = await transaction.runAsync(`UPDATE ${table} SET pinned = ?, updated_at = ? WHERE id = ?`, pinned ? 1 : 0, now, id);
+        if (result.changes !== 1) throw new Error('That item is no longer available.');
+        // Notes presents a card as pinned if any of its source thoughts is
+        // pinned too. Clear those flags with the card, or Unpin cannot remove
+        // it from the Pinned section. Pinning a board never changes its notes.
+        if (kind === 'card' && !pinned) {
+          await transaction.runAsync('UPDATE messages SET pinned = 0, updated_at = ? WHERE pinned = 1 AND id IN (SELECT message_id FROM card_messages WHERE card_id = ?)', now, id);
+        }
+      });
+    },
     listPinned: () => database.getAllAsync<{ id: string; title: string; kind: 'board' | 'card'; boardId: string | null; context: string; accessibilityContext: string | null }>(`
       SELECT id, name AS title, 'board' AS kind, NULL AS boardId,
         'Board' AS context, NULL AS accessibilityContext
@@ -1245,13 +1259,13 @@ export type StickResult = { status: 'stuck'; placement: SpacePlacement } | { sta
  * the calendar already shows. Hidden notes are listed as Hidden Chit and
  * never found by their words.
  */
-export async function listNoteCandidates(database: SQLiteDatabase, scope: 'space' | 'calendar', searchTerm?: string): Promise<SpaceCandidate[]> {
+export async function listNoteCandidates(database: SQLiteDatabase, scope: 'space' | 'calendar' | 'plan', searchTerm?: string): Promise<SpaceCandidate[]> {
   const term = searchTerm?.trim();
   const like = term ? `%${term.replace(/[%_]/g, '\\$&')}%` : null;
-  const cardFree = scope === 'space'
+  const cardFree = scope === 'plan' ? '1 = 1' : scope === 'space'
     ? 'NOT EXISTS (SELECT 1 FROM space_placements p WHERE p.card_id = c.id)'
     : 'NOT EXISTS (SELECT 1 FROM calendar_entries e WHERE e.card_id = c.id) AND NOT EXISTS (SELECT 1 FROM card_reminders r WHERE r.card_id = c.id AND r.completed_at IS NULL)';
-  const thoughtFree = scope === 'space'
+  const thoughtFree = scope === 'plan' ? '1 = 1' : scope === 'space'
     ? 'NOT EXISTS (SELECT 1 FROM space_placements p WHERE p.message_id = m.id)'
     : 'NOT EXISTS (SELECT 1 FROM calendar_entries e WHERE e.message_id = m.id) AND NOT EXISTS (SELECT 1 FROM message_reminders r WHERE r.message_id = m.id AND r.completed_at IS NULL)';
   const rows = await database.getAllAsync<{ kind: SpaceNoteKind; id: string; title: string; context: string | null; hidden: number; updatedAt: number }>(`

@@ -1,13 +1,13 @@
+import { hasTextFormatting, readRichText, noteTitle, sliceNoteText, joinNoteText, replaceNoteText, type NoteSpan } from './note-rich-text.ts';
 import { tr } from '@/localization/runtime';
 import type { AttachmentLike } from '@/db/types';
 
 // A note's content in reading order: paragraphs, structured list items and images.
-// Stored as messages.content_json when a note has lists or inline images —
-// text-only notes keep content_json NULL and stay exactly as they were.
-// messages.text always holds the note's words alone (text blocks joined), so
-// search, titles, stickies and every text-only preview keep working unchanged.
+// Formatted, titled and inline-image notes use messages.content_json. Legacy
+// plain notes retain content_json NULL. messages.text remains a clean search,
+// preview and copy projection: optional title followed by the body words.
 export type NoteList = { kind: 'bullet' | 'numbered'; id: string } | { kind: 'checklist'; id: string; checked: boolean };
-export type NoteText = { type: 'text'; text: string; list?: NoteList };
+export type NoteText = { type: 'text'; text: string; list?: NoteList; heading?: 1 | 2; paragraph?: true; spans?: NoteSpan[]; title?: string };
 export type NoteBlock = NoteText | { type: 'image'; attachmentId: string };
 
 export type NoteImageDetails = Pick<AttachmentLike, 'storagePath' | 'originalName' | 'mimeType' | 'size' | 'width' | 'height'>;
@@ -42,10 +42,10 @@ export function parseNoteContent(json: string | null | undefined): NoteBlock[] |
     for (const item of value) {
       if (!item || typeof item !== 'object') continue;
       const block = item as Record<string, unknown>;
-      if (block.type === 'text' && typeof block.text === 'string') blocks.push({ type: 'text', text: block.text, ...readList(block.list) });
+      if (block.type === 'text' && typeof block.text === 'string') blocks.push({ type: 'text', text: block.text, ...readList(block.list), ...readRichText(block, block.text.length) });
       else if (block.type === 'image' && typeof block.attachmentId === 'string' && block.attachmentId) blocks.push({ type: 'image', attachmentId: block.attachmentId });
     }
-    return blocks.some((block) => block.type === 'image' || block.list) ? blocks : null;
+    return blocks.some((block) => block.type === 'image' || block.list || hasTextFormatting(block)) ? blocks : null;
   } catch {
     return null;
   }
@@ -54,7 +54,7 @@ export function parseNoteContent(json: string | null | undefined): NoteBlock[] |
 /** Structured content, or null for a note containing only plain text. */
 export function serializeNoteContent(blocks: NoteBlock[]): string | null {
   const cleaned = compactBlocks(blocks);
-  return cleaned.some((block) => block.type === 'image' || block.list) ? JSON.stringify(cleaned) : null;
+  return cleaned.some((block) => block.type === 'image' || block.list || hasTextFormatting(block)) ? JSON.stringify(cleaned) : null;
 }
 
 /** Preserve authored whitespace; drop empty editor slots, keeping images in place. */
@@ -65,19 +65,19 @@ function compactBlocks(blocks: NoteBlock[]): NoteBlock[] {
     const text = block.text;
     // Empty text beside another text block is an authored paragraph (for
     // example the line before/after a formatted paragraph), not an image slot.
-    if (!text && !block.list && blocks[index - 1]?.type !== 'text' && blocks[index + 1]?.type !== 'text') continue;
+    if (!text && !block.list && !hasTextFormatting(block) && blocks[index - 1]?.type !== 'text' && blocks[index + 1]?.type !== 'text') continue;
     const previous = result[result.length - 1];
-    if (previous?.type === 'text' && !previous.list && !block.list) previous.text = `${previous.text}${text}`;
-    else result.push({ type: 'text', text, ...readList(block.list) });
+    if (previous?.type === 'text' && !previous.list && !block.list && !hasTextFormatting(previous) && !hasTextFormatting(block)) previous.text = `${previous.text}${text}`;
+    else result.push({ type: 'text', text, ...readList(block.list), ...readRichText(block, block.text.length) });
   }
   return result;
 }
 
 /** The note's words alone — what messages.text holds. */
 export function noteBlocksText(blocks: Pick<NoteDraftBlock, 'type'>[] | NoteBlock[]): string {
-  return (blocks as { type: string; text?: string }[])
+  return [noteTitle(blocks as { type: string; title?: string }[]).trim(), (blocks as { type: string; text?: string }[])
     .flatMap((block) => block.type === 'text' && block.text?.trim() ? [block.text.trim()] : [])
-    .join(PARAGRAPH_JOIN);
+    .join(PARAGRAPH_JOIN)].filter(Boolean).join(PARAGRAPH_JOIN);
 }
 
 export function readList(value: unknown): { list?: NoteList } {
@@ -87,13 +87,13 @@ export function readList(value: unknown): { list?: NoteList } {
   return (list.kind === 'bullet' || list.kind === 'numbered') && typeof list.id === 'string' && list.id.length > 0 ? { list: { kind: list.kind, id: list.id } } : {};
 }
 
-export function draftHasRichContent(blocks: NoteDraftBlock[]) {
-  return blocks.some((block) => block.type === 'image' || Boolean(block.list));
+export function draftHasRichContent(blocks: (NoteText | { type: 'image' })[]) {
+  return blocks.some((block) => block.type === 'image' || Boolean(block.list) || hasTextFormatting(block));
 }
 
 /** A deliberately inserted empty list item is not a cleared document. */
 export function isEmptyNoteDraft(blocks: NoteDraftBlock[]) {
-  return blocks.length === 1 && blocks[0].type === 'text' && blocks[0].text === '' && !blocks[0].list;
+  return blocks.length === 1 && blocks[0].type === 'text' && blocks[0].text === '' && !blocks[0].list && !blocks[0].title;
 }
 
 /** Number labels are derived from item order, never stored in the editable text. */
@@ -126,7 +126,7 @@ export function draftPlainText(blocks: NoteDraftBlock[]): string {
 
 /** Ordered words, list metadata and saved images, retained across restarts. */
 export function draftContentForStorage(blocks: NoteDraftBlock[]): string | null {
-  return serializeNoteContent(blocks.flatMap((block): NoteBlock[] => block.type === 'text' ? [{ type: 'text', text: block.text, ...readList(block.list) }] : block.attachmentId ? [{ type: 'image', attachmentId: block.attachmentId }] : []));
+  return serializeNoteContent(blocks.flatMap((block): NoteBlock[] => block.type === 'text' ? [{ type: 'text', text: block.text, ...readList(block.list), ...readRichText(block, block.text.length) }] : block.attachmentId ? [{ type: 'image', attachmentId: block.attachmentId }] : []));
 }
 
 /** Whether a draft holds images pasted in this session that aren't saved anywhere yet. */
@@ -156,7 +156,7 @@ export function draftFromNote(note: ContentSource): NoteDraftBlock[] {
     const inline = new Set(note.content.flatMap((block) => block.type === 'image' ? [block.attachmentId] : []));
     for (const attachment of note.attachments) if (attachment.type === 'photo' && !inline.has(attachment.id)) blocks.push(imageBlock(attachment));
     for (const block of note.content) {
-      if (block.type === 'text') blocks.push({ key: newBlockKey(), type: 'text', text: block.text, ...readList(block.list) });
+      if (block.type === 'text') blocks.push({ key: newBlockKey(), type: 'text', text: block.text, ...readList(block.list), ...readRichText(block, block.text.length) });
       else { const attachment = byId.get(block.attachmentId); if (attachment) blocks.push(imageBlock(attachment)); }
     }
   } else {
@@ -178,8 +178,8 @@ export function ensureEditableText(blocks: NoteDraftBlock[]): NoteDraftBlock[] {
   const result: NoteDraftBlock[] = [];
   for (const block of blocks) {
     const previous = result[result.length - 1];
-    if (block.type === 'text' && previous?.type === 'text' && !block.list && !previous.list) {
-      result[result.length - 1] = { ...previous, text: previous.text + block.text };
+    if (block.type === 'text' && previous?.type === 'text' && !block.list && !previous.list && !block.heading && !previous.heading && !block.paragraph && !previous.paragraph) {
+      result[result.length - 1] = joinNoteText(previous, block);
       continue;
     }
     if (block.type === 'image' && previous?.type !== 'text') result.push({ key: newBlockKey(), type: 'text', text: '' });
@@ -203,10 +203,10 @@ export function insertImageAtCursor(blocks: NoteDraftBlock[], cursor: NoteCursor
     return { blocks: next, cursor: { key: after.key, start: 0, end: 0 } };
   }
   const start = Math.max(0, Math.min(cursor.start, target.text.length));
-  const before = target.text.slice(0, start);
-  const afterText = target.text.slice(start);
-  const afterBlock: NoteDraftBlock = { key: newBlockKey(), type: 'text', text: afterText, ...readList(target.list) };
-  const next = [...blocks.slice(0, index), { ...target, text: before }, image, afterBlock, ...blocks.slice(index + 1)];
+  const before = sliceNoteText(target, 0, start);
+  const afterText = sliceNoteText(target, start);
+  const afterBlock: NoteDraftBlock = { ...afterText, key: newBlockKey() };
+  const next = [...blocks.slice(0, index), before, image, afterBlock, ...blocks.slice(index + 1)];
   return { blocks: ensureEditableText(next), cursor: { key: afterBlock.key, start: 0, end: 0 } };
 }
 
@@ -216,7 +216,7 @@ export function removeImageBlock(blocks: NoteDraftBlock[], key: string): NoteDra
 }
 
 export function updateTextBlock(blocks: NoteDraftBlock[], key: string, text: string): NoteDraftBlock[] {
-  return blocks.map((block) => block.key === key && block.type === 'text' ? { ...block, text } : block);
+  return blocks.map((block) => block.key === key && block.type === 'text' ? replaceNoteText(block, text) : block);
 }
 
 /**
@@ -235,7 +235,7 @@ export function noteRenderContent<T extends AttachmentLike>(note: { text: string
   note.content.forEach((block, index) => {
     if (block.type === 'text') {
       const text = block.text;
-      if (text || block.list) blocks.push({ key: `t${index}`, type: 'text', text, ...readList(block.list) });
+      if (text || block.list || hasTextFormatting(block)) blocks.push({ key: `t${index}`, type: 'text', text, ...readList(block.list), ...readRichText(block, block.text.length) });
       return;
     }
     const attachment = byId.get(block.attachmentId);
@@ -243,7 +243,7 @@ export function noteRenderContent<T extends AttachmentLike>(note: { text: string
     used.add(attachment.id);
     blocks.push({ key: `${attachment.id}:${index}`, type: 'image', attachment });
   });
-  if (!used.size && !blocks.some((block) => block.type === 'text' && block.list)) return null;
+  if (!used.size && !blocks.some((block) => block.type === 'text' && (block.list || hasTextFormatting(block)))) return null;
   return { blocks, leading: note.attachments.filter((attachment) => !used.has(attachment.id)) };
 }
 

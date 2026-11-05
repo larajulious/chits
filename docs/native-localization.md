@@ -1,3 +1,7 @@
+> Update 2026-11-05: Indian-language support expands the runtime to 21 languages.
+> See [the current expansion report](indian-localization.md) for implementation, validation and pending review.
+> The report below records the earlier 14-language work.
+
 # Chits native language recognition — 2026-10-18
 
 ## Result and scope

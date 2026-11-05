@@ -1,7 +1,7 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { memo, type ComponentProps, type ReactNode } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,6 +11,7 @@ import { radii, spacing } from '@/constants/theme';
 import { SHARE_NOTE_COLLECTIONS, type ShareNoteFontStyle, type ShareNoteTheme } from '@/constants/chits-themes';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
 import type { ShareNoteImage } from '@/services/share-note';
+import { AppText } from '@/components/ui/app-text';
 
 export function ControlSection({ title, hint, hintEmphasis = false, children }: { title: string; hint?: string | null; hintEmphasis?: boolean; children: ReactNode }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
@@ -18,9 +19,9 @@ export function ControlSection({ title, hint, hintEmphasis = false, children }: 
   useLocale();
   const { tokens: theme } = useTheme();
   return <View style={styles.section}>
-    <Text accessibilityRole="header" style={[styles.sectionTitle, { color: theme.textMuted }]}>{title}</Text>
+    <AppText accessibilityRole="header" style={[styles.sectionTitle, { color: theme.textMuted }]}>{title}</AppText>
     {children}
-    {hint ? <Text accessibilityLiveRegion="polite" style={[styles.hint, { color: hintEmphasis ? theme.accentStrong : theme.textMuted }, hintEmphasis && styles.hintEmphasis]}>{hint}</Text> : null}
+    {hint ? <AppText accessibilityLiveRegion="polite" style={[styles.hint, { color: hintEmphasis ? theme.accentStrong : theme.textMuted }, hintEmphasis && styles.hintEmphasis]}>{hint}</AppText> : null}
   </View>;
 }
 
@@ -43,8 +44,8 @@ export function SegmentedControl<Key extends string>({ options, value, onChange,
         onPress={() => onChange(option.key)}
         style={[styles.segment, selected && [styles.segmentSelected, { backgroundColor: theme.background }], option.disabled && styles.disabled]}
       >
-        <Text numberOfLines={1} style={[styles.segmentLabel, { color: selected ? theme.textPrimary : theme.textSecondary }]}>{option.label}</Text>
-        {option.detail ? <Text style={[styles.segmentDetail, { color: theme.textMuted }]}>{option.detail}</Text> : null}
+        <AppText numberOfLines={1} style={[styles.segmentLabel, { color: selected ? theme.textPrimary : theme.textSecondary }]}>{option.label}</AppText>
+        {option.detail ? <AppText style={[styles.segmentDetail, { color: theme.textMuted }]}>{option.detail}</AppText> : null}
       </Pressable>;
     })}
   </View>;
@@ -65,12 +66,12 @@ const ThemeSwatch = memo(function ThemeSwatch({ item, selected, onPress }: { ite
       <View style={[styles.swatchCanvas, { backgroundColor: colors.background }]}>
         {item.backgroundType === 'gradient' ? <LinearGradient colors={[colors.background, colors.backgroundEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} /> : null}
         <View style={[styles.swatchCard, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.swatchGlyph, { color: colors.textPrimary, fontStyle: item.fontStyle === 'elegant' ? 'italic' : 'normal', fontWeight: item.fontStyle === 'bold' ? '900' : '700', fontFamily: SWATCH_FACE[item.fontStyle] }]}>Aa</Text>
+          <AppText style={[styles.swatchGlyph, { color: colors.textPrimary, fontStyle: item.fontStyle === 'elegant' ? 'italic' : 'normal', fontWeight: item.fontStyle === 'bold' ? '900' : '700', fontFamily: SWATCH_FACE[item.fontStyle] }]}>Aa</AppText>
           <View style={[styles.swatchAccent, { backgroundColor: colors.accent }]} />
         </View>
       </View>
     </View>
-    <Text numberOfLines={1} style={[styles.swatchName, { color: selected ? theme.textPrimary : theme.textSecondary }, selected && styles.swatchNameSelected]}>{item.name}</Text>
+    <AppText numberOfLines={1} style={[styles.swatchName, { color: selected ? theme.textPrimary : theme.textSecondary }, selected && styles.swatchNameSelected]}>{item.name}</AppText>
   </Pressable>;
 });
 
@@ -82,7 +83,7 @@ export function ThemePicker({ value, onChange }: { value: string; onChange: (id:
   const { tokens: theme } = useTheme();
   return <View accessibilityRole="radiogroup" accessibilityLabel={tr("appearancetheme.theme")} style={styles.collections}>
     {SHARE_NOTE_COLLECTIONS.filter((collection) => collection.shown).map((collection) => <View key={collection.id}>
-      <Text accessibilityRole="header" style={[styles.collectionTitle, { color: theme.textSecondary }]}>{collection.name}</Text>
+      <AppText accessibilityRole="header" style={[styles.collectionTitle, { color: theme.textSecondary }]}>{collection.name}</AppText>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityLabel={tr("appearancetheme.valueThemes", { value1: collection.name })} contentContainerStyle={styles.themeRow} style={styles.bleed}>
         {collection.themes.map((item) => <ThemeSwatch key={item.id} item={item} selected={item.id === value} onPress={() => onChange(item.id)} />)}
       </ScrollView>
@@ -103,7 +104,7 @@ export function ImageSelector({ images, selected, onToggle }: { images: ShareNot
         {uri ? <Image source={{ uri }} contentFit="cover" cachePolicy="memory" recyclingKey={image.id} style={StyleSheet.absoluteFill} /> : null}
         {order < 0 ? <View style={styles.thumbDim} /> : null}
         <View style={[styles.thumbBadge, order >= 0 ? { backgroundColor: theme.accent, borderColor: theme.accent } : styles.thumbBadgeEmpty]}>
-          {order >= 0 ? <Text style={[styles.thumbBadgeText, { color: theme.accentText }]}>{order + 1}</Text> : null}
+          {order >= 0 ? <AppText style={[styles.thumbBadgeText, { color: theme.accentText }]}>{order + 1}</AppText> : null}
         </View>
       </Pressable>;
     })}
@@ -117,8 +118,8 @@ export function ToggleRow({ label, detail, value, onChange }: { label: string; d
   const { tokens: theme } = useTheme();
   return <View style={styles.toggleRow}>
     <View style={styles.toggleCopy}>
-      <Text style={[styles.toggleLabel, { color: theme.textPrimary }]}>{label}</Text>
-      {detail ? <Text style={[styles.hint, { color: theme.textMuted, marginTop: 2 }]}>{detail}</Text> : null}
+      <AppText style={[styles.toggleLabel, { color: theme.textPrimary }]}>{label}</AppText>
+      {detail ? <AppText style={[styles.hint, { color: theme.textMuted, marginTop: 2 }]}>{detail}</AppText> : null}
     </View>
     <Switch accessibilityLabel={label} value={value} onValueChange={onChange} trackColor={{ true: theme.accent, false: theme.borderSubtle }} thumbColor={Platform.OS === 'android' ? theme.background : undefined} />
   </View>;
@@ -131,7 +132,7 @@ export function InfoLine({ icon, message, tone = 'muted' }: { icon: ComponentPro
   const { tokens: theme } = useTheme();
   return <View accessibilityRole={tone === 'warning' ? 'alert' : undefined} style={[styles.info, { backgroundColor: tone === 'warning' ? theme.accentSoft : theme.surface }]}>
     <Ionicons accessible={false} name={icon} size={16} color={tone === 'warning' ? theme.accentStrong : theme.textMuted} />
-    <Text style={[styles.infoText, { color: theme.textSecondary }]}>{message}</Text>
+    <AppText style={[styles.infoText, { color: theme.textSecondary }]}>{message}</AppText>
   </View>;
 }
 

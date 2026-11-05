@@ -1,0 +1,15 @@
+<resources>
+  <string name="plan_widget_name">Piano di oggi</string>
+  <string name="plan_widget_description">Il tuo piano e i progressi di oggi.</string>
+  <string name="plan_widget_today">Oggi</string>
+  <string name="plan_widget_none">Hai un piccolo piano per oggi?</string>
+  <string name="plan_widget_action">Pianifica la mia giornata</string>
+  <string name="plan_widget_keep_going">Continua così!</string>
+  <string name="plan_widget_all_done">Tutto fatto per oggi!</string>
+  <string name="plan_widget_wrapped">Ed è fatta!</string>
+  <string name="plan_widget_hidden">I nomi delle attività sono nascosti. Puoi mostrarli in Impostazioni.</string>
+  <string name="plan_widget_add">Aggiungi</string>
+  <string name="plan_widget_wrap">Chiudi</string>
+  <string name="plan_widget_view">Vedi il piano di oggi</string>
+  <string name="plan_widget_recap">Vedi il riepilogo</string>
+</resources>

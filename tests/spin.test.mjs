@@ -360,7 +360,7 @@ test('schema-31 history upgrade preserves references, estimates, IDs, sequence a
   assert.equal(result.lastInsertRowId,100);
   assert.deepEqual(await db.getAllAsync('PRAGMA foreign_key_check'),[]);
   await migration.migrateDatabase(db);
-  assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version,32);
+  assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version,migration.LATEST_SCHEMA_VERSION);
 });
 test('unorganized review selection restores and routes to the real chat note without altering it', async t => {
   const {db,repo} = await fixture(t);

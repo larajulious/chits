@@ -1,0 +1,12 @@
+<resources>
+  <string name="anywhere_brand">Chits Anywhere</string>
+  <string name="anywhere_quick">ઝડપી નોંધ</string>
+  <string name="anywhere_recent">તાજેતરની નોંધો</string>
+  <string name="anywhere_empty">તમારો આગળનો વિચાર અહીંથી શરૂ થાય છે.</string>
+  <string name="anywhere_hidden">નોંધ માહિતી છુપાવેલ છે.</string>
+  <string name="anywhere_description">એક નોંધ બનાવો અથવા તમારી તાજેતરની નોંધો ખોલો.</string>
+  <string name="anywhere_privacy">વિજેટ ગોપનીયતા</string>
+  <string name="anywhere_titles">નોંધના શીર્ષકો બતાવો</string>
+  <string name="anywhere_previews">ટૂંકા લખાણ પૂર્વાવલોકનો બતાવો</string>
+  <string name="anywhere_warning">હોમ સ્ક્રીન વિજેટ્સ તમારા ઉપકરણનો ઉપયોગ કરનાર કોઈપણ વ્યક્તિ જોઈ શકે છે. નોંધ માહિતી મૂળભૂત રીતે છુપાયેલ છે.</string>
+</resources>
