@@ -1,10 +1,13 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { AppState } from 'react-native';
-import { cancelAnimation, Easing, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
+import { AppState, Keyboard } from 'react-native';
+import { cancelAnimation, Easing, useSharedValue, withDelay, withRepeat, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { CELEBRATE_MS, ENTRANCE_MS, nextMascotState, nextSpeechIndex, SPEECH_MS, STEP_EXIT_MS, WELCOME_FADE_MS } from './mascot-machine';
 import { EDGE, MASCOT_CUT } from './stage-layout';
+import { useMascotReducedMotion } from '@/components/mascot/use-mascot-accessibility';
+import { createMascotGestureController, gestureDuration, type GestureRequest, type MascotContext, type MascotReaction } from '@/components/mascot/mascot-gestures';
+import { animateMascotGesture } from '@/components/mascot/gesture-animation';
 
 const REST_TILT = -3;
 const SLEEPY_EYES = 0.5;
@@ -22,6 +25,8 @@ const EASE_SOFT = Easing.inOut(Easing.sin);
 const between = (low: number, high: number) => low + Math.random() * (high - low);
 
 type RigOptions = {
+  context?: MascotContext;
+  onGestureComplete?: (gesture: MascotReaction) => void;
   /** False skips the peek and wave, for a screen Chits has already greeted from. */
   entrance?: boolean;
   /** A settled, contented Chits: blushing a little when at rest. */
@@ -44,8 +49,8 @@ type RigOptions = {
   dozeAfter?: number;
 };
 
-export function useMascotRig(speechCount: number, { entrance = true, cheerful = false, idle = true, compact = false, personality = 'default', sleepy = false, restGaze = 0, restTilt = REST_TILT, dozeAfter = 0, calm = false }: RigOptions = {}) {
-  const reduced = useReducedMotion();
+export function useMascotRig(speechCount: number, { entrance = true, cheerful = false, idle = true, compact = false, personality = 'default', sleepy = false, restGaze = 0, restTilt = REST_TILT, dozeAfter = 0, calm = false, context = 'general', onGestureComplete }: RigOptions = {}) {
+  const reduced = useMascotReducedMotion();
   const skipEntrance = reduced || !entrance;
   const restingBlink = sleepy ? SLEEPY_EYES : 0;
   const restingArm = personality === 'boards' ? ARM_RAISED : 0;
@@ -57,8 +62,20 @@ export function useMascotRig(speechCount: number, { entrance = true, cheerful = 
   const returning = useRef(false);
   const restingBlush = useRef(0);
   const queuedLine = useRef<number | null>(null);
-  const reactionTurn = useRef(0);
-  const idleTurn = useRef(0);
+  const queuedSpeechGesture = useRef<MascotReaction>('happy');
+  const [controller] = useState(() => createMascotGestureController());
+  const [reaction, setReaction] = useState<GestureRequest | null>(null);
+  const queuedGesture = useRef<MascotReaction | null>(null);
+  const completion = useRef(onGestureComplete);
+  useEffect(() => { completion.current = onGestureComplete; }, [onGestureComplete]);
+  const [foreground, setForeground] = useState(AppState.currentState !== 'background' && AppState.currentState !== 'inactive');
+  const [writing, setWriting] = useState(false);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', next => setForeground(next === 'active'));
+    const shown = Keyboard.addListener('keyboardDidShow', () => setWriting(true));
+    const hidden = Keyboard.addListener('keyboardDidHide', () => setWriting(false));
+    return () => { subscription.remove(); shown.remove(); hidden.remove(); };
+  }, []);
   const lastStir = useRef(0);
   useEffect(() => { restingBlush.current = cheerful ? 0.7 : 0; }, [cheerful]);
 
@@ -73,6 +90,13 @@ export function useMascotRig(speechCount: number, { entrance = true, cheerful = 
   const blush = useSharedValue(0);
   const gaze = useSharedValue(restGaze);
   const asleep = useSharedValue(0);
+  const farArm = useSharedValue(0);
+  const stretch = useSharedValue(0);
+  const press = useSharedValue(0);
+  useEffect(() => () => {
+    controller.cancel();
+    [edge, tilt, lift, breath, arm, farArm, stretch, press, blink, happy, surprise, blush, gaze, asleep].forEach(cancelAnimation);
+  }, [arm, asleep, blink, blush, breath, controller, edge, farArm, gaze, happy, lift, press, stretch, surprise, tilt]);
 
   useFocusEffect(useCallback(() => {
     setFocused(true);
@@ -98,6 +122,14 @@ export function useMascotRig(speechCount: number, { entrance = true, cheerful = 
       move(happy, restingHappy, 110); move(surprise, 0, duration); move(blush, restingBlush.current, duration); move(gaze, restGaze, duration);
     };
 
+    if (!focused || !foreground) {
+      controller.cancel(); queuedGesture.current = null;
+      [edge, tilt, lift, breath, arm, farArm, stretch, press, blink, happy, surprise, blush, gaze, asleep].forEach(cancelAnimation);
+      press.set(0); farArm.set(0); stretch.set(0);
+      send('cancel');
+      return;
+    }
+    if (state !== 'reacting') { move(farArm, 0, 180); move(stretch, 0, 180); }
     switch (state) {
       case 'hidden':
         after(skipEntrance || compact ? 0 : WELCOME_FADE_MS, () => send(skipEntrance ? 'skipEntrance' : 'enter'));
@@ -167,36 +199,31 @@ export function useMascotRig(speechCount: number, { entrance = true, cheerful = 
         afterMotion(ENTRANCE_MS.wave, () => send('settled'));
         break;
       case 'idle':
+        move(blink, restingBlink, 140);
+        move(farArm, 0, 260); move(stretch, 0, 260); move(press, 0, 160);
         move(edge, EDGE.rest, settleMs, EASE_SOFT);
         move(tilt, restTilt, compact ? settleMs : 500, EASE_SOFT);
         move(arm, restingArm, compact ? settleMs : 480, EASE_SOFT);
         move(lift, 0, 240);
         relaxFace(420);
         break;
-      case 'reacting':
-        move(happy, 1, 120); move(blush, 1, 180); move(arm, personality === 'notes' ? 0 : ARM_RAISED, 200);
-        if (!reduced) {
-          const alternate = reactionTurn.current++ % 2 === 1;
-          if (personality === 'notes') {
-            // Alternate a thank-you nod with an inquisitive head tilt.
-            move(gaze, alternate ? -22 : -8, 180);
-            tilt.set(withSequence(withTiming(restTilt + (alternate ? -4 : 3), { duration: 220, easing: EASE_SOFT }), withTiming(restTilt, { duration: 360, easing: EASE_SOFT })));
-            if (!alternate) lift.set(withSequence(withTiming(8, { duration: 180, easing: EASE_SOFT }), withTiming(0, { duration: 260, easing: EASE_SOFT })));
-          } else if (personality === 'boards') {
-            // A short wave, then a playful lean on the next tap.
-            if (!alternate) arm.set(withSequence(withTiming(116, { duration: 180, easing: EASE_OUT }), withTiming(78, { duration: 150, easing: EASE_SOFT }), withTiming(ARM_RAISED, { duration: 150, easing: EASE_SOFT })));
-            edge.set(withSequence(withTiming(EDGE.rest + (alternate ? 24 : 10), { duration: 220, easing: EASE_OUT }), withTiming(EDGE.rest, { duration: 380, easing: EASE_SOFT })));
-            tilt.set(withSequence(withTiming(alternate ? 2 : -5, { duration: 220, easing: EASE_SOFT }), withTiming(restTilt, { duration: 380, easing: EASE_SOFT })));
-          } else {
-            if (!compact) lift.set(withSequence(withTiming(-34, { duration: 170, easing: EASE_OUT }), withTiming(0, { duration: 240, easing: Easing.out(Easing.quad) })));
-            edge.set(withSequence(withTiming(EDGE.rest + (compact ? 12 : 36), { duration: 200, easing: EASE_OUT }), withTiming(EDGE.rest, { duration: 380, easing: EASE_SOFT })));
-            tilt.set(withSequence(withTiming(-7, { duration: 200, easing: EASE_OUT }), withTiming(REST_TILT, { duration: 420, easing: EASE_SOFT })));
-          }
-        }
-        // The expression is brief; the bubble stays a little longer.
-        after(900, () => { move(arm, restingArm, 320, EASE_SOFT); relaxFace(320); });
-        after(SPEECH_MS, () => send('reacted'));
+      case 'reacting': {
+        const chosen = reaction?.gesture ?? 'happy';
+        const token = reaction?.token;
+        animateMascotGesture(chosen, { arm, farArm, tilt, lift, stretch, blink, happy, surprise, blush, gaze }, {
+          arm: restingArm, farArm: 0, tilt: restTilt, lift: 0, stretch: 0, blink: restingBlink,
+          happy: restingHappy, surprise: 0, blush: restingBlush.current, gaze: restGaze,
+        }, compact, reduced || calm);
+        const finish = () => {
+          if (token !== undefined && !controller.complete(token)) return;
+          try { completion.current?.(chosen); } finally { send('reacted'); }
+        };
+        // The visual reaction and its speech share the existing state machine.
+        // Reading time remains unchanged under Reduce Motion.
+        if (speechCount > 0 && gestureDuration(chosen) <= SPEECH_MS) after(SPEECH_MS, finish);
+        else after(reduced ? 450 : gestureDuration(chosen), finish);
         break;
+      }
       case 'shy':
         move(lift, 0, 200); move(arm, 0, 220); move(happy, 0, 160); move(surprise, 0, 160);
         move(blush, 1, 240); move(gaze, 12, 240); move(tilt, 3, 340);
@@ -233,87 +260,38 @@ export function useMascotRig(speechCount: number, { entrance = true, cheerful = 
         break;
     }
     return () => timers.forEach(clearTimeout);
-  }, [arm, blush, breath, compact, edge, gaze, happy, lift, personality, reduced, restGaze, restTilt, restingArm, restingHappy, skipEntrance, state, surprise, tilt]);
+  }, [arm, asleep, blink, blush, breath, calm, compact, controller, edge, farArm, focused, foreground, gaze, happy, lift, personality, press, reaction, reduced, restGaze, restTilt, restingArm, restingBlink, restingHappy, skipEntrance, speechCount, state, stretch, surprise, tilt]);
 
-  // A line asked for mid-animation waits its turn, so it can't cut a reaction off.
+  // Speech queued by an existing screen event shares the same admission gate.
   useEffect(() => {
-    if (state !== 'idle' || queuedLine.current === null) return;
-    const line = queuedLine.current;
-    queuedLine.current = null;
-    setSpeech(line);
-    send('tap');
-  }, [state]);
+    if (state !== 'idle' || !focused || !foreground || (calm && context === 'focus') || (context === 'notes' && writing) || queuedLine.current === null) return;
+    const request = controller.start(queuedSpeechGesture.current);
+    if (!request) return;
+    const line = queuedLine.current; queuedLine.current = null;
+    setReaction(request); setSpeech(line); send('tap');
+  }, [calm, context, controller, focused, foreground, state, writing]);
 
-  // Idle life. One looping value for breathing, and blinks and tilts on long
-  // random timers. All of it stops when Chits is out of view or the app is away.
+  // Idle timing runs on the UI thread. Long pauses cost no JS timer, and
+  // cleanup cancels every track before a gesture, blur, keyboard or background.
   useEffect(() => {
-    if (state !== 'idle' || reduced || !focused || !idle) return;
-    let timers: ReturnType<typeof setTimeout>[] = [];
-    const scheduleBlink = () => {
-      timers.push(setTimeout(() => {
-        blink.set(withSequence(withTiming(1, { duration: 70 }), withTiming(restingBlink, { duration: 110 })));
-        scheduleBlink();
-      }, calm ? between(7000, 13000) : between(2800, 6000)));
-    };
-    const scheduleTilt = () => {
-      timers.push(setTimeout(() => {
-        const target = restTilt + (Math.random() < 0.5 ? (compact ? -1.2 : -4) : (compact ? 1.2 : 3));
-        tilt.set(withSequence(withTiming(target, { duration: 620, easing: EASE_SOFT }), withDelay(900, withTiming(restTilt, { duration: 720, easing: EASE_SOFT }))));
-        scheduleTilt();
-      }, between(7000, 12000)));
-    };
-    const scheduleWorkspaceGesture = () => {
-      timers.push(setTimeout(() => {
-        const alternate = idleTurn.current++ % 2 === 1;
-        if (personality === 'notes') {
-          // Read across the notes, or consider one with a quiet head tilt.
-          gaze.set(withSequence(withTiming(alternate ? -4 : -24, { duration: 520, easing: EASE_SOFT }), withDelay(650, withTiming(restGaze, { duration: 520, easing: EASE_SOFT }))));
-          tilt.set(withSequence(withTiming(restTilt + (alternate ? 2 : -2), { duration: 520, easing: EASE_SOFT }), withDelay(650, withTiming(restTilt, { duration: 520, easing: EASE_SOFT }))));
-        } else if (alternate) {
-          // A small hello, separated from the next gesture by a long pause.
-          arm.set(withSequence(withTiming(68, { duration: 380, easing: EASE_SOFT }), withTiming(116, { duration: 180, easing: EASE_SOFT }), withTiming(restingArm, { duration: 460, easing: EASE_SOFT })));
-        } else {
-          gaze.set(withSequence(withTiming(-18, { duration: 420, easing: EASE_SOFT }), withDelay(600, withTiming(restGaze, { duration: 500, easing: EASE_SOFT }))));
-          tilt.set(withSequence(withTiming(1, { duration: 480, easing: EASE_SOFT }), withDelay(600, withTiming(restTilt, { duration: 500, easing: EASE_SOFT }))));
-        }
-        scheduleWorkspaceGesture();
-      }, personality === 'notes' ? between(7500, 13000) : between(10000, 17000)));
-    };
-    const start = () => {
-      if (!compact) breath.set(withRepeat(withTiming(1, { duration: 2600, easing: EASE_SOFT }), -1, true));
-      if (!restingHappy) scheduleBlink();
-      if (!calm) {
-        if (personality === 'default') scheduleTilt();
-        else scheduleWorkspaceGesture();
-      }
-    };
-    const stop = () => {
-      timers.forEach(clearTimeout);
-      timers = [];
-      cancelAnimation(breath);
-      cancelAnimation(blink);
-      cancelAnimation(tilt);
-      blink.set(restingBlink);
-      if (personality !== 'default') {
-        cancelAnimation(gaze); cancelAnimation(arm);
-        gaze.set(restGaze); arm.set(restingArm); tilt.set(restTilt);
-      }
-    };
-    if (AppState.currentState === 'active') start();
-    const subscription = AppState.addEventListener('change', (next) => {
-      stop();
-      if (next === 'active') start();
-    });
+    if (state !== 'idle' || reduced || !focused || !foreground || !idle || (context === 'notes' && writing)) return;
+    const breathe = withSequence(withTiming(calm ? 0.18 : compact ? 0.3 : 1, { duration: calm ? 3800 : 2800, easing: EASE_SOFT }), withTiming(0, { duration: 3000, easing: EASE_SOFT }));
+    breath.set(withRepeat(breathe, -1));
+    if (!restingHappy) blink.set(withRepeat(withSequence(withDelay(calm ? between(7000, 13000) : between(3200, 6200), withTiming(1, { duration: 70 })), withTiming(restingBlink, { duration: 130 })), -1));
+    if (!calm) {
+      tilt.set(withRepeat(withSequence(withDelay(between(9000, 15000), withTiming(restTilt + (compact ? 1.2 : 3), { duration: 620, easing: EASE_SOFT })), withDelay(800, withTiming(restTilt, { duration: 720, easing: EASE_SOFT }))), -1));
+      // A rare, small hello. Writing and active Focus never run this track.
+      if (context !== 'notes') arm.set(withRepeat(withSequence(withDelay(between(45000, 75000), withTiming(100, { duration: 420, easing: EASE_SOFT })), withTiming(76, { duration: 170 }), withTiming(108, { duration: 170 }), withTiming(restingArm, { duration: 460, easing: EASE_SOFT })), -1));
+    }
     return () => {
-      subscription.remove();
-      stop();
-      breath.set(withTiming(0, { duration: 240, easing: EASE_SOFT }));
+      [breath, blink, tilt, arm].forEach(cancelAnimation);
+      breath.set(0); blink.set(restingBlink);
     };
-  }, [arm, blink, breath, calm, compact, focused, gaze, idle, personality, reduced, restGaze, restTilt, restingArm, restingHappy, state, tilt, restingBlink]);
+  }, [arm, blink, breath, calm, compact, context, focused, foreground, idle, reduced, restTilt, restingArm, restingBlink, restingHappy, state, tilt, writing]);
 
   // A timestamp rather than state, so a stir from every bit of scrolling costs no render.
   useEffect(() => {
-    if (!dozeAfter || state !== 'idle' || !focused) return;
+    if (!dozeAfter || state !== 'idle' || !focused || !foreground) return;
     lastStir.current = Date.now();
     let timer: ReturnType<typeof setTimeout>;
     const check = () => {
@@ -323,12 +301,12 @@ export function useMascotRig(speechCount: number, { entrance = true, cheerful = 
     };
     timer = setTimeout(check, dozeAfter);
     return () => clearTimeout(timer);
-  }, [dozeAfter, focused, state]);
+  }, [dozeAfter, focused, foreground, state]);
 
   // Asleep: eyes shut, head drooped and sunk a little, one slow breath. Waking
   // goes through `reacting`, then `idle`, which put every part back.
   useEffect(() => {
-    if (state !== 'sleeping' || !focused) return;
+    if (state !== 'sleeping' || !focused || !foreground) return;
     const settle = (value: SharedValue<number>, to: number, duration: number) => {
       value.set(reduced ? to : withTiming(to, { duration, easing: EASE_SOFT }));
     };
@@ -341,41 +319,61 @@ export function useMascotRig(speechCount: number, { entrance = true, cheerful = 
       blink.set(reduced ? restingBlink : withTiming(restingBlink, { duration: 160 }));
       asleep.set(reduced ? 0 : withTiming(0, { duration: 160 }));
     };
-  }, [arm, asleep, blink, blush, breath, focused, gaze, happy, lift, reduced, restGaze, restTilt, restingBlink, state, tilt]);
+  }, [arm, asleep, blink, blush, breath, focused, foreground, gaze, happy, lift, reduced, restGaze, restTilt, restingBlink, state, tilt]);
 
   // Resting eyelids follow the mood, and a blink comes back to them.
   useEffect(() => {
     blink.set(reduced ? restingBlink : withTiming(restingBlink, { duration: 420, easing: EASE_SOFT }));
   }, [blink, reduced, restingBlink]);
 
-  /** Reacts to a touch, with the given line or a random one. Ignored unless Chits is at rest or asleep. */
+  /** Tap admission is synchronous, including taps during a normal reaction. */
   const tap = useCallback((line?: number) => {
-    if (state !== 'idle' && state !== 'sleeping') return false;
-    setSpeech((previous) => line ?? nextSpeechIndex(previous, speechCount));
+    if (!focused || !foreground || (calm && context === 'focus') || (context === 'notes' && writing)) return false;
+    const request = controller.tap(Date.now(), context, state === 'idle' || state === 'sleeping');
+    if (!request) return false;
+    setReaction(request);
+    setSpeech(previous => line ?? nextSpeechIndex(previous, speechCount));
     send('tap');
     return true;
-  }, [speechCount, state]);
-  /** Chits says this the next time they're at rest, whatever they're doing now. */
-  const say = useCallback((line: number) => {
-    if (state === 'idle') { setSpeech(line); send('tap'); }
-    else queuedLine.current = line;
-  }, [state]);
+  }, [calm, context, controller, focused, foreground, speechCount, state, writing]);
+  /** Context reactions wait behind a gesture; only committed screen state calls this. */
+  const react = useCallback((gesture: MascotReaction) => {
+    if (!focused || !foreground) return;
+    if ((calm && context === 'focus') || (context === 'notes' && writing) || !['idle', 'sleeping', 'watching'].includes(state)) { queuedGesture.current = gesture; return; }
+    const request = controller.start(gesture);
+    if (!request) { queuedGesture.current = gesture; return; }
+    setReaction(request); setSpeech(-1); send('gesture');
+  }, [calm, context, controller, focused, foreground, state, writing]);
+  useEffect(() => {
+    if (state !== 'idle' || (calm && context === 'focus') || !focused || !foreground || (context === 'notes' && writing) || queuedGesture.current === null) return;
+    const gesture = queuedGesture.current; queuedGesture.current = null; react(gesture);
+  }, [calm, context, focused, foreground, react, state, writing]);
+  /** Chits says this at rest. Existing copy and its reading interval are retained. */
+  const say = useCallback((line: number, gesture: MascotReaction = 'happy') => {
+    queuedSpeechGesture.current = gesture;
+    if (state === 'idle' && focused && foreground) {
+      const request = controller.start(gesture);
+      if (request) { setReaction(request); setSpeech(line); send('tap'); }
+      else queuedLine.current = line;
+    } else queuedLine.current = line;
+  }, [controller, focused, foreground, state]);
   /** Chits gives something on screen their full attention until `rest` or `celebrate`. */
-  const watch = useCallback(() => send('watch'), []);
+  const watch = useCallback(() => { controller.cancel(); send('watch'); }, [controller]);
   const rest = useCallback(() => send('rest'), []);
   /** A short, happy reaction to something that just happened. */
-  const celebrate = useCallback(() => send('celebrate'), []);
-  const hold = useCallback(() => send('hold'), []);
+  const celebrate = useCallback(() => { controller.cancel(); send('celebrate'); }, [controller]);
+  const hold = useCallback(() => { controller.cancel(); send('hold'); }, [controller]);
   /** Something moved, so Chits' `dozeAfter` starts again. It never wakes them. */
   const stir = useCallback(() => { lastStir.current = Date.now(); }, []);
   const release = useCallback(() => send('release'), []);
   /** Chits ducks out; `comeBack` brings them back on the next step, otherwise the screen is leaving. */
   const leave = useCallback((comeBack: boolean) => {
+    controller.cancel(); queuedGesture.current = null;
     returning.current = comeBack;
     send('leave');
-  }, []);
+  }, [controller]);
 
-  return { state, speech, tap, say, watch, rest, celebrate, hold, release, leave, stir, values: { edge, tilt, lift, breath, arm, blink, happy, surprise, blush, gaze, asleep } };
+  return { state, speech, active: focused && foreground, gesture: state === 'reacting' ? reaction?.gesture ?? null : null, tap, react, say, watch, rest, celebrate, hold, release, leave, stir, values: { edge, tilt, lift, breath, arm, blink, happy, surprise, blush, gaze, asleep, farArm, stretch, press } };
 }
 
 export type MascotRig = ReturnType<typeof useMascotRig>;

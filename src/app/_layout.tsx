@@ -21,6 +21,7 @@ import { OnboardingLayer } from '@/features/onboarding/onboarding-layer';
 import { updateMascotAppState } from '@/services/mascot-session';
 import { FocusCoordinator } from '@/features/focus/focus-coordinator';
 import { PlanCoordinator } from '@/features/plan/plan-coordinator';
+import { MascotProvider } from '@/components/mascot/mascot-provider';
 
 // Shows the message a reset asked for (e.g. "Restore complete") once the fresh
 // tree — with its reopened database — has mounted.
@@ -86,6 +87,7 @@ function ThemedApp() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="settings" />
             <Stack.Screen name="appearance-theme" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="mascot" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="backup" />
             <Stack.Screen name="unorganized" />
             <Stack.Screen name="board/[id]" />
@@ -122,7 +124,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Suspense fallback={<LoadingState />} key={resetKey}>
         <DatabaseProvider>
-          <LanguageProvider><ThemeProvider><ChatBackgroundProvider><ThemedApp /></ChatBackgroundProvider></ThemeProvider></LanguageProvider>
+          <LanguageProvider><ThemeProvider><MascotProvider><ChatBackgroundProvider><ThemedApp /></ChatBackgroundProvider></MascotProvider></ThemeProvider></LanguageProvider>
         </DatabaseProvider>
       </Suspense>
     </GestureHandlerRootView>

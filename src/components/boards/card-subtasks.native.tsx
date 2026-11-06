@@ -1,3 +1,4 @@
+import type { MascotInteractionHandle } from '@/components/mascot/chits-mascot';
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
@@ -54,6 +55,7 @@ export function CardSubtasks({ cardId, scrollRef, showHeading = true, onInputFoc
   const busyAdd = useRef(false);
   const busyEdit = useRef(false);
   const toggleQueue = useRef(Promise.resolve());
+  const mascotRef = useRef<MascotInteractionHandle>(null);
 
   const reload = useCallback(async () => { setItems(await repository.list(cardId)); }, [repository, cardId]);
   useFocusEffect(useCallback(() => { void reload().catch(() => setError(tr("cardsubtasks.couldNotLoadSubtasks"))); }, [reload]));
@@ -92,7 +94,8 @@ export function CardSubtasks({ cardId, scrollRef, showHeading = true, onInputFoc
   };
   const toggle = useCallback((item: CardSubtask) => {
     setItems((current) => current.map((row) => row.id === item.id ? { ...row, isCompleted: !row.isCompleted } : row));
-    toggleQueue.current = toggleQueue.current.then(async () => { await repository.toggle(cardId, item.id); }, async () => { await repository.toggle(cardId, item.id); })
+    const update = async () => { const saved = await repository.toggle(cardId, item.id); if (saved.isCompleted) mascotRef.current?.play('happy'); };
+    toggleQueue.current = toggleQueue.current.then(update, update)
       .catch(() => { setError(tr("cardsubtasks.couldNotUpdateThatSubtask")); void reload(); });
   }, [cardId, reload, repository]);
   const move = async (id: string, delta: -1 | 1) => {
@@ -127,7 +130,7 @@ export function CardSubtasks({ cardId, scrollRef, showHeading = true, onInputFoc
     </View> : null}
     {workspace && items.length ? <View style={styles.progressRow}>
       <AppText accessibilityLiveRegion="polite" style={[styles.progress, { color: workspace ? desk.inkMuted : tokens.textSecondary }]}>{tr('onboarding.hub.progress.count', { done: completed, total: items.length })}</AppText>
-      {workspace && completed === items.length ? <OnboardingMascot still size={32} accessible={false} /> : null}
+      {workspace && completed === items.length ? <OnboardingMascot size={32} accessible={false} interactive={false} controlRef={mascotRef} enableIdleAnimation={false} context="boards" /> : null}
     </View> : null}
     {items.length || adding ? <View onLayout={(event) => { listY.current = event.nativeEvent.layout.y; }} style={[styles.list, { borderColor: tokens.borderSubtle, backgroundColor: tokens.surface }, workspace && { marginTop: spacing.xs, backgroundColor: tokens.cardPaper, borderRadius: styleTokens.button.radius }]}>
       {items.map((item, index) => <View key={item.id} onLayout={(event) => { rowY.current.set(item.id, event.nativeEvent.layout.y); }} style={[styles.row, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: tokens.borderSubtle }]}>

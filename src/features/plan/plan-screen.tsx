@@ -83,23 +83,26 @@ export default function PlanScreen() {
   const wrapped = plan?.status === 'wrapped';
   const planning = !wrapped && (!plan || plan.status === 'planning') && date >= today;
   const evening = wrapping || wrapped;
-  const rig = useMascotRig(PLAN_LINES.length, { compact: true, entrance: !greetedDays.has(date), sleepy: evening, cheerful: wrapped });
-  const { say } = rig;
+  const rig = useMascotRig(PLAN_LINES.length, { context: 'plan', compact: true, entrance: !greetedDays.has(date), sleepy: evening, cheerful: wrapped });
+  const { say, react } = rig;
+  const previouslyDone = useRef(done);
 
   // Each milestone once a day: what's already true when the screen opens doesn't count.
   const reached = useRef<PlanMilestone[] | null>(null);
   useEffect(() => { reached.current = null; }, [date]);
   useEffect(() => {
     if (!ready) return;
-    if (reached.current === null) { reached.current = reachedFrom(done, total); return; }
+    if (reached.current === null) { reached.current = reachedFrom(done, total); previouslyDone.current = done; return; }
     const next = planMilestone(done, total, reached.current);
-    if (next && !wrapped) { reached.current = [...reached.current, next]; say(PLAN_LINE[next]); }
-  }, [done, ready, say, total, wrapped]);
+    if (next && !wrapped) { reached.current = [...reached.current, next]; say(PLAN_LINE[next], next === 'all' ? 'dance' : 'happy'); }
+    else if (!wrapped && done > previouslyDone.current) react('happy');
+    previouslyDone.current = done;
+  }, [done, ready, react, say, total, wrapped]);
   useEffect(() => {
     if (!ready || greetedDays.has(date) || !isToday || wrapped) return;
     greetedDays.add(date);
-    say(planning ? PLAN_LINE.morning : PLAN_LINE.afternoon);
-  }, [date, isToday, planning, ready, say, wrapped]);
+    say(planning ? PLAN_LINE.morning : PLAN_LINE.afternoon, period === 'morning' ? 'wave' : period === 'evening' ? 'sleepy' : 'happy');
+  }, [date, isToday, period, planning, ready, say, wrapped]);
 
   const dateLabel = dateFromKey(date).toLocaleDateString(getFormattingLocale(), { weekday: 'long', month: 'long', day: 'numeric' });
   const ordered = [...tasks.filter((task) => task.completedAt === null), ...tasks.filter((task) => task.completedAt !== null)];

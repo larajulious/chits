@@ -432,6 +432,7 @@ export async function restoreBackup(backup: ValidatedBackup, live: SQLiteDatabas
   let liveClosed = false;
   let commitStarted = false;
   let ownsStaging = false;
+  let phase = 'prepare';
   try {
     report(progress, tr("backup.preparingRestore"));
     await pauseReminderSync();
@@ -451,27 +452,33 @@ export async function restoreBackup(backup: ValidatedBackup, live: SQLiteDatabas
       await verifyFile(target, file);
       report(progress, tr("backupservice.restoringAttachments"), index + 1, backup.manifest.files.length);
     }
+    phase = 'verify-staged-database';
     const staged = await openDatabaseAsync('database.sqlite', { useNewConnection: true }, paths.root);
     try { await validateDatabase(staged, LATEST_SCHEMA_VERSION, true); await checkManifestReferences(staged, backup.manifest); await finalizeDatabase(staged); }
     finally { await staged.closeAsync(); }
     report(progress, tr("backup.preparingRestore"));
+    phase = 'live-write-check';
     await live.getFirstAsync('SELECT 1');
     await live.withExclusiveTransactionAsync(async (tx) => { await tx.execAsync('UPDATE app_settings SET value = value WHERE 0;'); });
     // A complete safety snapshot exists BEFORE the first live file is touched.
+    phase = 'safety-snapshot';
     await snapshot(live, paths.root, 'safety.sqlite');
     const hadAttachments = (await FS.getInfoAsync(paths.attachments)).exists;
     if (hadAttachments) await FS.copyAsync({ from: paths.attachments, to: paths.safetyAttachments });
     const journal: RestoreJournal = { version: 1, phase: 'pending', hadAttachments, safetyDatabaseHash: await ChitsFiles.hashFileAsync(paths.safetyDatabase) };
     await writeRestoreJournal(journal);
+    phase = 'close-live-database';
     liveClosed = true;
     await live.closeAsync();
     commitStarted = true;
     report(progress, tr("backupservice.restoringData"));
+    phase = 'replace-files';
     await removeDatabaseFiles(paths.database);
     await FS.moveAsync({ from: paths.stagedDatabase, to: paths.database });
     await FS.deleteAsync(paths.attachments, { idempotent: true });
     await FS.moveAsync({ from: paths.stagedAttachments, to: paths.attachments });
     report(progress, tr("backupservice.finishingRestore"));
+    phase = 'verify-restored-database';
     const reopened = await openDatabaseAsync('chits.db', { useNewConnection: true });
     try {
       await validateDatabase(reopened, LATEST_SCHEMA_VERSION, true);
@@ -485,7 +492,7 @@ export async function restoreBackup(backup: ValidatedBackup, live: SQLiteDatabas
     await FS.deleteAsync(paths.root, { idempotent: true }).catch(() => undefined);
     await discardValidatedBackup(backup);
   } catch (cause) {
-    console.warn('[backup] restore failed', cause);
+    console.warn(`[backup] restore failed (${phase})`, cause);
     if (commitStarted) {
       try { await recoverInterruptedRestore(); }
       catch (recoveryCause) { throw new RestoreError(backupErrorMessage(recoveryCause, tr("backupservice.yourSafetyCopyHasBeenKeptReopenChits")), true, liveClosed, cause); }

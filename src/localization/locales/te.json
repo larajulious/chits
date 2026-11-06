@@ -2086,5 +2086,17 @@
   "canvasConnections.unlink": "గమనికల అనుసంధానాన్ని తొలగించు",
   "canvasConnections.unlinkMessage": "ఈ అనుసంధానాన్ని తొలగించాలా? రెండు గమనికలూ వాటి స్థానాల్లోనే ఉంటాయి.",
   "canvasConnections.goTo": "{{title}}కు వెళ్లు",
-  "canvasConnections.retry": "అనుసంధానాలను మళ్లీ లోడ్ చేయి"
+  "canvasConnections.retry": "అనుసంధానాలను మళ్లీ లోడ్ చేయి",
+  "mascot.personalization": "వ్యక్తిగతీకరణ",
+  "mascot.title": "మీ Chits మస్కట్",
+  "mascot.change": "మస్కట్ మార్చండి",
+  "mascot.description": "మీకు తోడుగా ఉండే చిన్న స్నేహితుడిని ఎంచుకోండి.",
+  "mascot.classicDescription": "అసలైన చిన్న స్నేహితుడు.",
+  "mascot.ongDescription": "అదే స్టిక్కీ నోట్ స్నేహితుడు. మరింత స్టైల్‌తో.",
+  "mascot.limited": "పరిమిత ఎడిషన్",
+  "mascot.free": "ఉచితం",
+  "mascot.selected": "ఎంచుకోబడింది",
+  "mascot.choose": "మస్కట్ ఎంచుకోండి",
+  "mascot.current": "మీ స్నేహితుడు: {{name}}",
+  "mascot.freeRelease": "ఈ విడుదలలో రెండు మస్కట్‌లు ఉచితం."
 }

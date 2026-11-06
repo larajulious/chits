@@ -33,7 +33,7 @@ export function FocusHome() {
   const { handBold } = useHandwriting();
   const { rowStyle, isRTL } = useDirection();
   const [companion] = useState(() => { try { return repository.preferencesSync().companion; } catch { return FOCUS_DEFAULTS.companion; } });
-  const rig = useMascotRig(1, { compact: true, restGaze: -10 });
+  const rig = useMascotRig(1, { context: 'focus', compact: true, restGaze: -10 });
   const [checked, setChecked] = useState(false);
   const [query, setQuery] = useState('');
   const [notes, setNotes] = useState<SpaceCandidate[] | null>(null);

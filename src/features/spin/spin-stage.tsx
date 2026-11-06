@@ -58,7 +58,7 @@ type Props = {
 export function SpinStage({ title, body, moment, spinning, landing, repeat = false, celebrate = true, entrance, footer, footerFresh = false, scrollRef, children }: Props) {
   'use no memo'; // Global i18next copy must refresh when the locale subscription fires.
   useLocale();
-  const rig = useMascotRig(1, { entrance, compact: true, restGaze: -10 });
+  const rig = useMascotRig(1, { context: 'spin', entrance, compact: true, restGaze: -10 });
   const { watch, rest, celebrate: cheer, tap } = rig;
 
   const [line, setLine] = useState<{ key: string; announce: boolean } | null>(null);

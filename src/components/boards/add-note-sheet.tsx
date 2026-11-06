@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { AppDialogProvider } from '@/components/dialogs/app-dialog-provider';
 import { TemplateLibrary, type TemplateLibraryHandle } from '@/features/templates/template-library';
 import { createSingleFlight } from '@/services/note-templates';
@@ -233,6 +234,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
               <View style={[styles.choiceHeading, rowStyle]}><AppText accessibilityRole="header" variant="display" weight="600" style={[styles.choiceTitle, { color: theme.textPrimary }]}>{tr('templates.choose')}</AppText><IconButton label={tr('attachments.close')} onPress={close}><Icon name="close" size={22} color={theme.textPrimary} /></IconButton></View>
               <View style={styles.choiceContext}>{contextLine}</View>
               {(['blank', 'fromTemplate'] as const).map((kind) => <Pressable key={kind} accessibilityRole="button" onPress={() => { setStage(kind === 'blank' ? 'editor' : 'templates'); if (kind === 'blank') requestAnimationFrame(() => inputRef.current?.focus()); }} style={({ pressed }) => [styles.choiceRow, rowStyle, pressed && styles.pressed]}><Icon name={kind === 'blank' ? 'document-outline' : 'grid-outline'} size={22} color={theme.textPrimary} /><AppText style={[styles.choiceLabel, { color: theme.textPrimary }]}>{tr(`templates.${kind}`)}</AppText><Icon name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={theme.textMuted} /></Pressable>)}
+              <Pressable accessibilityRole="button" onPress={() => { close(); router.push('/canvas-new'); }} style={({ pressed }) => [styles.choiceRow, rowStyle, pressed && styles.pressed]}><Icon name="easel-outline" size={22} color={theme.textPrimary} /><AppText style={[styles.choiceLabel, { color: theme.textPrimary }]}>New Canvas</AppText><Icon name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={theme.textMuted} /></Pressable>
             </SafeAreaView>
           </BottomSheetSurface>
         </> : stage === 'templates' ? <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={[styles.fullScreen, { backgroundColor: theme.background }]}>

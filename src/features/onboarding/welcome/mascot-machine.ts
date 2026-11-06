@@ -6,7 +6,7 @@
 
 export const MASCOT_STATES = ['hidden', 'peeking', 'waving', 'idle', 'reacting', 'shy', 'exiting', 'watching', 'celebrating', 'sleeping'] as const;
 export type MascotState = typeof MASCOT_STATES[number];
-export type MascotEvent = 'sleep' | 'enter' | 'skipEntrance' | 'noticed' | 'settled' | 'tap' | 'reacted' | 'hold' | 'release' | 'leave' | 'returned' | 'watch' | 'celebrate' | 'rest';
+export type MascotEvent = 'gesture' | 'cancel' | 'sleep' | 'enter' | 'skipEntrance' | 'noticed' | 'settled' | 'tap' | 'reacted' | 'hold' | 'release' | 'leave' | 'returned' | 'watch' | 'celebrate' | 'rest';
 
 const TRANSITIONS: Record<MascotState, Partial<Record<MascotEvent, MascotState>>> = {
   hidden: { enter: 'peeking', skipEntrance: 'idle' },
@@ -23,14 +23,17 @@ const TRANSITIONS: Record<MascotState, Partial<Record<MascotEvent, MascotState>>
   sleeping: { tap: 'reacting', leave: 'exiting', watch: 'watching', celebrate: 'celebrating' },
 };
 
-/** An event that doesn't apply to the current state changes nothing — a second tap mid-reaction, say. */
+/** Inapplicable events leave the state unchanged. The rig's admission gate can
+ * replace a reaction with the rapid-tap egg without admitting a second track. */
 export function nextMascotState(state: MascotState, event: MascotEvent): MascotState {
+  if (event === 'cancel') return ['reacting', 'celebrating', 'shy', 'peeking', 'waving'].includes(state) ? 'idle' : state;
+  if (event === 'gesture' && ['idle', 'sleeping', 'watching'].includes(state)) return 'reacting';
   return TRANSITIONS[state][event] ?? state;
 }
 
 /** The staged entrance, in milliseconds: sneak 0–600, wave 600–1400, settle 1400–2200. */
 export const ENTRANCE_MS = { sneak: 600, wave: 800, settle: 800 } as const;
-/** How long the speech bubble stays, which is also how long further taps are ignored. */
+/** The existing speech bubble reading interval; ordinary taps cannot overlap it. */
 export const SPEECH_MS = 2600;
 /** The stack's fade into Welcome, with margin. Home stays covered and Chits stays hidden until it ends. */
 export const WELCOME_FADE_MS = 460;

@@ -1,10 +1,14 @@
-import type { ComponentProps, ReactNode } from 'react';
+import { useEffect, useRef, type ComponentProps, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, useAnimatedStyle, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
 
-import { ArmPart, ART, BackPart, BlushPart, BodyPart, CastShadowPart, EyePart, HappyEyePart, PIVOT, SleepingMouthPart, SmilePart, SurprisedMouthPart, TapePart, type ArtBox } from './mascot-art';
+import { ArmPart, ART, BackPart, BlushPart, BodyPart, CastShadowPart, EyePart, FarArmPart, GroundShadowPart, HappyEyePart, PIVOT, SleepingMouthPart, SmilePart, SurprisedMouthPart, TapePart, type ArtBox } from './mascot-art';
 import { MASCOT_CUT, MASCOT_VIEWBOX } from './stage-layout';
 import type { MascotRig } from './use-mascot-rig';
+import { useMascotPreference } from '@/components/mascot/mascot-provider';
+import { BandanaPart, BANDANA_BOX } from '@/components/mascot/mascot-still';
+import type { MascotVariant } from '@/components/mascot/mascot-variants';
+import { useMascotReducedMotion } from '@/components/mascot/use-mascot-accessibility';
 
 /** Chits leans around a point low down by the screen edge, not around their middle. */
 const LEAN_PIVOT = { x: 1000, y: 950 };
@@ -13,6 +17,9 @@ const TOUCH_AREA: ArtBox = { x: 180, y: 160, w: 870, h: 860 };
 const SHADOW_OFFSET = { x: -30, y: 26 };
 
 type Props = {
+  standalone?: boolean;
+  interactive?: boolean;
+  variant?: MascotVariant;
   values: MascotRig['values'];
   unit: number;
   screenWidth: number;
@@ -40,21 +47,30 @@ function Part({ box, unit, style, origin, children }: { box: ArtBox; unit: numbe
 }
 
 /** The character itself: positioned by the screen edge and the sheet, posed by the rig. */
-export function ChitsPeekMascot({ values, unit, screenWidth, edgeInset = 0, compact = false, sheetTop, zoom, shadowColor, label, hint, onPress, onLongPress, onPressOut, children }: Props) {
-  const { edge, tilt, lift, breath, arm, blink, happy, surprise, blush, gaze, asleep } = values;
+export function ChitsPeekMascot({ values, unit, screenWidth, edgeInset = 0, compact = false, standalone = false, interactive = true, variant: preview, sheetTop, zoom, shadowColor, label, hint, onPress, onLongPress, onPressOut, children }: Props) {
+  const preference = useMascotPreference();
+  const variant = preview ?? preference.variant;
+  const reduced = useMascotReducedMotion();
+  const { edge, tilt, lift, breath, arm, farArm, stretch, press, blink, happy, surprise, blush, gaze, asleep } = values;
   const size = MASCOT_VIEWBOX * unit;
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (holdTimer.current) clearTimeout(holdTimer.current); }, []);
 
   // The right edge of the screen and the top of the sheet hold Chits in place,
   // so they stay tucked behind both as the sheet moves between steps.
   const frame = useAnimatedStyle(() => {
+    if (standalone) return { transform: [{ translateX: 0 }, { translateY: 0 }, { scale: 1 }] };
     const scale = zoom.get();
     return { transform: [{ translateX: screenWidth - (edge.get() - edgeInset) * unit * scale }, { translateY: sheetTop.get() - MASCOT_CUT * unit * scale }, { scale }] };
   });
   const body = useAnimatedStyle(() => ({
-    transform: [{ translateY: (lift.get() - breath.get() * 7) * unit }, { rotate: `${tilt.get()}deg` }, { scaleY: 1 + breath.get() * 0.012 }],
+    transform: [{ translateY: (lift.get() - breath.get() * 7) * unit }, { rotate: `${tilt.get()}deg` }, { scaleX: 1 - stretch.get() * 0.6 + press.get() * 0.015 }, { scaleY: 1 + breath.get() * 0.012 + stretch.get() - press.get() * 0.025 }],
   }));
   const armStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${arm.get()}deg` }] }));
-  const tapeStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${(tilt.get() + 3) * -0.7}deg` }] }));
+  const farBehind = useAnimatedStyle(() => ({ opacity: farArm.get() < -45 ? 0 : 1, transform: [{ rotate: `${farArm.get()}deg` }] }));
+  const farInFront = useAnimatedStyle(() => ({ opacity: farArm.get() < -45 ? 1 : 0, transform: [{ rotate: `${farArm.get()}deg` }] }));
+  const ground = useAnimatedStyle(() => ({ opacity: Math.max(0.5, 1 + lift.get() * 0.003), transform: [{ scaleX: Math.max(0.8, 1 + lift.get() * 0.0015) }] }));
+  const tapeStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${(tilt.get() + (standalone ? 0 : 3)) * -0.7}deg` }] }));
   const blushStyle = useAnimatedStyle(() => ({ opacity: blush.get() * 0.75 }));
   const eyes = useAnimatedStyle(() => ({
     opacity: 1 - happy.get(),
@@ -67,15 +83,18 @@ export function ChitsPeekMascot({ values, unit, screenWidth, edgeInset = 0, comp
 
   // A lean around the far edge pushes the resting hand below a short hero.
   // Pivot compact poses at the shoulder so a nod keeps the hand on the page.
-  const leanPivot = compact ? PIVOT.shoulder : LEAN_PIVOT;
+  const leanPivot = standalone ? { x: 650, y: 1000 } : compact ? PIVOT.shoulder : LEAN_PIVOT;
   const lean = { transformOrigin: [leanPivot.x * unit, leanPivot.y * unit, 0] as [number, number, number] };
   return <>
+   {standalone ? <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><Part box={ART.ground} unit={unit} style={ground}><GroundShadowPart unit={unit} /></Part></View> : null}
    <Animated.View pointerEvents="box-none" style={[styles.frame, { width: size, height: size }, frame]}>
     <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, lean, body]}>
       <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={StyleSheet.absoluteFill}>
-        <Part box={{ ...ART.body, x: ART.body.x + SHADOW_OFFSET.x, y: ART.body.y + SHADOW_OFFSET.y }} unit={unit}><CastShadowPart unit={unit} color={shadowColor} /></Part>
-        <Part box={ART.back} unit={unit}><BackPart unit={unit} /></Part>
+        {!standalone ? <Part box={{ ...ART.body, x: ART.body.x + SHADOW_OFFSET.x, y: ART.body.y + SHADOW_OFFSET.y }} unit={unit}><CastShadowPart unit={unit} color={shadowColor} /></Part> : null}
+        <Part box={ART.back} unit={unit}><BackPart unit={unit} includeFarArm={false} /></Part>
+        <Part box={ART.farArm} unit={unit} origin={originAt(ART.farArm, { x: 1040, y: 690 }, unit)} style={farBehind}><FarArmPart unit={unit} /></Part>
         <Part box={ART.body} unit={unit}><BodyPart unit={unit} /></Part>
+        {variant === 'chits-ong' ? <Animated.View entering={reduced ? undefined : FadeIn.duration(180)} exiting={reduced ? undefined : FadeOut.duration(120)} style={placed(BANDANA_BOX, unit)}><BandanaPart unit={unit} /></Animated.View> : null}
         <Part box={ART.tape} unit={unit} origin={originAt(ART.tape, PIVOT.tape, unit)} style={tapeStyle}><TapePart unit={unit} /></Part>
         <Part box={ART.blush} unit={unit} style={blushStyle}><BlushPart unit={unit} /></Part>
         <Part box={ART.eyeLeft} unit={unit} style={eyes}><EyePart side="left" unit={unit} /></Part>
@@ -85,22 +104,24 @@ export function ChitsPeekMascot({ values, unit, screenWidth, edgeInset = 0, comp
         <Part box={ART.mouth} unit={unit} style={smile}><SmilePart unit={unit} /></Part>
         <Part box={ART.mouth} unit={unit} style={surprisedMouth}><SurprisedMouthPart unit={unit} /></Part>
         <Part box={ART.mouth} unit={unit} style={sleepingMouth}><SleepingMouthPart unit={unit} /></Part>
+        <Part box={ART.farArm} unit={unit} origin={originAt(ART.farArm, { x: 1040, y: 690 }, unit)} style={farInFront}><FarArmPart unit={unit} /></Part>
       </View>
-      <Pressable
+      {interactive ? <Pressable
         accessibilityRole="button"
         accessibilityLabel={label}
         accessibilityHint={hint}
         accessibilityActions={[{ name: 'activate' }, { name: 'longpress' }]}
         onAccessibilityAction={({ nativeEvent }) => {
           if (nativeEvent.actionName === 'activate') onPress();
-          else if (nativeEvent.actionName === 'longpress') { onLongPress(); setTimeout(onPressOut, 1600); }
+          else if (nativeEvent.actionName === 'longpress') { if (holdTimer.current) clearTimeout(holdTimer.current); onLongPress(); holdTimer.current = setTimeout(onPressOut, 1600); }
         }}
         delayLongPress={320}
         onPress={onPress}
+        onPressIn={() => press.set(reduced ? 0 : withTiming(1, { duration: 80 }))}
         onLongPress={onLongPress}
-        onPressOut={onPressOut}
-        style={placed(TOUCH_AREA, unit)}
-      />
+        onPressOut={() => { press.set(reduced ? 0 : withSpring(0, { damping: 15, stiffness: 230 })); onPressOut(); }}
+        style={standalone ? { position: 'absolute', left: 0, top: 0, width: size, height: size } : placed(TOUCH_AREA, unit)}
+      /> : null}
     </Animated.View>
    </Animated.View>
    {children}

@@ -2086,5 +2086,17 @@
   "canvasConnections.unlink": "नोंदींची जोडणी काढा",
   "canvasConnections.unlinkMessage": "ही जोडणी काढायची? दोन्ही नोंदी त्यांच्या जागी राहतील.",
   "canvasConnections.goTo": "{{title}} वर जा",
-  "canvasConnections.retry": "जोडण्या पुन्हा लोड करा"
+  "canvasConnections.retry": "जोडण्या पुन्हा लोड करा",
+  "mascot.personalization": "वैयक्तिकीकरण",
+  "mascot.title": "तुमचा Chits शुभंकर",
+  "mascot.change": "शुभंकर बदला",
+  "mascot.description": "तुम्हाला सोबत करणारा छोटा मित्र निवडा.",
+  "mascot.classicDescription": "तोच मूळ छोटा मित्र.",
+  "mascot.ongDescription": "तोच चिकट चिठ्ठीचा मित्र. जरा अधिक रुबाबात.",
+  "mascot.limited": "मर्यादित आवृत्ती",
+  "mascot.free": "मोफत",
+  "mascot.selected": "निवडलेले",
+  "mascot.choose": "शुभंकर निवडा",
+  "mascot.current": "तुमचा मित्र: {{name}}",
+  "mascot.freeRelease": "या आवृत्तीत दोन्ही शुभंकर मोफत आहेत."
 }

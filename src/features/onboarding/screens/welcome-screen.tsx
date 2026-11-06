@@ -86,7 +86,7 @@ export default function OnboardingWelcomeScreen() {
   const [furthest, setFurthest] = useState(resumeAt);
   const [mode, setMode] = useState<TourMode | null>(null);
   const [evening, setEvening] = useState(false);
-  const rig = useMascotRig(SPEECH.length, tourPose(step, evening));
+  const rig = useMascotRig(SPEECH.length, { ...tourPose(step, evening), context: 'welcome' });
   const { watch, rest, celebrate } = rig;
   const boardsScroll = useRef<ScrollView>(null);
   // The entrance can finish only once, and the copy stays up from then on.

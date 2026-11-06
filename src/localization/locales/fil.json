@@ -2086,5 +2086,17 @@
   "canvasConnections.unlink": "Alisin ang Koneksyon ng Notes",
   "canvasConnections.unlinkMessage": "Alisin ang koneksyong ito? Mananatili sa puwesto ang parehong note.",
   "canvasConnections.goTo": "Pumunta sa {{title}}",
-  "canvasConnections.retry": "Subukang i-load muli ang mga koneksyon"
+  "canvasConnections.retry": "Subukang i-load muli ang mga koneksyon",
+  "mascot.personalization": "Pag-personalize",
+  "mascot.title": "Ang Iyong Chits Mascot",
+  "mascot.change": "Palitan ang Mascot",
+  "mascot.description": "Piliin ang munting kaibigang makakasama mo.",
+  "mascot.classicDescription": "Ang orihinal na munting kaibigan.",
+  "mascot.ongDescription": "Parehong sticky na kaibigan. Mas maangas.",
+  "mascot.limited": "LIMITADONG EDISYON",
+  "mascot.free": "Libre",
+  "mascot.selected": "Napili",
+  "mascot.choose": "Pumili ng mascot",
+  "mascot.current": "Kaibigan mo: {{name}}",
+  "mascot.freeRelease": "Libre ang parehong mascot sa bersyong ito."
 }

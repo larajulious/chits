@@ -2086,5 +2086,17 @@
   "canvasConnections.unlink": "নোটের সংযোগ বিচ্ছিন্ন করুন",
   "canvasConnections.unlinkMessage": "এই সংযোগ সরাবেন? উভয় নোট নিজ নিজ স্থানে থাকবে।",
   "canvasConnections.goTo": "{{title}}-এ যান",
-  "canvasConnections.retry": "সংযোগ আবার লোড করুন"
+  "canvasConnections.retry": "সংযোগ আবার লোড করুন",
+  "mascot.personalization": "ব্যক্তিগতকরণ",
+  "mascot.title": "আপনার Chits মাসকট",
+  "mascot.change": "মাসকট বদলান",
+  "mascot.description": "আপনার সঙ্গী ছোট্ট বন্ধুটিকে বেছে নিন।",
+  "mascot.classicDescription": "সেই আসল ছোট্ট বন্ধু।",
+  "mascot.ongDescription": "একই স্টিকি নোটের বন্ধু। একটু বেশি দাপট।",
+  "mascot.limited": "সীমিত সংস্করণ",
+  "mascot.free": "বিনামূল্যে",
+  "mascot.selected": "বেছে নেওয়া হয়েছে",
+  "mascot.choose": "মাসকট বেছে নিন",
+  "mascot.current": "আপনার বন্ধু: {{name}}",
+  "mascot.freeRelease": "এই সংস্করণে দুটি মাসকটই বিনামূল্যে।"
 }

@@ -2086,5 +2086,17 @@
   "canvasConnections.unlink": "Ngắt kết nối ghi chú",
   "canvasConnections.unlinkMessage": "Xóa kết nối này? Cả hai ghi chú sẽ giữ nguyên vị trí.",
   "canvasConnections.goTo": "Đi đến {{title}}",
-  "canvasConnections.retry": "Thử tải lại kết nối"
+  "canvasConnections.retry": "Thử tải lại kết nối",
+  "mascot.personalization": "Cá nhân hóa",
+  "mascot.title": "Linh vật Chits của bạn",
+  "mascot.change": "Đổi linh vật",
+  "mascot.description": "Chọn người bạn nhỏ luôn ở bên bạn.",
+  "mascot.classicDescription": "Người bạn nhỏ nguyên bản.",
+  "mascot.ongDescription": "Vẫn là bạn giấy ghi chú. Thêm phần cá tính.",
+  "mascot.limited": "PHIÊN BẢN GIỚI HẠN",
+  "mascot.free": "Miễn phí",
+  "mascot.selected": "Đã chọn",
+  "mascot.choose": "Chọn linh vật",
+  "mascot.current": "Bạn đồng hành: {{name}}",
+  "mascot.freeRelease": "Cả hai linh vật đều miễn phí trong phiên bản này."
 }

@@ -1,4 +1,4 @@
-import { memo, useEffect, useState, type ReactNode } from 'react';
+import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { runOnJS, useAnimatedReaction, useAnimatedStyle, useDerivedValue, useReducedMotion, type SharedValue } from 'react-native-reanimated';
 
@@ -28,7 +28,7 @@ const DOZE_MS = 600_000;
 const STIR_STEP = 40;
 
 /** Animation and speech state stay here, isolated from the virtualized board list. */
-export const BoardsMascotHero = memo(function BoardsMascotHero({ width, paper, scrollY, activity, action, title, body, variant = 'boards' }: { width: number; paper: string; scrollY: SharedValue<number>; /** What keeps Chits awake when nothing scrolls, as a distance moved. */ activity?: SharedValue<number>; action?: ReactNode; title?: string; body?: string; variant?: 'boards' | 'notes' }) {
+export const BoardsMascotHero = memo(function BoardsMascotHero({ width, paper, scrollY, activity, action, title, body, variant = 'boards', revision, revisionScope = 'all', changedAt = 0 }: { revision?: string; revisionScope?: string; changedAt?: number; width: number; paper: string; scrollY: SharedValue<number>; /** What keeps Chits awake when nothing scrolls, as a distance moved. */ activity?: SharedValue<number>; action?: ReactNode; title?: string; body?: string; variant?: 'boards' | 'notes' }) {
   useLocale();
   const desk = useDesk();
   const { scheme } = useTheme();
@@ -38,12 +38,22 @@ export const BoardsMascotHero = memo(function BoardsMascotHero({ width, paper, s
   const lines = variant === 'notes' ? NOTE_LINES : BOARD_LINES;
   const rig = useMascotRig(lines.length, {
     // Greet on each listing mount; copy still reveals only once per launch.
-    entrance: true, compact: true, personality: variant,
+    entrance: true, compact: true, personality: variant, context: variant,
     restGaze: variant === 'notes' ? -24 : -5,
     restTilt: variant === 'notes' ? -6 : 1,
     dozeAfter: DOZE_MS,
   });
-  const { stir } = rig;
+  const { stir, react, active } = rig;
+  const arrivedAt = useRef(Date.now());
+  const previousActivity = useRef<{ scope: string; revision: string } | null>(null);
+  useEffect(() => {
+    if (!active || revision === undefined) return;
+    const previous = previousActivity.current;
+    previousActivity.current = { scope: revisionScope, revision };
+    // These are the listing's existing, loaded repository results. Returning
+    // from an editor reacts here; typing never summons a second mascot there.
+    if (previous && previous.scope === revisionScope && previous.revision !== revision && changedAt > arrivedAt.current) react('happy');
+  }, [active, changedAt, react, revision, revisionScope]);
   useAnimatedReaction(() => Math.round((activity ?? scrollY).get() / STIR_STEP), (step, previous) => {
     if (previous !== null && step !== previous) runOnJS(stir)();
   });

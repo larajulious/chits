@@ -2086,5 +2086,17 @@
   "canvasConnections.unlink": "नोट का कनेक्शन हटाएँ",
   "canvasConnections.unlinkMessage": "यह कनेक्शन हटाएँ? दोनों नोट अपनी जगह पर रहेंगे।",
   "canvasConnections.goTo": "{{title}} पर जाएँ",
-  "canvasConnections.retry": "कनेक्शन फिर लोड करें"
+  "canvasConnections.retry": "कनेक्शन फिर लोड करें",
+  "mascot.personalization": "वैयक्तिकरण",
+  "mascot.title": "आपका Chits शुभंकर",
+  "mascot.change": "शुभंकर बदलें",
+  "mascot.description": "अपने साथ रहने वाला नन्हा दोस्त चुनें।",
+  "mascot.classicDescription": "वही पहला नन्हा दोस्त।",
+  "mascot.ongDescription": "वही चिपकने वाली पर्ची का दोस्त। थोड़ा ज़्यादा अंदाज़।",
+  "mascot.limited": "सीमित संस्करण",
+  "mascot.free": "मुफ़्त",
+  "mascot.selected": "चुना गया",
+  "mascot.choose": "शुभंकर चुनें",
+  "mascot.current": "आपका दोस्त: {{name}}",
+  "mascot.freeRelease": "इस संस्करण में दोनों शुभंकर मुफ़्त हैं।"
 }

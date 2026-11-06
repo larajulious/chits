@@ -2086,5 +2086,17 @@
   "canvasConnections.unlink": "குறிப்புகளின் இணைப்பை நீக்கு",
   "canvasConnections.unlinkMessage": "இந்த இணைப்பை நீக்கவா? இரு குறிப்புகளும் அதே இடத்தில் இருக்கும்.",
   "canvasConnections.goTo": "{{title}} என்பதற்குச் செல்",
-  "canvasConnections.retry": "இணைப்புகளை மீண்டும் ஏற்றவும்"
+  "canvasConnections.retry": "இணைப்புகளை மீண்டும் ஏற்றவும்",
+  "mascot.personalization": "தனிப்பயனாக்கம்",
+  "mascot.title": "உங்கள் Chits சின்னம்",
+  "mascot.change": "சின்னத்தை மாற்று",
+  "mascot.description": "உங்களுடன் இருக்கும் குட்டி நண்பரைத் தேர்ந்தெடுங்கள்.",
+  "mascot.classicDescription": "அசல் குட்டி நண்பர்.",
+  "mascot.ongDescription": "அதே ஒட்டுக் குறிப்பு நண்பர். கூடுதல் பாணியுடன்.",
+  "mascot.limited": "வரையறுக்கப்பட்ட பதிப்பு",
+  "mascot.free": "இலவசம்",
+  "mascot.selected": "தேர்ந்தெடுக்கப்பட்டது",
+  "mascot.choose": "சின்னத்தைத் தேர்ந்தெடு",
+  "mascot.current": "உங்கள் நண்பர்: {{name}}",
+  "mascot.freeRelease": "இந்தப் பதிப்பில் இரு சின்னங்களும் இலவசம்."
 }

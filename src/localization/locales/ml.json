@@ -2086,5 +2086,17 @@
   "canvasConnections.unlink": "കുറിപ്പുകളുടെ ബന്ധം നീക്കുക",
   "canvasConnections.unlinkMessage": "ഈ ബന്ധം നീക്കണോ? രണ്ട് കുറിപ്പുകളും അതേ സ്ഥാനത്ത് തുടരും.",
   "canvasConnections.goTo": "{{title}} എന്നതിലേക്ക് പോകുക",
-  "canvasConnections.retry": "ബന്ധങ്ങൾ വീണ്ടും ലോഡ് ചെയ്യുക"
+  "canvasConnections.retry": "ബന്ധങ്ങൾ വീണ്ടും ലോഡ് ചെയ്യുക",
+  "mascot.personalization": "വ്യക്തിഗതമാക്കൽ",
+  "mascot.title": "നിങ്ങളുടെ Chits ചിഹ്നം",
+  "mascot.change": "ചിഹ്നം മാറ്റുക",
+  "mascot.description": "നിങ്ങൾക്ക് കൂട്ടായിരിക്കുന്ന കൊച്ചുകൂട്ടുകാരനെ തിരഞ്ഞെടുക്കൂ.",
+  "mascot.classicDescription": "ആദ്യത്തെ കൊച്ചുകൂട്ടുകാരൻ.",
+  "mascot.ongDescription": "അതേ സ്റ്റിക്കി നോട്ട് കൂട്ടുകാരൻ. കുറച്ചുകൂടി സ്റ്റൈലോടെ.",
+  "mascot.limited": "പരിമിത പതിപ്പ്",
+  "mascot.free": "സൗജന്യം",
+  "mascot.selected": "തിരഞ്ഞെടുത്തു",
+  "mascot.choose": "ചിഹ്നം തിരഞ്ഞെടുക്കുക",
+  "mascot.current": "നിങ്ങളുടെ കൂട്ടുകാരൻ: {{name}}",
+  "mascot.freeRelease": "ഈ പതിപ്പിൽ രണ്ട് ചിഹ്നങ്ങളും സൗജന്യമാണ്."
 }

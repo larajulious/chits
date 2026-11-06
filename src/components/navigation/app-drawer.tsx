@@ -13,11 +13,12 @@ import { DrawerBackground } from './drawer-background';
 
 type DrawerContextValue = { openDrawer: () => void; closeDrawer: () => void };
 type IconName = ComponentProps<typeof Ionicons>['name'];
-type Destination = { label: string; path: '/' | '/attachments' | '/calendar' | '/archive' | '/settings' | '/onboarding' | '/revisit'; icon: IconName };
+type Destination = { label: string; path: '/' | '/attachments' | '/calendar' | '/archive' | '/settings' | '/onboarding' | '/revisit' | '/canvases'; icon: IconName };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
 // Main destinations live in the side panel; Chat remains a floating button.
 const notesDestination: Destination = { get label() { return tr('index.notes'); }, path: '/', icon: 'reader-outline' };
+const canvasDestination: Destination = { label: 'Canvas', path: '/canvases', icon: 'easel-outline' };
 const calendarDestination: Destination = { get label() { return tr("appdrawer.calendar"); }, path: '/calendar', icon: 'calendar-outline' };
 const attachmentsDestination: Destination = { get label() { return tr('attachments.attachments'); }, path: '/attachments', icon: 'attach-outline' };
 const archiveDestination: Destination = { get label() { return tr("archive.archive"); }, path: '/archive', icon: 'archive-outline' };
@@ -76,6 +77,7 @@ function DrawerContent({ close }: { close: () => void }) {
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
         <NavigationRow destination={notesDestination} pathname={pathname} close={close} />
+        <NavigationRow destination={canvasDestination} pathname={pathname} close={close} />
         <NavigationRow destination={calendarDestination} pathname={pathname} close={close} />
         <NavigationRow destination={attachmentsDestination} pathname={pathname} close={close} />
         <NavigationRow destination={archiveDestination} pathname={pathname} close={close} />

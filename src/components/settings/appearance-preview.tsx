@@ -28,7 +28,7 @@ export function AppearancePreview({ paused }: { paused: boolean }) {
   const { background } = useChatBackground();
   const [width, setWidth] = useState(0);
   const [focused, setFocused] = useState(true);
-  const rig = useMascotRig(1, { entrance: false, idle: false });
+  const rig = useMascotRig(1, { context: 'settings', entrance: false, idle: false });
   const { tap } = rig;
   const sheetTop = useDerivedValue(() => HEIGHT);
   const zoom = useDerivedValue(() => 1);
@@ -42,10 +42,10 @@ export function AppearancePreview({ paused }: { paused: boolean }) {
     tap(0);
   }, [focused, look, paused, tap]);
 
-  return <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" pointerEvents="none" onLayout={({ nativeEvent }) => setWidth(nativeEvent.layout.width)} style={[styles.preview, { backgroundColor: tokens.chatBackground }]}>
+  return <View pointerEvents="box-none" onLayout={({ nativeEvent }) => setWidth(nativeEvent.layout.width)} style={[styles.preview, { backgroundColor: tokens.chatBackground }]}>
     <ChatBackgroundLayer background={background} />
-    {width > 0 ? <ChitsPeekMascot values={rig.values} unit={MASCOT_UNIT} screenWidth={width} sheetTop={sheetTop} zoom={zoom} shadowColor="transparent" label="" hint="" onPress={noop} onLongPress={noop} onPressOut={noop}>{null}</ChitsPeekMascot> : null}
-    <View style={styles.sample}>
+    {width > 0 ? <ChitsPeekMascot values={rig.values} unit={MASCOT_UNIT} screenWidth={width} sheetTop={sheetTop} zoom={zoom} shadowColor="transparent" label={tr('onboarding.mascot.label')} hint={tr('boardsHero.hint')} onPress={() => { if (!paused) rig.tap(); }} onLongPress={() => { if (!paused) rig.tap(); }} onPressOut={noop}>{null}</ChitsPeekMascot> : null}
+    <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.sample}>
       <View style={[styles.bubble, { backgroundColor: tokens.bubble, borderRadius: styleTokens.radius.bubble }]}><AppText numberOfLines={1} style={[styles.bubbleText, { color: tokens.bubbleText }]}>{tr('settings.myThought')}</AppText></View>
       <View style={[styles.card, { backgroundColor: tokens.cardPaper, borderColor: tokens.borderSubtle }]}>
         <View style={[styles.line, styles.lineLong, { backgroundColor: tokens.textMuted }]} />

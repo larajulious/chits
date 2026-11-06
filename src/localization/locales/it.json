@@ -2110,5 +2110,17 @@
   "canvasConnections.unlink": "Scollega note",
   "canvasConnections.unlinkMessage": "Rimuovere questo collegamento? Entrambe le note rimarranno al loro posto.",
   "canvasConnections.goTo": "Vai a {{title}}",
-  "canvasConnections.retry": "Riprova a caricare i collegamenti"
+  "canvasConnections.retry": "Riprova a caricare i collegamenti",
+  "mascot.personalization": "Personalizzazione",
+  "mascot.title": "La tua mascotte Chits",
+  "mascot.change": "Cambia mascotte",
+  "mascot.description": "Scegli il piccolo amico che ti tiene compagnia.",
+  "mascot.classicDescription": "Il piccolo amico originale.",
+  "mascot.ongDescription": "Lo stesso amico adesivo. Con più carattere.",
+  "mascot.limited": "EDIZIONE LIMITATA",
+  "mascot.free": "Gratis",
+  "mascot.selected": "Selezionata",
+  "mascot.choose": "Scegli mascotte",
+  "mascot.current": "Il tuo amico: {{name}}",
+  "mascot.freeRelease": "Entrambe le mascotte sono gratuite in questa versione."
 }

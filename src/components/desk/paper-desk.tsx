@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type PressableProps, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
-import { Image } from 'expo-image';
+import { ChitsMascot } from '@/components/mascot/chits-mascot';
 import { loadAsync, useFonts } from 'expo-font';
 import Animated, { FadeIn, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -113,7 +113,7 @@ export function DeskMessage({ message }: { message: string }) {
   const reduced = useReducedMotion();
   const { rowStyle } = useDirection();
   return <View style={[styles.message, rowStyle]}>
-    <Image accessible={false} source={require('@/assets/images/chits-mascot-animated.svg')} contentFit="contain" style={styles.mascot} />
+    <ChitsMascot still size={38} accessible={false} />
     <PaperNote paper={PAPER_YELLOW} tilt={-1.5} tape style={styles.messageNote}>
       <Animated.View key={message} entering={reduced ? undefined : FadeIn.duration(260)}>
         <AppText accessibilityLiveRegion="polite" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75} style={[hand, styles.messageText]}>{message}</AppText>
@@ -204,7 +204,6 @@ export function PaperAction({ label, primary = false, paper, ink, containerStyle
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   message: { alignItems: 'center', gap: 8, paddingHorizontal: 4 },
-  mascot: { width: 38, height: 38 },
   messageNote: { flex: 1, minHeight: 66, justifyContent: 'center', paddingHorizontal: 14, paddingTop: 8, paddingBottom: 6 },
   messageText: { color: PAPER_INK, fontSize: 18, lineHeight: 24 },
   tab: { paddingHorizontal: 12, paddingVertical: 4 },

@@ -2086,5 +2086,17 @@
   "canvasConnections.unlink": "Putuskan Catatan",
   "canvasConnections.unlinkMessage": "Hapus koneksi ini? Kedua catatan akan tetap di tempatnya.",
   "canvasConnections.goTo": "Buka {{title}}",
-  "canvasConnections.retry": "Coba muat koneksi lagi"
+  "canvasConnections.retry": "Coba muat koneksi lagi",
+  "mascot.personalization": "Personalisasi",
+  "mascot.title": "Maskot Chits Anda",
+  "mascot.change": "Ganti Maskot",
+  "mascot.description": "Pilih teman kecil yang menemani Anda.",
+  "mascot.classicDescription": "Teman kecil yang asli.",
+  "mascot.ongDescription": "Teman catatan tempel yang sama. Lebih bergaya.",
+  "mascot.limited": "EDISI TERBATAS",
+  "mascot.free": "Gratis",
+  "mascot.selected": "Dipilih",
+  "mascot.choose": "Pilih maskot",
+  "mascot.current": "Teman Anda: {{name}}",
+  "mascot.freeRelease": "Kedua maskot gratis dalam rilis ini."
 }

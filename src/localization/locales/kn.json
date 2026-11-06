@@ -2086,5 +2086,17 @@
   "canvasConnections.unlink": "ಟಿಪ್ಪಣಿಗಳ ಸಂಪರ್ಕವನ್ನು ತೆಗೆದುಹಾಕಿ",
   "canvasConnections.unlinkMessage": "ಈ ಸಂಪರ್ಕವನ್ನು ತೆಗೆದುಹಾಕಬೇಕೇ? ಎರಡೂ ಟಿಪ್ಪಣಿಗಳು ತಮ್ಮ ಸ್ಥಳದಲ್ಲೇ ಇರುತ್ತವೆ.",
   "canvasConnections.goTo": "{{title}} ಗೆ ಹೋಗಿ",
-  "canvasConnections.retry": "ಸಂಪರ್ಕಗಳನ್ನು ಮತ್ತೆ ಲೋಡ್ ಮಾಡಿ"
+  "canvasConnections.retry": "ಸಂಪರ್ಕಗಳನ್ನು ಮತ್ತೆ ಲೋಡ್ ಮಾಡಿ",
+  "mascot.personalization": "ವೈಯಕ್ತೀಕರಣ",
+  "mascot.title": "ನಿಮ್ಮ Chits ಮ್ಯಾಸ್ಕಾಟ್",
+  "mascot.change": "ಮ್ಯಾಸ್ಕಾಟ್ ಬದಲಿಸಿ",
+  "mascot.description": "ನಿಮಗೆ ಜೊತೆಯಾಗಿರುವ ಪುಟ್ಟ ಸ್ನೇಹಿತನನ್ನು ಆರಿಸಿ.",
+  "mascot.classicDescription": "ಮೂಲ ಪುಟ್ಟ ಸ್ನೇಹಿತ.",
+  "mascot.ongDescription": "ಅದೇ ಅಂಟು ಚೀಟಿಯ ಸ್ನೇಹಿತ. ಇನ್ನಷ್ಟು ಶೈಲಿಯೊಂದಿಗೆ.",
+  "mascot.limited": "ಸೀಮಿತ ಆವೃತ್ತಿ",
+  "mascot.free": "ಉಚಿತ",
+  "mascot.selected": "ಆಯ್ಕೆಮಾಡಲಾಗಿದೆ",
+  "mascot.choose": "ಮ್ಯಾಸ್ಕಾಟ್ ಆರಿಸಿ",
+  "mascot.current": "ನಿಮ್ಮ ಸ್ನೇಹಿತ: {{name}}",
+  "mascot.freeRelease": "ಈ ಆವೃತ್ತಿಯಲ್ಲಿ ಎರಡೂ ಮ್ಯಾಸ್ಕಾಟ್‌ಗಳು ಉಚಿತ."
 }

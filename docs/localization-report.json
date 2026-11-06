@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-05T14:20:29.536Z",
+  "generatedAt": "2026-11-06T06:23:01.448Z",
   "languages": [
     "en",
     "fil",
@@ -25,9 +25,9 @@
   ],
   "coverage": {
     "en": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2088,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2100,
       "pluralCategories": [
         "one",
         "other"
@@ -2120,14 +2120,26 @@
         "canvasConnections.unlink",
         "canvasConnections.unlinkMessage",
         "canvasConnections.goTo",
-        "canvasConnections.retry"
+        "canvasConnections.retry",
+        "mascot.personalization",
+        "mascot.title",
+        "mascot.change",
+        "mascot.description",
+        "mascot.classicDescription",
+        "mascot.ongDescription",
+        "mascot.limited",
+        "mascot.free",
+        "mascot.selected",
+        "mascot.choose",
+        "mascot.current",
+        "mascot.freeRelease"
       ],
       "linguisticReview": "source"
     },
     "fil": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2088,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2100,
       "pluralCategories": [
         "one",
         "other"
@@ -2210,9 +2222,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "pt-BR": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2112,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2124,
       "pluralCategories": [
         "one",
         "many",
@@ -2243,9 +2255,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "es": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2112,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2124,
       "pluralCategories": [
         "one",
         "many",
@@ -2278,9 +2290,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "id": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2088,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2100,
       "pluralCategories": [
         "other"
       ],
@@ -2312,9 +2324,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "fr": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2112,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2124,
       "pluralCategories": [
         "one",
         "many",
@@ -2371,9 +2383,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "de": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2088,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2100,
       "pluralCategories": [
         "one",
         "other"
@@ -2416,9 +2428,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "ja": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2088,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2100,
       "pluralCategories": [
         "other"
       ],
@@ -2431,9 +2443,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "ko": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2088,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2100,
       "pluralCategories": [
         "other"
       ],
@@ -2451,9 +2463,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "it": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2112,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2124,
       "pluralCategories": [
         "one",
         "many",
@@ -2486,9 +2498,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "vi": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2088,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2100,
       "pluralCategories": [
         "other"
       ],
@@ -2509,9 +2521,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "hi": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2088,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2100,
       "pluralCategories": [
         "one",
         "other"
@@ -2529,9 +2541,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "tr": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2088,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2100,
       "pluralCategories": [
         "one",
         "other"
@@ -2553,9 +2565,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "ar": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2184,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2196,
       "pluralCategories": [
         "zero",
         "one",
@@ -2578,9 +2590,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "ta": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2088,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2100,
       "pluralCategories": [
         "one",
         "other"
@@ -2600,9 +2612,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "te": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2088,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2100,
       "pluralCategories": [
         "one",
         "other"
@@ -2622,9 +2634,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "bn": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2088,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2100,
       "pluralCategories": [
         "one",
         "other"
@@ -2644,9 +2656,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "mr": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2088,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2100,
       "pluralCategories": [
         "one",
         "other"
@@ -2666,9 +2678,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "kn": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2088,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2100,
       "pluralCategories": [
         "one",
         "other"
@@ -2688,9 +2700,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "ml": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2088,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2100,
       "pluralCategories": [
         "one",
         "other"
@@ -2710,9 +2722,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "gu": {
-      "canonicalKeys": 2088,
-      "translatedKeys": 2088,
-      "totalKeys": 2088,
+      "canonicalKeys": 2100,
+      "translatedKeys": 2100,
+      "totalKeys": 2100,
       "pluralCategories": [
         "one",
         "other"

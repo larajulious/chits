@@ -2086,5 +2086,17 @@
   "canvasConnections.unlink": "નોંધોનું જોડાણ દૂર કરો",
   "canvasConnections.unlinkMessage": "આ જોડાણ દૂર કરવું છે? બંને નોંધો તેમની જગ્યાએ રહેશે.",
   "canvasConnections.goTo": "{{title}} પર જાઓ",
-  "canvasConnections.retry": "જોડાણો ફરી લોડ કરો"
+  "canvasConnections.retry": "જોડાણો ફરી લોડ કરો",
+  "mascot.personalization": "વ્યક્તિગતકરણ",
+  "mascot.title": "તમારો Chits શુભંકર",
+  "mascot.change": "શુભંકર બદલો",
+  "mascot.description": "તમને સાથ આપતો નાનકડો મિત્ર પસંદ કરો.",
+  "mascot.classicDescription": "એ જ મૂળ નાનકડો મિત્ર.",
+  "mascot.ongDescription": "એ જ ચોંટતી ચિઠ્ઠીનો મિત્ર. થોડો વધુ અંદાજ.",
+  "mascot.limited": "મર્યાદિત આવૃત્તિ",
+  "mascot.free": "મફત",
+  "mascot.selected": "પસંદ કરેલ",
+  "mascot.choose": "શુભંકર પસંદ કરો",
+  "mascot.current": "તમારો મિત્ર: {{name}}",
+  "mascot.freeRelease": "આ આવૃત્તિમાં બંને શુભંકર મફત છે."
 }

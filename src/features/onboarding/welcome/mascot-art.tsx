@@ -11,6 +11,8 @@ import Svg, { Circle, Ellipse, G, Line, Path, Rect } from 'react-native-svg';
 export type ArtBox = { x: number; y: number; w: number; h: number };
 
 export const ART = {
+  ground: { x: 360, y: 1100, w: 580, h: 100 },
+  farArm: { x: 980, y: 480, w: 240, h: 260 },
   back: { x: 390, y: 480, w: 830, h: 700 },
   arm: { x: 95, y: 685, w: 215, h: 260 },
   body: { x: 180, y: 130, w: 870, h: 930 },
@@ -35,8 +37,12 @@ const Tilted = ({ children }: { children: ReactNode }) => <G transform={BODY_TRA
 
 type PartProps = { unit: number };
 
+export const GroundShadowPart = memo(function GroundShadowPart({ unit }: PartProps) {
+  return <Canvas box={ART.ground} unit={unit}><Ellipse cx="650" cy="1150" rx="260" ry="28" fill="#000" opacity={0.18} /></Canvas>;
+});
+
 /** The legs and far arm: behind the body, and they don't move. */
-export const BackPart = memo(function BackPart({ unit }: PartProps) {
+export const BackPart = memo(function BackPart({ unit, includeFarArm = true }: PartProps & { includeFarArm?: boolean }) {
   return <Canvas box={ART.back} unit={unit}>
     <G fill={INK} stroke={INK} strokeLinecap="round">
       <Line x1="530" y1="960" x2="495" y2="1080" stroke={WARM_EDGE} strokeWidth="92" />
@@ -48,13 +54,19 @@ export const BackPart = memo(function BackPart({ unit }: PartProps) {
       <Ellipse cx="822" cy="1074" rx="96" ry="64" transform="rotate(-8 822 1074)" fill={WARM_EDGE} stroke="none" />
       <Ellipse cx="822" cy="1074" rx="72" ry="40" transform="rotate(-8 822 1074)" />
     </G>
-    <G fill="none" stroke={INK} strokeLinecap="round" strokeWidth="46">
+    {includeFarArm ? <FarArmShape /> : null}
+  </Canvas>;
+});
+
+const FarArmShape = () => <G fill="none" stroke={INK} strokeLinecap="round" strokeWidth="46">
       <Path d="M1040 690 Q1105 660 1128 585" stroke={WARM_EDGE} strokeWidth="94" />
       <Path d="M1040 690 Q1105 660 1128 585" />
       <Circle cx="1140" cy="560" r="66" fill={WARM_EDGE} stroke="none" />
       <Circle cx="1140" cy="560" r="42" fill={INK} stroke="none" />
-    </G>
-  </Canvas>;
+    </G>;
+
+export const FarArmPart = memo(function FarArmPart({ unit }: PartProps) {
+  return <Canvas box={ART.farArm} unit={unit}><FarArmShape /></Canvas>;
 });
 
 const ArmShape = () => <G fill="none" stroke={INK} strokeLinecap="round" strokeWidth="46">

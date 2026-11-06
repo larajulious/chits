@@ -2086,5 +2086,17 @@
   "canvasConnections.unlink": "Unlink Notes",
   "canvasConnections.unlinkMessage": "Remove this connection? Both notes will stay in place.",
   "canvasConnections.goTo": "Go to {{title}}",
-  "canvasConnections.retry": "Retry loading connections"
+  "canvasConnections.retry": "Retry loading connections",
+  "mascot.personalization": "Personalization",
+  "mascot.title": "Your Chits Mascot",
+  "mascot.change": "Change Mascot",
+  "mascot.description": "Pick the little buddy that keeps you company.",
+  "mascot.classicDescription": "The original little buddy.",
+  "mascot.ongDescription": "Same sticky buddy. Extra attitude.",
+  "mascot.limited": "LIMITED EDITION",
+  "mascot.free": "Free",
+  "mascot.selected": "Selected",
+  "mascot.choose": "Choose mascot",
+  "mascot.current": "Your buddy: {{name}}",
+  "mascot.freeRelease": "Both mascots are free in this release."
 }

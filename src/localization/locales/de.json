@@ -2086,5 +2086,17 @@
   "canvasConnections.unlink": "Notizen trennen",
   "canvasConnections.unlinkMessage": "Diese Verknüpfung entfernen? Beide Notizen bleiben an ihrem Platz.",
   "canvasConnections.goTo": "Zu {{title}} gehen",
-  "canvasConnections.retry": "Verknüpfungen erneut laden"
+  "canvasConnections.retry": "Verknüpfungen erneut laden",
+  "mascot.personalization": "Personalisierung",
+  "mascot.title": "Dein Chits-Maskottchen",
+  "mascot.change": "Maskottchen ändern",
+  "mascot.description": "Wähle den kleinen Freund, der dir Gesellschaft leistet.",
+  "mascot.classicDescription": "Der kleine Freund im Original.",
+  "mascot.ongDescription": "Derselbe Haftnotiz-Freund. Mit mehr Charakter.",
+  "mascot.limited": "LIMITIERTE EDITION",
+  "mascot.free": "Kostenlos",
+  "mascot.selected": "Ausgewählt",
+  "mascot.choose": "Maskottchen wählen",
+  "mascot.current": "Dein Freund: {{name}}",
+  "mascot.freeRelease": "Beide Maskottchen sind in dieser Version kostenlos."
 }

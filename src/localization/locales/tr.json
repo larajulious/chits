@@ -2086,5 +2086,17 @@
   "canvasConnections.unlink": "Notların Bağlantısını Kaldır",
   "canvasConnections.unlinkMessage": "Bu bağlantı kaldırılsın mı? Her iki not da yerinde kalacak.",
   "canvasConnections.goTo": "{{title}} konumuna git",
-  "canvasConnections.retry": "Bağlantıları yüklemeyi tekrar dene"
+  "canvasConnections.retry": "Bağlantıları yüklemeyi tekrar dene",
+  "mascot.personalization": "Kişiselleştirme",
+  "mascot.title": "Chits Maskotunuz",
+  "mascot.change": "Maskotu Değiştir",
+  "mascot.description": "Size eşlik edecek küçük dostunuzu seçin.",
+  "mascot.classicDescription": "İlk küçük dostunuz.",
+  "mascot.ongDescription": "Aynı yapışkan not dostu. Daha fazla tarz.",
+  "mascot.limited": "SINIRLI SÜRÜM",
+  "mascot.free": "Ücretsiz",
+  "mascot.selected": "Seçili",
+  "mascot.choose": "Maskot seç",
+  "mascot.current": "Dostunuz: {{name}}",
+  "mascot.freeRelease": "Bu sürümde iki maskot da ücretsizdir."
 }

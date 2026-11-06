@@ -20,9 +20,9 @@ const POSE_PROPS: Partial<Record<MascotPoseName, IconName>> = { paperclip: 'atta
 function MascotPose({ pose, width }: { pose: MascotPoseName; width: number }) {
   const { tokens, styleColors } = useTheme();
   const prop = POSE_PROPS[pose];
-  return <View accessible={false} importantForAccessibility="no-hide-descendants" style={{ width, alignItems: 'center' }}>
+  return <View accessible={false} style={{ width, alignItems: 'center' }}>
     <View style={styles.mascotTilt}>
-      <OnboardingMascot size={width} accessible={false} />
+      <OnboardingMascot size={width} interactive />
       {prop ? <View style={[styles.poseProp, { backgroundColor: styleColors.controlFill, borderColor: styleColors.outline }]}><Icon name={prop} size={26} color={tokens.textPrimary} /></View> : null}
     </View>
     {/* A soft contact shadow so the mascot stands on the page. */}
@@ -35,13 +35,13 @@ function MascotPose({ pose, width }: { pose: MascotPoseName; width: number }) {
  * action. Sticky (mascotEmptyStates): the mascot in `pose` above them, in
  * the display face, with a large accent button.
  */
-export function EmptyState({ title, description, action, pose = 'standard', style, guide = false }: { title: string; description: string; action?: { label: string; onPress: () => void }; pose?: MascotPoseName; style?: StyleProp<ViewStyle>; /** Chits, still, in any style: for the empty states people meet first. */ guide?: boolean }) {
+export function EmptyState({ title, description, action, pose = 'standard', style, guide = false }: { title: string; description: string; action?: { label: string; onPress: () => void }; pose?: MascotPoseName; style?: StyleProp<ViewStyle>; /** Chits at rest until tapped, in any style. */ guide?: boolean }) {
   const { tokens, styleTokens: t, styleColors } = useTheme();
   const e = t.emptyState;
   const reduced = useReducedMotion();
   const mascot = t.mascotEmptyStates;
   return <View style={[styles.emptyState, action && styles.withAction, style]}>
-    {guide ? <Animated.View entering={reduced ? undefined : FadeIn.duration(320)} style={styles.guide}><OnboardingMascot size={GUIDE_SIZE} accessible={false} still /></Animated.View> : mascot ? <MascotPose pose={pose} width={e.mascotWidth} /> : null}
+    {guide ? <Animated.View entering={reduced ? undefined : FadeIn.duration(320)} style={styles.guide}><OnboardingMascot size={GUIDE_SIZE} interactive enableIdleAnimation={false} /></Animated.View> : mascot ? <MascotPose pose={pose} width={e.mascotWidth} /> : null}
     <AppText accessibilityRole={mascot ? 'header' : undefined} variant="display" weight="600" style={[styles.title, { fontSize: e.titleSize, color: tokens.textPrimary }, e.maxWidth ? { maxWidth: e.maxWidth } : null]}>{title}</AppText>
     <AppText variant="paragraph" style={[styles.description, { fontSize: e.bodySize, lineHeight: e.bodyLineHeight, color: mascot ? styleColors.textSecondary : tokens.textSecondary }, e.maxWidth ? { maxWidth: e.maxWidth } : null, action && styles.descriptionAboveAction]}>{description}</AppText>
     {action ? <Button label={action.label} onPress={action.onPress} size="large" /> : null}

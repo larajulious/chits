@@ -2110,5 +2110,17 @@
   "canvasConnections.unlink": "Desconectar notas",
   "canvasConnections.unlinkMessage": "¿Eliminar esta conexión? Ambas notas permanecerán en su sitio.",
   "canvasConnections.goTo": "Ir a {{title}}",
-  "canvasConnections.retry": "Volver a cargar las conexiones"
+  "canvasConnections.retry": "Volver a cargar las conexiones",
+  "mascot.personalization": "Personalización",
+  "mascot.title": "Tu mascota Chits",
+  "mascot.change": "Cambiar mascota",
+  "mascot.description": "Elige al amiguito que te hace compañía.",
+  "mascot.classicDescription": "El amiguito original.",
+  "mascot.ongDescription": "El mismo amigo adhesivo. Con más actitud.",
+  "mascot.limited": "EDICIÓN LIMITADA",
+  "mascot.free": "Gratis",
+  "mascot.selected": "Seleccionada",
+  "mascot.choose": "Elegir mascota",
+  "mascot.current": "Tu amigo: {{name}}",
+  "mascot.freeRelease": "Ambas mascotas son gratis en esta versión."
 }

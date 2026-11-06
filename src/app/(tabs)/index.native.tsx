@@ -462,6 +462,7 @@ export default function BoardsScreen() {
   const openCardActions = useCallback(async (item: CardListItem) => {
     // "Stick to Fridge" / "Remove from Fridge", looked up as the menu opens.
     const space = await spaceNoteAction(database, item.kind, item.id).catch(() => null);
+    const canvasOption = [{ label: 'Pin to Canvas', icon: 'easel-outline' as const, onPress: () => router.push({ pathname: '/canvas-pin' as const, params: { noteId: item.id, kind: item.kind } }) }];
     const spaceOption = space ? [{ label: space.label, icon: space.icon, onPress: () => void space.run().then(setCardToast, () => setCardToast(tr("chat.thatCouldnTBeSavedPleaseTryAgain"))) }] : [];
     if (item.kind === 'thought') {
       actionSheet({
@@ -473,6 +474,7 @@ export default function BoardsScreen() {
           ...(item.hidden ? [] : [{ label: tr("index.shareNote"), icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ messageId: item.id })) }]),
           { label: item.pinned ? tr("index.unpin") : tr("index.pin"), icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void messageRepository.setPinned(item.id, !item.pinned).then(() => loadCards()).catch(() => setCardToast(tr("chat.thatCouldnTBeSavedPleaseTryAgain"))) },
           ...spaceOption,
+          ...canvasOption,
           {
             label: tr("index.archiveThought"), icon: 'archive-outline', onPress: () => confirm({
               type: 'default', icon: 'archive-outline', title: tr("index.archiveThought2"),
@@ -500,6 +502,7 @@ export default function BoardsScreen() {
         ...(item.hidden ? [] : [{ label: tr("index.shareNote"), icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ cardId: item.id })) }]),
         { label: item.pinned ? tr("index.unpin") : tr("index.pin"), icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void boardRepository.setPinned('card', item.id, !item.pinned).then(() => loadCards()).catch(() => setCardToast(tr("chat.thatCouldnTBeSavedPleaseTryAgain"))) },
         ...spaceOption,
+          ...canvasOption,
         { label: tr("index.moveBackToUnorganized"), icon: 'arrow-undo-outline', onPress: () => void moveCardBackToUnorganized(item) },
         {
           label: tr("index.archiveCard"), icon: 'archive-outline', onPress: () => confirm({

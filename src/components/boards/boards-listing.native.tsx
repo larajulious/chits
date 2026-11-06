@@ -65,6 +65,8 @@ export function BoardsListing({ boards, unorganizedCount, onBoard, onUnorganized
       removeClippedSubviews={false}
       ListHeaderComponent={<>
         <BoardsMascotHero
+          changedAt={boards.reduce((latest, board) => Math.max(latest, board.updatedAt), 0)}
+          revision={boards.map(board => `${board.id}:${board.updatedAt}`).sort().join(';')}
           width={width}
           paper={boardSurfaces.paper}
           scrollY={scrollY}

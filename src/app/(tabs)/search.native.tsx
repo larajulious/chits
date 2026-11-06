@@ -1,3 +1,4 @@
+import { whiteboards } from '@/features/whiteboard/repository';
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -6,7 +7,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
 import { AppHeader, AppText, EmptyState, Icon, IconButton, Screen, HeaderIcon, MenuIcon } from '@/components/ui/primitives';
-import { PAPERS, PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PaperCard, PaperDesk, PaperTab, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { PAPERS, PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW, PaperCard, PaperDesk, PaperTab, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { stableTilt } from '@/constants/style-tokens';
 import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { SearchField } from '@/components/ui/search-field';
@@ -16,7 +17,7 @@ import { createBoardRepository } from '@/db/repositories';
 import { useOpenCardNote } from '@/components/notes/use-open-card-note';
 import { useScreenReader } from '@/hooks/use-screen-reader';
 
-type Result = { id: string; title: string; context: string; kind: 'message' | 'card' | 'board' | 'file' };
+type Result = { id: string; title: string; context: string; kind: 'message' | 'card' | 'board' | 'file' | 'canvas' };
 
 export default function SearchScreen() {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
@@ -53,12 +54,13 @@ function SearchContent({ scopedBoardId, boardName }: { scopedBoardId?: string; b
     if (!trimmed) { setResults([]); setSearching(false); return; }
     setSearching(true);
     try {
-      const matches = await repository.search(trimmed, showArchived, scopedBoardId);
+      const [notes, canvases] = await Promise.all([repository.search(trimmed, showArchived, scopedBoardId), scopedBoardId ? Promise.resolve([]) : whiteboards(database).list()]);
+      const matches: Result[] = [...notes, ...canvases.filter(d => (showArchived || !d.archived) && d.title.toLowerCase().includes(trimmed.toLowerCase())).map(d => ({ id: d.id, title: d.title || 'Untitled Canvas', context: 'Canvas', kind: 'canvas' as const }))];
       if (currentRequest === requestId.current) setResults(matches);
     } finally {
       if (currentRequest === requestId.current) setSearching(false);
     }
-  }, [archived, repository, scopedBoardId]);
+  }, [archived, repository, scopedBoardId, database]);
 
   const queueSearch = useCallback((value: string) => {
     if (timer.current) clearTimeout(timer.current);
@@ -67,7 +69,7 @@ function SearchContent({ scopedBoardId, boardName }: { scopedBoardId?: string; b
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); ++requestId.current; }, []);
 
-  const open = (result: Result) => result.kind === 'card' ? void openCardNote(result.id) : router.push(result.kind === 'board' ? `/board/${result.id}` : result.kind === 'message' || result.kind === 'file' ? `/chat?messageId=${result.id}` : '/search');
+  const open = (result: Result) => result.kind === 'canvas' ? router.push({ pathname: '/canvas', params: { id: result.id } }) : result.kind === 'card' ? void openCardNote(result.id) : router.push(result.kind === 'board' ? `/board/${result.id}` : result.kind === 'message' || result.kind === 'file' ? `/chat?messageId=${result.id}` : '/search');
   // Boards aren't notes, so they have no spot on the board to go to.
   const showOnBoard = async (result: Result) => {
     const focusNote = result.kind === 'card' ? `card:${result.id}` : await repository.noteKeyForMessage(result.id);
@@ -107,7 +109,7 @@ function SearchContent({ scopedBoardId, boardName }: { scopedBoardId?: string; b
         <AppText weight="700" style={styles.kind}>{result.kind}</AppText>
         <AppText numberOfLines={2} style={[handwriting.handBold, styles.title]}>{result.title}</AppText>
         <AppText numberOfLines={2} style={styles.context}>{result.context}</AppText>
-        {result.kind !== 'board' && !listOnly ? <Pressable accessibilityRole="button" accessibilityLabel={tr('search.showOnBoard')} hitSlop={8} onPress={() => void showOnBoard(result)} style={({ pressed }) => [styles.locate, pressed && styles.locatePressed]}>
+        {result.kind !== 'board' && result.kind !== 'canvas' && !listOnly ? <Pressable accessibilityRole="button" accessibilityLabel={tr('search.showOnBoard')} hitSlop={8} onPress={() => void showOnBoard(result)} style={({ pressed }) => [styles.locate, pressed && styles.locatePressed]}>
           <Icon name="locate-outline" size={19} color={PAPER_INK_MUTED} />
           <AppText weight="600" style={styles.locateText}>{tr('search.showOnBoard')}</AppText>
         </Pressable> : null}
@@ -118,7 +120,7 @@ function SearchContent({ scopedBoardId, boardName }: { scopedBoardId?: string; b
 }
 
 // Each kind of result on its own paper: thoughts cream, cards lavender, boards yellow, files mint.
-const RESULT_PAPER: Record<Result['kind'], string> = { message: PAPER_WHITE, card: PAPERS[5], board: PAPERS[0], file: PAPERS[2] };
+const RESULT_PAPER: Record<Result['kind'], string> = { canvas: PAPER_YELLOW, message: PAPER_WHITE, card: PAPERS[5], board: PAPERS[0], file: PAPERS[2] };
 const styles = StyleSheet.create({
   searchWrap: { marginHorizontal: spacing.md, marginTop: spacing.sm, marginBottom: spacing.xs },
   filter: { alignItems: 'flex-start', marginLeft: spacing.md, marginTop: 4, marginBottom: 4 },

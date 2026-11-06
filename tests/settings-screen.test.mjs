@@ -114,13 +114,13 @@ test('a board with no color of its own is tinted from the accent, not its dark t
   assert.match(read('src/components/boards/board-list-item.native.tsx'), /board\.accent \?\? tokens\.accent;/);
 });
 
-test('empty states use the agreed copy and a still Chits, compact in columns', () => {
+test('empty states use the agreed copy and quiet Chits until tapped, compact in columns', () => {
   assert.match(read('src/components/notes/notes-listing.native.tsx'), /workspace\.quietTitle/);
   assert.match(read('src/components/boards/boards-listing.native.tsx'), /workspace\.noBoardsTitle/);
   const board = read('src/app/board/[id].native.tsx');
   assert.match(board, /boardEmpty \? <OnboardingMascot still size=\{76\}/, 'one Chits for an empty board, none per column');
   assert.match(board, /columns\.every\(\(column\) => columnCardCount\(column, 0\) === 0\)/, 'an unloaded column cannot make a full board look empty');
-  assert.match(read('src/components/ui/empty-state.tsx'), /still \/>/);
+  assert.match(read('src/components/ui/empty-state.tsx'), /interactive enableIdleAnimation=\{false\}/);
 });
 
 

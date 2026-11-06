@@ -2182,5 +2182,17 @@
   "canvasConnections.unlink": "إلغاء ربط الملاحظات",
   "canvasConnections.unlinkMessage": "إزالة هذا الرابط؟ ستبقى الملاحظتان في مكانيهما.",
   "canvasConnections.goTo": "الانتقال إلى {{title}}",
-  "canvasConnections.retry": "إعادة محاولة تحميل الروابط"
+  "canvasConnections.retry": "إعادة محاولة تحميل الروابط",
+  "mascot.personalization": "التخصيص",
+  "mascot.title": "تميمة Chits الخاصة بك",
+  "mascot.change": "تغيير التميمة",
+  "mascot.description": "اختر الصديق الصغير الذي يؤنسك.",
+  "mascot.classicDescription": "الصديق الصغير الأصلي.",
+  "mascot.ongDescription": "صديق الملاحظات اللاصقة نفسه. بشخصية أكثر جرأة.",
+  "mascot.limited": "إصدار محدود",
+  "mascot.free": "مجاني",
+  "mascot.selected": "محددة",
+  "mascot.choose": "اختر التميمة",
+  "mascot.current": "صديقك: {{name}}",
+  "mascot.freeRelease": "كلتا التميمتين مجانيتان في هذا الإصدار."
 }

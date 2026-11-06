@@ -40,7 +40,7 @@ export function FocusStage({ phase, outcome, companion, entrance, finished, foot
   const reduced = useReducedMotion();
   // Decided on arrival: a session starting mid-wave doesn't change how Chits came in.
   const [arrival] = useState(entrance);
-  const rig = useMascotRig(1, { entrance: arrival, compact: true, ...focusPose(phase) });
+  const rig = useMascotRig(1, { context: 'focus', entrance: arrival, idle: companion, compact: true, ...focusPose(phase) });
   const { celebrate, tap } = rig;
   const calm = useSharedValue(phase === 'running' ? 1 : 0);
   useEffect(() => {

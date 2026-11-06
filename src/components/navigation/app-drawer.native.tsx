@@ -49,15 +49,16 @@ type ContextItem = {
   accessibilityContext: string | null;
 };
 type IconName = ComponentProps<typeof Ionicons>['name'];
-type Destination = { label: string; path: '/' | '/spaces/pick' | '/attachments' | '/calendar' | '/archive' | '/settings' | '/onboarding' | '/revisit' | '/focus' | '/spin'; icon: IconName };
+type Destination = { label: string; path: '/' | '/spaces/pick' | '/attachments' | '/calendar' | '/archive' | '/settings' | '/onboarding' | '/revisit' | '/focus' | '/spin' | '/canvases'; icon: IconName };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
 // Main destinations live in the side panel; Chat remains a floating button.
 const spacesDestination: Destination = { get label() { return tr("pick.spaces"); }, path: '/spaces/pick', icon: 'magnet-outline' };
 const notesDestination: Destination = { get label() { return tr('index.notes'); }, path: '/', icon: 'reader-outline' };
+const canvasDestination: Destination = { label: 'Canvas', path: '/canvases', icon: 'easel-outline' };
 const calendarDestination: Destination = { get label() { return tr("appdrawer.calendar"); }, path: '/calendar', icon: 'calendar-outline' };
-const focusDestination: Destination = { get label() { return tr('focus.title'); }, path: '/focus', icon: 'timer-outline' };
-const spinDestination: Destination = { get label() { return tr('spin.title'); }, path: '/spin', icon: 'shuffle-outline' };
+const focusDestination: Destination = { get label() { return tr('focus.title').replace(/^Chits\s+/u, ''); }, path: '/focus', icon: 'timer-outline' };
+const spinDestination: Destination = { get label() { return tr('spin.title').replace(/^Chits\s+/u, ''); }, path: '/spin', icon: 'shuffle-outline' };
 const attachmentsDestination: Destination = { get label() { return tr('attachments.attachments'); }, path: '/attachments', icon: 'attach-outline' };
 const archiveDestination: Destination = { get label() { return tr("archive.archive"); }, path: '/archive', icon: 'archive-outline' };
 const revisitDestination: Destination = { get label() { return tr("revisit.revisit"); }, path: '/revisit', icon: 'refresh-outline' };
@@ -367,6 +368,7 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
       <View style={[styles.sheet, { backgroundColor: surfaces.paper }]}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerContent}>
           <NavigationRow destination={notesDestination} pathname={pathname} close={close} />
+          <NavigationRow destination={canvasDestination} pathname={pathname} close={close} />
           <NavigationRow destination={spacesDestination} pathname={pathname} close={close} badge={stuckCount} />
           <NavigationRow destination={calendarDestination} pathname={pathname} close={close} badge={incomingReminderCount} badgeNoun="reminder" />
           <NavigationRow destination={focusDestination} pathname={pathname} close={close} />

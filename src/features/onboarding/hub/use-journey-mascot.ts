@@ -19,7 +19,7 @@ export function useJourneyMascot(done: readonly ChecklistItem[], loaded: boolean
   const database = useSQLiteContext();
   const [entrance] = useState(() => !peekedThisLaunch);
   useEffect(() => { peekedThisLaunch = true; }, []);
-  const rig = useMascotRig(JOURNEY_LINES.length, { entrance, cheerful: done.length === CHECKLIST_ITEMS.length });
+  const rig = useMascotRig(JOURNEY_LINES.length, { context: 'getting-started', entrance, cheerful: done.length === CHECKLIST_ITEMS.length });
   const { say } = rig;
   const celebrated = useRef<number | null | undefined>(undefined);
 

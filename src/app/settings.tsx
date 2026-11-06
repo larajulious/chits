@@ -24,6 +24,7 @@ import { ActivityIndicator, KeyboardAvoidingView, Modal, Pressable, ScrollView, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { createSpinRepository } from '@/db/spin-repository';
 import { ORGANIZATION_ENABLED_KEY } from '@/services/chits-organization';
+import { MascotSettings } from '@/components/settings/mascot-settings';
 
 type Sheet = 'appearance' | 'language' | 'style' | 'accent' | null;
 const appearanceNames = { get system() { return tr('settings.systemDefault'); }, get light() { return tr('settings.light'); }, get dark() { return tr('settings.dark'); } };
@@ -120,6 +121,7 @@ export default function SettingsScreen() {
         <SettingsRow icon="time-outline" label={tr('focus.history')} onPress={() => router.push('/focus-history')} />
         <SettingsRow icon="refresh" label={tr('onboarding.hub.replay')} description={tr('onboarding.hub.replay.detail')} disabled={busy} onPress={() => void replayTour()} />
       </SettingsSection>
+      <MascotSettings />
       <SettingsSection title={tr('settings.appearance')}>
         <AppearancePreview paused={sheet !== null} />
         <SettingsRow icon="color-palette-outline" label={tr('appearancetheme.theme')} value={CHITS_THEMES[identity].name} onPress={() => router.push('/appearance-theme')} />

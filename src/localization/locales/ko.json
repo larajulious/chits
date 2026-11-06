@@ -2086,5 +2086,17 @@
   "canvasConnections.unlink": "노트 연결 해제",
   "canvasConnections.unlinkMessage": "이 연결을 삭제할까요? 두 노트는 그대로 유지됩니다.",
   "canvasConnections.goTo": "{{title}}로 이동",
-  "canvasConnections.retry": "연결 불러오기 재시도"
+  "canvasConnections.retry": "연결 불러오기 재시도",
+  "mascot.personalization": "개인 설정",
+  "mascot.title": "나의 Chits 마스코트",
+  "mascot.change": "마스코트 변경",
+  "mascot.description": "곁을 지켜 줄 작은 친구를 골라 보세요.",
+  "mascot.classicDescription": "처음부터 함께한 작은 친구.",
+  "mascot.ongDescription": "같은 메모지 친구. 개성은 더 강하게.",
+  "mascot.limited": "한정판",
+  "mascot.free": "무료",
+  "mascot.selected": "선택됨",
+  "mascot.choose": "마스코트 선택",
+  "mascot.current": "나의 친구: {{name}}",
+  "mascot.freeRelease": "이번 버전에서는 두 마스코트 모두 무료입니다."
 }

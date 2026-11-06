@@ -1,6 +1,6 @@
 import { type ComponentProps, type PropsWithChildren } from 'react';
 import { StyleSheet } from 'react-native';
-import { Image } from 'expo-image';
+import { ChitsMascot } from '@/components/mascot/chits-mascot';
 import Animated, { FadeIn, LinearTransition, useReducedMotion } from 'react-native-reanimated';
 import { useTheme } from '@/components/theme-provider';
 import { AppText } from '@/components/ui/app-text';
@@ -27,7 +27,7 @@ export function FocusCompanion({ message, small = false }: { message?: string; s
   // The approved mascot, rendered as a still image: no competing character,
   // animation loop, WebView, new pose or color changes during concentration.
   return <Animated.View entering={reduced ? undefined : FadeIn.duration(180)} style={[styles.companion, rowStyle]}>
-    <Image accessible={false} source={require('@/assets/images/chits-mascot-animated.svg')} contentFit="contain" style={{ width: small ? 32 : 64, height: small ? 32 : 64 }} />
+    <ChitsMascot still size={small ? 32 : 64} accessible={false} />
     {message ? <AppText style={[styles.message, { color: tokens.textSecondary }]}>{message}</AppText> : null}
   </Animated.View>;
 }

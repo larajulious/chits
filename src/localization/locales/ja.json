@@ -2086,5 +2086,17 @@
   "canvasConnections.unlink": "ノートの接続を解除",
   "canvasConnections.unlinkMessage": "この接続を削除しますか？両方のノートはそのまま残ります。",
   "canvasConnections.goTo": "{{title}} に移動",
-  "canvasConnections.retry": "接続の読み込みを再試行"
+  "canvasConnections.retry": "接続の読み込みを再試行",
+  "mascot.personalization": "パーソナライズ",
+  "mascot.title": "あなたのChitsマスコット",
+  "mascot.change": "マスコットを変更",
+  "mascot.description": "いつもそばにいる小さな相棒を選びましょう。",
+  "mascot.classicDescription": "おなじみの小さな相棒。",
+  "mascot.ongDescription": "いつもの付箋の相棒。ちょっぴりワイルドに。",
+  "mascot.limited": "限定版",
+  "mascot.free": "無料",
+  "mascot.selected": "選択中",
+  "mascot.choose": "マスコットを選ぶ",
+  "mascot.current": "あなたの相棒：{{name}}",
+  "mascot.freeRelease": "このバージョンでは、どちらのマスコットも無料です。"
 }

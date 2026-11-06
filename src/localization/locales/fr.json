@@ -2110,5 +2110,17 @@
   "canvasConnections.unlink": "Dissocier les notes",
   "canvasConnections.unlinkMessage": "Supprimer ce lien ? Les deux notes resteront en place.",
   "canvasConnections.goTo": "Aller à {{title}}",
-  "canvasConnections.retry": "Réessayer de charger les liens"
+  "canvasConnections.retry": "Réessayer de charger les liens",
+  "mascot.personalization": "Personnalisation",
+  "mascot.title": "Votre mascotte Chits",
+  "mascot.change": "Changer de mascotte",
+  "mascot.description": "Choisissez le petit compagnon qui vous accompagne.",
+  "mascot.classicDescription": "Le petit compagnon original.",
+  "mascot.ongDescription": "Le même ami adhésif. Avec plus de caractère.",
+  "mascot.limited": "ÉDITION LIMITÉE",
+  "mascot.free": "Gratuit",
+  "mascot.selected": "Sélectionnée",
+  "mascot.choose": "Choisir la mascotte",
+  "mascot.current": "Votre compagnon : {{name}}",
+  "mascot.freeRelease": "Les deux mascottes sont gratuites dans cette version."
 }
