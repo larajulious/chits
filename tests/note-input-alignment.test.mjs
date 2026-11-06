@@ -21,7 +21,7 @@ const attributes = { textAlignVertical: true, style: { textAlignVertical: true, 
 const source = readFileSync(new URL('../src/components/notes/note-blocks-editor.tsx', import.meta.url), 'utf8');
 const component = 'export ' + source.slice(source.indexOf('function BlockInput('), source.indexOf('const styles = StyleSheet.create'));
 const code = ts.transpileModule(component, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-function render(style, extra, requestedSelection, keyboardSuppressed = false) {
+function render(style, extra, requestedSelection, keyboardSuppressed = false, props = {}) {
   const context = {
     nativeNoteFormattingAvailable: false, syncNativeNoteFormatting: () => {}, detachNativeNoteFormatting: () => {}, useLayoutEffect: () => {},
     exports: {}, noteHeadingStyle: () => undefined, noteTextSpans: block => block.text, contentTextStyle, languageDirection, useLocale: () => 'en', tr, require: () => ({ jsx: (type, props) => ({ type, props }) }),
@@ -29,7 +29,7 @@ function render(style, extra, requestedSelection, keyboardSuppressed = false) {
     useCallback: callback => callback, useEffect: () => {}, TextInput: 'TextInput', Text: 'Text',
   };
   vm.runInNewContext(code, context);
-  return context.exports.BlockInput({ block: { key: 'active', type: 'text', text: '' }, style, extra, requestedSelection, keyboardSuppressed }).props;
+  return context.exports.BlockInput({ block: { key: 'active', type: 'text', text: '' }, style, extra, requestedSelection, keyboardSuppressed, ...props }).props;
 }
 const rich = { padding: 0, minHeight: 26, textAlignVertical: 'top' };
 const plain = { flex: 1, padding: 16 };
@@ -39,6 +39,15 @@ test('explicit range restoration reaches TextInput and releases native cursor ow
   assert.equal(render(plain).selection, undefined);
   assert.equal(render(plain).value, undefined);
   assert.equal(render(plain).children.props.children, '');
+});
+test('structural Return stays out of the uncontrolled native text, and plain rows keep their newline', () => {
+  const returned = [];
+  const input = render(plain, undefined, undefined, false, { structuralReturn: true, onReturnBlock: key => returned.push(key) });
+  assert.equal(input.submitBehavior, 'submit');
+  input.onSubmitEditing();
+  assert.deepEqual(returned, ['active']);
+  assert.equal(render(plain).submitBehavior, undefined);
+  assert.equal(render(plain).onSubmitEditing, undefined);
 });
 function nativeAlignmentAfter(before, after) {
   const initial = native.exports.create(before, attributes);

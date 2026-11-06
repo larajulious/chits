@@ -21,10 +21,11 @@ for (const kind of ['bullet', 'numbered', 'checklist']) {
     const inserted = toggleNoteList([plain('active')], at('active'), kind);
     assert.equal(inserted.blocks[0].list.kind, kind);
   });
-  test(`${kind}: another deliberate empty item is preserved until explicitly exited`, () => {
+  test(`${kind}: Backspace on an empty item leaves the other deliberate empty item listed`, () => {
     const result = backspaceNoteBlock([item('other'), item('active')], at('active'));
     assert.equal(result.blocks[0].list.kind, kind);
-    assert.equal(result.blocks.length, 2);
+    assert.equal(result.blocks.length, 1);
+    assert.equal(result.blocks[0].key, 'active', 'focused input survives the removal');
   });
 }
 

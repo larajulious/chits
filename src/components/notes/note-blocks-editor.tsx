@@ -6,7 +6,7 @@ import { contentTextStyle, firstStrongDirection, languageDirection, needsSystemF
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode, type Ref, type RefObject } from 'react';
-import { ActivityIndicator, BackHandler, Keyboard, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
+import { ActivityIndicator, BackHandler, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ImagePlusGlyph from 'lucide-react-native/icons/image-plus';
@@ -15,7 +15,7 @@ import ListOrderedGlyph from 'lucide-react-native/icons/list-ordered';
 import SquareCheckGlyph from 'lucide-react-native/icons/square-check-big';
 import { NoteCheckbox } from './note-checkbox';
 import { createNoteEditHistory } from '@/services/note-edit-history';
-import { backspaceNoteBlock, editNoteListItem, toggleNoteList, toggleNoteChecklist } from '@/services/note-lists';
+import { backspaceNoteBlock, editNoteListItem, noteRevealOffset, toggleNoteList, toggleNoteChecklist } from '@/services/note-lists';
 
 import { bindNativeImagePaste, subscribeNativeImagePaste, subscribeNativeBoundaryBackspace } from '@/services/native-image-paste';
 import { nativeNoteFormattingAvailable, syncNativeNoteFormatting, detachNativeNoteFormatting, showNativeNoteKeyboard, cancelNativeNoteKeyboard, hideNativeNoteKeyboard } from '@/services/native-note-formatting';
@@ -233,12 +233,19 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
   const pendingFocus = useRef<NoteCursor>(null);
   const pendingScroll = useRef<string | null>(null);
   const [focusRequest, setFocusRequest] = useState(0);
-  const [focusTarget, setFocusTarget] = useState<NoteCursor>(null);
+  const [focusTarget, setFocusTargetState] = useState<NoteCursor>(null);
+  // Native selection events can arrive before React re-renders a release, so
+  // they read the live request rather than a value captured by a render.
+  const liveFocusTarget = useRef<NoteCursor>(null);
+  const setFocusTarget = useCallback((cursor: NoteCursor) => { liveFocusTarget.current = cursor; setFocusTargetState(cursor); }, []);
   const [keyboardSuppressed, setKeyboardSuppressed] = useState(false);
   const keyboardSuppressedRef = useRef(false);
   const formattingCursor = useRef<NoteCursor>(null);
   const scroll = useRef<ScrollView>(null);
-  const positions = useRef(new Map<string, number>());
+  const positions = useRef(new Map<string, { y: number; height: number }>());
+  const blocksTop = useRef(0);
+  const scrollOffset = useRef(0);
+  const viewportHeight = useRef(0);
   const [width, setWidth] = useState(0);
   const richLayout = blocks.length > 1 || blocks.some(block => block.type === 'image' || block.list || block.heading);
   const fillPlainViewport = fillViewport && !richLayout;
@@ -272,7 +279,7 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
     setFocusTarget(cursor);
     pendingScroll.current = revealBlock ? cursor?.key ?? null : null;
     setFocusRequest((value) => value + 1);
-  }, []);
+  }, [setFocusTarget]);
   const currentCursor = useCallback((): NoteCursor => {
     if (formattingCursor.current) return formattingCursor.current;
     const block = liveBlocks.current.find((item) => item.type === 'text' && item.key === lastFocused.current)
@@ -301,7 +308,7 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
     pendingFocus.current = null;
     pendingScroll.current = null;
     setFocusTarget(null);
-  }, []);
+  }, [setFocusTarget]);
   const resumeKeyboard = useCallback(() => {
     const held = formattingCursor.current;
     suppressKeyboard(false);
@@ -437,18 +444,21 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
     scroll.current?.scrollTo({ x: 0, y: 0, animated: false });
   }, []);
   useLayoutEffect(() => { if (emptyDocument) resetEmptyScroll(); }, [emptyDocument, resetEmptyScroll]);
+  // A row with no layout yet is new: its onLayout finishes the pending reveal.
+  const revealRow = useCallback((key: string) => {
+    const row = positions.current.get(key);
+    if (!row) return;
+    pendingScroll.current = null;
+    const y = noteRevealOffset({ top: blocksTop.current + row.y, height: row.height, offset: scrollOffset.current, viewport: viewportHeight.current, margin: spacing.md });
+    if (y !== null) scroll.current?.scrollTo({ y, animated: true });
+  }, []);
   useEffect(() => {
     const key = pendingScroll.current;
     if (!key) return;
     // Wait for row layout only to scroll. Never defer cursor restoration here.
-    const frame = requestAnimationFrame(() => {
-      if (pendingScroll.current !== key) return;
-      pendingScroll.current = null;
-      const y = positions.current.get(key);
-      if (y !== undefined) scroll.current?.scrollTo({ y: Math.max(0, y - spacing.md), animated: true });
-    });
+    const frame = requestAnimationFrame(() => { if (pendingScroll.current === key) revealRow(key); });
     return () => cancelAnimationFrame(frame);
-  }, [blocks, focusRequest]);
+  }, [blocks, focusRequest, revealRow]);
 
   const register = useCallback((key: string, input: TextInput | null) => { if (input) inputs.current.set(key, input); else inputs.current.delete(key); }, []);
   const focused = useCallback((key: string) => {
@@ -472,14 +482,15 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
     if (held && (key !== held.key || selection.start !== held.start || selection.end !== held.end)) return;
     // Structural splits can emit one final selection from the previous input.
     // Only the focused input can change the active typing marks.
-    const requested = pendingFocus.current ?? focusTarget;
+    const requested = pendingFocus.current ?? liveFocusTarget.current;
     if (requested && (key !== requested.key || selection.start !== requested.start || selection.end !== requested.end)) return;
     selections.current.set(key, selection);
     if (key !== lastFocused.current) return;
-    setFocusTarget(target => target?.key === key && target.start === selection.start && target.end === selection.end ? null : target);
+    const target = liveFocusTarget.current;
+    if (target?.key === key && target.start === selection.start && target.end === selection.end) setFocusTarget(null);
     if (pendingMarks.current && (pendingMarks.current.key !== key || selection.start !== pendingMarks.current.at || selection.end !== selection.start)) pendingMarks.current = null;
     notifyFormat(key);
-  }, [focusTarget, notifyFormat]);
+  }, [notifyFormat, setFocusTarget]);
   const changed = useCallback((key: string, value: string) => {
     formattingCursor.current = null;
     setFocusTarget(null);
@@ -512,7 +523,15 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
       const next = current.map(item => item.key === key ? replacement : item);
       commit(next);
     }
-  }, [commit]);
+  }, [commit, setFocusTarget]);
+  // UIKit never receives this Return (see BlockInput), so build the value it
+  // would have produced from the editor's selection.
+  const returned = useCallback((key: string) => {
+    const block = liveBlocks.current.find((item) => item.key === key);
+    if (!editable || block?.type !== 'text') return;
+    const selection = selections.current.get(key) ?? { start: block.text.length, end: block.text.length };
+    changed(key, `${block.text.slice(0, selection.start)}\n${block.text.slice(selection.end)}`);
+  }, [changed, editable]);
   const backspace = useCallback((key: string, expected: NoteDraftBlock, nativeSelection?: { start: number; end: number }) => {
     if (!editable || liveBlocks.current.find((item) => item.key === key) !== expected) return;
     const selection = nativeSelection ?? selections.current.get(key);
@@ -532,6 +551,11 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
     onFocusBlock={focused}
     onSelectBlock={selected}
     onChangeBlock={changed}
+    // iOS inputs are uncontrolled, and RN only pushes text to UIKit when the
+    // React text changes. Enter at the end of "A" leaves it "A", so a newline
+    // typed into a list item or heading would stay behind as a blank line.
+    structuralReturn={Platform.OS === 'ios' && Boolean(block.list || block.heading)}
+    onReturnBlock={returned}
     onBoundaryBackspace={backspace}
     onBlurBlock={blurred}
     keyboardSuppressed={keyboardSuppressed}
@@ -541,7 +565,7 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
     single={single}
     maxLength={Math.max(block.text.length, maxLength - (totalText - block.text.length))}
     editable={editable}
-    style={single ? singleInputStyle : [blockInputStyle, !block.text && styles.emptyInput, block.key === lastTextKey && styles.trailingInput, block.list?.kind === 'checklist' && styles.checklistInput, block.list?.kind === 'checklist' && block.list.checked && { color: theme.textMuted, textDecorationLine: 'line-through' }]}
+    style={single ? singleInputStyle : [blockInputStyle, !block.text && !block.list && styles.emptyInput, block.key === lastTextKey && styles.trailingInput, block.list?.kind === 'checklist' && styles.checklistInput, block.list?.kind === 'checklist' && block.list.checked && { color: theme.textMuted, textDecorationLine: 'line-through' }]}
   />;
 
   const remove = (block: Extract<NoteDraftBlock, { type: 'image' }>) => {
@@ -559,9 +583,9 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
   // Keep the trailing input so text can still be added below the image.
   const leadingImageSlot = blocks[0]?.type === 'text' && blocks[0].text === '' && !blocks[0].list && blocks[1]?.type === 'image';
   const imageNumbers = new Map(blocks.filter((block) => block.type === 'image').map((block, index) => [block.key, index + 1]));
-  return <ScrollView ref={scroll} style={richLayout ? blockContainerStyle : singleContainer} scrollEnabled={richLayout || showTitle} contentContainerStyle={[styles.scrollContent, fillPlainViewport && styles.fillViewport, contentContainerStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="none" onLayout={resetEmptyScroll} onContentSizeChange={resetEmptyScroll}>
+  return <ScrollView ref={scroll} style={richLayout ? blockContainerStyle : singleContainer} scrollEnabled={richLayout || showTitle} contentContainerStyle={[styles.scrollContent, fillPlainViewport && styles.fillViewport, contentContainerStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="none" scrollEventThrottle={16} onScroll={({ nativeEvent }) => { scrollOffset.current = nativeEvent.contentOffset.y; }} onLayout={({ nativeEvent }) => { viewportHeight.current = nativeEvent.layout.height; resetEmptyScroll(); }} onContentSizeChange={resetEmptyScroll}>
     {showTitle ? <TextInput ref={titleInput} onTouchStart={() => { activeInput.current = 'title'; touchReturnRequested.current = true; releaseRequestedSelection(); }} onTouchEnd={finishTouch} onTouchCancel={cancelTouch} onFocus={() => { activeInput.current = 'title'; }} showSoftInputOnFocus={!keyboardSuppressed} accessibilityLabel={formattingText("titleLabel")} placeholder={formattingText("titlePlaceholder")} value={noteTitle(blocks)} onChangeText={title => commit(withNoteTitle(liveBlocks.current, title), undefined, true)} editable={editable} maxLength={200} placeholderTextColor={theme.textMuted} style={{ color: theme.textPrimary, fontSize: 20, fontWeight: '700', flexShrink: 0, minHeight: 48, paddingHorizontal: richLayout ? 0 : singleLayout?.paddingHorizontal ?? 0, paddingVertical: spacing.xs, marginBottom: spacing.xs, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.borderSubtle }} /> : null}
-    <View style={[styles.blocks, !richLayout && styles.singleBlocks, fillPlainViewport && styles.fillViewport]} onLayout={({ nativeEvent }) => { const next = Math.floor(nativeEvent.layout.width); setWidth((current) => current === next ? current : next); }}>
+    <View style={[styles.blocks, !richLayout && styles.singleBlocks, fillPlainViewport && styles.fillViewport]} onLayout={({ nativeEvent }) => { blocksTop.current = nativeEvent.layout.y; const next = Math.floor(nativeEvent.layout.width); setWidth((current) => current === next ? current : next); }}>
     {blocks.map((block, blockIndex) => {
       if (blockIndex === 0 && leadingImageSlot) return null;
       // The final native input fills the unused editor space, so a tap anywhere
@@ -569,7 +593,7 @@ export function NoteBlocksEditor({ ref, blocks, onChangeBlocks, editable, placeh
       if (block.type === 'text') {
         const previous = blocks[blockIndex - 1];
         const consecutiveTasks = block.list?.kind === 'checklist' && previous?.type === 'text' && previous.list?.kind === 'checklist';
-        return <View key={block.key} style={[block.list && styles.listRow, block.list && { flexDirection: firstStrongDirection(block.text, languageDirection(locale)) === 'rtl' ? 'row-reverse' : 'row' }, block.key === lastTextKey && styles.trailingText, fillPlainViewport && styles.fillViewport, { marginTop: richLayout && blockIndex ? (consecutiveTasks ? spacing.xxs : spacing.xs) : 0 }]} onLayout={({ nativeEvent }) => positions.current.set(block.key, nativeEvent.layout.y)}>
+        return <View key={block.key} style={[block.list && styles.listRow, block.list && { flexDirection: firstStrongDirection(block.text, languageDirection(locale)) === 'rtl' ? 'row-reverse' : 'row' }, block.key === lastTextKey && styles.trailingText, fillPlainViewport && styles.fillViewport, { marginTop: richLayout && blockIndex ? (consecutiveTasks ? spacing.xxs : spacing.xs) : 0 }]} onLayout={({ nativeEvent }) => { positions.current.set(block.key, { y: nativeEvent.layout.y, height: nativeEvent.layout.height }); if (pendingScroll.current === block.key) revealRow(block.key); }}>
           {block.list?.kind === 'checklist'
             ? <NoteCheckbox checked={block.list.checked} label={block.text} disabled={!editable} onPress={() => commit(toggleNoteChecklist(liveBlocks.current, block.key))} />
             : block.list ? <AppText accessible={false} style={[blockInputStyle, styles.listMarker]}>{markers[blockIndex]}</AppText> : null}
@@ -610,6 +634,8 @@ type BlockInputProps = {
   onFocusBlock: (key: string) => void;
   onSelectBlock: (key: string, selection: { start: number; end: number }) => void;
   onChangeBlock: (key: string, value: string) => void;
+  structuralReturn?: boolean;
+  onReturnBlock?: (key: string) => void;
   onBoundaryBackspace: (key: string, expected: NoteDraftBlock, selection?: { start: number; end: number }) => void;
   onBlurBlock?: () => void;
   extra?: Props['singleInputProps'];
@@ -623,7 +649,7 @@ type BlockInputProps = {
 
 // One run of the note's words. Alone (no images) it scrolls itself like any
 // note field; between images it grows with its text inside the editor's column.
-function BlockInput({ block, onTouchBlock, onTouchEndBlock, onTouchCancelBlock, onKeyBlock, requestedSelection, register, onFocusBlock, onSelectBlock, onChangeBlock, onBoundaryBackspace, onBlurBlock, extra, accessibilityLabel, placeholder, single, maxLength, editable, style, keyboardSuppressed = false }: BlockInputProps) {
+function BlockInput({ block, onTouchBlock, onTouchEndBlock, onTouchCancelBlock, onKeyBlock, requestedSelection, register, onFocusBlock, onSelectBlock, onChangeBlock, structuralReturn = false, onReturnBlock, onBoundaryBackspace, onBlurBlock, extra, accessibilityLabel, placeholder, single, maxLength, editable, style, keyboardSuppressed = false }: BlockInputProps) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   const locale = useLocale();
@@ -684,6 +710,8 @@ function BlockInput({ block, onTouchBlock, onTouchEndBlock, onTouchCancelBlock, 
     // keep the attributed fallback; a runtime never switches modes per mark.
     value={nativeNoteFormattingAvailable ? block.text : undefined}
     onChangeText={(value) => { cancelBoundaryBackspace(); onChangeBlock(key, value); }}
+    submitBehavior={structuralReturn ? 'submit' : undefined}
+    onSubmitEditing={structuralReturn ? () => { cancelBoundaryBackspace(); onReturnBlock?.(key); } : undefined}
     onKeyPress={({ nativeEvent }) => {
       onKeyBlock?.();
       if (nativeEvent.key === 'Backspace' && selection.current.start === 0 && selection.current.end === 0) {

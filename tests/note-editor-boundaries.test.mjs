@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { backspaceNoteBlock, editNoteListItem, toggleNoteList } from '../src/services/note-lists.ts';
+import { backspaceNoteBlock, editNoteListItem, noteRevealOffset, toggleNoteList } from '../src/services/note-lists.ts';
 import { draftPlainText, draftContentForStorage, draftFromNote, parseNoteContent } from '../src/services/note-content.ts';
 import { createNoteEditHistory } from '../src/services/note-edit-history.ts';
 
@@ -23,6 +23,21 @@ for (const kind of ['numbered', 'bullet', 'checklist']) {
     assert.deepEqual(merged.blocks[0].list, original[0].list);
     assert.deepEqual(merged.cursor, at('b', 'First😀'.length));
     assert.equal(original[1].list.kind, kind);
+  });
+
+  test(`${kind}: Backspace removes an empty item in one press and lands after the item above`, () => {
+    const result = backspaceNoteBlock([item('a', 'First😀', kind, true), item('b', '', kind), item('c', 'Next', kind)], at('b'));
+    assert.deepEqual(result.blocks.map((block) => block.text), ['First😀', 'Next']);
+    assert.equal(result.blocks[0].key, 'b', 'focused input survives the removal');
+    assert.equal(result.blocks[0].list.kind, kind);
+    assert.equal(result.blocks[1].list.kind, kind);
+    assert.deepEqual(result.cursor, at('b', 'First😀'.length));
+  });
+
+  test(`${kind}: Backspace on an empty first item exits the list without touching the text above`, () => {
+    const result = backspaceNoteBlock([plain('p', 'Intro'), { ...item('b', '', kind) }, item('c', 'Next', kind)], at('b'));
+    assert.deepEqual(result.blocks.map((block) => block.text), ['Intro\n', 'Next']);
+    assert.equal(result.blocks.some((block) => block.key === 'b' && block.list), false);
   });
 
   test(`${kind}: Enter exits an empty item and continues a nonempty one`, () => {
@@ -146,4 +161,14 @@ test('long checklist edit retains unrelated objects and completion states', () =
   for (let i = 0; i < 4999; i++) assert.equal(result.blocks[i], blocks[i]);
   assert.equal(result.blocks.at(-1).list, undefined);
   assert.equal(result.blocks.at(-1).key, '4999');
+});
+
+test('reveal scrolls only as far as an off-screen row needs', () => {
+  const view = { offset: 100, viewport: 300, margin: 16 };
+  assert.equal(noteRevealOffset({ ...view, top: 200, height: 27 }), null, 'a visible row never moves');
+  assert.equal(noteRevealOffset({ ...view, top: 390, height: 27 }), 133, 'a row below rises just into view');
+  assert.equal(noteRevealOffset({ ...view, top: 50, height: 27 }), 34, 'a row above drops just into view');
+  assert.equal(noteRevealOffset({ ...view, top: 10, height: 27 }), 0);
+  assert.equal(noteRevealOffset({ ...view, top: 200, height: 900 }), 184, 'a tall row shows its start');
+  assert.equal(noteRevealOffset({ ...view, viewport: 0, top: 900, height: 27 }), null, 'no viewport yet');
 });

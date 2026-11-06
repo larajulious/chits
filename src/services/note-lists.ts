@@ -38,9 +38,12 @@ export function backspaceNoteBlock(blocks: NoteDraftBlock[], cursor: NoteCursor)
   const index = blocks.findIndex((block) => block.key === cursor.key);
   const block = blocks[index];
   if (block?.type !== 'text') return { blocks, cursor: null };
-  if (block.list) return normalizeClearedDocument(toggleNoteList(blocks, cursor, block.list.kind), block.key);
-  if (block.heading) return { blocks: blocks.map(item => item.key === block.key ? { ...block, heading: undefined } : item), cursor };
   const previous = blocks[index - 1];
+  // An empty item inside a list has nothing to keep: it goes in one press and
+  // joins the item above. Words, and an empty first item, unformat first.
+  const emptyContinuation = block.list && !block.text && previous?.type === 'text' && previous.list?.id === block.list.id;
+  if (block.list && !emptyContinuation) return normalizeClearedDocument(toggleNoteList(blocks, cursor, block.list.kind), block.key);
+  if (block.heading) return { blocks: blocks.map(item => item.key === block.key ? { ...block, heading: undefined } : item), cursor };
   if (!previous) return normalizeClearedDocument({ blocks, cursor: null }, block.key);
   if (previous.type === 'image') {
     // A text key must never silently delete an attachment. Cross the image to
@@ -59,6 +62,16 @@ export function backspaceNoteBlock(blocks: NoteDraftBlock[], cursor: NoteCursor)
     ...remainder,
     ...blocks.slice(index + 1),
   ], { key: block.key, start: prefix.length, end: prefix.length }), block.key);
+}
+
+/** The smallest scroll that shows a row, or null when it is already in view.
+ * Rows taller than the viewport show their start.
+ */
+export function noteRevealOffset({ top, height, offset, viewport, margin }: { top: number; height: number; offset: number; viewport: number; margin: number }) {
+  if (viewport <= 0) return null;
+  if (top - margin < offset) return Math.max(0, top - margin);
+  const bottom = top + Math.min(height, viewport - margin * 2) + margin;
+  return bottom > offset + viewport ? bottom - viewport : null;
 }
 
 function listOf(kind: NoteList['kind'], id: string): NoteList {

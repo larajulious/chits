@@ -151,7 +151,7 @@ test('late keyboard blur cannot collapse a formatting session range after native
   const range = { key: 'body', start: 6, end: 11 };
   const formattingCursor = { current: range }, selections = { current: new Map([['body', range]]) };
   const selected = callback('selected', {
-    formattingCursor, selections, pendingFocus: { current: null }, focusTarget: null,
+    formattingCursor, selections, pendingFocus: { current: null }, liveFocusTarget: { current: null },
     lastFocused: { current: 'body' }, pendingMarks: { current: null },
     setFocusTarget: () => {}, notifyFormat: () => {},
   });
