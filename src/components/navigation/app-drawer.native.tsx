@@ -131,7 +131,10 @@ function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'n
         active && { backgroundColor: tokens.accent, boxShadow: `0px 3px 8px ${desk.shadow}` },
         pressed && styles.pressed,
       ]}>
-      {iconOnly ? <Icon name={destination.icon} size={DOCK_ICON_SIZE} color={ink} /> : <>
+      {iconOnly ? <>
+        <Icon name={destination.icon} size={DOCK_ICON_SIZE} color={ink} />
+        <AppText family={fonts.textBold} style={[styles.dockLabel, { color: ink }]}>{destination.label}</AppText>
+      </> : <>
         <DrawerIcon name={destination.icon} color={ink} fill={active ? mix(tokens.accent, PAPER_WHITE, 0.55) : surfaces.control} />
         <AppText numberOfLines={1} family={active ? fonts.display : fonts.text} style={[styles.itemText, { color: ink }]}>{destination.label}</AppText>
       </>}
@@ -141,22 +144,24 @@ function NavigationRow({ destination, pathname, close, badge = 0, badgeNoun = 'n
   );
 }
 
-// The Style setting (same as Settings → Appearance → Style) as a footer icon:
-// each tap moves to the next style, and the panel restyles in place.
-function StyleButton({ value, onPress }: { value: AppStyle; onPress: () => void }) {
+// Open an explicit choice before changing the same Style preference as Settings.
+function StyleButton({ value, expanded, onPress }: { value: AppStyle; expanded: boolean; onPress: () => void }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
   const { styleTokens } = useTheme();
   const surfaces = useDrawerSurfaces();
+  const fonts = useWelcomeFonts();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={tr("settings.style")}
       accessibilityValue={{ text: APP_STYLE_NAMES[value] }}
+      accessibilityState={{ expanded }}
       onPress={onPress}
       style={({ pressed }) => [styles.dockCell, { borderRadius: dockCellRadius(styleTokens.button.radius) }, pressed && styles.pressed]}>
       <Icon name="color-palette-outline" size={DOCK_ICON_SIZE} color={surfaces.ink} />
+      <AppText family={fonts.textBold} style={[styles.dockLabel, { color: surfaces.ink }]}>{tr("settings.style")}</AppText>
     </Pressable>
   );
 }
@@ -280,6 +285,9 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   const repository = useMemo(() => createBoardRepository(database), [database]);
   const pathname = usePathname();
   const { style, setStyle, styleTokens } = useTheme();
+  const fonts = useWelcomeFonts();
+  const [stylePicker, setStylePicker] = useState(false);
+  const [savingStyle, setSavingStyle] = useState(false);
   const { rowStyle } = useDirection();
   const desk = useDesk();
   const surfaces = useDrawerSurfaces();
@@ -337,15 +345,16 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
 
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 1800); return () => clearTimeout(timer); }, [toast]);
 
-  // Same setting as Settings → Appearance → Style; the drawer restyles in place.
-  // The icon doesn't show which style is on, so a toast names the new one.
-  const nextStyle = useCallback(() => {
-    const next = APP_STYLES[(APP_STYLES.indexOf(style) + 1) % APP_STYLES.length];
-    void Haptics.selectionAsync();
+  // Changing a style is deliberate; opening the chooser leaves the preference alone.
+  const chooseStyle = useCallback((next: AppStyle) => {
+    if (savingStyle) return;
+    if (next === style) { setStylePicker(false); return; }
+    setSavingStyle(true);
     setStyle(next)
-      .then(() => setToast(tr("settings.valueStyle", { value1: APP_STYLE_NAMES[next] })))
-      .catch(() => setToast(tr("appdrawer.styleCouldNotBeSaved")));
-  }, [setStyle, style]);
+      .then(() => { setStylePicker(false); void Haptics.selectionAsync(); setToast(tr("settings.valueStyle", { value1: APP_STYLE_NAMES[next] })); })
+      .catch(() => setToast(tr("appdrawer.styleCouldNotBeSaved")))
+      .finally(() => setSavingStyle(false));
+  }, [savingStyle, setStyle, style]);
 
   // Immediately reversible (pin it again elsewhere), so no confirmation — just an
   // optimistic removal with a subtle toast, rolled back only if the write fails.
@@ -383,8 +392,14 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
             foot of the panel, as one compact dock lined up with the rows' icons,
             instead of sitting in the list of destinations. */}
         <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.sm), backgroundColor: surfaces.paper, borderTopColor: surfaces.control }]}>
+          {stylePicker ? <View style={[styles.styleChoices, rowStyle]}>
+            {APP_STYLES.map(option => <Pressable key={option} accessibilityRole="radio" accessibilityLabel={APP_STYLE_NAMES[option]} accessibilityState={{ checked: style === option, disabled: savingStyle }} disabled={savingStyle} onPress={() => chooseStyle(option)} style={({ pressed }) => [styles.styleChoice, rowStyle, { backgroundColor: style === option ? surfaces.control : surfaces.paper, borderColor: style === option ? surfaces.action : surfaces.track, borderRadius: styleTokens.button.radius }, pressed && styles.pressed]}>
+              <AppText family={fonts.textBold} style={[styles.styleChoiceLabel, { color: surfaces.ink }]}>{APP_STYLE_NAMES[option]}</AppText>
+              <Icon name={style === option ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={surfaces.ink} />
+            </Pressable>)}
+          </View> : null}
           <View style={[styles.dock, rowStyle, { backgroundColor: surfaces.control, borderRadius: styleTokens.button.radius }]}>
-            <StyleButton value={style} onPress={nextStyle} />
+            <StyleButton value={style} expanded={stylePicker} onPress={() => setStylePicker(value => !value)} />
             <NavigationRow destination={gettingStartedDestination} pathname={pathname} close={close} iconOnly />
             <NavigationRow destination={settingsDestination} pathname={pathname} close={close} iconOnly />
           </View>
@@ -476,7 +491,11 @@ const styles = StyleSheet.create({
   badgeText: { color: PAPER_INK, fontSize: 12, lineHeight: 17, fontVariant: ['tabular-nums'] },
   footer: { paddingTop: spacing.sm, paddingHorizontal: spacing.md, borderTopWidth: StyleSheet.hairlineWidth },
   dock: { padding: DOCK_PADDING, gap: DOCK_PADDING },
-  dockCell: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center' },
+  dockCell: { flex: 1, minWidth: 0, minHeight: 68, paddingHorizontal: 3, paddingVertical: 8, gap: 5, alignItems: 'center', justifyContent: 'center' },
+  dockLabel: { fontSize: 11, lineHeight: 15, textAlign: 'center', flexShrink: 1 },
+  styleChoices: { gap: spacing.xs, marginBottom: spacing.sm },
+  styleChoice: { flex: 1, minWidth: 0, minHeight: 44, paddingHorizontal: spacing.xs, paddingVertical: spacing.xs, gap: 6, alignItems: 'center', justifyContent: 'space-between', borderWidth: 1.5 },
+  styleChoiceLabel: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 18 },
   section: { paddingTop: spacing.sm, gap: 2 },
   sectionHeader: { minHeight: 36, justifyContent: 'center', paddingHorizontal: spacing.xs },
   sectionLabel: { fontSize: 18, lineHeight: 24 },

@@ -10,9 +10,9 @@ const read = (path) => readFileSync(new URL(path, root), 'utf8');
 const demoFiles = readdirSync(new URL('src/features/onboarding/demos/', root));
 
 test('the tour runs in the order of the brief, and counts only the features', () => {
-  assert.deepEqual(Object.keys(TOUR_STEP), ['meet', 'spaces', 'boards', 'spin', 'focus', 'plan', 'finish']);
-  assert.equal(TOUR_STEP_COUNT, 7);
-  assert.equal(FEATURE_STEPS.length, 5);
+  assert.deepEqual(Object.keys(TOUR_STEP), ['meet', 'spaces', 'boards', 'spin', 'focus', 'plan', 'canvas', 'finish']);
+  assert.equal(TOUR_STEP_COUNT, 8);
+  assert.equal(FEATURE_STEPS.length, 6);
 });
 
 test('a damaged saved step can never point outside the tour', () => {
@@ -27,6 +27,8 @@ test('Chits only ducks out when the sheet moves, not between demos', () => {
   assert.equal(sheetMoves(TOUR_STEP.plan, TOUR_STEP.finish), true);
   assert.equal(sheetMoves(TOUR_STEP.boards, TOUR_STEP.spin), false);
   assert.equal(sheetMoves(TOUR_STEP.spin, TOUR_STEP.boards), false);
+  assert.equal(sheetMoves(TOUR_STEP.plan, TOUR_STEP.canvas), false);
+  assert.equal(sheetMoves(TOUR_STEP.canvas, TOUR_STEP.finish), true);
 });
 
 test('each feature has its own Chits: calm for Focus, cheerful then sleepy for Plan', () => {
@@ -95,6 +97,7 @@ test('no demo can reach saved data', () => {
 });
 
 test('the demos are the real parts, not lookalikes', () => {
+  assert.match(read('src/features/onboarding/demos/canvas-demo.tsx'), /workspaceHTML/);
   assert.match(read('src/features/onboarding/demos/spin-demo.tsx'), /<SpinWheel /);
   assert.match(read('src/features/onboarding/demos/spin-demo.tsx'), /spinLanding\(/);
   assert.match(read('src/features/onboarding/demos/focus-demo.tsx'), /<FocusDial /);
@@ -139,7 +142,7 @@ test('the hold on a card follows the rules the real board learned', () => {
 
 test('every tour step keeps Skip and Next, and nothing has to be finished first', () => {
   const screen = read('src/features/onboarding/screens/welcome-screen.tsx');
-  assert.equal(screen.match(/footer=\{demoFooter\(/g).length, 5);
+  assert.equal(screen.match(/footer=\{demoFooter\(/g).length, 6);
   assert.doesNotMatch(screen, /disabled=/, 'Next is never held back by a demo');
   assert.match(screen, /ot\('tour\.finish\.start'\)/);
 });

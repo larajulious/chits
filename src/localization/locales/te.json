@@ -2098,5 +2098,10 @@
   "mascot.selected": "ఎంచుకోబడింది",
   "mascot.choose": "మస్కట్ ఎంచుకోండి",
   "mascot.current": "మీ స్నేహితుడు: {{name}}",
-  "mascot.freeRelease": "ఈ విడుదలలో రెండు మస్కట్‌లు ఉచితం."
+  "mascot.freeRelease": "ఈ విడుదలలో రెండు మస్కట్‌లు ఉచితం.",
+  "onboarding.tour.canvas.title": "పెద్ద ఆలోచనలకు చిన్న చోటు.",
+  "onboarding.tour.canvas.body": "Canvas పై గీయండి, వచనం జోడించండి, నోట్లను పిన్ చేయండి. ఇక్కడ గీసి చూడండి లేదా నమూనా నోట్‌ను పిన్ చేయండి.",
+  "onboarding.tour.canvas.draw": "గీయండి",
+  "onboarding.tour.canvas.pin": "నోట్‌ను పిన్ చేయండి",
+  "onboarding.tour.canvas.say": "మీ ఆలోచనలకు చోటివ్వండి."
 }

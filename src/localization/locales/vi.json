@@ -2098,5 +2098,10 @@
   "mascot.selected": "Đã chọn",
   "mascot.choose": "Chọn linh vật",
   "mascot.current": "Bạn đồng hành: {{name}}",
-  "mascot.freeRelease": "Cả hai linh vật đều miễn phí trong phiên bản này."
+  "mascot.freeRelease": "Cả hai linh vật đều miễn phí trong phiên bản này.",
+  "onboarding.tour.canvas.title": "Không gian cho ý tưởng lớn.",
+  "onboarding.tour.canvas.body": "Vẽ, thêm chữ và ghim ghi chú trên Canvas. Thử vẽ ở đây hoặc ghim một ghi chú mẫu.",
+  "onboarding.tour.canvas.draw": "Vẽ",
+  "onboarding.tour.canvas.pin": "Ghim ghi chú",
+  "onboarding.tour.canvas.say": "Dành chỗ cho ý tưởng của bạn."
 }

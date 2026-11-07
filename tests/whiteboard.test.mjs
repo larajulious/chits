@@ -6,22 +6,23 @@ import { newCanvas } from '../src/features/whiteboard/document.ts';
 import { loadModule, runtime } from './helpers/backup-runtime.mjs';
 const { whiteboards } = await loadModule('src/features/whiteboard/repository');
 function engine(doc = newCanvas()) {
-  const messages = [], exports = [], calls = [];
+  const messages = [], exports = [], calls = [], timers = new Map();let timerId=0;
   const context = new Proxy({ measureText: s => ({ width: s.length * 8 }) }, { get: (o,k) => o[k] ?? ((...args) => calls.push([k,...args])) });
   const canvas = () => ({ width: 0, height: 0, getContext: () => context, setPointerCapture() {}, toDataURL() { exports.push({ width: this.width, height: this.height }); return 'data:image/png;base64,AAAA'; } });
   const surface = canvas();
-  const sandbox = { document: { querySelector: () => surface, getElementById: () => ({}), createElement: canvas }, innerWidth: 390, innerHeight: 700, devicePixelRatio: 1, requestAnimationFrame: () => 1, window: { ReactNativeWebView: { postMessage: m => messages.push(JSON.parse(m)) } } };
+  const sandbox = { setTimeout: callback => { timers.set(++timerId,callback);return timerId; }, clearTimeout: id => timers.delete(id), document: { querySelector: () => surface, getElementById: () => ({}), createElement: canvas }, innerWidth: 390, innerHeight: 700, devicePixelRatio: 1, requestAnimationFrame: () => 1, window: { ReactNativeWebView: { postMessage: m => messages.push(JSON.parse(m)) } } };
   vm.createContext(sandbox); vm.runInContext(workspaceHTML.match(/<script>([\s\S]*)<\/script>/)[1], sandbox);
   const command = m => sandbox.window.command(m);
   command({ type: 'load', doc: structuredClone(doc), notes: {} });
   const event = (x,y,id=1) => ({ clientX:x,clientY:y,pointerId:id,pressure:.5,pointerType:'touch' });
   const stroke = (x,y,x2,y2) => { surface.onpointerdown(event(x,y)); surface.onpointermove(event(x2,y2)); surface.onpointerup(event(x2,y2)); };
   const latest = () => messages.filter(m => m.type === 'change').at(-1)?.doc;
-  return { command, surface, stroke, latest, exports, event, messages };
+  const hold = () => { const callbacks=[...timers.values()];timers.clear();callbacks.forEach(callback=>callback()); };
+  return { command, surface, stroke, latest, exports, event, messages, hold };
 }
 test('world-coordinate strokes, undo/redo and stroke-only erasing preserve note references', () => {
   const doc = newCanvas(); doc.viewport = { x: 50, y: 100, zoom: 2 };
-  const e = engine(doc); e.command({ type:'pin', kind:'thought', id:'original' });
+  const e = engine(doc); e.command({type:'tool',tool:'pen'}); e.command({ type:'pin', kind:'thought', id:'original' });
   e.stroke(70,120,150,200);
   let saved = e.latest(); assert.equal(saved.objects[1].points[0].x,10); assert.equal(saved.objects[1].points[0].y,10);
   e.command({ type:'undo' }); assert.equal(e.latest().objects.length,1);
@@ -31,7 +32,7 @@ test('world-coordinate strokes, undo/redo and stroke-only erasing preserve note 
   e.command({ type:'undo' }); assert.equal(e.latest().objects.length,2);
 });
 test('full-content export includes distant objects and bounds memory', () => {
-  const e = engine(); e.stroke(-50000,-20000,50000,20000);
+  const e = engine(); e.command({type:'tool',tool:'pen'}); e.stroke(-50000,-20000,50000,20000);
   e.command({ type:'export',padding:64 }); assert.equal(e.exports.length,1);
   assert.ok(e.exports[0].width<=4096); assert.ok(e.exports[0].height<=4096);
   assert.equal(e.messages.at(-1).type,'export');
@@ -45,7 +46,7 @@ test('pinch preserves the world point under the moving midpoint', () => {
   assert.equal((200-e.latest().viewport.x)/2,126);
 });
 test('hundreds of strokes stay structured and reopening retains objects and camera', () => {
-  const e = engine(); for(let i=0;i<400;i++) e.stroke(i,i,i+20,i+30);
+  const e = engine(); e.command({type:'tool',tool:'pen'}); for(let i=0;i<400;i++) e.stroke(i,i,i+20,i+30);
   const doc=e.latest(); assert.equal(doc.objects.length,400);
   const reopened=engine(doc); reopened.command({ type:'tool',tool:'pen' }); reopened.stroke(1,1,3,3);
   assert.equal(reopened.latest().objects.length,401);
@@ -132,4 +133,50 @@ test('layer and removal availability includes strokes and missing notes, and cle
   e.command({type:'undo'});assert.equal(selection().hasSelection,false);
   tap(140,20);assert.equal(selection().hasSelection,true);
   e.command({type:'tool',tool:'pen'});assert.equal(selection().hasSelection,false);
+});
+
+
+test('opening a canvas defaults to moving the camera without drawing', () => {
+  const e=engine();e.stroke(100,100,150,140);
+  assert.equal(e.latest().objects.length,0);
+  assert.equal(e.latest().viewport.x,74);
+  assert.equal(e.latest().viewport.y,64);
+});
+
+test('text size changes resize selected text, preserve color and support undo and redo', () => {
+  const doc=newCanvas();doc.objects=[{id:'text',type:'text',x:10,y:10,width:100,height:60,color:'#b5413b',text:'Keep this text',fontSize:20}];
+  const e=engine(doc);e.command({type:'tool',tool:'select'});
+  e.surface.onpointerdown(e.event(44,44));e.surface.onpointerup(e.event(44,44));
+  assert.equal(e.messages.filter(m=>m.type==='selection').at(-1).textStyle.fontSize,20);
+  e.command({type:'style',fontSize:40});
+  let o=e.latest().objects[0];assert.equal(o.fontSize,40);assert.equal(o.width,200);assert.equal(o.height,120);assert.equal(o.color,'#b5413b');assert.equal(o.text,'Keep this text');
+  e.command({type:'style',color:'#356bb0',width:7});assert.equal(e.latest().objects[0].fontSize,40);
+  e.command({type:'undo'});assert.equal(e.latest().objects[0].color,'#b5413b');
+  e.command({type:'undo'});assert.equal(e.latest().objects[0].fontSize,20);
+  e.command({type:'redo'});assert.equal(e.latest().objects[0].fontSize,40);
+});
+
+
+test('holding selected text or a pinned note opens options and allows undoable removal', () => {
+  for(const type of ['text','note']) {
+    const doc=newCanvas();doc.objects=[{id:'item',type,x:10,y:10,width:120,height:80,color:'#292820',text:'Keep my text',noteKind:'thought',noteId:'original'}];
+    const e=engine(doc);e.command({type:'tool',tool:'select'});
+    e.surface.onpointerdown(e.event(44,44));e.hold();
+    const options=e.messages.filter(m=>m.type==='options');assert.equal(options.length,1);assert.equal(options[0].hasSelection,true);
+    e.surface.onpointerup(e.event(44,44));e.command({type:'delete'});assert.equal(e.latest().objects.length,0);
+    e.command({type:'undo'});assert.equal(e.latest().objects[0].id,'item');
+  }
+});
+
+test('dragging, lifting, cancelling, pinching and switching tools cancel hold options', () => {
+  for(const cancel of ['drag','up','cancel','pinch','tool']) {
+    const doc=newCanvas();doc.objects=[{id:'item',type:'text',x:10,y:10,width:120,height:80,color:'#292820',text:'Text'}];
+    const e=engine(doc);e.command({type:'tool',tool:'select'});e.surface.onpointerdown(e.event(44,44));
+    if(cancel==='drag')e.surface.onpointermove(e.event(75,75));
+    if(cancel==='up')e.surface.onpointerup(e.event(44,44));
+    if(cancel==='cancel')e.surface.onpointercancel(e.event(44,44));
+    if(cancel==='pinch')e.surface.onpointerdown(e.event(100,100,2));
+    if(cancel==='tool')e.command({type:'tool',tool:'move'});
+    e.hold();assert.equal(e.messages.some(m=>m.type==='options'),false,cancel);
+  }
 });

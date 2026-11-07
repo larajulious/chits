@@ -2098,5 +2098,10 @@
   "mascot.selected": "चुना गया",
   "mascot.choose": "शुभंकर चुनें",
   "mascot.current": "आपका दोस्त: {{name}}",
-  "mascot.freeRelease": "इस संस्करण में दोनों शुभंकर मुफ़्त हैं।"
+  "mascot.freeRelease": "इस संस्करण में दोनों शुभंकर मुफ़्त हैं।",
+  "onboarding.tour.canvas.title": "बड़े विचारों के लिए थोड़ी जगह।",
+  "onboarding.tour.canvas.body": "Canvas पर चित्र बनाएँ, टेक्स्ट जोड़ें और नोट पिन करें। यहाँ चित्र बनाकर या नमूना नोट पिन करके देखें।",
+  "onboarding.tour.canvas.draw": "चित्र बनाएँ",
+  "onboarding.tour.canvas.pin": "नोट पिन करें",
+  "onboarding.tour.canvas.say": "अपने विचारों को जगह दें।"
 }

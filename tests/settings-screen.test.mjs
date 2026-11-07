@@ -170,7 +170,10 @@ test('the side panel footer is one row of labelled icons', () => {
   assert.match(drawer, /<StyleButton value=\{style\}/);
   assert.match(drawer, /destination=\{gettingStartedDestination\}[^>]*iconOnly/);
   assert.match(drawer, /destination=\{settingsDestination\}[^>]*iconOnly/);
-  // With no visible text, the screen reader label is the only name these have.
+  // Footer names are visible as well as available to screen readers.
   assert.match(drawer, /accessibilityLabel=\{tr\("settings\.style"\)\}/);
-  assert.doesNotMatch(drawer, /SegmentedControl/);
+  assert.match(drawer, /styles\.dockLabel/);
+  assert.match(drawer, /APP_STYLES\.map\(option/);
+  assert.match(drawer, /onPress=\{\(\) => chooseStyle\(option\)\}/);
+  assert.doesNotMatch(drawer, /const nextStyle|APP_STYLES\[\(APP_STYLES\.indexOf/);
 });

@@ -2098,5 +2098,10 @@
   "mascot.selected": "Seçili",
   "mascot.choose": "Maskot seç",
   "mascot.current": "Dostunuz: {{name}}",
-  "mascot.freeRelease": "Bu sürümde iki maskot da ücretsizdir."
+  "mascot.freeRelease": "Bu sürümde iki maskot da ücretsizdir.",
+  "onboarding.tour.canvas.title": "Büyük fikirler için bir alan.",
+  "onboarding.tour.canvas.body": "Canvas üzerinde çizim yap, metin ekle ve notlarını sabitle. Burada çizim yapmayı veya örnek bir notu sabitlemeyi dene.",
+  "onboarding.tour.canvas.draw": "Çiz",
+  "onboarding.tour.canvas.pin": "Not sabitle",
+  "onboarding.tour.canvas.say": "Fikirlerine yer aç."
 }

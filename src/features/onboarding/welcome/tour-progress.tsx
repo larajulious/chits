@@ -22,7 +22,7 @@ export function TourProgress({ progress, step, surfaces }: { progress: SharedVal
   const current = FEATURE_STEPS.findIndex((item) => item === step);
   const visible = current >= 0;
   const label = ot('tour.progress', { step: current + 1, total: FEATURE_STEPS.length });
-  const fade = useAnimatedStyle(() => ({ opacity: interpolate(progress.get(), [TOUR_STEP.meet, TOUR_STEP.spaces, TOUR_STEP.plan, TOUR_STEP.finish], [0, 1, 1, 0], 'clamp') }));
+  const fade = useAnimatedStyle(() => ({ opacity: interpolate(progress.get(), [TOUR_STEP.meet, TOUR_STEP.spaces, TOUR_STEP.canvas, TOUR_STEP.finish], [0, 1, 1, 0], 'clamp') }));
   return <Animated.View
     pointerEvents="none"
     accessible={visible}

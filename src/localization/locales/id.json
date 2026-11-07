@@ -2098,5 +2098,10 @@
   "mascot.selected": "Dipilih",
   "mascot.choose": "Pilih maskot",
   "mascot.current": "Teman Anda: {{name}}",
-  "mascot.freeRelease": "Kedua maskot gratis dalam rilis ini."
+  "mascot.freeRelease": "Kedua maskot gratis dalam rilis ini.",
+  "onboarding.tour.canvas.title": "Ruang untuk ide besar.",
+  "onboarding.tour.canvas.body": "Gambar, tambahkan teks, dan sematkan catatan di Canvas. Coba menggambar di sini atau sematkan catatan contoh.",
+  "onboarding.tour.canvas.draw": "Gambar",
+  "onboarding.tour.canvas.pin": "Sematkan catatan",
+  "onboarding.tour.canvas.say": "Beri ruang untuk ide Anda."
 }

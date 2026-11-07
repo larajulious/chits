@@ -2098,5 +2098,10 @@
   "mascot.selected": "தேர்ந்தெடுக்கப்பட்டது",
   "mascot.choose": "சின்னத்தைத் தேர்ந்தெடு",
   "mascot.current": "உங்கள் நண்பர்: {{name}}",
-  "mascot.freeRelease": "இந்தப் பதிப்பில் இரு சின்னங்களும் இலவசம்."
+  "mascot.freeRelease": "இந்தப் பதிப்பில் இரு சின்னங்களும் இலவசம்.",
+  "onboarding.tour.canvas.title": "பெரிய யோசனைகளுக்குச் சிறிது இடம்.",
+  "onboarding.tour.canvas.body": "Canvas இல் வரையுங்கள், உரை சேருங்கள், குறிப்புகளைப் பொருத்துங்கள். இங்கே வரைந்து பாருங்கள் அல்லது மாதிரிக் குறிப்பைப் பொருத்துங்கள்.",
+  "onboarding.tour.canvas.draw": "வரையுங்கள்",
+  "onboarding.tour.canvas.pin": "குறிப்பைப் பொருத்து",
+  "onboarding.tour.canvas.say": "உங்கள் யோசனைகளுக்கு இடம் கொடுங்கள்."
 }

@@ -2098,5 +2098,10 @@
   "mascot.selected": "選択中",
   "mascot.choose": "マスコットを選ぶ",
   "mascot.current": "あなたの相棒：{{name}}",
-  "mascot.freeRelease": "このバージョンでは、どちらのマスコットも無料です。"
+  "mascot.freeRelease": "このバージョンでは、どちらのマスコットも無料です。",
+  "onboarding.tour.canvas.title": "大きなアイデアに、自由な場所を。",
+  "onboarding.tour.canvas.body": "Canvasで絵を描いたり、文字を加えたり、メモをピン留めできます。ここで描くか、サンプルのメモをピン留めしてみましょう。",
+  "onboarding.tour.canvas.draw": "描く",
+  "onboarding.tour.canvas.pin": "メモをピン留め",
+  "onboarding.tour.canvas.say": "アイデアを自由に広げましょう。"
 }

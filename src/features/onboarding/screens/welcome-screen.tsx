@@ -14,6 +14,7 @@ import { AppText } from '@/components/ui/app-text';
 import { layout, spacing } from '@/constants/theme';
 import { PLAN_DUSK } from '@/features/plan/plan-hero';
 import { tr } from '@/localization/runtime';
+import { CanvasDemo } from '../demos/canvas-demo';
 import { BoardsDemo } from '../demos/boards-demo';
 import type { TourMascot } from '../demos/demo-kit';
 import { FocusDemo } from '../demos/focus-demo';
@@ -38,12 +39,12 @@ import { useWelcomeFonts } from '../welcome/welcome-fonts';
 import { welcomeSurfaces, type WelcomeSurfaces } from '../welcome/welcome-surfaces';
 
 const SPEECH: OnboardingStringKey[] = ['mascot.say.room', 'mascot.say.listening', 'mascot.say.both', 'mascot.say.corner'];
-const { meet: MEET, spaces: SPACES, boards: BOARDS, spin: SPIN, focus: FOCUS, plan: PLAN, finish: FINISH } = TOUR_STEP;
+const { meet: MEET, spaces: SPACES, boards: BOARDS, spin: SPIN, focus: FOCUS, plan: PLAN, canvas: CANVAS, finish: FINISH } = TOUR_STEP;
 const STEPS = Array.from({ length: TOUR_STEP_COUNT }, (_, step) => step);
 /** What Chits says on arriving at a step, and when tapped there. */
 const STEP_LINES: Partial<Record<number, string>> = {
   [SPACES]: 'onboarding.tour.spaces.say', [BOARDS]: 'onboarding.tour.boards.say.hello', [SPIN]: 'onboarding.tour.spin.say.hello',
-  [FOCUS]: 'focus.say.ready.0', [PLAN]: 'plan.say.morning', [FINISH]: 'onboarding.tour.finish.say',
+  [FOCUS]: 'focus.say.ready.0', [PLAN]: 'plan.say.morning', [CANVAS]: 'onboarding.tour.canvas.say', [FINISH]: 'onboarding.tour.finish.say',
 };
 const STEP_MS = 440;
 /** After the step has slid in. Chits needs longer when they ducked out for the sheet to move. */
@@ -271,10 +272,15 @@ export default function OnboardingWelcomeScreen() {
             <StepBody compact surfaces={surfaces}>{ot('tour.focus.body')}</StepBody>
             <FocusDemo surfaces={surfaces} active={step === FOCUS} mascot={mascot} />
           </StepPanel> : null}
-          {furthest >= PLAN ? <StepPanel dense index={PLAN} progress={progress} active={step === PLAN} height={panelHeight(PLAN)} footer={demoFooter(FINISH)}>
+          {furthest >= PLAN ? <StepPanel dense index={PLAN} progress={progress} active={step === PLAN} height={panelHeight(PLAN)} footer={demoFooter(CANVAS)}>
             <StepHeading compact surfaces={surfaces}>{ot('tour.plan.title')}</StepHeading>
             <StepBody compact surfaces={surfaces}>{ot('tour.plan.body')}</StepBody>
             <PlanDemo surfaces={surfaces} active={step === PLAN} mascot={mascot} evening={evening} onEveningChange={setEvening} />
+          </StepPanel> : null}
+          {furthest >= CANVAS ? <StepPanel dense index={CANVAS} progress={progress} active={step === CANVAS} height={panelHeight(CANVAS)} footer={demoFooter(FINISH)}>
+            <StepHeading compact surfaces={surfaces}>{ot('tour.canvas.title')}</StepHeading>
+            <StepBody compact surfaces={surfaces}>{ot('tour.canvas.body')}</StepBody>
+            <CanvasDemo surfaces={surfaces} active={step === CANVAS} mascot={mascot} />
           </StepPanel> : null}
           {furthest >= FINISH ? <StepPanel
             index={FINISH}

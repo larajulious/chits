@@ -2098,5 +2098,10 @@
   "mascot.selected": "Napili",
   "mascot.choose": "Pumili ng mascot",
   "mascot.current": "Kaibigan mo: {{name}}",
-  "mascot.freeRelease": "Libre ang parehong mascot sa bersyong ito."
+  "mascot.freeRelease": "Libre ang parehong mascot sa bersyong ito.",
+  "onboarding.tour.canvas.title": "Lugar para sa malalaking ideya.",
+  "onboarding.tour.canvas.body": "Gumuhit, magdagdag ng teksto, at mag-pin ng mga tala sa Canvas. Subukang gumuhit dito o mag-pin ng halimbawang tala.",
+  "onboarding.tour.canvas.draw": "Gumuhit",
+  "onboarding.tour.canvas.pin": "Mag-pin ng tala",
+  "onboarding.tour.canvas.say": "Bigyan ng lugar ang iyong mga ideya."
 }

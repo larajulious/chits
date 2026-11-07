@@ -2098,5 +2098,10 @@
   "mascot.selected": "Selected",
   "mascot.choose": "Choose mascot",
   "mascot.current": "Your buddy: {{name}}",
-  "mascot.freeRelease": "Both mascots are free in this release."
+  "mascot.freeRelease": "Both mascots are free in this release.",
+  "onboarding.tour.canvas.title": "A little room for big ideas.",
+  "onboarding.tour.canvas.body": "Draw, add text, and pin your notes on Canvas. Try drawing here or pin a sample note.",
+  "onboarding.tour.canvas.draw": "Draw",
+  "onboarding.tour.canvas.pin": "Pin a note",
+  "onboarding.tour.canvas.say": "Make room for your ideas."
 }

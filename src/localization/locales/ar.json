@@ -2194,5 +2194,10 @@
   "mascot.selected": "محددة",
   "mascot.choose": "اختر التميمة",
   "mascot.current": "صديقك: {{name}}",
-  "mascot.freeRelease": "كلتا التميمتين مجانيتان في هذا الإصدار."
+  "mascot.freeRelease": "كلتا التميمتين مجانيتان في هذا الإصدار.",
+  "onboarding.tour.canvas.title": "مساحة صغيرة لأفكار كبيرة.",
+  "onboarding.tour.canvas.body": "ارسم وأضف نصًا وثبّت ملاحظاتك على Canvas. جرّب الرسم هنا أو تثبيت ملاحظة تجريبية.",
+  "onboarding.tour.canvas.draw": "ارسم",
+  "onboarding.tour.canvas.pin": "ثبّت ملاحظة",
+  "onboarding.tour.canvas.say": "أفسح المجال لأفكارك."
 }

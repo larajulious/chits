@@ -2098,5 +2098,10 @@
   "mascot.selected": "বেছে নেওয়া হয়েছে",
   "mascot.choose": "মাসকট বেছে নিন",
   "mascot.current": "আপনার বন্ধু: {{name}}",
-  "mascot.freeRelease": "এই সংস্করণে দুটি মাসকটই বিনামূল্যে।"
+  "mascot.freeRelease": "এই সংস্করণে দুটি মাসকটই বিনামূল্যে।",
+  "onboarding.tour.canvas.title": "বড় ভাবনার জন্য একটু জায়গা।",
+  "onboarding.tour.canvas.body": "Canvas-এ আঁকুন, লেখা যোগ করুন আর নোট পিন করুন। এখানে এঁকে দেখুন বা একটি নমুনা নোট পিন করুন।",
+  "onboarding.tour.canvas.draw": "আঁকুন",
+  "onboarding.tour.canvas.pin": "নোট পিন করুন",
+  "onboarding.tour.canvas.say": "আপনার ভাবনাকে জায়গা দিন।"
 }

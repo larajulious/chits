@@ -1,10 +1,10 @@
 // The welcome tour's steps and how Chits rests on each. Pure data, so tests can
 // check it without React Native.
 
-export const TOUR_STEP = { meet: 0, spaces: 1, boards: 2, spin: 3, focus: 4, plan: 5, finish: 6 } as const;
-export const TOUR_STEP_COUNT = 7;
+export const TOUR_STEP = { meet: 0, spaces: 1, boards: 2, spin: 3, focus: 4, plan: 5, canvas: 6, finish: 7 } as const;
+export const TOUR_STEP_COUNT = 8;
 /** The steps with a feature to try: what the progress bar counts. */
-export const FEATURE_STEPS = [TOUR_STEP.spaces, TOUR_STEP.boards, TOUR_STEP.spin, TOUR_STEP.focus, TOUR_STEP.plan] as const;
+export const FEATURE_STEPS = [TOUR_STEP.spaces, TOUR_STEP.boards, TOUR_STEP.spin, TOUR_STEP.focus, TOUR_STEP.plan, TOUR_STEP.canvas] as const;
 
 /** A saved step from an older or damaged row can't point past the end of the tour. */
 export function clampTourStep(step: number) {
@@ -13,7 +13,7 @@ export function clampTourStep(step: number) {
 
 /** The sheet only moves on the way into and out of the demos; between them Chits stays put. */
 export function sheetMoves(from: number, to: number) {
-  const inDemos = (step: number) => step >= TOUR_STEP.spaces && step <= TOUR_STEP.plan;
+  const inDemos = (step: number) => step >= TOUR_STEP.spaces && step <= TOUR_STEP.canvas;
   return !(inDemos(from) && inDemos(to));
 }
 
@@ -29,6 +29,7 @@ export function tourPose(step: number, evening: boolean): TourPose {
     // Next to nothing moves here, which is what sets it apart from Spin.
     case TOUR_STEP.focus: return { restGaze: -6, restTilt: -2, calm: true };
     case TOUR_STEP.plan: return evening ? { restGaze: -4, restTilt: -1, sleepy: true } : { restGaze: -10, cheerful: true };
+    case TOUR_STEP.canvas: return { restGaze: -12, restTilt: -3, cheerful: true };
     case TOUR_STEP.finish: return { cheerful: true };
     default: return {};
   }

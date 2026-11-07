@@ -2098,5 +2098,10 @@
   "mascot.selected": "પસંદ કરેલ",
   "mascot.choose": "શુભંકર પસંદ કરો",
   "mascot.current": "તમારો મિત્ર: {{name}}",
-  "mascot.freeRelease": "આ આવૃત્તિમાં બંને શુભંકર મફત છે."
+  "mascot.freeRelease": "આ આવૃત્તિમાં બંને શુભંકર મફત છે.",
+  "onboarding.tour.canvas.title": "મોટા વિચારો માટે થોડી જગ્યા.",
+  "onboarding.tour.canvas.body": "Canvas પર દોરો, લખાણ ઉમેરો અને નોંધો પિન કરો. અહીં દોરી જુઓ અથવા નમૂનાની નોંધ પિન કરો.",
+  "onboarding.tour.canvas.draw": "દોરો",
+  "onboarding.tour.canvas.pin": "નોંધ પિન કરો",
+  "onboarding.tour.canvas.say": "તમારા વિચારોને જગ્યા આપો."
 }

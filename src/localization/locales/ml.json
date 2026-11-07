@@ -2098,5 +2098,10 @@
   "mascot.selected": "തിരഞ്ഞെടുത്തു",
   "mascot.choose": "ചിഹ്നം തിരഞ്ഞെടുക്കുക",
   "mascot.current": "നിങ്ങളുടെ കൂട്ടുകാരൻ: {{name}}",
-  "mascot.freeRelease": "ഈ പതിപ്പിൽ രണ്ട് ചിഹ്നങ്ങളും സൗജന്യമാണ്."
+  "mascot.freeRelease": "ഈ പതിപ്പിൽ രണ്ട് ചിഹ്നങ്ങളും സൗജന്യമാണ്.",
+  "onboarding.tour.canvas.title": "വലിയ ആശയങ്ങൾക്ക് ഒരിടം.",
+  "onboarding.tour.canvas.body": "Canvas-ൽ വരയ്ക്കൂ, എഴുത്ത് ചേർക്കൂ, കുറിപ്പുകൾ പിൻ ചെയ്യൂ. ഇവിടെ വരച്ചുനോക്കൂ അല്ലെങ്കിൽ ഒരു മാതൃകാ കുറിപ്പ് പിൻ ചെയ്യൂ.",
+  "onboarding.tour.canvas.draw": "വരയ്ക്കൂ",
+  "onboarding.tour.canvas.pin": "കുറിപ്പ് പിൻ ചെയ്യൂ",
+  "onboarding.tour.canvas.say": "നിങ്ങളുടെ ആശയങ്ങൾക്ക് ഇടം നൽകൂ."
 }

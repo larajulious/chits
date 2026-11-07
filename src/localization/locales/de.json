@@ -2098,5 +2098,10 @@
   "mascot.selected": "Ausgewählt",
   "mascot.choose": "Maskottchen wählen",
   "mascot.current": "Dein Freund: {{name}}",
-  "mascot.freeRelease": "Beide Maskottchen sind in dieser Version kostenlos."
+  "mascot.freeRelease": "Beide Maskottchen sind in dieser Version kostenlos.",
+  "onboarding.tour.canvas.title": "Platz für große Ideen.",
+  "onboarding.tour.canvas.body": "Zeichnen Sie, fügen Sie Text hinzu und heften Sie Notizen an Canvas. Zeichnen Sie hier oder heften Sie eine Beispielnotiz an.",
+  "onboarding.tour.canvas.draw": "Zeichnen",
+  "onboarding.tour.canvas.pin": "Notiz anheften",
+  "onboarding.tour.canvas.say": "Machen Sie Platz für Ihre Ideen."
 }

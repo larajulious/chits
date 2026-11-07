@@ -2122,5 +2122,10 @@
   "mascot.selected": "Selezionata",
   "mascot.choose": "Scegli mascotte",
   "mascot.current": "Il tuo amico: {{name}}",
-  "mascot.freeRelease": "Entrambe le mascotte sono gratuite in questa versione."
+  "mascot.freeRelease": "Entrambe le mascotte sono gratuite in questa versione.",
+  "onboarding.tour.canvas.title": "Spazio per grandi idee.",
+  "onboarding.tour.canvas.body": "Disegna, aggiungi testo e fissa le tue note su Canvas. Prova a disegnare qui o a fissare una nota di esempio.",
+  "onboarding.tour.canvas.draw": "Disegna",
+  "onboarding.tour.canvas.pin": "Fissa una nota",
+  "onboarding.tour.canvas.say": "Fai spazio alle tue idee."
 }

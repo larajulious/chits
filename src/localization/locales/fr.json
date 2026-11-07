@@ -2122,5 +2122,10 @@
   "mascot.selected": "Sélectionnée",
   "mascot.choose": "Choisir la mascotte",
   "mascot.current": "Votre compagnon : {{name}}",
-  "mascot.freeRelease": "Les deux mascottes sont gratuites dans cette version."
+  "mascot.freeRelease": "Les deux mascottes sont gratuites dans cette version.",
+  "onboarding.tour.canvas.title": "De la place pour vos grandes idées.",
+  "onboarding.tour.canvas.body": "Dessinez, ajoutez du texte et épinglez vos notes sur Canvas. Essayez de dessiner ici ou d’épingler une note d’exemple.",
+  "onboarding.tour.canvas.draw": "Dessiner",
+  "onboarding.tour.canvas.pin": "Épingler une note",
+  "onboarding.tour.canvas.say": "Faites de la place à vos idées."
 }

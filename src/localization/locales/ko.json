@@ -2098,5 +2098,10 @@
   "mascot.selected": "선택됨",
   "mascot.choose": "마스코트 선택",
   "mascot.current": "나의 친구: {{name}}",
-  "mascot.freeRelease": "이번 버전에서는 두 마스코트 모두 무료입니다."
+  "mascot.freeRelease": "이번 버전에서는 두 마스코트 모두 무료입니다.",
+  "onboarding.tour.canvas.title": "큰 아이디어를 위한 공간.",
+  "onboarding.tour.canvas.body": "Canvas에서 그림을 그리고, 글을 쓰고, 메모를 고정하세요. 여기에 그리거나 예시 메모를 고정해 보세요.",
+  "onboarding.tour.canvas.draw": "그리기",
+  "onboarding.tour.canvas.pin": "메모 고정",
+  "onboarding.tour.canvas.say": "아이디어를 펼쳐 보세요."
 }

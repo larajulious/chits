@@ -2122,5 +2122,10 @@
   "mascot.selected": "Seleccionada",
   "mascot.choose": "Elegir mascota",
   "mascot.current": "Tu amigo: {{name}}",
-  "mascot.freeRelease": "Ambas mascotas son gratis en esta versión."
+  "mascot.freeRelease": "Ambas mascotas son gratis en esta versión.",
+  "onboarding.tour.canvas.title": "Un espacio para grandes ideas.",
+  "onboarding.tour.canvas.body": "Dibuja, añade texto y fija tus notas en Canvas. Prueba a dibujar aquí o a fijar una nota de ejemplo.",
+  "onboarding.tour.canvas.draw": "Dibujar",
+  "onboarding.tour.canvas.pin": "Fijar una nota",
+  "onboarding.tour.canvas.say": "Dale espacio a tus ideas."
 }

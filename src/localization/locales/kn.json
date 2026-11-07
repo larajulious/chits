@@ -2098,5 +2098,10 @@
   "mascot.selected": "ಆಯ್ಕೆಮಾಡಲಾಗಿದೆ",
   "mascot.choose": "ಮ್ಯಾಸ್ಕಾಟ್ ಆರಿಸಿ",
   "mascot.current": "ನಿಮ್ಮ ಸ್ನೇಹಿತ: {{name}}",
-  "mascot.freeRelease": "ಈ ಆವೃತ್ತಿಯಲ್ಲಿ ಎರಡೂ ಮ್ಯಾಸ್ಕಾಟ್‌ಗಳು ಉಚಿತ."
+  "mascot.freeRelease": "ಈ ಆವೃತ್ತಿಯಲ್ಲಿ ಎರಡೂ ಮ್ಯಾಸ್ಕಾಟ್‌ಗಳು ಉಚಿತ.",
+  "onboarding.tour.canvas.title": "ದೊಡ್ಡ ಆಲೋಚನೆಗಳಿಗೆ ಸ್ವಲ್ಪ ಜಾಗ.",
+  "onboarding.tour.canvas.body": "Canvas ಮೇಲೆ ಚಿತ್ರ ಬಿಡಿಸಿ, ಪಠ್ಯ ಸೇರಿಸಿ ಮತ್ತು ಟಿಪ್ಪಣಿಗಳನ್ನು ಪಿನ್ ಮಾಡಿ. ಇಲ್ಲಿ ಚಿತ್ರ ಬಿಡಿಸಿ ನೋಡಿ ಅಥವಾ ಮಾದರಿ ಟಿಪ್ಪಣಿಯನ್ನು ಪಿನ್ ಮಾಡಿ.",
+  "onboarding.tour.canvas.draw": "ಚಿತ್ರ ಬಿಡಿಸಿ",
+  "onboarding.tour.canvas.pin": "ಟಿಪ್ಪಣಿ ಪಿನ್ ಮಾಡಿ",
+  "onboarding.tour.canvas.say": "ನಿಮ್ಮ ಆಲೋಚನೆಗಳಿಗೆ ಜಾಗ ನೀಡಿ."
 }
