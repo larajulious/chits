@@ -1,0 +1,16 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/sticky_root" android:layout_width="match_parent" android:layout_height="match_parent">
+ <ImageView android:id="@+id/sticky_image" android:layout_width="match_parent" android:layout_height="match_parent" android:scaleType="fitXY" />
+ <!-- Tap targets laid over each note (Android 12+), back to front. -->
+ <ImageView android:id="@+id/sticky_hit_0" android:layout_width="1dp" android:layout_height="1dp" android:layout_gravity="top|left" android:visibility="gone" />
+ <ImageView android:id="@+id/sticky_hit_1" android:layout_width="1dp" android:layout_height="1dp" android:layout_gravity="top|left" android:visibility="gone" />
+ <ImageView android:id="@+id/sticky_hit_2" android:layout_width="1dp" android:layout_height="1dp" android:layout_gravity="top|left" android:visibility="gone" />
+ <ImageView android:id="@+id/sticky_hit_3" android:layout_width="1dp" android:layout_height="1dp" android:layout_gravity="top|left" android:visibility="gone" />
+ <ImageView android:id="@+id/sticky_hit_4" android:layout_width="1dp" android:layout_height="1dp" android:layout_gravity="top|left" android:visibility="gone" />
+ <ImageView android:id="@+id/sticky_hit_5" android:layout_width="1dp" android:layout_height="1dp" android:layout_gravity="top|left" android:visibility="gone" />
+ <ImageView android:id="@+id/sticky_hit_6" android:layout_width="1dp" android:layout_height="1dp" android:layout_gravity="top|left" android:visibility="gone" />
+ <ImageView android:id="@+id/sticky_hit_7" android:layout_width="1dp" android:layout_height="1dp" android:layout_gravity="top|left" android:visibility="gone" />
+ <ImageView android:id="@+id/sticky_hit_8" android:layout_width="1dp" android:layout_height="1dp" android:layout_gravity="top|left" android:visibility="gone" />
+ <ImageView android:id="@+id/sticky_hit_9" android:layout_width="1dp" android:layout_height="1dp" android:layout_gravity="top|left" android:visibility="gone" />
+ <ImageView android:id="@+id/sticky_hit_10" android:layout_width="1dp" android:layout_height="1dp" android:layout_gravity="top|left" android:visibility="gone" />
+ <ImageView android:id="@+id/sticky_hit_11" android:layout_width="1dp" android:layout_height="1dp" android:layout_gravity="top|left" android:visibility="gone" />
+</FrameLayout>

@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">Post-it</string>
+  <string name="sticky_widget_description">Un Espace et ses post-it, directement sur votre écran d’accueil.</string>
+  <string name="sticky_widget_choose">Choisir un Espace</string>
+  <string name="sticky_widget_hidden">Chit caché</string>
+  <string name="sticky_widget_voice">Note vocale</string>
+  <string name="sticky_space_fridge">Réfrigérateur</string>
+  <string name="sticky_space_desk">Bureau</string>
+  <string name="sticky_space_cork">Panneau de liège</string>
+  <string name="sticky_space_wall">Mur</string>
+</resources>

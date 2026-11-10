@@ -1823,7 +1823,7 @@
   "focus.recap.status.early": "타이머 종료 전에 마침",
   "focus.recap.status.brief": "짧은 시간 후 종료",
   "anywhere.brand": "어디서나 Chits",
-  "anywhere.quick": "빠른 노트",
+  "anywhere.quick": "메모",
   "anywhere.recent": "최근 노트",
   "anywhere.empty": "다음 생각은 여기서 시작됩니다.",
   "anywhere.hidden": "노트 정보가 숨겨져 있습니다.",
@@ -2103,5 +2103,12 @@
   "onboarding.tour.canvas.body": "Canvas에서 그림을 그리고, 글을 쓰고, 메모를 고정하세요. 여기에 그리거나 예시 메모를 고정해 보세요.",
   "onboarding.tour.canvas.draw": "그리기",
   "onboarding.tour.canvas.pin": "메모 고정",
-  "onboarding.tour.canvas.say": "아이디어를 펼쳐 보세요."
+  "onboarding.tour.canvas.say": "아이디어를 펼쳐 보세요.",
+  "stickyWidget.name": "스티커 메모",
+  "stickyWidget.description": "공간과 그 스티커 메모를 홈 화면에 그대로.",
+  "stickyWidget.choose": "공간 선택",
+  "stickyWidget.chooseDescription": "이 위젯에 표시할 공간을 선택하세요.",
+  "stickyWidget.setup": "Chits를 열어 스티커 메모를 설정하세요.",
+  "stickyWidget.unavailable": "이 메모는 더 이상 사용할 수 없어요.",
+  "stickyWidget.unavailableHint": "위젯이 곧 업데이트돼요."
 }

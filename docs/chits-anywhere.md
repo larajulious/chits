@@ -165,3 +165,11 @@ Open `ios/Chits.xcworkspace`, select scheme **Chits** and **Any iOS Device (arm6
 - `src/features/anywhere/widget.tsx`
 - `src/services/database-transactions.ts`
 - `tests/anywhere.test.mjs`
+
+## Button label (2026-11-10)
+
+At the user's request the compose button reads **Note** instead of Quick Note (`anywhere.quick` in all 21 catalogs, `anywhere_quick` on Android, and the iOS layout's fallback). It still opens the Chat composer as before. The gallery description ("Quick Note and your recent notes.") was left as it was.
+
+## iOS fix: titles-only privacy (2026-11-10)
+
+With **Show note titles** on and previews off, every note carried `preview: null`. expo-widgets stores props in `UserDefaults`, which refuses `NSNull`, so each iOS publish failed silently and the widget kept old or empty content. `publish.ios.ts` now sends `withoutNulls(...)` (`src/services/widget-props.ts`, shared with Sticky Notes); the layout already treats a missing preview as none. Covered in `tests/anywhere.test.mjs`. Not yet confirmed on a device.

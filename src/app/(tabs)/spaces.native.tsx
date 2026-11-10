@@ -22,6 +22,7 @@ import { NotePicker } from '@/components/spaces/note-picker';
 import { useSpaceFonts } from '@/components/spaces/space-fonts';
 import { spaceFullMessage } from '@/components/spaces/space-note-action';
 import { LetterMagnets, SpaceSurface } from '@/components/spaces/space-surface';
+import { rememberSpaceBoard } from '@/features/sticky-widget/board-size';
 import { StickyPaper } from '@/components/spaces/sticky-note';
 import { useNoteSpaceName } from '@/components/spaces/use-notespace-name';
 import { SheetDim, StickyOptionsSheet } from '@/components/spaces/sticky-options-sheet';
@@ -30,6 +31,7 @@ import { ReminderSheet } from '@/components/reminders/reminder-sheet';
 import { removeCardReminder, removeMessageReminder, setCardReminder, setMessageReminder } from '@/services/reminders';
 import { useTheme } from '@/components/theme-provider';
 import { HeaderIconButton, HeaderIcon, MenuIcon, Toast } from '@/components/ui/primitives';
+import { TileInkContext } from '@/components/ui/controls';
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { DEFAULT_STICKY_COLOR, SPACE_CAPACITY, SPACE_IDS, SPACE_LIST, SPACES, resolveSpaceId, toUnit, type SpaceId, type SpacePaperStyle } from '@/constants/spaces';
 import { DARK_SURFACE, DOCK_ICONS, DOCK_LABELS, noteSeed } from '@/constants/spaces-theme';
@@ -83,6 +85,8 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
   const pendingSelectionRef = useRef<SpaceId | null>(null);
   const [counts, setCounts] = useState(EMPTY_COUNTS);
   const [board, setBoard] = useState<LayoutRectangle | null>(null);
+  // Sticky Notes widgets redraw this board in miniature, so they need its size.
+  useEffect(() => { if (board) void rememberSpaceBoard(database, board); }, [board, database]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [reminderNote, setReminderNote] = useState<PinnedNote | null>(null);
@@ -400,7 +404,9 @@ function RoundButton({ icon, label, onPress, disabled = false, size = 44, style 
   const ui = useSpaceUI();
   const styles = useSpaceStyles(createStyles);
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.round, size !== 44 && { width: size, height: size, borderRadius: size / 2 }, inkSurface({ fill: styleColors.controlFill, radius: size === 44 ? styleTokens.header.iconButton.radius : size / 2, edge: styleTokens.header.iconButton.edge }, pressed), style, disabled && styles.disabled, pressed && styles.pressed]}>
-    {icon === 'menu' ? <MenuIcon /> : <Icon name={icon} size={icon === 'chevron-back' ? 24 : 21} color={ui.paper} style={icon === 'chevron-back' ? { marginLeft: -2 } : undefined} />}
+    <TileInkContext.Provider value={ui.paper}>
+      {icon === 'menu' ? <MenuIcon /> : <Icon name={icon} size={icon === 'chevron-back' ? 24 : 21} color={ui.paper} style={icon === 'chevron-back' ? { marginLeft: -2 } : undefined} />}
+    </TileInkContext.Provider>
   </Pressable>;
 }
 

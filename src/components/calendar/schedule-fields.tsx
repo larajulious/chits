@@ -2,9 +2,9 @@ import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
-import { DateTimePicker } from '@expo/ui/community/datetime-picker';
 
-import { AndroidReminderTimePicker } from '@/components/reminders/android-reminder-time-picker';
+import { ReminderDatePicker } from '@/components/reminders/reminder-date-picker.native';
+import { ReminderTimePicker } from '@/components/reminders/reminder-time-picker.native';
 import { ExactAlarmNotice, useExactAlarmAccess } from '@/components/reminders/exact-alarm-notice';
 import { ReminderSheet } from '@/components/reminders/reminder-sheet';
 import { useTheme } from '@/components/theme-provider';
@@ -15,9 +15,9 @@ import { useStickyControls } from '@/components/ui/surface';
 import { radii, spacing } from '@/constants/theme';
 import { reminderInPast, type CalendarDestination, type ReminderChoice, type ScheduleDraft } from '@/features/calendar/calendar-actions';
 import {
-  DAY_MINUTES, DEFAULT_DURATION_MINUTES, formatMinute, localDayKey, minuteOfDay, parseDayKey, reminderPresets,
+  DAY_MINUTES, DEFAULT_DURATION_MINUTES, formatMinute, localDayKey, parseDayKey, reminderPresets,
 } from '@/features/calendar/calendar-schedule';
-import { formatReminder, formatReminderDay, materialDialogDate } from '@/services/reminder-time';
+import { formatReminder, formatReminderDay } from '@/services/reminder-time';
 
 type Props = {
   value: ScheduleDraft;
@@ -37,17 +37,16 @@ export function defaultStartMinute(dateKey: string, now = new Date()): number {
 /**
  * The day, time and reminder of a calendar note, as compact grouped rows:
  * Date, All day, Starts/Ends, a row of reminder choices and (when adding)
- * where the note is saved. iOS uses compact native pickers; Android the
- * Material date dialog and Chits' numeric time entry — the same controls as
- * the reminder sheet.
+ * where the note is saved. The day and times use the shared Chits pickers on
+ * iOS and Android.
  */
 export function ScheduleFields({ value, onChange, destination, destinations, onDestinationChange }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const { scheme, tokens: theme } = useTheme();
+  const { tokens: theme } = useTheme();
   const controls = useStickyControls();
-  const [androidPicker, setAndroidPicker] = useState<'date' | 'start' | 'end' | null>(null);
+  const [picker, setPicker] = useState<'date' | 'start' | 'end' | null>(null);
   const [customOpen, setCustomOpen] = useState(false);
   const [customKey, setCustomKey] = useState(0);
   const day = parseDayKey(value.dateKey) ?? new Date();
@@ -58,7 +57,6 @@ export function ScheduleFields({ value, onChange, destination, destinations, onD
   const past = reminderInPast(value);
   const wantsReminder = value.reminder.mode !== 'none';
   const alarmAccess = useExactAlarmAccess(wantsReminder);
-  const themeVariant = scheme === 'dark' ? 'dark' : 'light';
 
   // A relative reminder that doesn't exist for the new kind of day (e.g. "5 min
   // before" on an all-day note) falls back to the first preset.
@@ -79,17 +77,14 @@ export function ScheduleFields({ value, onChange, destination, destinations, onD
   const chooseReminder = (reminder: ReminderChoice) => onChange({ ...value, reminder });
   const timeAsDate = (minute: number) => new Date(day.getFullYear(), day.getMonth(), day.getDate(), Math.floor(minute / 60), minute % 60);
 
-  const timeField = (which: 'start' | 'end', minute: number) => Platform.OS === 'ios'
-    ? <DateTimePicker style={styles.iosTime} value={timeAsDate(minute % DAY_MINUTES)} mode="time" display="compact" accentColor={theme.accentStrong} themeVariant={themeVariant} onValueChange={(_, date) => (which === 'start' ? setStart : setEnd)(minuteOfDay(date) || (which === 'end' ? DAY_MINUTES : 0))} />
-    : <FieldButton text={formatMinute(minute % DAY_MINUTES)} label={tr("schedulefields.valueValueChangeTime", { value1: which === 'start' ? tr("schedulefields.starts") : tr("schedulefields.ends"), value2: formatMinute(minute % DAY_MINUTES) })} onPress={() => setAndroidPicker(which)} />;
+  const timeField = (which: 'start' | 'end', minute: number) =>
+    <FieldButton text={formatMinute(minute % DAY_MINUTES)} label={tr("schedulefields.valueValueChangeTime", { value1: which === 'start' ? tr("schedulefields.starts") : tr("schedulefields.ends"), value2: formatMinute(minute % DAY_MINUTES) })} onPress={() => setPicker(which)} />;
 
   return (
     <View style={styles.root}>
       <View style={[styles.group, controls.panel, { borderColor: theme.borderSubtle }]}>
         <Row label={tr("schedulefields.date")} icon="calendar-outline" first>
-          {Platform.OS === 'ios'
-            ? <DateTimePicker style={styles.iosDate} value={day} mode="date" display="compact" accentColor={theme.accentStrong} themeVariant={themeVariant} onValueChange={(_, date) => setDay(date.getFullYear(), date.getMonth(), date.getDate())} />
-            : <FieldButton text={formatReminderDay(day, new Date())} label={tr("schedulefields.dateValueChangeDate", { value1: formatReminderDay(day, new Date()) })} onPress={() => setAndroidPicker('date')} />}
+          <FieldButton text={formatReminderDay(day, new Date())} label={tr("schedulefields.dateValueChangeDate", { value1: formatReminderDay(day, new Date()) })} onPress={() => setPicker('date')} />
         </Row>
         <Row label={tr("schedulefields.allDay")} icon="sunny-outline">
           <Switch accessibilityLabel={tr("schedulefields.allDay")} value={allDay} onValueChange={toggleAllDay} trackColor={{ true: theme.accentStrong, false: theme.borderSubtle }} thumbColor={Platform.OS === 'android' ? theme.surface : undefined} ios_backgroundColor={theme.borderSubtle} />
@@ -122,24 +117,20 @@ export function ScheduleFields({ value, onChange, destination, destinations, onD
         </ChipRow>
       </> : null}
 
-      {Platform.OS === 'android' && androidPicker === 'date' ? (
-        <DateTimePicker
-          value={materialDialogDate(day)}
-          mode="date"
-          presentation="dialog"
-          accentColor={theme.accentStrong}
-          // The Material date dialog returns UTC midnight of the chosen day.
-          onValueChange={(_, date) => { setAndroidPicker(null); setDay(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()); }}
-          onDismiss={() => setAndroidPicker(null)}
+      {picker === 'date' ? (
+        <ReminderDatePicker
+          value={day}
+          prompt={tr('reminderDatePicker.dayPrompt')}
+          onConfirm={(year, month, date) => { setPicker(null); setDay(year, month, date); }}
+          onDismiss={() => setPicker(null)}
         />
       ) : null}
-      {Platform.OS === 'android' && (androidPicker === 'start' || androidPicker === 'end') ? (
-        <AndroidReminderTimePicker
-          value={timeAsDate((androidPicker === 'start' ? start : end) % DAY_MINUTES)}
-          accent={theme.accentStrong}
-          accentOn={theme.background}
-          onConfirm={(hours, minutes) => { const which = androidPicker; setAndroidPicker(null); const minute = hours * 60 + minutes; if (which === 'start') setStart(minute); else setEnd(minute || DAY_MINUTES); }}
-          onDismiss={() => setAndroidPicker(null)}
+      {picker === 'start' || picker === 'end' ? (
+        <ReminderTimePicker
+          value={timeAsDate((picker === 'start' ? start : end) % DAY_MINUTES)}
+          prompt={tr(picker === 'start' ? 'reminderTimePicker.startPrompt' : 'reminderTimePicker.endPrompt')}
+          onConfirm={(hours, minutes) => { const which = picker; setPicker(null); const minute = hours * 60 + minutes; if (which === 'start') setStart(minute); else setEnd(minute || DAY_MINUTES); }}
+          onDismiss={() => setPicker(null)}
         />
       ) : null}
       <ReminderSheet
@@ -193,9 +184,6 @@ const styles = StyleSheet.create({
   row: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm },
   rowLabel: { flex: 1, fontSize: 15, fontWeight: '500' },
   fieldValue: { alignItems: 'flex-end', justifyContent: 'center' },
-  // iOS compact pickers size to their content; give them room so they're never clipped.
-  iosDate: { width: 170 },
-  iosTime: { width: 110 },
   fieldButton: { minHeight: 34, minWidth: 88, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.sm, borderRadius: radii.control - 2 },
   fieldButtonText: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
   sectionLabel: { marginTop: spacing.sm, marginBottom: spacing.xxs, fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },

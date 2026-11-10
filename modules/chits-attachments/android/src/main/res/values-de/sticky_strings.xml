@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">Haftnotizen</string>
+  <string name="sticky_widget_description">Ein Bereich mit seinen Haftnotizen, direkt auf Ihrem Home-Bildschirm.</string>
+  <string name="sticky_widget_choose">Bereich auswählen</string>
+  <string name="sticky_widget_hidden">Verstecktes Chit</string>
+  <string name="sticky_widget_voice">Sprachnotiz</string>
+  <string name="sticky_space_fridge">Kühlschrank</string>
+  <string name="sticky_space_desk">Schreibtisch</string>
+  <string name="sticky_space_cork">Korkbrett</string>
+  <string name="sticky_space_wall">Wand</string>
+</resources>

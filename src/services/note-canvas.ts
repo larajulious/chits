@@ -79,7 +79,7 @@ export function canvasCardFrame(input: CanvasCardInput, fontScale = 1): CanvasCa
   height += titleLines * 21 * scale + bodyLines * 20 * scale;
   if (input.progress) height += 26 * scale;
   height += input.rows * 25 * scale + (input.moreRows ? 18 * scale : 0);
-  if (input.audio) height += 46;
+  if (input.audio) height += Math.ceil((width - CARD_PADDING * 2) * 0.64) + 44 + 8;
   if (input.reminder) height += 30 * scale;
   if (titleLines || bodyLines || input.rows || input.audio || input.reminder || input.hidden || input.file) height += CARD_PADDING + 4;
   return { width, height: Math.max(MIN_CARD_HEIGHT, Math.ceil(height / 4) * 4), pictureHeight, titleLines, bodyLines };

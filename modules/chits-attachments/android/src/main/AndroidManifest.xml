@@ -11,6 +11,14 @@
       <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
       <meta-data android:name="android.appwidget.provider" android:resource="@xml/chits_plan_info" />
     </receiver>
+    <receiver android:name=".ChitsStickyProvider" android:exported="false" android:label="@string/sticky_widget_name">
+      <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/chits_sticky_info" />
+    </receiver>
+    <!-- The launcher opens this to choose a Sticky Note widget's note, so it must be exported. -->
+    <activity android:name=".ChitsStickyConfigureActivity" android:exported="true" android:excludeFromRecents="true" android:taskAffinity="" android:label="@string/sticky_widget_choose" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+      <intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" /></intent-filter>
+    </activity>
     <receiver android:name=".ChitsReminderAlarmReceiver" android:exported="false">
       <intent-filter>
         <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />

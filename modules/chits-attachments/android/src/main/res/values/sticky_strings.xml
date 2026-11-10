@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">Sticky Notes</string>
+  <string name="sticky_widget_description">A Space and its sticky notes, right on your Home Screen.</string>
+  <string name="sticky_widget_choose">Choose a Space</string>
+  <string name="sticky_widget_hidden">Hidden Chit</string>
+  <string name="sticky_widget_voice">Voice note</string>
+  <string name="sticky_space_fridge">Fridge</string>
+  <string name="sticky_space_desk">Desk</string>
+  <string name="sticky_space_cork">Cork board</string>
+  <string name="sticky_space_wall">Wall</string>
+</resources>

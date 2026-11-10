@@ -1,6 +1,6 @@
 <resources>
   <string name="anywhere_brand">Chits mọi nơi</string>
-  <string name="anywhere_quick">Ghi chú nhanh</string>
+  <string name="anywhere_quick">Ghi chú</string>
   <string name="anywhere_recent">Ghi chú gần đây</string>
   <string name="anywhere_empty">Ý tưởng tiếp theo bắt đầu từ đây.</string>
   <string name="anywhere_hidden">Thông tin ghi chú đã được ẩn.</string>

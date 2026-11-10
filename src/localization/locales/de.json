@@ -1823,7 +1823,7 @@
   "focus.recap.status.early": "Vor Ablauf des Timers beendet",
   "focus.recap.status.brief": "Nach kurzer Zeit beendet",
   "anywhere.brand": "Chits überall",
-  "anywhere.quick": "Schnellnotiz",
+  "anywhere.quick": "Notiz",
   "anywhere.recent": "Letzte Notizen",
   "anywhere.empty": "Dein nächster Gedanke beginnt hier.",
   "anywhere.hidden": "Notizinformationen sind ausgeblendet.",
@@ -2103,5 +2103,12 @@
   "onboarding.tour.canvas.body": "Zeichnen Sie, fügen Sie Text hinzu und heften Sie Notizen an Canvas. Zeichnen Sie hier oder heften Sie eine Beispielnotiz an.",
   "onboarding.tour.canvas.draw": "Zeichnen",
   "onboarding.tour.canvas.pin": "Notiz anheften",
-  "onboarding.tour.canvas.say": "Machen Sie Platz für Ihre Ideen."
+  "onboarding.tour.canvas.say": "Machen Sie Platz für Ihre Ideen.",
+  "stickyWidget.name": "Haftnotizen",
+  "stickyWidget.description": "Ein Bereich mit seinen Haftnotizen, direkt auf Ihrem Home-Bildschirm.",
+  "stickyWidget.choose": "Bereich auswählen",
+  "stickyWidget.chooseDescription": "Wählen Sie den Bereich, den dieses Widget zeigt.",
+  "stickyWidget.setup": "Öffnen Sie Chits, um Ihre Haftnotizen einzurichten.",
+  "stickyWidget.unavailable": "Diese Notiz ist nicht mehr verfügbar.",
+  "stickyWidget.unavailableHint": "Ihr Widget wird gleich aktualisiert."
 }

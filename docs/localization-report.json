@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-06T06:23:01.448Z",
+  "generatedAt": "2026-11-10T03:23:13.903Z",
   "languages": [
     "en",
     "fil",
@@ -25,14 +25,16 @@
   ],
   "coverage": {
     "en": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2100,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2120,
+      "totalKeys": 2120,
       "pluralCategories": [
         "one",
         "other"
       ],
       "identicalToEnglish": [
+        "noteMedia.play",
+        "notesPull.create",
         "archive.restoreThisValue",
         "archive.valueWillReturnToItsPreviousLocation",
         "archive.restore",
@@ -850,6 +852,12 @@
         "permissionsettingsprompt.notificationsRequired",
         "permissionsettingsprompt.toRemindYouAboutThisCardChitsNeeds",
         "androidremindertimepicker.cancelTimeSelection",
+        "reminderTimePicker.title",
+        "reminderTimePicker.prompt",
+        "reminderTimePicker.startPrompt",
+        "reminderTimePicker.endPrompt",
+        "reminderTimePicker.morningPrompt",
+        "reminderTimePicker.eveningPrompt",
         "androidremindertimepicker.setTime",
         "androidremindertimepicker.enterTheHourAndMinute",
         "androidremindertimepicker.hour",
@@ -2132,14 +2140,26 @@
         "mascot.selected",
         "mascot.choose",
         "mascot.current",
-        "mascot.freeRelease"
+        "mascot.freeRelease",
+        "onboarding.tour.canvas.title",
+        "onboarding.tour.canvas.body",
+        "onboarding.tour.canvas.draw",
+        "onboarding.tour.canvas.pin",
+        "onboarding.tour.canvas.say",
+        "stickyWidget.name",
+        "stickyWidget.description",
+        "stickyWidget.choose",
+        "stickyWidget.chooseDescription",
+        "stickyWidget.setup",
+        "stickyWidget.unavailable",
+        "stickyWidget.unavailableHint"
       ],
       "linguisticReview": "source"
     },
     "fil": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2100,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2112,
       "pluralCategories": [
         "one",
         "other"
@@ -2222,9 +2242,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "pt-BR": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2124,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2136,
       "pluralCategories": [
         "one",
         "many",
@@ -2255,9 +2275,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "es": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2124,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2136,
       "pluralCategories": [
         "one",
         "many",
@@ -2290,9 +2310,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "id": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2100,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2112,
       "pluralCategories": [
         "other"
       ],
@@ -2324,9 +2344,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "fr": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2124,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2136,
       "pluralCategories": [
         "one",
         "many",
@@ -2376,6 +2396,7 @@
         "focus.minutes",
         "focus.noteNumber",
         "focus.title",
+        "anywhere.quick",
         "spin.title",
         "spin.source.note",
         "spin.category.suggestions"
@@ -2383,9 +2404,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "de": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2100,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2112,
       "pluralCategories": [
         "one",
         "other"
@@ -2428,9 +2449,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "ja": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2100,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2112,
       "pluralCategories": [
         "other"
       ],
@@ -2443,9 +2464,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "ko": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2100,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2112,
       "pluralCategories": [
         "other"
       ],
@@ -2463,9 +2484,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "it": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2124,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2136,
       "pluralCategories": [
         "one",
         "many",
@@ -2498,9 +2519,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "vi": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2100,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2112,
       "pluralCategories": [
         "other"
       ],
@@ -2521,9 +2542,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "hi": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2100,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2112,
       "pluralCategories": [
         "one",
         "other"
@@ -2541,9 +2562,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "tr": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2100,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2112,
       "pluralCategories": [
         "one",
         "other"
@@ -2565,9 +2586,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "ar": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2196,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2208,
       "pluralCategories": [
         "zero",
         "one",
@@ -2590,9 +2611,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "ta": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2100,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2112,
       "pluralCategories": [
         "one",
         "other"
@@ -2612,9 +2633,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "te": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2100,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2112,
       "pluralCategories": [
         "one",
         "other"
@@ -2634,9 +2655,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "bn": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2100,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2112,
       "pluralCategories": [
         "one",
         "other"
@@ -2656,9 +2677,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "mr": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2100,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2112,
       "pluralCategories": [
         "one",
         "other"
@@ -2678,9 +2699,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "kn": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2100,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2112,
       "pluralCategories": [
         "one",
         "other"
@@ -2700,9 +2721,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "ml": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2100,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2112,
       "pluralCategories": [
         "one",
         "other"
@@ -2722,9 +2743,9 @@
       "linguisticReview": "native-speaker review required"
     },
     "gu": {
-      "canonicalKeys": 2100,
-      "translatedKeys": 2100,
-      "totalKeys": 2100,
+      "canonicalKeys": 2120,
+      "translatedKeys": 2112,
+      "totalKeys": 2112,
       "pluralCategories": [
         "one",
         "other"
@@ -2744,7 +2765,225 @@
       "linguisticReview": "native-speaker review required"
     }
   },
-  "errors": [],
+  "errors": [
+    "fil: missing noteMedia.play",
+    "fil: missing notesPull.create",
+    "fil: missing reminderTimePicker.title",
+    "fil: missing reminderTimePicker.prompt",
+    "fil: missing reminderTimePicker.startPrompt",
+    "fil: missing reminderTimePicker.endPrompt",
+    "fil: missing reminderTimePicker.morningPrompt",
+    "fil: missing reminderTimePicker.eveningPrompt",
+    "pt-BR: missing noteMedia.play",
+    "pt-BR: missing notesPull.create",
+    "pt-BR: missing reminderTimePicker.title",
+    "pt-BR: missing reminderTimePicker.prompt",
+    "pt-BR: missing reminderTimePicker.startPrompt",
+    "pt-BR: missing reminderTimePicker.endPrompt",
+    "pt-BR: missing reminderTimePicker.morningPrompt",
+    "pt-BR: missing reminderTimePicker.eveningPrompt",
+    "es: missing noteMedia.play",
+    "es: missing notesPull.create",
+    "es: missing reminderTimePicker.title",
+    "es: missing reminderTimePicker.prompt",
+    "es: missing reminderTimePicker.startPrompt",
+    "es: missing reminderTimePicker.endPrompt",
+    "es: missing reminderTimePicker.morningPrompt",
+    "es: missing reminderTimePicker.eveningPrompt",
+    "id: missing noteMedia.play",
+    "id: missing notesPull.create",
+    "id: missing reminderTimePicker.title",
+    "id: missing reminderTimePicker.prompt",
+    "id: missing reminderTimePicker.startPrompt",
+    "id: missing reminderTimePicker.endPrompt",
+    "id: missing reminderTimePicker.morningPrompt",
+    "id: missing reminderTimePicker.eveningPrompt",
+    "fr: missing noteMedia.play",
+    "fr: missing notesPull.create",
+    "fr: missing reminderTimePicker.title",
+    "fr: missing reminderTimePicker.prompt",
+    "fr: missing reminderTimePicker.startPrompt",
+    "fr: missing reminderTimePicker.endPrompt",
+    "fr: missing reminderTimePicker.morningPrompt",
+    "fr: missing reminderTimePicker.eveningPrompt",
+    "de: missing noteMedia.play",
+    "de: missing notesPull.create",
+    "de: missing reminderTimePicker.title",
+    "de: missing reminderTimePicker.prompt",
+    "de: missing reminderTimePicker.startPrompt",
+    "de: missing reminderTimePicker.endPrompt",
+    "de: missing reminderTimePicker.morningPrompt",
+    "de: missing reminderTimePicker.eveningPrompt",
+    "ja: missing noteMedia.play",
+    "ja: missing notesPull.create",
+    "ja: missing reminderTimePicker.title",
+    "ja: missing reminderTimePicker.prompt",
+    "ja: missing reminderTimePicker.startPrompt",
+    "ja: missing reminderTimePicker.endPrompt",
+    "ja: missing reminderTimePicker.morningPrompt",
+    "ja: missing reminderTimePicker.eveningPrompt",
+    "ko: missing noteMedia.play",
+    "ko: missing notesPull.create",
+    "ko: missing reminderTimePicker.title",
+    "ko: missing reminderTimePicker.prompt",
+    "ko: missing reminderTimePicker.startPrompt",
+    "ko: missing reminderTimePicker.endPrompt",
+    "ko: missing reminderTimePicker.morningPrompt",
+    "ko: missing reminderTimePicker.eveningPrompt",
+    "it: missing noteMedia.play",
+    "it: missing notesPull.create",
+    "it: missing reminderTimePicker.title",
+    "it: missing reminderTimePicker.prompt",
+    "it: missing reminderTimePicker.startPrompt",
+    "it: missing reminderTimePicker.endPrompt",
+    "it: missing reminderTimePicker.morningPrompt",
+    "it: missing reminderTimePicker.eveningPrompt",
+    "vi: missing noteMedia.play",
+    "vi: missing notesPull.create",
+    "vi: missing reminderTimePicker.title",
+    "vi: missing reminderTimePicker.prompt",
+    "vi: missing reminderTimePicker.startPrompt",
+    "vi: missing reminderTimePicker.endPrompt",
+    "vi: missing reminderTimePicker.morningPrompt",
+    "vi: missing reminderTimePicker.eveningPrompt",
+    "hi: missing noteMedia.play",
+    "hi: missing notesPull.create",
+    "hi: missing reminderTimePicker.title",
+    "hi: missing reminderTimePicker.prompt",
+    "hi: missing reminderTimePicker.startPrompt",
+    "hi: missing reminderTimePicker.endPrompt",
+    "hi: missing reminderTimePicker.morningPrompt",
+    "hi: missing reminderTimePicker.eveningPrompt",
+    "tr: missing noteMedia.play",
+    "tr: missing notesPull.create",
+    "tr: missing reminderTimePicker.title",
+    "tr: missing reminderTimePicker.prompt",
+    "tr: missing reminderTimePicker.startPrompt",
+    "tr: missing reminderTimePicker.endPrompt",
+    "tr: missing reminderTimePicker.morningPrompt",
+    "tr: missing reminderTimePicker.eveningPrompt",
+    "ar: missing noteMedia.play",
+    "ar: missing notesPull.create",
+    "ar: missing reminderTimePicker.title",
+    "ar: missing reminderTimePicker.prompt",
+    "ar: missing reminderTimePicker.startPrompt",
+    "ar: missing reminderTimePicker.endPrompt",
+    "ar: missing reminderTimePicker.morningPrompt",
+    "ar: missing reminderTimePicker.eveningPrompt",
+    "ta: missing noteMedia.play",
+    "ta: missing notesPull.create",
+    "ta: missing reminderTimePicker.title",
+    "ta: missing reminderTimePicker.prompt",
+    "ta: missing reminderTimePicker.startPrompt",
+    "ta: missing reminderTimePicker.endPrompt",
+    "ta: missing reminderTimePicker.morningPrompt",
+    "ta: missing reminderTimePicker.eveningPrompt",
+    "te: missing noteMedia.play",
+    "te: missing notesPull.create",
+    "te: missing reminderTimePicker.title",
+    "te: missing reminderTimePicker.prompt",
+    "te: missing reminderTimePicker.startPrompt",
+    "te: missing reminderTimePicker.endPrompt",
+    "te: missing reminderTimePicker.morningPrompt",
+    "te: missing reminderTimePicker.eveningPrompt",
+    "bn: missing noteMedia.play",
+    "bn: missing notesPull.create",
+    "bn: missing reminderTimePicker.title",
+    "bn: missing reminderTimePicker.prompt",
+    "bn: missing reminderTimePicker.startPrompt",
+    "bn: missing reminderTimePicker.endPrompt",
+    "bn: missing reminderTimePicker.morningPrompt",
+    "bn: missing reminderTimePicker.eveningPrompt",
+    "mr: missing noteMedia.play",
+    "mr: missing notesPull.create",
+    "mr: missing reminderTimePicker.title",
+    "mr: missing reminderTimePicker.prompt",
+    "mr: missing reminderTimePicker.startPrompt",
+    "mr: missing reminderTimePicker.endPrompt",
+    "mr: missing reminderTimePicker.morningPrompt",
+    "mr: missing reminderTimePicker.eveningPrompt",
+    "kn: missing noteMedia.play",
+    "kn: missing notesPull.create",
+    "kn: missing reminderTimePicker.title",
+    "kn: missing reminderTimePicker.prompt",
+    "kn: missing reminderTimePicker.startPrompt",
+    "kn: missing reminderTimePicker.endPrompt",
+    "kn: missing reminderTimePicker.morningPrompt",
+    "kn: missing reminderTimePicker.eveningPrompt",
+    "ml: missing noteMedia.play",
+    "ml: missing notesPull.create",
+    "ml: missing reminderTimePicker.title",
+    "ml: missing reminderTimePicker.prompt",
+    "ml: missing reminderTimePicker.startPrompt",
+    "ml: missing reminderTimePicker.endPrompt",
+    "ml: missing reminderTimePicker.morningPrompt",
+    "ml: missing reminderTimePicker.eveningPrompt",
+    "gu: missing noteMedia.play",
+    "gu: missing notesPull.create",
+    "gu: missing reminderTimePicker.title",
+    "gu: missing reminderTimePicker.prompt",
+    "gu: missing reminderTimePicker.startPrompt",
+    "gu: missing reminderTimePicker.endPrompt",
+    "gu: missing reminderTimePicker.morningPrompt",
+    "gu: missing reminderTimePicker.eveningPrompt",
+    "src/app/canvas-new.native.tsx:23: hardcoded label \"Creating canvas…\"",
+    "src/app/canvas-new.native.tsx:24: hardcoded title \"New Canvas\"",
+    "src/app/canvas-new.native.tsx:24: hardcoded label \"Back\"",
+    "src/app/canvas-new.native.tsx:25: hardcoded title \"Let's try that again\"",
+    "src/app/canvas-new.native.tsx:25: hardcoded description \"We couldn't create your canvas. Your existing canvases are safe.\"",
+    "src/app/canvas-new.native.tsx:26: hardcoded label \"Try again\"",
+    "src/app/canvas-pin.native.tsx:20: hardcoded title \"Pin to Canvas\"",
+    "src/app/canvas-pin.native.tsx:20: hardcoded label \"Back\"",
+    "src/app/canvas-pin.native.tsx:22: hardcoded JSX text \"Choose a home for this note.\"",
+    "src/app/canvas-pin.native.tsx:23: hardcoded accessibilityLabel \"Search canvas titles\"",
+    "src/app/canvas-pin.native.tsx:23: hardcoded placeholder \"Find a canvas\"",
+    "src/app/canvas-pin.native.tsx:24: hardcoded JSX text \"New Canvas\"",
+    "src/app/canvas-pin.native.tsx:27: hardcoded UI template \"Pin note to  \"",
+    "src/app/canvas-pin.native.tsx:30: hardcoded UI expression \"No matching canvases\"",
+    "src/app/canvas-pin.native.tsx:30: hardcoded UI expression \"Start with a fresh canvas\"",
+    "src/app/canvas-pin.native.tsx:30: hardcoded UI expression \"Try a different title or create a new canvas.\"",
+    "src/app/canvas-pin.native.tsx:30: hardcoded UI expression \"Your note will be waiting there, ready to arrange.\"",
+    "src/app/canvas.tsx:4: hardcoded JSX text \"Canvas is available in the iOS and Android app. Back\"",
+    "src/app/canvases.native.tsx:8: hardcoded title \"Chits Canvas\"",
+    "src/app/canvases.native.tsx:8: hardcoded label \"New Canvas\"",
+    "src/components/boards/add-note-sheet.tsx:239: hardcoded JSX text \"New Canvas\"",
+    "src/features/whiteboard/library.native.tsx:35: hardcoded JSX text \"Your drawings, notes, and ideas in one place.\"",
+    "src/features/whiteboard/library.native.tsx:36: hardcoded accessibilityLabel \"Search canvas titles\"",
+    "src/features/whiteboard/library.native.tsx:36: hardcoded placeholder \"Search canvases\"",
+    "src/features/whiteboard/library.native.tsx:47: hardcoded UI expression \"No matching canvases\"",
+    "src/features/whiteboard/library.native.tsx:47: hardcoded UI expression \"No archived canvases\"",
+    "src/features/whiteboard/library.native.tsx:47: hardcoded UI expression \"Your first canvas starts here\"",
+    "src/features/whiteboard/library.native.tsx:47: hardcoded UI expression \"Try another canvas title.\"",
+    "src/features/whiteboard/library.native.tsx:47: hardcoded UI expression \"Canvases you archive will appear here.\"",
+    "src/features/whiteboard/library.native.tsx:47: hardcoded UI expression \"Choose New Canvas from Create New to start drawing.\"",
+    "src/features/whiteboard/library.native.tsx:48: hardcoded UI template \"Open canvas  \"",
+    "src/features/whiteboard/workspace.native.tsx:103: hardcoded title \"Canvas\"",
+    "src/features/whiteboard/workspace.native.tsx:103: hardcoded label \"Back\"",
+    "src/features/whiteboard/workspace.native.tsx:103: hardcoded label \"Export as image\"",
+    "src/features/whiteboard/workspace.native.tsx:103: hardcoded label \"Canvas options\"",
+    "src/features/whiteboard/workspace.native.tsx:105: hardcoded accessibilityLabel \"Canvas title\"",
+    "src/features/whiteboard/workspace.native.tsx:105: hardcoded placeholder \"Untitled Canvas\"",
+    "src/features/whiteboard/workspace.native.tsx:111: hardcoded label \"Undo\"",
+    "src/features/whiteboard/workspace.native.tsx:112: hardcoded label \"Redo\"",
+    "src/features/whiteboard/workspace.native.tsx:156: hardcoded JSX text \"Text size\"",
+    "src/features/whiteboard/workspace.native.tsx:157: hardcoded label \"Decrease text size\"",
+    "src/features/whiteboard/workspace.native.tsx:158: hardcoded JSX text \"px\"",
+    "src/features/whiteboard/workspace.native.tsx:159: hardcoded label \"Increase text size\"",
+    "src/features/whiteboard/workspace.native.tsx:163: hardcoded UI template \"Color  \"",
+    "src/features/whiteboard/workspace.native.tsx:166: hardcoded UI template \"  px\"",
+    "src/features/whiteboard/workspace.native.tsx:180: hardcoded UI template \" . Retry save\"",
+    "src/features/whiteboard/workspace.native.tsx:183: hardcoded title \"Pin a note\"",
+    "src/features/whiteboard/workspace.native.tsx:183: hardcoded label \"Close note picker\"",
+    "src/features/whiteboard/workspace.native.tsx:183: hardcoded label \"Done\"",
+    "src/features/whiteboard/workspace.native.tsx:185: hardcoded accessibilityLabel \"Search notes\"",
+    "src/features/whiteboard/workspace.native.tsx:185: hardcoded placeholder \"Find a note to pin\"",
+    "src/features/whiteboard/workspace.native.tsx:195: hardcoded UI expression \"Pinned to canvas\"",
+    "src/features/whiteboard/workspace.native.tsx:195: hardcoded UI expression \"Pin to canvas\"",
+    "src/features/whiteboard/workspace.native.tsx:204: hardcoded UI expression \"No matching notes\"",
+    "src/features/whiteboard/workspace.native.tsx:204: hardcoded UI expression \"No notes here yet\"",
+    "src/features/whiteboard/workspace.native.tsx:204: hardcoded UI expression \"Try another search or filter.\"",
+    "src/features/whiteboard/workspace.native.tsx:204: hardcoded UI expression \"Your notes will appear here, ready to pin.\""
+  ],
   "unresolved": [
     "All translated catalogs require native-speaker review; identical English values are listed for review, including brands and homographs.",
     "Device visual, accessibility and keyboard/IME acceptance remains manual."

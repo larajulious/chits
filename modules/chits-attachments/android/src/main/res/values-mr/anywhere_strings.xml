@@ -1,6 +1,6 @@
 <resources>
   <string name="anywhere_brand">Chits Anywhere</string>
-  <string name="anywhere_quick">द्रुत टीप</string>
+  <string name="anywhere_quick">नोंद</string>
   <string name="anywhere_recent">अलीकडील नोट्स</string>
   <string name="anywhere_empty">तुमचा पुढचा विचार इथून सुरू होतो.</string>
   <string name="anywhere_hidden">टीप माहिती लपविली आहे.</string>

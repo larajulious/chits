@@ -161,3 +161,12 @@ test('database observers wait for transaction settlement and cannot fail a saved
   stop(); await db.withTransactionAsync(async()=>{});
   assert.equal(events.at(-1),'commit');
 });
+test('with titles shown and previews hidden, what iOS stores has no nulls (UserDefaults would refuse the write)', async () => {
+  const { withoutNulls } = await loadModule('src/services/widget-props');
+  const notes = widgetNotes([{ kind: 'thought', id: 'a', title: 'Groceries', preview: 'milk', updatedAt: 2 }, { kind: 'card', id: 'b', title: 'Trip', preview: null, updatedAt: 1 }], 'titles');
+  assert.ok(notes.every((note) => note.preview === null), 'titles-only notes carry a null preview');
+  const stored = withoutNulls({ version: 1, privacy: 'titles', notes, mascot: '' });
+  assert.ok(!JSON.stringify(stored).includes('null'));
+  assert.deepEqual(stored.notes.map((note) => [note.id, note.title, 'preview' in note]), [['a', 'Groceries', false], ['b', 'Trip', false]]);
+  assert.equal(stored.mascot, '');
+});

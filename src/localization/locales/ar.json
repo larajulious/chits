@@ -1915,7 +1915,7 @@
   "focus.recap.status.early": "انتهت قبل نهاية المؤقت",
   "focus.recap.status.brief": "انتهت بعد وقت قصير",
   "anywhere.brand": "Chits في كل مكان",
-  "anywhere.quick": "ملاحظة سريعة",
+  "anywhere.quick": "ملاحظة",
   "anywhere.recent": "الملاحظات الأخيرة",
   "anywhere.empty": "فكرتك القادمة تبدأ هنا.",
   "anywhere.hidden": "معلومات الملاحظات مخفية.",
@@ -2199,5 +2199,12 @@
   "onboarding.tour.canvas.body": "ارسم وأضف نصًا وثبّت ملاحظاتك على Canvas. جرّب الرسم هنا أو تثبيت ملاحظة تجريبية.",
   "onboarding.tour.canvas.draw": "ارسم",
   "onboarding.tour.canvas.pin": "ثبّت ملاحظة",
-  "onboarding.tour.canvas.say": "أفسح المجال لأفكارك."
+  "onboarding.tour.canvas.say": "أفسح المجال لأفكارك.",
+  "stickyWidget.name": "ملاحظات لاصقة",
+  "stickyWidget.description": "مساحة وملاحظاتها اللاصقة، على شاشتك الرئيسية مباشرة.",
+  "stickyWidget.choose": "اختر مساحة",
+  "stickyWidget.chooseDescription": "اختر المساحة التي تعرضها هذه الأداة.",
+  "stickyWidget.setup": "افتح Chits لإعداد ملاحظاتك اللاصقة.",
+  "stickyWidget.unavailable": "لم تعد هذه الملاحظة متاحة.",
+  "stickyWidget.unavailableHint": "ستُحدَّث الأداة بعد لحظات."
 }

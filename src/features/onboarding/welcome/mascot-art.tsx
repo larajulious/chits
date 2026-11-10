@@ -1,3 +1,4 @@
+import Animated, { useAnimatedProps, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import { memo, type ReactNode } from 'react';
 import Svg, { Circle, Ellipse, G, Line, Path, Rect } from 'react-native-svg';
 
@@ -151,3 +152,40 @@ export const SurprisedMouthPart = memo(function SurprisedMouthPart({ unit }: Par
     <Tilted><Ellipse cx="5" cy="18" rx="30" ry="36" fill={INK} /></Tilted>
   </Canvas>;
 });
+
+
+export type ElasticArmGeometry = { path: string; x: number; y: number; scale: number; visible: number; grip: number };
+const MovingPath = Animated.createAnimatedComponent(Path);
+
+/** The same arm outline/hand artwork, reaching a grip without stretching the hand. */
+export function ElasticArmPart({ geometry, unit, width }: { geometry: SharedValue<ElasticArmGeometry>; unit: number; width: number }) {
+  const outline = useAnimatedProps(() => ({ d: geometry.get().grip >= 0.98 ? '' : geometry.get().path, strokeWidth: 94 * unit * geometry.get().scale, opacity: geometry.get().grip >= 0.98 ? 0 : geometry.get().visible }));
+  const ink = useAnimatedProps(() => ({ d: geometry.get().grip >= 0.98 ? '' : geometry.get().path, strokeWidth: 46 * unit * geometry.get().scale, opacity: geometry.get().grip >= 0.98 ? 0 : geometry.get().visible }));
+  const above = 1250 * unit;
+  const size = above * 2;
+  return <Svg pointerEvents="none" width={width} height={size} viewBox={`0 ${-above} ${width} ${size}`} style={[{ position: 'absolute', left: 0, top: -above }]}>
+    <MovingPath animatedProps={outline} fill="none" stroke={WARM_EDGE} strokeLinecap="round" />
+    <MovingPath animatedProps={ink} fill="none" stroke={INK} strokeLinecap="round" />
+
+  </Svg>;
+}
+
+/** Only the small static hand texture moves; it never redraws a header-sized SVG. */
+export function ElasticHandPart({ geometry, unit }: { geometry: SharedValue<ElasticArmGeometry>; unit: number }) {
+  const size = 200 * unit;
+  const position = useAnimatedStyle(() => {
+    const e = geometry.get();
+    return { opacity: e.visible, transform: [{ translateX: e.x - size * e.scale / 2 }, { translateY: e.y - size * e.scale / 2 }, { scale: e.scale }] };
+  });
+  return <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: size, height: size, transformOrigin: [0, 0, 0] }, position]}>
+    <Svg width={size} height={size} viewBox="-100 -100 200 200">
+      <Path d={mittenPath(88)} fill={WARM_EDGE} />
+      <Path d={mittenPath(61)} fill={INK} />
+    </Svg>
+  </Animated.View>;
+}
+
+function mittenPath(r: number) {
+  const at = (x: number, y: number) => `${x * r} ${y * r}`;
+  return `M ${at(-0.96, 0.1)} C ${at(-1.03, -0.52)} ${at(-0.52, -0.96)} ${at(0.08, -0.94)} C ${at(0.7, -0.92)} ${at(1.04, -0.43)} ${at(0.98, 0.14)} C ${at(0.98, 0.63)} ${at(0.55, 0.85)} ${at(0.21, 0.53)} C ${at(-0.15, 1.02)} ${at(-0.96, 0.8)} ${at(-0.96, 0.1)} Z`;
+}

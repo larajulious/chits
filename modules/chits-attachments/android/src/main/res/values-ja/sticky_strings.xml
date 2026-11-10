@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">付箋</string>
+  <string name="sticky_widget_description">スペースとその付箋を、ホーム画面にそのまま。</string>
+  <string name="sticky_widget_choose">スペースを選ぶ</string>
+  <string name="sticky_widget_hidden">隠れた情報</string>
+  <string name="sticky_widget_voice">音声メモ</string>
+  <string name="sticky_space_fridge">冷蔵庫</string>
+  <string name="sticky_space_desk">デスク</string>
+  <string name="sticky_space_cork">コルクボード</string>
+  <string name="sticky_space_wall">壁</string>
+</resources>

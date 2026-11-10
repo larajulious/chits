@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">Mga sticky note</string>
+  <string name="sticky_widget_description">Isang espasyo at ang mga sticky note nito, diretso sa iyong Home Screen.</string>
+  <string name="sticky_widget_choose">Pumili ng espasyo</string>
+  <string name="sticky_widget_hidden">Nakatagong Chit</string>
+  <string name="sticky_widget_voice">Voice note</string>
+  <string name="sticky_space_fridge">Ref</string>
+  <string name="sticky_space_desk">Desk</string>
+  <string name="sticky_space_cork">Cork board</string>
+  <string name="sticky_space_wall">Dingding</string>
+</resources>

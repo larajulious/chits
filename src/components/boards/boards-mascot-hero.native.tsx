@@ -14,6 +14,7 @@ import { useTheme } from '@/components/theme-provider';
 import { useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
 import { COMPACT_EDGE_INSET, compactHeroLayout, heroScroll } from './compact-hero-layout';
+import { NOTES_MAX_PULL, NotesElasticSurface, NotesRefreshMascot, useNotesRefresh } from '@/components/notes/notes-pull-refresh.native';
 import { SleepingZs } from './sleeping-zs';
 
 const BOARD_LINES = ['boardsHero.say.0', 'boardsHero.say.1', 'boardsHero.say.2', 'boardsHero.say.3'];
@@ -60,46 +61,57 @@ export const BoardsMascotHero = memo(function BoardsMascotHero({ width, paper, s
   const [copyHeight, setCopyHeight] = useState(0);
   const hero = compactHeroLayout(width, copyHeight);
   const heroHeight = hero.height;
+  const refresh = useNotesRefresh();
+  const stretch = refresh?.stretch;
+  const pullProgress = refresh?.progress;
+  const backgroundPull = useAnimatedStyle(() => ({ transform: [{ translateY: -(stretch?.get() ?? 0) }] }));
+  const mascotPaperPull = useAnimatedStyle(() => ({ transform: [{ translateY: stretch?.get() ?? 0 }] }));
+  const speechVisibility = useAnimatedStyle(() => ({ opacity: 1 - Math.min(1, (pullProgress?.get() ?? 0) * 4) }));
   const reduced = useReducedMotion();
   // The hero stays in the list so its controls keep working, and cancels the
   // scroll to hold still. The list's rows draw after it, so they slide over it.
   const held = useDerivedValue(() => reduced ? 0 : heroScroll(scrollY.get(), heroHeight));
-  const sheetTop = useDerivedValue(() => heroHeight - 12);
+  const sheetTop = useDerivedValue(() => heroHeight - 12 + (stretch?.get() ?? 0));
   const zoom = useDerivedValue(() => 1);
   const pinned = useAnimatedStyle(() => ({ transform: [{ translateY: held.get() }] }));
   const paperFront = useAnimatedStyle(() => ({ opacity: Math.min(1, held.get() / PAPER_LIP) }));
   const tap = () => { rig.tap(); };
 
-  return <View testID={`${variant}-mascot-hero`} style={{ height: hero.height }}>
-   <Animated.View style={[styles.hero, { height: hero.height, backgroundColor: desk.desk }, pinned]}>
-    <DeskScenery width={width} height={hero.height} dark={scheme === 'dark'} objects={false} />
-    <ChitsPeekMascot
+  return <Animated.View testID={`${variant}-mascot-hero`} style={{ height: heroHeight }}>
+   <Animated.View style={[styles.hero, { backgroundColor: refresh ? 'transparent' : desk.desk }, { height: heroHeight }, pinned]}>
+    {refresh ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, backgroundPull]}><NotesElasticSurface width={width} height={hero.height + NOTES_MAX_PULL + width * 0.23} /></Animated.View> : <DeskScenery width={width} height={hero.height} dark={scheme === 'dark'} objects={false} />}
+    <NotesRefreshMascot height={hero.height} unit={hero.unit} width={width}>{(travel, gripSurface) => <><ChitsPeekMascot travel={travel} gripSurface={gripSurface}
       values={rig.values} unit={hero.unit} screenWidth={width} edgeInset={COMPACT_EDGE_INSET} compact
       sheetTop={sheetTop} zoom={zoom} shadowColor={desk.shadow}
       label={tr('onboarding.mascot.label')} hint={tr('boardsHero.hint')}
       onPress={tap} onLongPress={tap} onPressOut={release}
     >
-      <View pointerEvents="none" style={[styles.paperEdge, { backgroundColor: paper, boxShadow: `0px -2px 6px ${desk.shadow}` }]} />
+      <Animated.View pointerEvents="none" style={[styles.paperEdge, { backgroundColor: paper, boxShadow: `0px -2px 6px ${desk.shadow}` }, mascotPaperPull]} />
     </ChitsPeekMascot>
-    <Reveal visible animate={entrance} delay={100} style={[styles.copy, { left: hero.copyLeft, width: hero.copyWidth }]}>
+      {/* Speech travels through the same header overlay as the mascot and draws above it. */}
+      {rig.state === 'reacting' && rig.speech >= 0 ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.speechLayer, speechVisibility]}>
+        <SpeechBubble compact side="right" text={tr(lines[rig.speech])} top={8} maxWidth={Math.min(180, width - hero.copyLeft - hero.copyWidth - 20)} />
+      </Animated.View> : null}
+    </>}</NotesRefreshMascot>
+    <Animated.View pointerEvents="box-none" style={StyleSheet.absoluteFill}><Reveal visible animate={entrance} delay={100} style={[styles.copy, { left: hero.copyLeft, width: hero.copyWidth }]}>
       <View onLayout={({ nativeEvent }) => setCopyHeight(nativeEvent.layout.height)} style={styles.words}>
         <AppText accessibilityRole="header" family={fonts.display} style={[styles.title, { color: desk.ink }]}>{title ?? tr(variant === 'notes' ? 'chat.whatSOnYourMind' : 'boardsHero.title')}</AppText>
         <AppText family={fonts.text} style={[styles.description, { color: desk.inkMuted }]}>{body ?? tr(variant === 'notes' ? 'chat.sendYourselfAnythingYouCanOrganizeItLater' : 'boardsHero.body')}</AppText>
         {action ? <View style={styles.action}>{action}</View> : null}
       </View>
-    </Reveal>
-    {rig.state === 'reacting' && rig.speech >= 0 ? <SpeechBubble compact side="right" text={tr(lines[rig.speech])} top={8} maxWidth={Math.min(180, width - hero.copyLeft - hero.copyWidth - 20)} /> : null}
+    </Reveal></Animated.View>
     {rig.state === 'sleeping' ? <SleepingZs left={hero.copyLeft + hero.copyWidth + 6} top={58} color={desk.inkMuted} family={fonts.display} /> : null}
    </Animated.View>
    {/* The paper that moves with the list. It only has to reach as far as the held hero does. */}
-   <View pointerEvents="none" style={[styles.cover, { top: hero.height, height: hero.height, backgroundColor: paper }]} />
+   <Animated.View pointerEvents="none" style={[styles.cover, { height: hero.height, top: heroHeight, backgroundColor: paper }]} />
    {/* Chits' arm rests over the paper edge, so the moving edge fades in above it. */}
    <Animated.View pointerEvents="none" style={[styles.paperEdge, { backgroundColor: paper, boxShadow: `0px -2px 6px ${desk.shadow}` }, paperFront]} />
-  </View>;
+  </Animated.View>;
 });
 
 const styles = StyleSheet.create({
   hero: { overflow: 'hidden' },
+  speechLayer: { zIndex: 1 },
   cover: { position: 'absolute', left: 0, right: 0 },
   copy: { position: 'absolute', top: 12 },
   words: { gap: 5 },

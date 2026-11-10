@@ -3,8 +3,8 @@ import { memo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
 
-import { fileKindLabel, formatCardDate, formatDurationSeconds, getCardPreviewMedia, noteContent, paperFor } from '@/components/boards/card-list-row.native';
-import { VideoPoster } from '@/components/chat/message-row.native';
+import { fileKindLabel, formatCardDate, getCardPreviewMedia, noteContent, paperFor } from '@/components/boards/card-list-row.native';
+import { NoteMediaPreview } from './note-media-preview.native';
 import { PAPERS, PAPER_INK, PAPER_INK_MUTED, PAPER_YELLOW, PushPin, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { useTheme } from '@/components/theme-provider';
 import { AppText } from '@/components/ui/app-text';
@@ -123,6 +123,7 @@ function FullCard({ note, handlers }: { note: CanvasNote; handlers: CanvasCardHa
 
   return <Animated.View style={pressStyle}>
     <Pressable
+      accessible={!(audio || picture?.type === 'video')}
       accessibilityRole="button"
       accessibilityLabel={`${words}. ${location}.`}
       accessibilityHint={tr('cardlistrow.opensNote')}
@@ -137,9 +138,9 @@ function FullCard({ note, handlers }: { note: CanvasNote; handlers: CanvasCardHa
       <View style={[styles.fill, styles.clip, { borderRadius: radius }]}>
         {/* The band of a real sticky's gum strip: all the paper texture a card needs. */}
         <View pointerEvents="none" style={styles.gum} />
-        {picture ? <View pointerEvents="none" style={[styles.picture, { height: frame.pictureHeight, backgroundColor: wash, borderRadius: Math.max(2, radius - 8) }]}>
-          {uri ? <CardPhoto uri={uri} wash={wash} muted={muted} /> : <VideoPoster attachment={picture} style={styles.fill} />}
-          {overflow > 0 ? <View style={styles.overflow}><AppText weight="700" {...scaling} style={styles.overflowText}>+{overflow}</AppText></View> : null}
+        {picture ? <View pointerEvents={picture.type === 'video' ? 'auto' : 'none'} style={[styles.picture, { height: frame.pictureHeight, backgroundColor: wash, borderRadius: Math.max(2, radius - 8) }]}>
+          {picture.type === 'video' ? <NoteMediaPreview attachment={picture} caption={item.title} color={paper} onEdit={() => handlers.onOpen(item)} onInlineTouch={handlers.onInlineTouch} onInlineTap={handlers.onInlineTap} /> : uri ? <CardPhoto uri={uri} wash={wash} muted={muted} /> : <View style={[styles.fill, styles.center]}><Icon name="image-outline" size={22} color={muted} /></View>}
+          {overflow > 0 ? <View pointerEvents="none" style={[styles.overflow, picture.type === 'video' && { top: 6, bottom: undefined }]}><AppText weight="700" {...scaling} style={styles.overflowText}>+{overflow}</AppText></View> : null}
         </View> : null}
         <View style={styles.copy}>
           {content.kind === 'hidden' ? <View style={styles.stack}>
@@ -174,11 +175,7 @@ function FullCard({ note, handlers }: { note: CanvasNote; handlers: CanvasCardHa
           </Pressable>)}
           {total > rows.length ? <AppText {...scaling} style={[styles.more, { color: muted }]}>+{total - rows.length} {tr('cardlistrow.more')}</AppText> : null}
 
-          {audio ? <View pointerEvents="none" style={[styles.audio, { backgroundColor: wash, borderRadius: radius / 2 }]}>
-            <Icon name="mic-outline" size={15} color={ink} />
-            <View style={styles.wave}>{WAVE.map((height, index) => <View key={index} style={[styles.waveBar, { height, backgroundColor: ink }]} />)}</View>
-            <AppText weight="600" {...scaling} style={[styles.small, { color: ink }]}>{audio.duration ? formatDurationSeconds(audio.duration) : tr('cardlistrow.voiceNote')}</AppText>
-          </View> : null}
+          {audio ? <View style={{ marginTop: 8 }}><NoteMediaPreview attachment={audio} caption={item.title} color={paper} width={note.width - 24} onEdit={() => handlers.onOpen(item)} onInlineTouch={handlers.onInlineTouch} onInlineTap={handlers.onInlineTap} /></View> : null}
           {reminder ? <View style={[styles.reminder, { backgroundColor: reminder.fill, borderRadius: radius / 2 }]}>
             <Icon name={reminder.icon} size={11} color={reminder.ink} />
             <AppText weight="600" {...scaling} numberOfLines={1} style={[styles.reminderText, { color: reminder.ink }]}>{reminder.label}</AppText>
@@ -214,8 +211,6 @@ export const CanvasNoteCard = memo(function CanvasNoteCard({ note, lite, handler
 
 function noop() {}
 
-const WAVE = [6, 12, 9, 15, 8, 12, 5, 10, 7];
-
 const styles = StyleSheet.create({
   fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   center: { alignItems: 'center', justifyContent: 'center' },
@@ -241,9 +236,6 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 18 },
   done: { textDecorationLine: 'line-through' },
   more: { fontSize: 11.5, lineHeight: 18, marginLeft: 22 },
-  audio: { flexDirection: 'row', alignItems: 'center', gap: 7, height: 36, marginTop: 8, paddingHorizontal: 9 },
-  wave: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 2 },
-  waveBar: { width: 2, borderRadius: 1, opacity: 0.7 },
   reminder: { alignSelf: 'flex-start', maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, paddingHorizontal: 7, paddingVertical: 3 },
   reminderText: { flexShrink: 1, fontSize: 11, lineHeight: 15 },
   footer: { position: 'absolute', left: 12, right: 5, bottom: 3, height: 28, flexDirection: 'row', alignItems: 'center', gap: 5 },

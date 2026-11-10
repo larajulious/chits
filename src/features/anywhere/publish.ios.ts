@@ -1,6 +1,7 @@
 import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system/legacy';
 import { requireOptionalNativeModule } from 'expo';
+import { withoutNulls } from '@/services/widget-props';
 import { serialWidgetPublisher } from './publish-queue';
 export const publishWidget = serialWidgetPublisher(async (snapshot) => {
   if (!requireOptionalNativeModule('ExpoWidgets')) return;
@@ -12,5 +13,6 @@ export const publishWidget = serialWidgetPublisher(async (snapshot) => {
     const asset = await Asset.fromModule(require('../../../assets/images/app_icon.png')).downloadAsync();
     if (asset.localUri) await FileSystem.copyAsync({ from: asset.localUri, to: image });
   }
-  Widget.updateSnapshot({ ...snapshot, mascot: image });
+  // A preview is null while previews are off; UserDefaults would refuse the whole write.
+  Widget.updateSnapshot(withoutNulls({ ...snapshot, mascot: image }));
 });

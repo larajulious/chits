@@ -5,6 +5,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { Appearance, View } from 'react-native';
 import { SQLiteProvider, type SQLiteDatabase } from 'expo-sqlite';
 import { ThemeProvider, useTheme } from '@/components/theme-provider';
+import { NotesHeaderStage } from '@/components/notes/notes-pull-refresh.native';
 import { NotesListing } from '@/components/notes/notes-listing.native';
 import { BoardHeaderButton } from '@/components/boards/board-header-button';
 import type { CardSection } from '@/components/boards/cards-collection.native';
@@ -59,6 +60,7 @@ function FixtureContent() {
   const chips = [{ key: 'all', label: 'All', count: items.length }, { key: 'unorganized', label: 'Unorganized', count: items.filter(item => item.kind === 'thought').length }];
   const arrange = (_section: CardSection, keys: string[]) => { setOrdered(keys); setArranged(true); };
   return <Screen edges={['top', 'left', 'right']}>
+    <NotesHeaderStage leadingWidth={46} trailingWidth={100}>
     <AppHeader title={section?.title ?? 'Chits'} subtitle={`${section?.count ?? total} notes${arranged ? ' · arranged' : ''}`} leadingWidth={46} actionWidth={100}
       leading={<BoardHeaderButton label="QA back" onPress={() => setOpened(null)}><HeaderIcon name="chevron-back" size={24} /></BoardHeaderButton>}
       trailing={<View style={{ flexDirection: 'row', gap: 8 }}>
@@ -76,5 +78,6 @@ function FixtureContent() {
         footer={<AppText accessibilityLabel={arranged ? 'Order changed in memory' : 'Order unchanged'} style={{ padding: 16 }}>{arranged ? 'Order changed in memory' : 'Order unchanged'}</AppText>}
       />}
     </PaperDesk>
+    </NotesHeaderStage>
   </Screen>;
 }

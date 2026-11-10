@@ -1,8 +1,12 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
-import { noteChecklistEntries, noteChecklistSummary, serializeNoteContent, type NoteBlock, type NoteChecklistEntry } from '@/services/note-content';
+import { noteChecklistEntries, noteChecklistSummary, serializeNoteContent, textDraft, type NoteBlock, type NoteChecklistEntry } from '@/services/note-content';
 import { subscribeToNoteChanges } from '@/services/note-changes';
 import { cardNoteRoute } from '@/services/card-note-route';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { floatingChatBottom } from '@/components/navigation/floating-chat-layout';
+import { useChatTransition } from '@/components/navigation/chat-transition';
 import { setHomeView } from '@/services/home-view';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
@@ -26,6 +30,7 @@ import { requestReminderSync, subscribeToReminderChanges } from '@/services/remi
 import { BoardAppearanceFields } from '@/components/boards/board-appearance-fields';
 import { BoardsListing } from '@/components/boards/boards-listing.native';
 import type { CardSection } from '@/components/boards/cards-collection.native';
+import { NotesHeaderStage } from '@/components/notes/notes-pull-refresh.native';
 import { NotesListing } from '@/components/notes/notes-listing.native';
 import { shareNoteHref } from '@/services/share-note-source';
 import { type BoardIconName } from '@/constants/board-appearance';
@@ -110,6 +115,9 @@ export default function BoardsScreen() {
   const { actionSheet, confirm } = useAppDialog();
   const { tokens: theme, styleTokens, styleColors } = useTheme();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const { buttonHidden } = useChatTransition();
+  const orderSwitchVisibility = useAnimatedStyle(() => ({ opacity: buttonHidden.get() ? 0 : 1 }));
   // The board mounts only what's on screen, which a screen reader can't reach
   // past, so VoiceOver and TalkBack keep the list and its Move earlier/later.
   const listOnly = useScreenReader();
@@ -158,7 +166,8 @@ export default function BoardsScreen() {
     setHeaderSection(null);
     router.setParams({ view: undefined });
   }, [view]));
-  const [addNoteOpen, setAddNoteOpen] = useState(false);
+  const [addNoteOpen, setAddNoteOpen] = useState<'choice' | 'blank' | null>(null);
+  const [blankNoteBlocks] = useState(() => textDraft());
   const [cards, setCards] = useState<CardListItem[]>([]);
   // Chat thoughts not yet organized into any board/card — the Cards view
   // shows these alongside real cards (pinned ones in Pinned, the rest in All
@@ -462,6 +471,22 @@ export default function BoardsScreen() {
   const openCardActions = useCallback(async (item: CardListItem) => {
     // "Stick to Fridge" / "Remove from Fridge", looked up as the menu opens.
     const space = await spaceNoteAction(database, item.kind, item.id).catch(() => null);
+    const privacyOption = {
+      label: tr(item.hidden ? 'id.showContent' : 'id.hideContent'),
+      icon: item.hidden ? 'eye-outline' as const : 'eye-off-outline' as const,
+      onPress: () => {
+        const hidden = !item.hidden;
+        const save = item.kind === 'thought'
+          ? messageRepository.setHiddenContent(item.id, hidden)
+          : boardRepository.setCardHiddenContent(item.id, hidden);
+        void save.then(async () => {
+          void requestReminderSync();
+          await loadCards();
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setCardToast(tr(hidden ? 'id.contentHidden' : 'id.contentVisible2'));
+        }).catch(() => setCardToast(tr('chat.thatCouldnTBeSavedPleaseTryAgain')));
+      },
+    };
     const canvasOption = [{ label: 'Pin to Canvas', icon: 'easel-outline' as const, onPress: () => router.push({ pathname: '/canvas-pin' as const, params: { noteId: item.id, kind: item.kind } }) }];
     const spaceOption = space ? [{ label: space.label, icon: space.icon, onPress: () => void space.run().then(setCardToast, () => setCardToast(tr("chat.thatCouldnTBeSavedPleaseTryAgain"))) }] : [];
     if (item.kind === 'thought') {
@@ -473,6 +498,7 @@ export default function BoardsScreen() {
           ...(item.hidden ? [] : [{ label: tr('templates.saveAs'), icon: 'copy-outline' as const, onPress: () => router.push({ pathname: '/templates', params: { sourceMessageId: item.id } }) }]),
           ...(item.hidden ? [] : [{ label: tr("index.shareNote"), icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ messageId: item.id })) }]),
           { label: item.pinned ? tr("index.unpin") : tr("index.pin"), icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void messageRepository.setPinned(item.id, !item.pinned).then(() => loadCards()).catch(() => setCardToast(tr("chat.thatCouldnTBeSavedPleaseTryAgain"))) },
+          privacyOption,
           ...spaceOption,
           ...canvasOption,
           {
@@ -501,6 +527,7 @@ export default function BoardsScreen() {
         ...(item.hidden ? [] : [{ label: tr('focus.action'), icon: 'timer-outline' as const, onPress: () => router.push({ pathname: '/focus', params: { note: `card:${item.id}` } }) }]),
         ...(item.hidden ? [] : [{ label: tr("index.shareNote"), icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ cardId: item.id })) }]),
         { label: item.pinned ? tr("index.unpin") : tr("index.pin"), icon: item.pinned ? 'pin' : 'pin-outline', onPress: () => void boardRepository.setPinned('card', item.id, !item.pinned).then(() => loadCards()).catch(() => setCardToast(tr("chat.thatCouldnTBeSavedPleaseTryAgain"))) },
+        privacyOption,
         ...spaceOption,
           ...canvasOption,
         { label: tr("index.moveBackToUnorganized"), icon: 'arrow-undo-outline', onPress: () => void moveCardBackToUnorganized(item) },
@@ -573,11 +600,12 @@ export default function BoardsScreen() {
 
   return (
     <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: theme.background }}>
+      <NotesHeaderStage leadingWidth={headerActionsWidth(2)} trailingWidth={headerActionsWidth(viewMode === 'cards' && !listOnly ? 2 : 1)}>
       <AppHeader
         showTitle={false}
         title={activeHeaderSection?.title ?? appTitle}
         leadingWidth={headerActionsWidth(2)}
-        actionWidth={headerActionsWidth(viewMode !== 'cards' ? 1 : listOnly || showBoard ? 2 : 3)}
+        actionWidth={headerActionsWidth(viewMode === 'cards' && !listOnly ? 2 : 1)}
         leading={(
           <View style={[styles.headerActions, { gap: headerGap }]}>
             <IconButton label={tr("archive.openNavigation")} onPress={openDrawer}>
@@ -594,10 +622,6 @@ export default function BoardsScreen() {
         )}
         trailing={(
           <View style={[styles.headerActions, { gap: headerGap }]}>
-            {viewMode === 'cards' && !showBoard ? <IconButton label={orderMode === 'custom' ? tr('cardscollection.switchToRecent') : tr('cardscollection.switchToMyOrder')} disabled={isLoading || showLoader} onPress={() => changeOrderMode(orderMode === 'custom' ? 'recent' : 'custom')}>
-              {/* The icon names the order showing now: newest first, or your own arrangement. */}
-              <HeaderIcon name={orderMode === 'custom' ? 'swap-vertical-outline' : 'time-outline'} size={22} />
-            </IconButton> : null}
             {/* Screen readers stay on the grid, so they have nothing to switch. */}
             {viewMode === 'cards' && !listOnly ? <IconButton label={tr(showBoard ? 'notesCanvas.showGrid' : 'notesCanvas.showBoard')} disabled={isLoading || showLoader} onPress={() => { void Haptics.selectionAsync(); changeNoteLayout(showBoard ? 'grid' : 'board'); }}>
               {/* The icon names where it goes, since that's what it's there for. */}
@@ -622,7 +646,8 @@ export default function BoardsScreen() {
         {viewMode === "cards" ? (
             <NotesListing
               empty={totalCardCount === 0}
-              onWrite={() => setAddNoteOpen(true)}
+              onWrite={() => setAddNoteOpen('choice')}
+              onPullCreate={() => setAddNoteOpen('blank')}
               sections={cardSections}
               chips={cardFilterChips}
               filter={cardFilter}
@@ -651,6 +676,17 @@ export default function BoardsScreen() {
       </View>
       )}
       </PaperDesk>
+      </NotesHeaderStage>
+
+      {viewMode === 'cards' && !showBoard ? <Animated.View style={[{
+        position: 'absolute',
+        right: Math.max(spacing.lg, insets.right + spacing.sm) + (styleTokens.chat.width - BOARD_HEADER_BUTTON_SIZE) / 2,
+        bottom: floatingChatBottom(insets.bottom) + styleTokens.chat.height + spacing.sm,
+      }, orderSwitchVisibility]}>
+        <IconButton label={orderMode === 'custom' ? tr('cardscollection.switchToRecent') : tr('cardscollection.switchToMyOrder')} disabled={isLoading || showLoader} onPress={() => changeOrderMode(orderMode === 'custom' ? 'recent' : 'custom')}>
+          <HeaderIcon name={orderMode === 'custom' ? 'swap-vertical-outline' : 'time-outline'} size={22} />
+        </IconButton>
+      </Animated.View> : null}
 
       <FormSheet
         ref={scrollRef}
@@ -708,7 +744,7 @@ export default function BoardsScreen() {
         </View>
       </FormSheet>
       <Toast message={cardToast} />
-      <AddNoteSheet visible={addNoteOpen} onClose={() => setAddNoteOpen(false)} onSubmit={addNote} />
+      <AddNoteSheet visible={addNoteOpen !== null} initialBlocks={addNoteOpen === 'blank' ? blankNoteBlocks : undefined} startFullscreen={addNoteOpen === 'blank'} onClose={() => setAddNoteOpen(null)} onSubmit={addNote} />
     </Screen>
   );
 }

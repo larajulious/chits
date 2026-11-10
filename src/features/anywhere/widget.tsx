@@ -17,7 +17,7 @@ const layout = (props: AnywhereSnapshot, widgetEnvironment: WidgetEnvironment) =
   const quick = <Link destination={quickURL}>
     <HStack spacing={5} modifiers={[frame({ maxWidth: Infinity, minHeight: small ? 24 : 20, alignment: 'leading' }), padding({ all: 8 }), background(props.accent ?? '#FBE47E'), cornerRadius(12)]}>
       <Image systemName="square.and.pencil" size={16} color={props.onAccent ?? '#2B2410'} />
-      <Text modifiers={[font({ size: small ? 13 : 12, weight: 'bold', design: 'rounded' }), foregroundStyle(props.onAccent ?? '#2B2410'), lineLimit(2)]}>{props.quick ?? 'Quick Note'}</Text>
+      <Text modifiers={[font({ size: small ? 13 : 12, weight: 'bold', design: 'rounded' }), foregroundStyle(props.onAccent ?? '#2B2410'), lineLimit(2)]}>{props.quick ?? 'Note'}</Text>
     </HStack>
   </Link>;
   if (small) return <VStack alignment="leading" spacing={8} modifiers={modifiers}>{mascot}<Spacer />{quick}</VStack>;

@@ -1846,7 +1846,7 @@
   "focus.recap.status.early": "Concluída antes do fim do timer",
   "focus.recap.status.brief": "Encerrada após pouco tempo",
   "anywhere.brand": "Chits em qualquer lugar",
-  "anywhere.quick": "Nota rápida",
+  "anywhere.quick": "Nota",
   "anywhere.recent": "Notas recentes",
   "anywhere.empty": "Sua próxima ideia começa aqui.",
   "anywhere.hidden": "As informações das notas estão ocultas.",
@@ -2127,5 +2127,12 @@
   "onboarding.tour.canvas.body": "Desenhe, adicione texto e fixe suas notas no Canvas. Experimente desenhar aqui ou fixar uma nota de exemplo.",
   "onboarding.tour.canvas.draw": "Desenhar",
   "onboarding.tour.canvas.pin": "Fixar uma nota",
-  "onboarding.tour.canvas.say": "Dê espaço às suas ideias."
+  "onboarding.tour.canvas.say": "Dê espaço às suas ideias.",
+  "stickyWidget.name": "Notas adesivas",
+  "stickyWidget.description": "Um Espaço e suas notas adesivas, direto na sua Tela de Início.",
+  "stickyWidget.choose": "Escolha um Espaço",
+  "stickyWidget.chooseDescription": "Escolha o Espaço que este widget mostra.",
+  "stickyWidget.setup": "Abra o Chits para configurar suas notas adesivas.",
+  "stickyWidget.unavailable": "Esta nota não está mais disponível.",
+  "stickyWidget.unavailableHint": "Seu widget será atualizado em instantes."
 }

@@ -4,7 +4,7 @@ import { TemplateLibrary, type TemplateLibraryHandle } from '@/features/template
 import { createSingleFlight } from '@/services/note-templates';
 import { tr } from '@/localization/runtime';
 import { useDirection, useLocale } from '@/localization/provider';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Keyboard, Modal, Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
@@ -45,6 +45,8 @@ type Props = {
   /** False while those fields aren't valid yet. */
   canSubmit?: boolean;
   initialBlocks?: NoteDraftBlock[];
+  /** Open directly into the full-screen editor, without the capture chooser. */
+  startFullscreen?: boolean;
 };
 
 const ATTACH_OPTIONS = [
@@ -62,7 +64,7 @@ const MAX_NOTE_LENGTH = 10000;
 // text where the cursor was. Picking and storage are the same shared path Chat uses
 // (services/attachment-import), so media is optimized and stored identically; a
 // staged file is deleted again if the sheet is dismissed without adding.
-export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit, title = tr("id.addNote"), context, extra, extraSummary, canSubmit = true, initialBlocks }: Props) {
+export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit, title = tr("id.addNote"), context, extra, extraSummary, canSubmit = true, initialBlocks, startFullscreen = false }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -73,7 +75,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   const paragraphFont = useFontStyle('paragraph');
   const inputRef = useRef<NoteBlocksEditorControl>(null);
   const wasVisible = useRef(false);
-  const [stage, setStage] = useState<'choice' | 'templates' | 'editor'>('choice');
+  const [stage, setStage] = useState<'choice' | 'templates' | 'editor'>(initialBlocks || startFullscreen ? 'editor' : 'choice');
   const libraryRef = useRef<TemplateLibraryHandle>(null);
   const [runSubmit] = useState(createSingleFlight);
   const [blocks, setBlocks] = useState<NoteDraftBlock[]>(() => textDraft());
@@ -83,21 +85,21 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   const [error, setError] = useState<string | null>(null);
   // Full-screen writing mode (like Edit Note) for longer notes; same state, so
   // text and any attachment carry over when switching either way.
-  const [fullscreen, setFullscreen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(startFullscreen);
   const keyboardVisible = useKeyboardInset() > 0;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (visible && !wasVisible.current) {
-      setFullscreen(false);
+      setFullscreen(startFullscreen);
       setBlocks(initialBlocks ?? textDraft());
-      setStage(initialBlocks ? 'editor' : 'choice');
+      setStage(initialBlocks || startFullscreen ? 'editor' : 'choice');
       setSaving(false);
       setStaging(false);
       setDraft(null);
       setError(null);
     }
     wasVisible.current = visible;
-  }, [visible, initialBlocks]);
+  }, [visible, initialBlocks, startFullscreen]);
 
   const trimmed = noteBlocksText(blocks);
   const imageCount = draftImageCount(blocks);
@@ -222,7 +224,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
       transparent
       animationType="slide"
       onRequestClose={() => { if (inputRef.current?.dismissActivePanel()) return; if (stage === 'templates') libraryRef.current?.back(); else close(); }}
-      onShow={() => { if (initialBlocks) requestAnimationFrame(() => inputRef.current?.focus()); }}
+      onShow={() => { if (initialBlocks || startFullscreen) requestAnimationFrame(() => inputRef.current?.focus()); }}
     >
       <SafeAreaProvider>
       <KeyboardPane style={[styles.backdrop, fullscreen && { backgroundColor: desk.desk }]}>

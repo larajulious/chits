@@ -1823,7 +1823,7 @@
   "focus.recap.status.early": "Natapos bago maubos ang timer",
   "focus.recap.status.brief": "Natapos pagkatapos ng maikling oras",
   "anywhere.brand": "Chits Kahit Saan",
-  "anywhere.quick": "Mabilis na Tala",
+  "anywhere.quick": "Tala",
   "anywhere.recent": "Mga Kamakailang Tala",
   "anywhere.empty": "Dito nagsisimula ang susunod mong ideya.",
   "anywhere.hidden": "Nakatago ang impormasyon ng mga tala.",
@@ -2103,5 +2103,12 @@
   "onboarding.tour.canvas.body": "Gumuhit, magdagdag ng teksto, at mag-pin ng mga tala sa Canvas. Subukang gumuhit dito o mag-pin ng halimbawang tala.",
   "onboarding.tour.canvas.draw": "Gumuhit",
   "onboarding.tour.canvas.pin": "Mag-pin ng tala",
-  "onboarding.tour.canvas.say": "Bigyan ng lugar ang iyong mga ideya."
+  "onboarding.tour.canvas.say": "Bigyan ng lugar ang iyong mga ideya.",
+  "stickyWidget.name": "Mga sticky note",
+  "stickyWidget.description": "Isang espasyo at ang mga sticky note nito, diretso sa iyong Home Screen.",
+  "stickyWidget.choose": "Pumili ng espasyo",
+  "stickyWidget.chooseDescription": "Piliin ang espasyong ipapakita ng widget na ito.",
+  "stickyWidget.setup": "Buksan ang Chits para i-set up ang iyong mga sticky note.",
+  "stickyWidget.unavailable": "Hindi na available ang note na ito.",
+  "stickyWidget.unavailableHint": "Maa-update ang iyong widget sa ilang sandali."
 }

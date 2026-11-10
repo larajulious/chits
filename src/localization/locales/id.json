@@ -1823,7 +1823,7 @@
   "focus.recap.status.early": "Selesai sebelum timer habis",
   "focus.recap.status.brief": "Berakhir setelah waktu singkat",
   "anywhere.brand": "Chits di Mana Saja",
-  "anywhere.quick": "Catatan Cepat",
+  "anywhere.quick": "Catatan",
   "anywhere.recent": "Catatan Terbaru",
   "anywhere.empty": "Ide berikutnya dimulai di sini.",
   "anywhere.hidden": "Informasi catatan disembunyikan.",
@@ -2103,5 +2103,12 @@
   "onboarding.tour.canvas.body": "Gambar, tambahkan teks, dan sematkan catatan di Canvas. Coba menggambar di sini atau sematkan catatan contoh.",
   "onboarding.tour.canvas.draw": "Gambar",
   "onboarding.tour.canvas.pin": "Sematkan catatan",
-  "onboarding.tour.canvas.say": "Beri ruang untuk ide Anda."
+  "onboarding.tour.canvas.say": "Beri ruang untuk ide Anda.",
+  "stickyWidget.name": "Catatan tempel",
+  "stickyWidget.description": "Sebuah Ruang dan catatan tempelnya, langsung di Layar Utama Anda.",
+  "stickyWidget.choose": "Pilih Ruang",
+  "stickyWidget.chooseDescription": "Pilih Ruang yang ditampilkan widget ini.",
+  "stickyWidget.setup": "Buka Chits untuk menyiapkan catatan tempel Anda.",
+  "stickyWidget.unavailable": "Catatan ini sudah tidak tersedia.",
+  "stickyWidget.unavailableHint": "Widget Anda akan diperbarui sebentar lagi."
 }

@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">Ghi chú dán</string>
+  <string name="sticky_widget_description">Một Không gian và các ghi chú dán của nó, ngay trên Màn hình chính.</string>
+  <string name="sticky_widget_choose">Chọn Không gian</string>
+  <string name="sticky_widget_hidden">Chit ẩn</string>
+  <string name="sticky_widget_voice">Ghi chú thoại</string>
+  <string name="sticky_space_fridge">Tủ lạnh</string>
+  <string name="sticky_space_desk">Bàn</string>
+  <string name="sticky_space_cork">Bảng nút chai</string>
+  <string name="sticky_space_wall">Tường</string>
+</resources>

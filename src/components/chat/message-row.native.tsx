@@ -93,7 +93,7 @@ function ViewerActions({ attachment, label, onDismiss }: { attachment: Attachmen
   </>;
 }
 
-function VideoViewer({ attachment, onDismiss }: { attachment: AttachmentLike; onDismiss: () => void }) {
+export function VideoViewer({ attachment, onDismiss }: { attachment: AttachmentLike; onDismiss: () => void }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();

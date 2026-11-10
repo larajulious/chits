@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">സ്റ്റിക്കി നോട്ടുകൾ</string>
+  <string name="sticky_widget_description">ഒരു ഇടവും അതിലെ സ്റ്റിക്കി നോട്ടുകളും, നേരിട്ട് നിങ്ങളുടെ ഹോം സ്ക്രീനിൽ.</string>
+  <string name="sticky_widget_choose">ഒരു ഇടം തിരഞ്ഞെടുക്കുക</string>
+  <string name="sticky_widget_hidden">മറഞ്ഞിരിക്കുന്ന ചിറ്റ്</string>
+  <string name="sticky_widget_voice">ശബ്ദ കുറിപ്പ്</string>
+  <string name="sticky_space_fridge">ഫ്രിഡ്ജ്</string>
+  <string name="sticky_space_desk">ഡെസ്ക്</string>
+  <string name="sticky_space_cork">കോർക്ക് ബോർഡ്</string>
+  <string name="sticky_space_wall">മതിൽ</string>
+</resources>

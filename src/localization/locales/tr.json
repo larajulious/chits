@@ -1823,7 +1823,7 @@
   "focus.recap.status.early": "Zamanlayıcı bitmeden tamamlandı",
   "focus.recap.status.brief": "Kısa süre sonra bitirildi",
   "anywhere.brand": "Her Yerde Chits",
-  "anywhere.quick": "Hızlı Not",
+  "anywhere.quick": "Not",
   "anywhere.recent": "Son Notlar",
   "anywhere.empty": "Bir sonraki düşüncen burada başlar.",
   "anywhere.hidden": "Not bilgileri gizli.",
@@ -2103,5 +2103,12 @@
   "onboarding.tour.canvas.body": "Canvas üzerinde çizim yap, metin ekle ve notlarını sabitle. Burada çizim yapmayı veya örnek bir notu sabitlemeyi dene.",
   "onboarding.tour.canvas.draw": "Çiz",
   "onboarding.tour.canvas.pin": "Not sabitle",
-  "onboarding.tour.canvas.say": "Fikirlerine yer aç."
+  "onboarding.tour.canvas.say": "Fikirlerine yer aç.",
+  "stickyWidget.name": "Yapışkan notlar",
+  "stickyWidget.description": "Bir Alan ve yapışkan notları, doğrudan Ana Ekranınızda.",
+  "stickyWidget.choose": "Alan seçin",
+  "stickyWidget.chooseDescription": "Bu widget’ın göstereceği Alanı seçin.",
+  "stickyWidget.setup": "Yapışkan notlarınızı ayarlamak için Chits’i açın.",
+  "stickyWidget.unavailable": "Bu not artık kullanılamıyor.",
+  "stickyWidget.unavailableHint": "Widget’ınız birazdan güncellenecek."
 }

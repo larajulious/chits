@@ -1823,7 +1823,7 @@
   "focus.recap.status.early": "టైమర్ ముగిసేలోపు పూర్తయింది",
   "focus.recap.status.brief": "కొద్దిసేపటి తర్వాత ముగిసింది",
   "anywhere.brand": "Chits Anywhere",
-  "anywhere.quick": "త్వరిత గమనిక",
+  "anywhere.quick": "గమనిక",
   "anywhere.recent": "ఇటీవలి గమనికలు",
   "anywhere.empty": "మీ తదుపరి ఆలోచన ఇక్కడ ప్రారంభమవుతుంది.",
   "anywhere.hidden": "గమనిక సమాచారం దాచబడింది.",
@@ -2103,5 +2103,12 @@
   "onboarding.tour.canvas.body": "Canvas పై గీయండి, వచనం జోడించండి, నోట్లను పిన్ చేయండి. ఇక్కడ గీసి చూడండి లేదా నమూనా నోట్‌ను పిన్ చేయండి.",
   "onboarding.tour.canvas.draw": "గీయండి",
   "onboarding.tour.canvas.pin": "నోట్‌ను పిన్ చేయండి",
-  "onboarding.tour.canvas.say": "మీ ఆలోచనలకు చోటివ్వండి."
+  "onboarding.tour.canvas.say": "మీ ఆలోచనలకు చోటివ్వండి.",
+  "stickyWidget.name": "స్టిక్కీ నోట్‌లు",
+  "stickyWidget.description": "ఒక స్పేస్, దాని స్టిక్కీ నోట్‌లు, నేరుగా మీ హోమ్ స్క్రీన్‌పై.",
+  "stickyWidget.choose": "స్పేస్‌ను ఎంచుకోండి",
+  "stickyWidget.chooseDescription": "ఈ విడ్జెట్ చూపించే స్పేస్‌ను ఎంచుకోండి.",
+  "stickyWidget.setup": "మీ స్టిక్కీ నోట్‌లను సెటప్ చేయడానికి Chitsను తెరవండి.",
+  "stickyWidget.unavailable": "ఈ నోట్ ఇకపై అందుబాటులో లేదు.",
+  "stickyWidget.unavailableHint": "మీ విడ్జెట్ కొద్దిసేపట్లో అప్‌డేట్ అవుతుంది."
 }

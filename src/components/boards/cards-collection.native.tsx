@@ -23,6 +23,7 @@ export type CardSection = { key: string; title: string; pinned?: boolean; count:
 type Cell = { kind: 'header'; section: CardSection } | { kind: 'note'; item: CardListItem; column: number; section: CardSection };
 type NoteCell = Extract<Cell, { kind: 'note' }>;
 type Props = {
+  nativeScrollGesture?: ReturnType<typeof Gesture.Native>;
   sections: CardSection[];
   chips: { key: string; label: string; count: number }[];
   filter: string;
@@ -71,7 +72,7 @@ function SectionHeading({ section }: { section: CardSection }) {
 }
 
 /** Real cards remain recycled; only the active date label changes while scrolling. */
-export function CardsCollection({ sections, chips, filter, onFilter, orderMode, onArrange, onOpen, onMore, onToggleSubtask, onSectionChange, bottomInset, header, estimatedHeaderHeight = 0, scrollOffset: providedScrollOffset, footer, emptyState, backgroundColor, filterBackgroundColor }: Props) {
+export function CardsCollection({ nativeScrollGesture, sections, chips, filter, onFilter, orderMode, onArrange, onOpen, onMore, onToggleSubtask, onSectionChange, bottomInset, header, estimatedHeaderHeight = 0, scrollOffset: providedScrollOffset, footer, emptyState, backgroundColor, filterBackgroundColor }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -106,13 +107,14 @@ export function CardsCollection({ sections, chips, filter, onFilter, orderMode, 
   const filterPosition = useAnimatedStyle(() => ({ transform: [{ translateY: Math.max(0, headerHeight.get() - Math.max(0, scrollOffset.get())) }] }));
   // FlashList owns its scroll ref too. Keep the renderer stable so updates to
   // filters, headings or notes never replace the native scroller.
-  const renderScrollComponent = useCallback((props: ScrollViewProps & { ref?: Ref<ScrollView> }) => (
-    <ScrollView {...props} ref={(node) => {
+  const renderScrollComponent = useCallback((props: ScrollViewProps & { ref?: Ref<ScrollView> }) => {
+    const scroller = <ScrollView {...props} ref={(node) => {
       scrollRef(node);
       if (typeof props.ref === 'function') props.ref(node);
       else if (props.ref) props.ref.current = node;
-    }} />
-  ), [scrollRef]);
+    }} />;
+    return nativeScrollGesture ? <GestureDetector gesture={nativeScrollGesture}>{scroller}</GestureDetector> : scroller;
+  }, [scrollRef, nativeScrollGesture]);
 
   const collection = useMemo(() => {
     const cells: Cell[] = [];
@@ -277,7 +279,10 @@ export function CardsCollection({ sections, chips, filter, onFilter, orderMode, 
   /* eslint-enable react-hooks/refs */
   useEffect(() => stopScrolling, []);
 
-  const liftStyle = useAnimatedStyle(() => ({ transform: [{ translateX: dragX.get() }, { translateY: dragY.get() }, { scale: 1 + 0.04 * lifted.get() }, { rotate: `${-1.5 * lifted.get()}deg` }] }));
+  const liftStyle = useAnimatedStyle(() => {
+    const amount = reduceMotion ? 0 : lifted.get();
+    return { transform: [{ translateX: dragX.get() }, { translateY: dragY.get() }, { scale: 1 + 0.04 * amount }, { rotate: `${-4 * amount}deg` }] };
+  });
 
   // Screen readers arrange with Move earlier / Move later on each note.
   const step = (cell: NoteCell, direction: -1 | 1) => {

@@ -23,6 +23,12 @@ class ChitsAnywhereModule : Module() {
       require(today.length < 24000 && JSONObject(today).optInt("version") == 1 && fresh.length < 24000)
       ChitsPlanProvider.store(context, today, fresh)
     }
+    // Sticky Note widgets: every Space note, drawn per widget by ChitsStickyProvider.
+    AsyncFunction("updateStickySnapshot") { value: String ->
+      val context = appContext.reactContext ?: return@AsyncFunction
+      require(value.length < 400000 && JSONObject(value).optInt("version") == 1)
+      ChitsStickyProvider.store(context, value)
+    }
     AsyncFunction("takePlanPending") {
       val context = appContext.reactContext ?: return@AsyncFunction "[]"
       ChitsPlanProvider.takePending(context)

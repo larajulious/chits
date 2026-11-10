@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">ملاحظات لاصقة</string>
+  <string name="sticky_widget_description">مساحة وملاحظاتها اللاصقة، على شاشتك الرئيسية مباشرة.</string>
+  <string name="sticky_widget_choose">اختر مساحة</string>
+  <string name="sticky_widget_hidden">الشيت المخفي</string>
+  <string name="sticky_widget_voice">ملاحظة صوتية</string>
+  <string name="sticky_space_fridge">الثلاجة</string>
+  <string name="sticky_space_desk">مكتب</string>
+  <string name="sticky_space_cork">لوح الفلين</string>
+  <string name="sticky_space_wall">الجدار</string>
+</resources>

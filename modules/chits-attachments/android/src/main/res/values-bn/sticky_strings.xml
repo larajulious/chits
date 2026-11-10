@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">স্টিকি নোট</string>
+  <string name="sticky_widget_description">একটি স্পেস ও তার স্টিকি নোটগুলো, সরাসরি আপনার হোম স্ক্রিনে।</string>
+  <string name="sticky_widget_choose">একটি স্পেস বেছে নিন</string>
+  <string name="sticky_widget_hidden">লুকানো চিট</string>
+  <string name="sticky_widget_voice">ভয়েস নোট</string>
+  <string name="sticky_space_fridge">ফ্রিজ</string>
+  <string name="sticky_space_desk">ডেস্ক</string>
+  <string name="sticky_space_cork">কর্ক বোর্ড</string>
+  <string name="sticky_space_wall">প্রাচীর</string>
+</resources>

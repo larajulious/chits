@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">Note adesive</string>
+  <string name="sticky_widget_description">Uno Spazio e le sue note adesive, direttamente nella schermata Home.</string>
+  <string name="sticky_widget_choose">Scegli uno Spazio</string>
+  <string name="sticky_widget_hidden">Chit nascosta</string>
+  <string name="sticky_widget_voice">Nota vocale</string>
+  <string name="sticky_space_fridge">Frigo</string>
+  <string name="sticky_space_desk">Scrivania</string>
+  <string name="sticky_space_cork">Bacheca di sughero</string>
+  <string name="sticky_space_wall">Muro</string>
+</resources>

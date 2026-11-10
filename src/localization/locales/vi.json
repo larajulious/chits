@@ -1823,7 +1823,7 @@
   "focus.recap.status.early": "Kết thúc trước khi hết giờ",
   "focus.recap.status.brief": "Kết thúc sau một lúc ngắn",
   "anywhere.brand": "Chits mọi nơi",
-  "anywhere.quick": "Ghi chú nhanh",
+  "anywhere.quick": "Ghi chú",
   "anywhere.recent": "Ghi chú gần đây",
   "anywhere.empty": "Ý tưởng tiếp theo bắt đầu từ đây.",
   "anywhere.hidden": "Thông tin ghi chú đã được ẩn.",
@@ -2103,5 +2103,12 @@
   "onboarding.tour.canvas.body": "Vẽ, thêm chữ và ghim ghi chú trên Canvas. Thử vẽ ở đây hoặc ghim một ghi chú mẫu.",
   "onboarding.tour.canvas.draw": "Vẽ",
   "onboarding.tour.canvas.pin": "Ghim ghi chú",
-  "onboarding.tour.canvas.say": "Dành chỗ cho ý tưởng của bạn."
+  "onboarding.tour.canvas.say": "Dành chỗ cho ý tưởng của bạn.",
+  "stickyWidget.name": "Ghi chú dán",
+  "stickyWidget.description": "Một Không gian và các ghi chú dán của nó, ngay trên Màn hình chính.",
+  "stickyWidget.choose": "Chọn Không gian",
+  "stickyWidget.chooseDescription": "Chọn Không gian mà tiện ích này hiển thị.",
+  "stickyWidget.setup": "Mở Chits để thiết lập ghi chú dán của bạn.",
+  "stickyWidget.unavailable": "Ghi chú này không còn nữa.",
+  "stickyWidget.unavailableHint": "Tiện ích của bạn sẽ được cập nhật trong giây lát."
 }

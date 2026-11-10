@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">Notas adesivas</string>
+  <string name="sticky_widget_description">Um Espaço e suas notas adesivas, direto na sua Tela de Início.</string>
+  <string name="sticky_widget_choose">Escolha um Espaço</string>
+  <string name="sticky_widget_hidden">Chit oculto</string>
+  <string name="sticky_widget_voice">Nota de voz</string>
+  <string name="sticky_space_fridge">Geladeira</string>
+  <string name="sticky_space_desk">Mesa</string>
+  <string name="sticky_space_cork">Mural de cortiça</string>
+  <string name="sticky_space_wall">Parede</string>
+</resources>

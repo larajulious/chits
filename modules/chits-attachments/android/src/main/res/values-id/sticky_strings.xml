@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">Catatan tempel</string>
+  <string name="sticky_widget_description">Sebuah Ruang dan catatan tempelnya, langsung di Layar Utama Anda.</string>
+  <string name="sticky_widget_choose">Pilih Ruang</string>
+  <string name="sticky_widget_hidden">Obrolan Tersembunyi</string>
+  <string name="sticky_widget_voice">Catatan suara</string>
+  <string name="sticky_space_fridge">Kulkas</string>
+  <string name="sticky_space_desk">Meja</string>
+  <string name="sticky_space_cork">Papan gabus</string>
+  <string name="sticky_space_wall">Dinding</string>
+</resources>

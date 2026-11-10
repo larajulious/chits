@@ -1823,7 +1823,7 @@
   "focus.recap.status.early": "ടൈമർ അവസാനിക്കുന്നതിന് മുമ്പ് പൂർത്തിയായി",
   "focus.recap.status.brief": "കുറച്ച് സമയത്തിന് ശേഷം അവസാനിച്ചു",
   "anywhere.brand": "Chits Anywhere",
-  "anywhere.quick": "ദ്രുത കുറിപ്പ്",
+  "anywhere.quick": "കുറിപ്പ്",
   "anywhere.recent": "സമീപകാല കുറിപ്പുകൾ",
   "anywhere.empty": "നിങ്ങളുടെ അടുത്ത ചിന്ത ഇവിടെ തുടങ്ങുന്നു.",
   "anywhere.hidden": "കുറിപ്പ് വിവരങ്ങൾ മറച്ചിരിക്കുന്നു.",
@@ -2103,5 +2103,12 @@
   "onboarding.tour.canvas.body": "Canvas-ൽ വരയ്ക്കൂ, എഴുത്ത് ചേർക്കൂ, കുറിപ്പുകൾ പിൻ ചെയ്യൂ. ഇവിടെ വരച്ചുനോക്കൂ അല്ലെങ്കിൽ ഒരു മാതൃകാ കുറിപ്പ് പിൻ ചെയ്യൂ.",
   "onboarding.tour.canvas.draw": "വരയ്ക്കൂ",
   "onboarding.tour.canvas.pin": "കുറിപ്പ് പിൻ ചെയ്യൂ",
-  "onboarding.tour.canvas.say": "നിങ്ങളുടെ ആശയങ്ങൾക്ക് ഇടം നൽകൂ."
+  "onboarding.tour.canvas.say": "നിങ്ങളുടെ ആശയങ്ങൾക്ക് ഇടം നൽകൂ.",
+  "stickyWidget.name": "സ്റ്റിക്കി നോട്ടുകൾ",
+  "stickyWidget.description": "ഒരു ഇടവും അതിലെ സ്റ്റിക്കി നോട്ടുകളും, നേരിട്ട് നിങ്ങളുടെ ഹോം സ്ക്രീനിൽ.",
+  "stickyWidget.choose": "ഒരു ഇടം തിരഞ്ഞെടുക്കുക",
+  "stickyWidget.chooseDescription": "ഈ വിജറ്റ് കാണിക്കുന്ന ഇടം തിരഞ്ഞെടുക്കുക.",
+  "stickyWidget.setup": "നിങ്ങളുടെ സ്റ്റിക്കി നോട്ടുകൾ സജ്ജമാക്കാൻ Chits തുറക്കുക.",
+  "stickyWidget.unavailable": "ഈ കുറിപ്പ് ഇനി ലഭ്യമല്ല.",
+  "stickyWidget.unavailableHint": "നിങ്ങളുടെ വിജറ്റ് ഉടൻ അപ്ഡേറ്റ് ആകും."
 }

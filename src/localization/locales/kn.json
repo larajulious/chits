@@ -1823,7 +1823,7 @@
   "focus.recap.status.early": "ಟೈಮರ್ ಮುಗಿಯುವ ಮೊದಲು ಮುಗಿದಿದೆ",
   "focus.recap.status.brief": "ಸ್ವಲ್ಪ ಸಮಯದ ನಂತರ ಮುಕ್ತಾಯವಾಯಿತು",
   "anywhere.brand": "Chits Anywhere",
-  "anywhere.quick": "ತ್ವರಿತ ಟಿಪ್ಪಣಿ",
+  "anywhere.quick": "ಟಿಪ್ಪಣಿ",
   "anywhere.recent": "ಇತ್ತೀಚಿನ ಟಿಪ್ಪಣಿಗಳು",
   "anywhere.empty": "ನಿಮ್ಮ ಮುಂದಿನ ಆಲೋಚನೆ ಇಲ್ಲಿಂದ ಪ್ರಾರಂಭವಾಗುತ್ತದೆ.",
   "anywhere.hidden": "ಟಿಪ್ಪಣಿ ಮಾಹಿತಿಯನ್ನು ಮರೆಮಾಡಲಾಗಿದೆ.",
@@ -2103,5 +2103,12 @@
   "onboarding.tour.canvas.body": "Canvas ಮೇಲೆ ಚಿತ್ರ ಬಿಡಿಸಿ, ಪಠ್ಯ ಸೇರಿಸಿ ಮತ್ತು ಟಿಪ್ಪಣಿಗಳನ್ನು ಪಿನ್ ಮಾಡಿ. ಇಲ್ಲಿ ಚಿತ್ರ ಬಿಡಿಸಿ ನೋಡಿ ಅಥವಾ ಮಾದರಿ ಟಿಪ್ಪಣಿಯನ್ನು ಪಿನ್ ಮಾಡಿ.",
   "onboarding.tour.canvas.draw": "ಚಿತ್ರ ಬಿಡಿಸಿ",
   "onboarding.tour.canvas.pin": "ಟಿಪ್ಪಣಿ ಪಿನ್ ಮಾಡಿ",
-  "onboarding.tour.canvas.say": "ನಿಮ್ಮ ಆಲೋಚನೆಗಳಿಗೆ ಜಾಗ ನೀಡಿ."
+  "onboarding.tour.canvas.say": "ನಿಮ್ಮ ಆಲೋಚನೆಗಳಿಗೆ ಜಾಗ ನೀಡಿ.",
+  "stickyWidget.name": "ಸ್ಟಿಕಿ ಟಿಪ್ಪಣಿಗಳು",
+  "stickyWidget.description": "ಒಂದು ಜಾಗ ಮತ್ತು ಅದರ ಸ್ಟಿಕಿ ಟಿಪ್ಪಣಿಗಳು, ನೇರವಾಗಿ ನಿಮ್ಮ ಹೋಮ್ ಸ್ಕ್ರೀನ್‌ನಲ್ಲಿ.",
+  "stickyWidget.choose": "ಜಾಗವನ್ನು ಆಯ್ಕೆಮಾಡಿ",
+  "stickyWidget.chooseDescription": "ಈ ವಿಜೆಟ್ ತೋರಿಸುವ ಜಾಗವನ್ನು ಆಯ್ಕೆಮಾಡಿ.",
+  "stickyWidget.setup": "ನಿಮ್ಮ ಸ್ಟಿಕಿ ಟಿಪ್ಪಣಿಗಳನ್ನು ಹೊಂದಿಸಲು Chits ತೆರೆಯಿರಿ.",
+  "stickyWidget.unavailable": "ಈ ಟಿಪ್ಪಣಿ ಇನ್ನು ಲಭ್ಯವಿಲ್ಲ.",
+  "stickyWidget.unavailableHint": "ನಿಮ್ಮ ವಿಜೆಟ್ ಸ್ವಲ್ಪ ಸಮಯದಲ್ಲಿ ಅಪ್‌ಡೇಟ್ ಆಗುತ್ತದೆ."
 }

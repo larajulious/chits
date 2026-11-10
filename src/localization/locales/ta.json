@@ -1823,7 +1823,7 @@
   "focus.recap.status.early": "டைமர் முடிவதற்குள் முடிந்தது",
   "focus.recap.status.brief": "சிறிது நேரம் கழித்து முடிந்தது",
   "anywhere.brand": "Chits Anywhere",
-  "anywhere.quick": "விரைவு குறிப்பு",
+  "anywhere.quick": "குறிப்பு",
   "anywhere.recent": "சமீபத்திய குறிப்புகள்",
   "anywhere.empty": "உங்களின் அடுத்த எண்ணம் இங்கே தொடங்குகிறது.",
   "anywhere.hidden": "குறிப்பு தகவல் மறைக்கப்பட்டுள்ளது.",
@@ -2103,5 +2103,12 @@
   "onboarding.tour.canvas.body": "Canvas இல் வரையுங்கள், உரை சேருங்கள், குறிப்புகளைப் பொருத்துங்கள். இங்கே வரைந்து பாருங்கள் அல்லது மாதிரிக் குறிப்பைப் பொருத்துங்கள்.",
   "onboarding.tour.canvas.draw": "வரையுங்கள்",
   "onboarding.tour.canvas.pin": "குறிப்பைப் பொருத்து",
-  "onboarding.tour.canvas.say": "உங்கள் யோசனைகளுக்கு இடம் கொடுங்கள்."
+  "onboarding.tour.canvas.say": "உங்கள் யோசனைகளுக்கு இடம் கொடுங்கள்.",
+  "stickyWidget.name": "ஸ்டிக்கி குறிப்புகள்",
+  "stickyWidget.description": "ஓர் இடமும் அதன் ஸ்டிக்கி குறிப்புகளும், நேரடியாக உங்கள் முகப்புத் திரையில்.",
+  "stickyWidget.choose": "இடத்தைத் தேர்ந்தெடுக்கவும்",
+  "stickyWidget.chooseDescription": "இந்த விட்ஜெட் காட்டும் இடத்தைத் தேர்ந்தெடுக்கவும்.",
+  "stickyWidget.setup": "உங்கள் ஸ்டிக்கி குறிப்புகளை அமைக்க Chits-ஐத் திறக்கவும்.",
+  "stickyWidget.unavailable": "இந்தக் குறிப்பு இனி கிடைக்கவில்லை.",
+  "stickyWidget.unavailableHint": "உங்கள் விட்ஜெட் சிறிது நேரத்தில் புதுப்பிக்கப்படும்."
 }

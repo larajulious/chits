@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">स्टिकी नोट्स</string>
+  <string name="sticky_widget_description">एक स्पेस और उसके स्टिकी नोट्स, सीधे आपकी होम स्क्रीन पर।</string>
+  <string name="sticky_widget_choose">स्पेस चुनें</string>
+  <string name="sticky_widget_hidden">छिपी हुई चिट</string>
+  <string name="sticky_widget_voice">वॉयस नोट</string>
+  <string name="sticky_space_fridge">फ्रिज</string>
+  <string name="sticky_space_desk">डेस्क</string>
+  <string name="sticky_space_cork">कॉर्क बोर्ड</string>
+  <string name="sticky_space_wall">दीवार</string>
+</resources>

@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">Yapışkan notlar</string>
+  <string name="sticky_widget_description">Bir Alan ve yapışkan notları, doğrudan Ana Ekranınızda.</string>
+  <string name="sticky_widget_choose">Alan seçin</string>
+  <string name="sticky_widget_hidden">Gizli Bilgi</string>
+  <string name="sticky_widget_voice">Sesli not</string>
+  <string name="sticky_space_fridge">Buzdolabı</string>
+  <string name="sticky_space_desk">Masa</string>
+  <string name="sticky_space_cork">Mantar panosu</string>
+  <string name="sticky_space_wall">Duvar</string>
+</resources>

@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">સ્ટીકી નોંધો</string>
+  <string name="sticky_widget_description">એક જગ્યા અને તેની સ્ટીકી નોંધો, સીધી તમારી હોમ સ્ક્રીન પર.</string>
+  <string name="sticky_widget_choose">જગ્યા પસંદ કરો</string>
+  <string name="sticky_widget_hidden">છુપાયેલ ચિટ</string>
+  <string name="sticky_widget_voice">વૉઇસ નોંધ</string>
+  <string name="sticky_space_fridge">ફ્રીજ</string>
+  <string name="sticky_space_desk">ડેસ્ક</string>
+  <string name="sticky_space_cork">કૉર્ક બોર્ડ</string>
+  <string name="sticky_space_wall">દીવાલ</string>
+</resources>

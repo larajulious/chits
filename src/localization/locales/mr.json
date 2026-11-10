@@ -1823,7 +1823,7 @@
   "focus.recap.status.early": "टाइमर संपण्यापूर्वी पूर्ण झाले",
   "focus.recap.status.brief": "थोड्या वेळाने संपले",
   "anywhere.brand": "Chits Anywhere",
-  "anywhere.quick": "द्रुत टीप",
+  "anywhere.quick": "नोंद",
   "anywhere.recent": "अलीकडील नोट्स",
   "anywhere.empty": "तुमचा पुढचा विचार इथून सुरू होतो.",
   "anywhere.hidden": "टीप माहिती लपविली आहे.",
@@ -2103,5 +2103,12 @@
   "onboarding.tour.canvas.body": "Canvas वर चित्र काढा, मजकूर जोडा आणि नोट्स पिन करा. इथे चित्र काढून पाहा किंवा नमुना नोट पिन करा.",
   "onboarding.tour.canvas.draw": "चित्र काढा",
   "onboarding.tour.canvas.pin": "नोट पिन करा",
-  "onboarding.tour.canvas.say": "तुमच्या कल्पनांना जागा द्या."
+  "onboarding.tour.canvas.say": "तुमच्या कल्पनांना जागा द्या.",
+  "stickyWidget.name": "स्टिकी नोट्स",
+  "stickyWidget.description": "एक स्पेस आणि त्यावरील स्टिकी नोट्स, थेट तुमच्या होम स्क्रीनवर.",
+  "stickyWidget.choose": "स्पेस निवडा",
+  "stickyWidget.chooseDescription": "हे विजेट कोणता स्पेस दाखवेल ते निवडा.",
+  "stickyWidget.setup": "तुमच्या स्टिकी नोट्स सेट करण्यासाठी Chits उघडा.",
+  "stickyWidget.unavailable": "ही नोट आता उपलब्ध नाही.",
+  "stickyWidget.unavailableHint": "तुमचे विजेट काही क्षणांत अपडेट होईल."
 }

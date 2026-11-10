@@ -1823,7 +1823,7 @@
   "focus.recap.status.early": "タイマー終了前に完了",
   "focus.recap.status.brief": "短時間で終了",
   "anywhere.brand": "どこでもChits",
-  "anywhere.quick": "クイックノート",
+  "anywhere.quick": "メモ",
   "anywhere.recent": "最近のノート",
   "anywhere.empty": "次のひらめきはここから。",
   "anywhere.hidden": "ノート情報は非表示です。",
@@ -2103,5 +2103,12 @@
   "onboarding.tour.canvas.body": "Canvasで絵を描いたり、文字を加えたり、メモをピン留めできます。ここで描くか、サンプルのメモをピン留めしてみましょう。",
   "onboarding.tour.canvas.draw": "描く",
   "onboarding.tour.canvas.pin": "メモをピン留め",
-  "onboarding.tour.canvas.say": "アイデアを自由に広げましょう。"
+  "onboarding.tour.canvas.say": "アイデアを自由に広げましょう。",
+  "stickyWidget.name": "付箋",
+  "stickyWidget.description": "スペースとその付箋を、ホーム画面にそのまま。",
+  "stickyWidget.choose": "スペースを選ぶ",
+  "stickyWidget.chooseDescription": "このウィジェットに表示するスペースを選びます。",
+  "stickyWidget.setup": "Chitsを開いて付箋を設定してください。",
+  "stickyWidget.unavailable": "このメモは利用できなくなりました。",
+  "stickyWidget.unavailableHint": "ウィジェットはまもなく更新されます。"
 }

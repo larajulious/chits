@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">ಸ್ಟಿಕಿ ಟಿಪ್ಪಣಿಗಳು</string>
+  <string name="sticky_widget_description">ಒಂದು ಜಾಗ ಮತ್ತು ಅದರ ಸ್ಟಿಕಿ ಟಿಪ್ಪಣಿಗಳು, ನೇರವಾಗಿ ನಿಮ್ಮ ಹೋಮ್ ಸ್ಕ್ರೀನ್‌ನಲ್ಲಿ.</string>
+  <string name="sticky_widget_choose">ಜಾಗವನ್ನು ಆಯ್ಕೆಮಾಡಿ</string>
+  <string name="sticky_widget_hidden">ಹಿಡನ್ ಚಿಟ್</string>
+  <string name="sticky_widget_voice">ಧ್ವನಿ ಟಿಪ್ಪಣಿ</string>
+  <string name="sticky_space_fridge">ಫ್ರಿಜ್</string>
+  <string name="sticky_space_desk">ಡೆಸ್ಕ್</string>
+  <string name="sticky_space_cork">ಕಾರ್ಕ್ ಬೋರ್ಡ್</string>
+  <string name="sticky_space_wall">ಗೋಡೆ</string>
+</resources>

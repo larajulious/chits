@@ -1846,7 +1846,7 @@
   "focus.recap.status.early": "Terminée avant la fin du minuteur",
   "focus.recap.status.brief": "Arrêtée après peu de temps",
   "anywhere.brand": "Chits partout",
-  "anywhere.quick": "Note rapide",
+  "anywhere.quick": "Note",
   "anywhere.recent": "Notes récentes",
   "anywhere.empty": "Votre prochaine idée commence ici.",
   "anywhere.hidden": "Les informations des notes sont masquées.",
@@ -2127,5 +2127,12 @@
   "onboarding.tour.canvas.body": "Dessinez, ajoutez du texte et épinglez vos notes sur Canvas. Essayez de dessiner ici ou d’épingler une note d’exemple.",
   "onboarding.tour.canvas.draw": "Dessiner",
   "onboarding.tour.canvas.pin": "Épingler une note",
-  "onboarding.tour.canvas.say": "Faites de la place à vos idées."
+  "onboarding.tour.canvas.say": "Faites de la place à vos idées.",
+  "stickyWidget.name": "Post-it",
+  "stickyWidget.description": "Un Espace et ses post-it, directement sur votre écran d’accueil.",
+  "stickyWidget.choose": "Choisir un Espace",
+  "stickyWidget.chooseDescription": "Choisissez l’Espace affiché par ce widget.",
+  "stickyWidget.setup": "Ouvrez Chits pour configurer vos post-it.",
+  "stickyWidget.unavailable": "Cette note n’est plus disponible.",
+  "stickyWidget.unavailableHint": "Votre widget sera à jour dans un instant."
 }

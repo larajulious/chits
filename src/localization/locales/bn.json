@@ -1823,7 +1823,7 @@
   "focus.recap.status.early": "টাইমার শেষ হওয়ার আগেই শেষ",
   "focus.recap.status.brief": "কিছুক্ষণ পর শেষ হলো",
   "anywhere.brand": "Chits Anywhere",
-  "anywhere.quick": "দ্রুত নোট",
+  "anywhere.quick": "নোট",
   "anywhere.recent": "সাম্প্রতিক নোট",
   "anywhere.empty": "আপনার পরবর্তী চিন্তা এখানে শুরু.",
   "anywhere.hidden": "নোট তথ্য গোপন করা হয়.",
@@ -2103,5 +2103,12 @@
   "onboarding.tour.canvas.body": "Canvas-এ আঁকুন, লেখা যোগ করুন আর নোট পিন করুন। এখানে এঁকে দেখুন বা একটি নমুনা নোট পিন করুন।",
   "onboarding.tour.canvas.draw": "আঁকুন",
   "onboarding.tour.canvas.pin": "নোট পিন করুন",
-  "onboarding.tour.canvas.say": "আপনার ভাবনাকে জায়গা দিন।"
+  "onboarding.tour.canvas.say": "আপনার ভাবনাকে জায়গা দিন।",
+  "stickyWidget.name": "স্টিকি নোট",
+  "stickyWidget.description": "একটি স্পেস ও তার স্টিকি নোটগুলো, সরাসরি আপনার হোম স্ক্রিনে।",
+  "stickyWidget.choose": "একটি স্পেস বেছে নিন",
+  "stickyWidget.chooseDescription": "এই উইজেটে কোন স্পেস দেখাবে তা বেছে নিন।",
+  "stickyWidget.setup": "আপনার স্টিকি নোট সেট আপ করতে Chits খুলুন।",
+  "stickyWidget.unavailable": "এই নোটটি আর উপলব্ধ নেই।",
+  "stickyWidget.unavailableHint": "আপনার উইজেট কিছুক্ষণের মধ্যে আপডেট হবে।"
 }

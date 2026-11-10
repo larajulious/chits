@@ -1,6 +1,6 @@
 <resources>
   <string name="anywhere_brand">Chits في كل مكان</string>
-  <string name="anywhere_quick">ملاحظة سريعة</string>
+  <string name="anywhere_quick">ملاحظة</string>
   <string name="anywhere_recent">الملاحظات الأخيرة</string>
   <string name="anywhere_empty">فكرتك القادمة تبدأ هنا.</string>
   <string name="anywhere_hidden">معلومات الملاحظات مخفية.</string>

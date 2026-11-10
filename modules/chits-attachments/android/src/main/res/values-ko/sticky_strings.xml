@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">스티커 메모</string>
+  <string name="sticky_widget_description">공간과 그 스티커 메모를 홈 화면에 그대로.</string>
+  <string name="sticky_widget_choose">공간 선택</string>
+  <string name="sticky_widget_hidden">숨겨진 전표</string>
+  <string name="sticky_widget_voice">음성 메모</string>
+  <string name="sticky_space_fridge">냉장고</string>
+  <string name="sticky_space_desk">책상</string>
+  <string name="sticky_space_cork">코르크보드</string>
+  <string name="sticky_space_wall">벽</string>
+</resources>

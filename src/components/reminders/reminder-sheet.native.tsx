@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, AppState, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { DateTimePicker } from '@expo/ui/community/datetime-picker';
 
-import { AndroidReminderTimePicker } from './android-reminder-time-picker';
+import { ReminderDatePicker } from './reminder-date-picker.native';
+import { ReminderTimePicker } from './reminder-time-picker.native';
 import { ExactAlarmNotice } from './exact-alarm-notice';
 import { showPermissionSettingsPrompt } from '@/components/permissions/permission-settings-prompt';
 import { useTheme } from '@/components/theme-provider';
@@ -18,7 +18,7 @@ import { hasExactReminderAccess } from '@/services/reminder-alarm-access';
 import type { SetReminderResult } from '@/services/reminders';
 import {
   dateFormat, defaultCustomReminderTime, formatReminder, formatReminderClock, formatReminderDay, isValidReminderTime,
-  materialDialogDate, reminderQuickOptions, withDate, withTime, type ReminderQuickKey,
+  reminderQuickOptions, withDate, withTime, type ReminderQuickKey,
 } from '@/services/reminder-time';
 
 type Choice = ReminderQuickKey | 'custom';
@@ -42,14 +42,14 @@ const QUICK_ICONS: Record<ReminderQuickKey, React.ComponentProps<typeof Ionicons
 
 /**
  * "Remind me" for a note or card: quick choices, then a date and a time the user can
- * adjust, and one clear button. iOS uses compact native pickers; Android
- * uses the Material date dialog and a numeric time-entry dialog.
+ * adjust, and one clear button. Date and time open the shared Chits pickers;
+ * saving and permission handling stay here.
  */
 export function ReminderSheet({ visible, existing, accent, accentOn, onClose, onSave, onRemove }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const { scheme, tokens: theme } = useTheme();
+  const { tokens: theme } = useTheme();
   const controls = useStickyControls();
   // Initial state comes from props at mount; the parent remounts the sheet
   // (new `key`) each time it opens, so it always starts from the note's current
@@ -63,8 +63,8 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
   const [now, setNow] = useState(initial.now);
   const [choice, setChoice] = useState<Choice>(initial.choice);
   const [value, setValue] = useState<Date>(initial.value);
-  const [androidPicker, setAndroidPicker] = useState<'date' | 'time' | null>(null);
-  // "Pick date & time" on Android runs the date dialog then the time dialog.
+  const [picker, setPicker] = useState<'date' | 'time' | null>(null);
+  // "Pick date & time" on Android runs the date picker then the time picker.
   const [chainTime, setChainTime] = useState(false);
   const [problem, setProblem] = useState<'past' | 'declined' | 'exact-alarm' | 'failed' | null>(null);
   const [busy, setBusy] = useState<'save' | 'remove' | null>(null);
@@ -100,7 +100,7 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
   const chooseCustom = () => {
     const base = choice === 'custom' ? value : defaultCustomReminderTime(new Date());
     pick(base, 'custom');
-    if (Platform.OS === 'android') { setChainTime(true); setAndroidPicker('date'); }
+    if (Platform.OS === 'android') { setChainTime(true); setPicker('date'); }
   };
 
   const close = () => { if (!busy) onClose(); };
@@ -163,14 +163,10 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
             <AppText style={[styles.sectionLabel, { color: theme.textMuted }]}>{tr("remindersheet.dateTime")}</AppText>
             <View style={[styles.group, controls.panel, { borderColor: theme.borderSubtle }]}>
               <FieldRow label={tr("schedulefields.date")} first>
-                {Platform.OS === 'ios'
-                  ? <DateTimePicker style={styles.iosDate} value={value} mode="date" display="compact" minimumDate={startOfDay(now)} accentColor={accent} themeVariant={scheme === 'dark' ? 'dark' : 'light'} onValueChange={(_, date) => pick(withDate(value, date.getFullYear(), date.getMonth(), date.getDate()), 'custom')} />
-                  : <FieldButton text={formatReminderDay(value, now)} label={tr("schedulefields.dateValueChangeDate", { value1: formatReminderDay(value, now) })} onPress={() => setAndroidPicker('date')} />}
+                <FieldButton text={formatReminderDay(value, now)} label={tr("schedulefields.dateValueChangeDate", { value1: formatReminderDay(value, now) })} onPress={() => setPicker('date')} />
               </FieldRow>
               <FieldRow label={tr("remindersheet.time")} first={false}>
-                {Platform.OS === 'ios'
-                  ? <DateTimePicker style={styles.iosTime} value={value} mode="time" display="compact" accentColor={accent} themeVariant={scheme === 'dark' ? 'dark' : 'light'} onValueChange={(_, date) => pick(withTime(value, date.getHours(), date.getMinutes()), 'custom')} />
-                  : <FieldButton text={formatReminderClock(value)} label={tr("remindersheet.timeValueChangeTime", { value1: formatReminderClock(value) })} onPress={() => setAndroidPicker('time')} />}
+                <FieldButton text={formatReminderClock(value)} label={tr("remindersheet.timeValueChangeTime", { value1: formatReminderClock(value) })} onPress={() => setPicker('time')} />
               </FieldRow>
             </View>
 
@@ -212,25 +208,19 @@ export function ReminderSheet({ visible, existing, accent, accentOn, onClose, on
         </SafeAreaView>
       </View>
 
-      {Platform.OS === 'android' && androidPicker === 'date' ? (
-        <DateTimePicker
-          value={materialDialogDate(value)}
-          mode="date"
-          presentation="dialog"
-          minimumDate={materialDialogDate(now)}
-          accentColor={accent}
-          // The Material date dialog returns UTC midnight of the chosen day.
-          onValueChange={(_, date) => { setAndroidPicker(chainTime ? 'time' : null); setChainTime(false); pick(withDate(value, date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()), 'custom'); }}
-          onDismiss={() => { setAndroidPicker(null); setChainTime(false); }}
+      {visible && picker === 'date' ? (
+        <ReminderDatePicker
+          value={value}
+          minimumDate={startOfDay(now)}
+          onConfirm={(year, month, day) => { setPicker(chainTime ? 'time' : null); setChainTime(false); pick(withDate(value, year, month, day), 'custom'); }}
+          onDismiss={() => { setPicker(null); setChainTime(false); }}
         />
       ) : null}
-      {Platform.OS === 'android' && androidPicker === 'time' ? (
-        <AndroidReminderTimePicker
+      {visible && picker === 'time' ? (
+        <ReminderTimePicker
           value={value}
-          accent={accent}
-          accentOn={accentOn}
-          onConfirm={(hours, minutes) => { setAndroidPicker(null); pick(withTime(value, hours, minutes), 'custom'); }}
-          onDismiss={() => setAndroidPicker(null)}
+          onConfirm={(hours, minutes) => { setPicker(null); pick(withTime(value, hours, minutes), 'custom'); }}
+          onDismiss={() => setPicker(null)}
         />
       ) : null}
     </Modal>
@@ -312,9 +302,6 @@ const styles = StyleSheet.create({
   rowDetail: { maxWidth: '48%', fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
   sectionLabel: { marginTop: spacing.lg, marginBottom: spacing.xs, fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
   fieldValue: { alignItems: 'flex-end', justifyContent: 'center' },
-  // iOS compact pickers size to their content; give them room so they're never clipped.
-  iosDate: { width: 170 },
-  iosTime: { width: 110 },
   fieldButton: { minHeight: 34, minWidth: 88, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.sm, borderRadius: radii.control - 2 },
   fieldButtonText: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.sm },

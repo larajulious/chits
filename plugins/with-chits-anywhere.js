@@ -18,7 +18,10 @@ module.exports = config => withXcodeProject(config, config => {
   for (const file of fs.readdirSync(locales).filter(file => file.endsWith('.json'))) {
     const language = file.replace('.json', '');
     const catalog = JSON.parse(fs.readFileSync(path.join(locales, file), 'utf8'));
-    for (const [source, key] of [['Chits Anywhere', 'anywhere.brand'], ['Quick Note and your recent notes.', 'anywhere.description'], ["Today's Plan", 'plan.widget.name'], ["Your plan and progress for today.", 'plan.widget.description']]) {
+    for (const [source, key] of [['Chits Anywhere', 'anywhere.brand'], ['Quick Note and your recent notes.', 'anywhere.description'], ["Today's Plan", 'plan.widget.name'], ["Your plan and progress for today.", 'plan.widget.description'],
+      ['Sticky Notes', 'stickyWidget.name'], ['A Space and its sticky notes, right on your Home Screen.', 'stickyWidget.description'], ['Choose a Space', 'stickyWidget.choose'],
+      ['Pick the Space this widget shows.', 'stickyWidget.chooseDescription'], ['Open Chits to set up your sticky notes.', 'stickyWidget.setup'], ['Space', 'spaces.space'],
+      ['Fridge', 'spacestheme.fridge'], ['Desk', 'spacestheme.desk'], ['Cork board', 'spaces.corkBoard'], ['Wall', 'spacestheme.wall']]) {
       strings[source] ??= { localizations: {} };
       strings[source].localizations[language] = { stringUnit: { state: 'translated', value: catalog[key] } };
     }

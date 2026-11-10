@@ -21,6 +21,7 @@ import { OnboardingLayer } from '@/features/onboarding/onboarding-layer';
 import { updateMascotAppState } from '@/services/mascot-session';
 import { FocusCoordinator } from '@/features/focus/focus-coordinator';
 import { PlanCoordinator } from '@/features/plan/plan-coordinator';
+import { StickyWidgetCoordinator } from '@/features/sticky-widget/coordinator';
 import { MascotProvider } from '@/components/mascot/mascot-provider';
 
 // Shows the message a reset asked for (e.g. "Restore complete") once the fresh
@@ -82,6 +83,7 @@ function ThemedApp() {
         <AnywhereCoordinator />
         <FocusCoordinator />
         <PlanCoordinator />
+        <StickyWidgetCoordinator />
         <AppDrawerProvider><StatusBar style={statusBarStyle} />
           <Stack screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: tokens.background } }}>
             <Stack.Screen name="(tabs)" />

@@ -1823,7 +1823,7 @@
   "focus.recap.status.early": "ટાઈમર સમાપ્ત થાય તે પહેલાં સમાપ્ત",
   "focus.recap.status.brief": "થોડા સમય પછી સમાપ્ત",
   "anywhere.brand": "Chits Anywhere",
-  "anywhere.quick": "ઝડપી નોંધ",
+  "anywhere.quick": "નોંધ",
   "anywhere.recent": "તાજેતરની નોંધો",
   "anywhere.empty": "તમારો આગળનો વિચાર અહીંથી શરૂ થાય છે.",
   "anywhere.hidden": "નોંધ માહિતી છુપાવેલ છે.",
@@ -2103,5 +2103,12 @@
   "onboarding.tour.canvas.body": "Canvas પર દોરો, લખાણ ઉમેરો અને નોંધો પિન કરો. અહીં દોરી જુઓ અથવા નમૂનાની નોંધ પિન કરો.",
   "onboarding.tour.canvas.draw": "દોરો",
   "onboarding.tour.canvas.pin": "નોંધ પિન કરો",
-  "onboarding.tour.canvas.say": "તમારા વિચારોને જગ્યા આપો."
+  "onboarding.tour.canvas.say": "તમારા વિચારોને જગ્યા આપો.",
+  "stickyWidget.name": "સ્ટીકી નોંધો",
+  "stickyWidget.description": "એક જગ્યા અને તેની સ્ટીકી નોંધો, સીધી તમારી હોમ સ્ક્રીન પર.",
+  "stickyWidget.choose": "જગ્યા પસંદ કરો",
+  "stickyWidget.chooseDescription": "આ વિજેટ કઈ જગ્યા બતાવે તે પસંદ કરો.",
+  "stickyWidget.setup": "તમારી સ્ટીકી નોંધો સેટ કરવા માટે Chits ખોલો.",
+  "stickyWidget.unavailable": "આ નોંધ હવે ઉપલબ્ધ નથી.",
+  "stickyWidget.unavailableHint": "તમારું વિજેટ થોડી જ વારમાં અપડેટ થશે."
 }

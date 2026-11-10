@@ -1,6 +1,6 @@
 <resources>
   <string name="anywhere_brand">Chits Anywhere</string>
-  <string name="anywhere_quick">ദ്രുത കുറിപ്പ്</string>
+  <string name="anywhere_quick">കുറിപ്പ്</string>
   <string name="anywhere_recent">സമീപകാല കുറിപ്പുകൾ</string>
   <string name="anywhere_empty">നിങ്ങളുടെ അടുത്ത ചിന്ത ഇവിടെ തുടങ്ങുന്നു.</string>
   <string name="anywhere_hidden">കുറിപ്പ് വിവരങ്ങൾ മറച്ചിരിക്കുന്നു.</string>

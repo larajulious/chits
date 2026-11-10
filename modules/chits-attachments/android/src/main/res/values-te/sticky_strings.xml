@@ -1,0 +1,11 @@
+<resources>
+  <string name="sticky_widget_name">స్టిక్కీ నోట్‌లు</string>
+  <string name="sticky_widget_description">ఒక స్పేస్, దాని స్టిక్కీ నోట్‌లు, నేరుగా మీ హోమ్ స్క్రీన్‌పై.</string>
+  <string name="sticky_widget_choose">స్పేస్‌ను ఎంచుకోండి</string>
+  <string name="sticky_widget_hidden">దాచిన చిట్</string>
+  <string name="sticky_widget_voice">వాయిస్ నోట్</string>
+  <string name="sticky_space_fridge">ఫ్రిజ్</string>
+  <string name="sticky_space_desk">డెస్క్</string>
+  <string name="sticky_space_cork">కార్క్ బోర్డు</string>
+  <string name="sticky_space_wall">గోడ</string>
+</resources>

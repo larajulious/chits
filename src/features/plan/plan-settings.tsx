@@ -1,12 +1,9 @@
-import { DateTimePicker } from '@expo/ui/community/datetime-picker';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
 
-import { AndroidReminderTimePicker } from '@/components/reminders/android-reminder-time-picker';
+import { ReminderTimePicker } from '@/components/reminders/reminder-time-picker.native';
 import { SettingsNote, SettingsRow, SettingsSection, SettingsToggleRow } from '@/components/settings/settings-rows';
-import { useTheme } from '@/components/theme-provider';
 import { useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
 import { formatReminderClock } from '@/services/reminder-time';
@@ -28,7 +25,6 @@ export function PlanSettingsSection() {
 
   useLocale();
   const database = useSQLiteContext();
-  const { tokens, scheme } = useTheme();
   const [settings, setSettings] = useState<PlanNotificationSettings>(PLAN_NOTIFICATION_DEFAULTS);
   const [blocked, setBlocked] = useState(false);
   const [picking, setPicking] = useState<'morning' | 'evening' | null>(null);
@@ -48,7 +44,6 @@ export function PlanSettingsSection() {
   const timeRow = (key: 'morning' | 'evening') => {
     const field = key === 'morning' ? 'morningTime' as const : 'eveningTime' as const;
     const value = clockDate(settings[field]);
-    if (Platform.OS === 'ios') return <View style={styles.iosTime}><SettingsRow label={tr('plan.settings.time')} /><View style={styles.iosPicker}><DateTimePicker value={value} mode="time" display="compact" accentColor={tokens.accent} themeVariant={scheme === 'dark' ? 'dark' : 'light'} onValueChange={(_event, date) => { if (date) void save(field, clockOf(date.getHours(), date.getMinutes())); }} /></View></View>;
     return <SettingsRow label={tr('plan.settings.time')} value={formatReminderClock(value)} onPress={() => setPicking(key)} />;
   };
   return <SettingsSection title={tr('plan.cta.plan')}>
@@ -58,11 +53,6 @@ export function PlanSettingsSection() {
     {settings.evening ? timeRow('evening') : null}
     {blocked ? <SettingsNote>{tr('plan.settings.blocked')}</SettingsNote> : null}
     <SettingsRow icon="time-outline" label={tr('plan.history')} onPress={() => router.push('/plan-history')} />
-    {picking ? <AndroidReminderTimePicker value={clockDate(settings[picking === 'morning' ? 'morningTime' : 'eveningTime'])} accent={tokens.accent} accentOn={tokens.accentText} onDismiss={() => setPicking(null)} onConfirm={(hours, minutes) => { void save(picking === 'morning' ? 'morningTime' : 'eveningTime', clockOf(hours, minutes)); setPicking(null); }} /> : null}
+    {picking ? <ReminderTimePicker value={clockDate(settings[picking === 'morning' ? 'morningTime' : 'eveningTime'])} prompt={tr(picking === 'morning' ? 'reminderTimePicker.morningPrompt' : 'reminderTimePicker.eveningPrompt')} onDismiss={() => setPicking(null)} onConfirm={(hours, minutes) => { void save(picking === 'morning' ? 'morningTime' : 'eveningTime', clockOf(hours, minutes)); setPicking(null); }} /> : null}
   </SettingsSection>;
 }
-
-const styles = StyleSheet.create({
-  iosTime: { justifyContent: 'center' },
-  iosPicker: { position: 'absolute', right: 14 },
-});

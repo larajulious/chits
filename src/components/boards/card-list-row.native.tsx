@@ -5,12 +5,13 @@ import { Pressable, StyleSheet, View, type AccessibilityActionEvent, type Access
 import * as Haptics from 'expo-haptics';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
 
+import { NoteMediaPreview } from '@/components/notes/note-media-preview.native';
 import { AttachmentContent } from '@/components/chat/message-row';
-import { useTheme } from '@/components/theme-provider';
 import { AppText } from '@/components/ui/app-text';
+import { useTheme } from '@/components/theme-provider';
 import { Icon } from '@/components/ui/icon';
-import { PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW, PushPin, Tape, useDesk, useHandwriting } from '@/components/desk/paper-desk';
-import { mix, noteColors, stableTilt } from '@/constants/style-tokens';
+import { PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { mix, noteColors } from '@/constants/style-tokens';
 import { useWelcomeFonts } from '@/features/onboarding/welcome/welcome-fonts';
 import { formatReminder, dateFormat } from '@/services/reminder-time';
 import type { AttachmentLike, CardListItem } from '@/db/types';
@@ -115,7 +116,7 @@ export function fileKindLabel(name: string, count: number) {
 
 // Notes are paper on the desk, always light whatever the appearance: a board's
 // notes take a pastel of the board's color, so a glance at the grid shows which
-// belong together; unorganized notes are cream; a hidden note is plain kraft.
+// belong together; unorganized notes are warm yellow; a hidden note is plain kraft.
 export function paperFor(accent: string | null, hidden: boolean) {
   if (hidden) return { paper: KRAFT, muted: PAPER_INK_MUTED };
   if (!accent) return { paper: PAPER_WHITE, muted: PAPER_INK_MUTED };
@@ -127,9 +128,8 @@ const PICTURE_MARGIN = 8;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PRESS_SPRING = { damping: 18, stiffness: 320, mass: 0.6 };
 
-// A content-first note on the desk, in the same rounded paper as the Boards
-// list: tape on some and a pushpin on the pinned, an optional polaroid photo, a
-// bounded preview and one line of metadata. Tapping opens the note; pressing springs
+// Chits rounded paper, board pastels and shared workspace type, with an
+// optional photo and bounded preview. Pin state stays in the metadata. Tapping opens the note; pressing springs
 // it down, a long press opens its actions, and subtasks tick in place.
 // `arranging` hands the long press to the list's drag (My order), which opens
 // the actions itself when the note is held without moving.
@@ -142,8 +142,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
   const { hand, handBold } = useHandwriting();
   const fonts = useWelcomeFonts();
   const reduceMotion = useReducedMotion();
-  const radius = styleTokens.button.radius;
-  const taped = !item.pinned && stableTilt(`${item.id}:tape`, 1) > 0.2;
+  const radius = styleTokens.noteCard.radius.topLeft;
   const press = useSharedValue(1);
   const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: press.get() }] }));
   const accent = item.hidden ? null : item.boardAccent;
@@ -158,7 +157,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
   const showFileBadge = item.fileCount > 0 && content.kind !== 'file' && !item.hidden;
   const connectionCount = item.hidden ? 0 : item.connectionCount ?? 0;
   const wash = mix(paper, '#FFFFFF', 0.55);
-  const rule = 'rgba(43,38,32,0.16)';
+  const rule = 'rgba(43,38,32,0.07)';
   const hasCopy = content.kind !== 'text' || Boolean(content.title || content.body || checklist || item.subtaskPreview?.length || audio || item.reminderAt);
   // Half-width notes: the board name alone reads cleanly; the column is in the label for screen readers.
   const location = item.boardName ?? tr("index.unorganized");
@@ -177,6 +176,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
   return (
     <Animated.View style={pressStyle}>
     <Pressable
+      accessible={!(audio || picture?.type === 'video')}
       accessibilityRole="button"
       accessibilityLabel={connectionCount ? `${accessibleLabel} ${tr('connectednotes.connectedNotes')}, ${countLabel('link', connectionCount)}.` : accessibleLabel}
       accessibilityHint={tr("cardlistrow.opensNote")}
@@ -191,11 +191,11 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
       style={({ pressed }) => [styles.card, { backgroundColor: paper, borderRadius: radius, boxShadow: `0px ${pressed ? 1 : 3}px ${pressed ? 3 : 8}px ${desk.shadow}` }, reduceMotion && pressed && styles.reducedPressed]}
     >
       {picture ? (
-        <View pointerEvents="none" style={[styles.picture, { backgroundColor: wash, borderColor: rule, borderRadius: Math.max(2, radius - PICTURE_MARGIN) }]}>
-          <AttachmentContent attachment={picture} variant="paper" />
-          {picture.type === "video" ? <View style={styles.videoPlay}><Icon name="play" size={18} color="#FFFFFF" /></View> : null}
-          {picture.type === "video" && picture.duration ? <View style={styles.durationBadge}><AppText weight="600" style={styles.durationBadgeText}>{formatDurationSeconds(picture.duration)}</AppText></View> : null}
-          {overflowCount > 0 ? <View style={styles.overflowBadge}><AppText weight="700" style={styles.overflowBadgeText}>+{overflowCount}</AppText></View> : null}
+        <View pointerEvents={picture.type === 'video' ? 'auto' : 'none'} style={styles.pictureInset}>
+          <View style={[styles.picture, { backgroundColor: wash, borderColor: rule, borderRadius: Math.max(2, radius - PICTURE_MARGIN) }]}>
+            {picture.type === 'video' ? <NoteMediaPreview attachment={picture} caption={item.title} color={paper} onEdit={onPress} /> : <AttachmentContent attachment={picture} variant="paper" />}
+            {overflowCount > 0 ? <View pointerEvents="none" style={[styles.overflowBadge, picture.type === 'video' && { top: 8, bottom: undefined }]}><AppText weight="700" style={styles.overflowBadgeText}>+{overflowCount}</AppText></View> : null}
+          </View>
         </View>
       ) : null}
 
@@ -208,7 +208,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
           </View>
         ) : content.kind === "file" ? (
           <View style={styles.fileRow}>
-            <View style={[styles.fileIcon, { backgroundColor: wash, borderRadius: radius / 2 }]}><Icon name={/\.pdf$/i.test(content.name) ? 'document-text-outline' : 'document-outline'} size={22} color={muted} /></View>
+            <View style={[styles.fileIcon, { backgroundColor: wash, borderRadius: 6 }]}><Icon name={/\.pdf$/i.test(content.name) ? 'document-text-outline' : 'document-outline'} size={22} color={muted} /></View>
             <AppText weight="600" numberOfLines={2} style={[styles.fileName, { color: ink }]}>{content.name}</AppText>
             <AppText style={[styles.fileMeta, { color: muted }]}>{fileKindLabel(content.name, item.fileCount)}</AppText>
           </View>
@@ -243,7 +243,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
             disabled={!onToggleSubtask}
             hitSlop={{ top: 5, bottom: 5 }}
             onPress={(event) => { event.stopPropagation(); onToggleSubtask?.(subtask.id); }}
-            style={({ pressed }) => [styles.checklistRow, pressed && styles.subtaskPressed]}
+            style={({ pressed }) => [styles.checklistRow, styles.interactiveChecklistRow, pressed && styles.subtaskPressed]}
           >
             <View style={[styles.previewCheckbox, { borderColor: subtask.isCompleted ? ink : muted, backgroundColor: subtask.isCompleted ? ink : 'transparent' }]}>{subtask.isCompleted ? <Icon name="checkmark" size={11} color={paper} /> : null}</View>
             <AppText variant="paragraph" numberOfLines={2} style={[styles.checklistText, { color: subtask.isCompleted ? muted : ink }, subtask.isCompleted && styles.completedText]}>{subtask.title}</AppText>
@@ -251,11 +251,8 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
           {item.subtaskCount > 3 ? <AppText style={[styles.checklistMore, { color: muted }]}>+{item.subtaskCount - 3} {' '}{tr("cardlistrow.more")}</AppText> : null}
         </View> : null}
 
-        {audio ? <View style={[styles.audioPill, { backgroundColor: wash, borderRadius: radius / 2 }]}>
-          <View style={styles.waveform}>{[7, 14, 10, 18, 9, 14, 6].map((height, index) => <View key={index} style={[styles.waveformBar, { height, backgroundColor: ink }]} />)}</View>
-          <AppText weight="600" style={[styles.audioText, { color: ink }]}>{audio.duration ? formatDurationSeconds(audio.duration) : tr("cardlistrow.voiceNote")}</AppText>
-        </View> : null}
-        {reminder && reminderLabel ? <View style={[styles.reminderChip, { backgroundColor: reminder.fill, borderRadius: radius / 2 }]}>
+        {audio ? <View style={{ marginTop: 10 }}><NoteMediaPreview attachment={audio} caption={item.title} color={paper} onEdit={onPress} /></View> : null}
+        {reminder && reminderLabel ? <View style={[styles.reminderChip, { backgroundColor: reminder.fill, borderRadius: 6 }]}>
           <Icon name={reminder.icon} size={12} color={reminder.ink} />
           <AppText weight="600" numberOfLines={1} style={[styles.reminderText, { color: reminder.ink }]}>{reminderLabel}</AppText>
         </View> : null}
@@ -263,71 +260,67 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
 
       <View style={styles.footer}>
         <View style={styles.footerMeta}>
-          {accent ? <View style={[styles.boardDot, { backgroundColor: accent, borderColor: mix(accent, ink, 0.3) }]} /> : null}
-          <AppText family={fonts.text} numberOfLines={1} style={[styles.location, { color: muted }]}>{location}</AppText>
+          <View style={styles.categoryRow}>
+            {item.pinned ? <Icon name="pin-outline" size={11} color={muted} /> : null}
+            {accent ? <View style={[styles.boardDot, { backgroundColor: accent, borderColor: mix(accent, ink, 0.3) }]} /> : null}
+            <AppText family={fonts.text} numberOfLines={1} style={[styles.location, { color: muted }]}>{location}</AppText>
+          </View>
           <AppText family={fonts.text} style={[styles.date, { color: muted }]}>{formatCardDate(item.updatedAt)}</AppText>
-          {showFileBadge ? <View style={styles.badge}><Icon name="attach" size={13} color={muted} /><AppText style={[styles.badgeText, { color: muted }]}>{item.fileCount}</AppText></View> : null}
-          {connectionCount > 0 ? <View style={styles.badge}><Icon name="link-outline" size={13} color={muted} /><AppText style={[styles.badgeText, { color: muted }]}>{connectionCount}</AppText></View> : null}
+          {showFileBadge ? <View style={styles.badge}><Icon name="attach" size={12} color={muted} /><AppText style={[styles.badgeText, { color: muted }]}>{item.fileCount}</AppText></View> : null}
+          {connectionCount > 0 ? <View style={styles.badge}><Icon name="link-outline" size={12} color={muted} /><AppText style={[styles.badgeText, { color: muted }]}>{connectionCount}</AppText></View> : null}
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel={tr("cardlistrow.cardActions")} hitSlop={6} onPress={(event) => { event.stopPropagation(); onMore(); }} style={({ pressed }) => [styles.more, pressed && { backgroundColor: wash }]}>
-          <Icon name="ellipsis-horizontal" size={16} color={muted} />
+          <Icon name="ellipsis-horizontal" size={17} color={muted} />
         </Pressable>
       </View>
     </Pressable>
-    {taped ? <Tape width={58} angle={stableTilt(`${item.id}:tape-angle`, 5)} /> : null}
-    {item.pinned ? <View pointerEvents="none" style={styles.pin}><PushPin size={22} /></View> : null}
     </Animated.View>
   );
 });
 
 const styles = StyleSheet.create({
-  card: { minHeight: 96 },
+  card: { minHeight: 104 },
   reducedPressed: { opacity: 0.82 },
-  noteContent: { minWidth: 0, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4 },
-  textOnlyContent: { minHeight: 52, paddingTop: 12 },
+  noteContent: { minWidth: 0, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 2 },
+  textOnlyContent: { minHeight: 52, paddingTop: 14 },
   // A printed photo stuck on the paper: an even margin, corners that follow the
   // card's, a hairline edge. The photo fills it exactly (AttachmentContent's 'paper').
-  picture: { height: 104, marginTop: PICTURE_MARGIN, marginHorizontal: PICTURE_MARGIN, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  videoPlay: { position: 'absolute', alignSelf: 'center', top: 34, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)' },
-  durationBadge: { position: 'absolute', left: 8, bottom: 8, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.55)' },
-  durationBadgeText: { color: '#FFFFFF', fontSize: 11 },
+  pictureInset: { paddingTop: PICTURE_MARGIN, paddingHorizontal: PICTURE_MARGIN },
+  picture: { width: '100%', aspectRatio: 4 / 3, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   overflowBadge: { position: 'absolute', right: 8, bottom: 8, minWidth: 26, height: 22, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: 'rgba(0,0,0,0.55)' },
   overflowBadgeText: { color: '#FFFFFF', fontSize: 11 },
   title: { fontSize: 17, lineHeight: 22 },
   body: { fontSize: 15, lineHeight: 21 },
-  bodyUnderTitle: { marginTop: 3, fontSize: 14, lineHeight: 19 },
-  checklist: { marginTop: 10, gap: 6 },
+  bodyUnderTitle: { marginTop: 6, fontSize: 14, lineHeight: 20 },
+  checklist: { marginTop: 12, gap: 7 },
   progressLabels: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 },
   progressCount: { flexShrink: 1, fontSize: 12, lineHeight: 16 },
   progressPercent: { fontSize: 11.5, lineHeight: 16, fontVariant: ['tabular-nums'] },
-  progressTrack: { height: 4, borderRadius: 2, overflow: 'hidden', marginBottom: 2 },
+  progressTrack: { height: 3, borderRadius: 2, overflow: 'hidden', marginBottom: 2 },
   progressFill: { height: '100%', borderRadius: 2 },
   checklistRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  interactiveChecklistRow: { minHeight: 44, paddingVertical: 7 },
   subtaskPressed: { opacity: 0.6 },
   previewCheckbox: { width: 15, height: 15, marginTop: 2, borderWidth: 1.25, borderRadius: 4.5, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   checklistText: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 18.5 },
   completedText: { textDecorationLine: 'line-through' },
   checklistMore: { fontSize: 11.5, lineHeight: 16, marginLeft: 23 },
   hiddenRow: { gap: 4, paddingTop: 2 },
-  hiddenTitle: { fontSize: 18, lineHeight: 24 },
+  hiddenTitle: { fontSize: 16, lineHeight: 22 },
   hiddenCopy: { fontSize: 12, lineHeight: 17 },
   fileRow: { gap: 6 },
   fileIcon: { width: 38, height: 42, marginBottom: 3, alignItems: 'center', justifyContent: 'center' },
   fileName: { fontSize: 13.5, lineHeight: 19 },
   fileMeta: { fontSize: 11.5, lineHeight: 16 },
-  audioPill: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 9, minHeight: 36, marginTop: 10, paddingHorizontal: 10 },
-  waveform: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  waveformBar: { width: 2, borderRadius: 1, opacity: 0.7 },
-  audioText: { flexShrink: 1, fontSize: 12, fontVariant: ['tabular-nums'] },
   reminderChip: { alignSelf: 'flex-start', maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10, paddingHorizontal: 8, paddingVertical: 4 },
   reminderText: { flexShrink: 1, fontSize: 11.5, lineHeight: 15 },
-  footer: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, marginHorizontal: 12, paddingBottom: 4, marginRight: 6 },
-  footerMeta: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 8, marginHorizontal: 12, paddingBottom: 6 },
+  footerMeta: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  categoryRow: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 4 },
   boardDot: { width: 7, height: 7, borderRadius: 3.5, borderWidth: StyleSheet.hairlineWidth },
-  location: { flexShrink: 1, fontSize: 12, lineHeight: 16 },
-  date: { flexShrink: 0, fontSize: 11.5, lineHeight: 16, fontVariant: ['tabular-nums'] },
+  location: { flexShrink: 1, fontSize: 11.5, lineHeight: 16 },
+  date: { flexShrink: 0, fontSize: 11, lineHeight: 16, fontVariant: ['tabular-nums'] },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 1 },
-  badgeText: { fontSize: 11.5, lineHeight: 16, fontVariant: ['tabular-nums'] },
-  more: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  pin: { position: 'absolute', top: -10, left: '50%', marginLeft: -11 },
+  badgeText: { fontSize: 10.5, lineHeight: 15, fontVariant: ['tabular-nums'] },
+  more: { width: 32, height: 32, flexShrink: 0, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
 });
