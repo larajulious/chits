@@ -1,7 +1,7 @@
 import { tr } from '@/localization/runtime';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { NoteSubmission } from '@/components/boards/add-note-sheet';
+import { createSubmittedNote, type NoteSubmission } from '@/components/boards/add-note-sheet';
 import type { SpaceId } from '@/constants/spaces';
 import { createBoardRepository, createMessageRepository, createSpaceRepository } from '@/db/repositories';
 import { removeCardReminder, removeMessageReminder, setCardReminder, setMessageReminder, type SetReminderResult } from '@/services/reminders';
@@ -78,15 +78,10 @@ export async function createCalendarNote(database: SQLiteDatabase, submission: N
   normalizeSchedule(draft);
   let note: CalendarNoteRef;
   if (destination.type === 'board') {
-    const { cardId } = await createBoardRepository(database).createNoteCard({ boardId: destination.boardId, columnId: destination.columnId, text: submission.text, attachment: submission.attachment, blocks: submission.blocks });
+    const { cardId } = await createBoardRepository(database).createNoteCard({ boardId: destination.boardId, columnId: destination.columnId, text: submission.text, attachments: submission.attachments, blocks: submission.blocks });
     note = { kind: 'card', id: cardId };
   } else {
-    const messages = createMessageRepository(database);
-    const id = submission.blocks
-      ? await messages.createNote({ blocks: submission.blocks, attachment: submission.attachment })
-      : submission.attachment
-        ? (await messages.createAttachmentMessage(submission.attachment, submission.text || null)).id
-        : (await messages.createText(submission.text)).id;
+    const id = await createSubmittedNote(createMessageRepository(database), submission);
     note = { kind: 'message', id };
   }
   let spaceFull = false;

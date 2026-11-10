@@ -23,7 +23,7 @@ import { ChitsLoader, useChitsLoading } from '@/components/ui/chits-loader';
 import { FormSheet, type FormSheetHandle } from '@/components/ui/form-sheet';
 import { AppHeader, AppText, PressableSurface, Screen, Toast, HeaderIcon, MenuIcon, useFontStyle } from '@/components/ui/primitives';
 import { BoardHeaderButton as IconButton, BOARD_HEADER_BUTTON_SIZE } from '@/components/boards/board-header-button';
-import { AddNoteSheet, type NoteSubmission } from '@/components/boards/add-note-sheet';
+import { AddNoteSheet, createSubmittedNote, type NoteSubmission } from '@/components/boards/add-note-sheet';
 import { groupRecentNotes } from '@/services/card-grouping';
 import { detachConfirmationMessage } from '@/services/detach-card';
 import { requestReminderSync, subscribeToReminderChanges } from '@/services/reminders';
@@ -302,10 +302,8 @@ export default function BoardsScreen() {
 
   // A note added from the Cards header isn't tied to a board yet, so it's
   // created like a Chat thought and shows up under Unorganized.
-  const addNote = async ({ text, attachment, blocks }: NoteSubmission) => {
-    if (blocks) await messageRepository.createNote({ blocks, attachment });
-    else if (attachment) await messageRepository.createAttachmentMessage(attachment, text || null);
-    else await messageRepository.createText(text);
+  const addNote = async (submission: NoteSubmission) => {
+    await createSubmittedNote(messageRepository, submission);
     await Promise.all([load(), loadCards()]);
     setCardToast(tr("calendar.noteAdded"));
   };
@@ -744,7 +742,7 @@ export default function BoardsScreen() {
         </View>
       </FormSheet>
       <Toast message={cardToast} />
-      <AddNoteSheet visible={addNoteOpen !== null} initialBlocks={addNoteOpen === 'blank' ? blankNoteBlocks : undefined} startFullscreen={addNoteOpen === 'blank'} onClose={() => setAddNoteOpen(null)} onSubmit={addNote} />
+      <AddNoteSheet visible={addNoteOpen !== null} initialBlocks={addNoteOpen === 'blank' ? blankNoteBlocks : undefined} startFullscreen={addNoteOpen === 'blank'} focusOnOpen={false} onClose={() => setAddNoteOpen(null)} onSubmit={addNote} />
     </Screen>
   );
 }

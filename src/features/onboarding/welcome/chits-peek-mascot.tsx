@@ -88,17 +88,19 @@ export function ChitsPeekMascot({ travel, gripSurface, values, unit, screenWidth
       y: y + ((travel?.targetY.get() ?? y) - y) * p,
       scale: scale * (1 + p * ((travel?.targetScale.get() ?? 1) - 1)),
     };
-    // One continuous off-screen route: exit right, travel above the header,
-    // then peek down. Reversing progress exits up and re-enters from the right.
+    // One continuous route out of sight: exit right, drop behind the cloth's
+    // edge, slide across under it, then rise into place before the hands reach
+    // for the hem. Coming from below keeps the head clear of the status bar,
+    // which clips the header. Reversing progress sinks and exits to the right.
     const outside = screenWidth + size;
-    const above = -size * 2;
     const targetX = travel.targetX.get(), targetY = travel.targetY.get();
+    const hidden = targetY + size * travel.targetScale.get();
     let nextX = targetX, nextY = targetY;
     if (p < 0.22) { nextX = x + (outside - x) * p / 0.22; nextY = y; }
-    else if (p < 0.29) { nextX = outside; nextY = y + (above - y) * (p - 0.22) / 0.07; }
-    else if (p < 0.36) { nextX = outside + (targetX - outside) * (p - 0.29) / 0.07; nextY = above; }
-    else if (p < 0.55) { nextY = above + (targetY - above) * (p - 0.36) / 0.19; }
-    return { x: nextX, y: nextY, scale: scale * (1 + Math.min(1, p / 0.55) * (travel.targetScale.get() - 1)) };
+    else if (p < 0.29) { nextX = outside; nextY = y + (hidden - y) * (p - 0.22) / 0.07; }
+    else if (p < 0.36) { nextX = outside + (targetX - outside) * (p - 0.29) / 0.07; nextY = hidden; }
+    else if (p < 0.44) { const t = (p - 0.36) / 0.08; nextY = hidden + (targetY - hidden) * t * (2 - t); }
+    return { x: nextX, y: nextY, scale: scale * (1 + Math.min(1, p / 0.36) * (travel.targetScale.get() - 1)) };
   });
   const frame = useAnimatedStyle(() => ({ transform: [{ translateX: placement.get().x }, { translateY: placement.get().y }, { scale: placement.get().scale }] }));
   const pose = useDerivedValue(() => {
@@ -123,10 +125,10 @@ export function ChitsPeekMascot({ travel, gripSurface, values, unit, screenWidth
     const project = (x: number, y: number) => projectArmPoint(x, y, PIVOT.shoulder, angle, reach, pivot, unit, placement.get(), pose.get());
     const shoulder = project(300, 825), control = project(175, 780), oldHand = project(166, 875);
     const anchor = travel.handLeft.get();
-    const hand = { x: oldHand.x + (anchor.x - oldHand.x) * g, y: oldHand.y + (anchor.y - oldHand.y) * g };
+    const hand = gripHand(oldHand, anchor, g);
     const cx = control.x * (1 - g) + ((shoulder.x + hand.x) / 2 - Math.min(9, Math.abs(hand.y - shoulder.y) * 0.16)) * g;
     const cy = control.y * (1 - g) + (shoulder.y + (hand.y - shoulder.y) * 0.6) * g;
-    return { path: `M ${shoulder.x} ${shoulder.y} Q ${cx} ${cy} ${hand.x} ${hand.y}`, ...hand, scale: placement.get().scale * (0.73 + 0.27 * g), visible: 1, grip: g };
+    return { path: `M ${shoulder.x} ${shoulder.y} Q ${cx} ${cy} ${hand.x} ${hand.y}`, ...hand, scale: placement.get().scale * (0.73 + 0.27 * g), visible: Math.min(1, g * 3), grip: g };
   });
   const farGrip = useDerivedValue<ElasticArmGeometry>(() => {
     if (!travel || !travel.reach.get()) return { path: '', x: 0, y: 0, scale: 1, visible: 0, grip: 0 };
@@ -139,10 +141,10 @@ export function ChitsPeekMascot({ travel, gripSurface, values, unit, screenWidth
     const attached = projectArmPoint(950, 825, { x: 950, y: 825 }, 0, 1, pivot, unit, placement.get(), pose.get());
     const shoulder = { x: oldShoulder.x + (attached.x - oldShoulder.x) * g, y: oldShoulder.y + (attached.y - oldShoulder.y) * g };
     const anchor = travel.handRight.get();
-    const hand = { x: oldHand.x + (anchor.x - oldHand.x) * g, y: oldHand.y + (anchor.y - oldHand.y) * g };
+    const hand = gripHand(oldHand, anchor, g);
     const cx = control.x * (1 - g) + ((shoulder.x + hand.x) / 2 + Math.min(9, Math.abs(hand.y - shoulder.y) * 0.16)) * g;
     const cy = control.y * (1 - g) + (shoulder.y + (hand.y - shoulder.y) * 0.6) * g;
-    return { path: `M ${shoulder.x} ${shoulder.y} Q ${cx} ${cy} ${hand.x} ${hand.y}`, ...hand, scale: placement.get().scale * (0.73 + 0.27 * g), visible: 1, grip: g };
+    return { path: `M ${shoulder.x} ${shoulder.y} Q ${cx} ${cy} ${hand.x} ${hand.y}`, ...hand, scale: placement.get().scale * (0.73 + 0.27 * g), visible: Math.min(1, g * 3), grip: g };
   });
   const armStyle = useAnimatedStyle(() => ({ opacity: (travel?.reach.get() ?? 0) > 0 ? 0 : 1, transform: [{ rotate: `${arm.get() * (1 - (travel?.progress.get() ?? 0)) + (travel?.reduced ? 0 : (travel?.progress.get() ?? 0) * (12 + (travel?.pulse.get() ?? 0) * 9))}deg` } ] }));
   const farBehind = useAnimatedStyle(() => ({ opacity: (travel?.reach.get() ?? 0) > 0 ? 0 : farArm.get() < -45 ? 0 : 1, transform: [{ rotate: `${farArm.get() * (1 - (travel?.progress.get() ?? 0)) + (travel?.reduced ? 0 : (travel?.progress.get() ?? 0) * 125)}deg` }] }));
@@ -232,6 +234,16 @@ export function ChitsPeekMascot({ travel, gripSurface, values, unit, screenWidth
     <ElasticHandPart geometry={farGrip} unit={unit} />
     <ElasticHandPart geometry={nearGrip} unit={unit} />
   </> : <>{bodyModel}{children}{nearModel}</>;
+}
+
+/**
+ * Where a reaching hand is drawn. The hands draw in front of the cloth, so a
+ * hand starting below the hem (Chits waits low behind it) comes up from the
+ * hem itself rather than crossing the hero.
+ */
+function gripHand(from: { x: number; y: number }, anchor: { x: number; y: number }, g: number) {
+  'worklet';
+  return { x: from.x + (anchor.x - from.x) * g, y: Math.min(from.y + (anchor.y - from.y) * g, anchor.y) };
 }
 
 function projectArmPoint(x: number, y: number, shoulder: { x: number; y: number }, armAngle: number, reach: number,

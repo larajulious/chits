@@ -4,27 +4,29 @@ import test from 'node:test';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
-test('Add note sheet can attach a photo, video or file and cleans up a discarded one', () => {
+test('Add note attaches through the same list and picker as Edit Note, and cleans up discarded ones', () => {
   const sheet = read('src/components/boards/add-note-sheet.tsx');
-  assert.match(sheet, /\{ key: 'photo', get label\(\) \{ return tr\("id\.photo"\)/);
-  assert.match(sheet, /\{ key: 'video', get label\(\) \{ return tr\("addcardattachmentsheet\.video"\)/);
-  assert.match(sheet, /\{ key: 'file', get label\(\) \{ return tr\("addcardattachmentsheet\.file"\)/);
-  assert.doesNotMatch(sheet, /key: 'audio'/);
-  assert.match(sheet, /const canAdd = \(Boolean\(trimmed\) \|\| noteHasChecklist\(blocks\) \|\| Boolean\(draft\) \|\| imageCount > 0\) && canSubmit && !busy;/);
-  // Dismissing deletes the staged copy; a successful save keeps it.
-  assert.match(sheet, /const close = \(\) => \{\s*if \(busy\) return;\s*discardDraft\(\);\s*discardPastedImages\(blocks\);/);
-  assert.match(sheet, /await onSubmit\(\{ text: trimmed, attachment: draft\?\.attachment \?\? null, blocks: draftHasRichContent\(blocks\) \? blocks : null \}\);\s*\/\/[^\n]*\n\s*setDraft\(null\);\s*setBlocks\(textDraft\(\)\);/);
+  // The chat composer's sheet: Photo, Insert photo inline, Video, Audio and File.
+  assert.match(sheet, /<AttachmentPicker disabled=\{busy\} onSelected=\{addDraft\} onInlineSelected=\{insertInline\}/);
+  assert.match(sheet, /<NoteAttachmentList /);
+  assert.match(sheet, /<NoteAttachmentAddRow label=\{tr\('id\.addAttachment'\)\}/);
+  assert.match(read('src/app/card/edit-content.native.tsx'), /<NoteAttachmentList /, 'Edit Note uses the same list');
+  assert.doesNotMatch(sheet, /ATTACH_OPTIONS/);
+  assert.match(sheet, /const canAdd = \(Boolean\(trimmed\) \|\| noteHasChecklist\(blocks\) \|\| drafts\.length > 0 \|\| imageCount > 0\) && canSubmit && !busy;/);
+  // Dismissing deletes the staged copies; a successful save keeps them.
+  assert.match(sheet, /const close = \(\) => \{\s*if \(busy\) return;\s*discardDrafts\(\);\s*discardPastedImages\(blocks\);/);
+  assert.match(sheet, /await onSubmit\(\{ text: trimmed, attachments: drafts\.map\(\(draft\) => draft\.attachment\), blocks: draftHasRichContent\(blocks\) \? blocks : null \}\);\s*\/\/[^\n]*\n\s*setDrafts\(\[\]\);\s*setBlocks\(textDraft\(\)\);/);
 });
 
-test('both Add note entry points save the attachment through the existing storage paths', () => {
-  const cards = read('src/app/(tabs)/index.native.tsx');
-  assert.match(cards, /if \(attachment\) await messageRepository\.createAttachmentMessage\(attachment, text \|\| null\);/);
-  const board = read('src/app/board/[id].native.tsx');
-  assert.match(board, /repository\.createNoteCard\(\{ boardId: id, columnId: targetColumn\.id, text, attachment, blocks \}\)/);
+test('every Add note entry point saves its attachments the same way', () => {
+  const sheet = read('src/components/boards/add-note-sheet.tsx');
+  assert.match(sheet, /if \(blocks \|\| attachments\.length > 1\) return messages\.createNote\(\{ blocks: blocks \?\? textDraft\(text\), attachments \}\);/);
+  assert.match(sheet, /if \(attachments\[0\]\) return \(await messages\.createAttachmentMessage\(attachments\[0\], text \|\| null\)\)\.id;/);
+  for (const path of ['src/app/(tabs)/index.native.tsx', 'src/features/spin/note-spin-screen.tsx', 'src/app/templates.native.tsx', 'src/features/calendar/calendar-actions.ts']) assert.match(read(path), /createSubmittedNote\(/, path);
+  assert.match(read('src/app/board/[id].native.tsx'), /repository\.createNoteCard\(\{ boardId: id, columnId: targetColumn\.id, text, attachments, blocks \}\)/);
+  assert.match(read('src/app/(tabs)/spaces.native.tsx'), /repository\.createNote\(createDestination, \{ blocks: blocks \?\? textDraft\(text\), attachments \}\)/);
   const repository = read('src/db/repositories.ts');
-  assert.match(repository, /async createNoteCard\(input: \{ boardId: string; columnId: string; text: string; attachment\?:/);
-  assert.match(cards, /if \(blocks\) await messageRepository\.createNote\(\{ blocks, attachment \}\);/);
-  assert.match(repository, /if \(attachment\) await transaction\.runAsync\(INSERT_ATTACHMENT_SQL,/);
+  assert.match(repository, /for \(const \[index, attachment\] of attachments\.entries\(\)\) \{\s*await transaction\.runAsync\(INSERT_ATTACHMENT_SQL,/);
 });
 
 test('Chat and the Add note sheet share one picking/staging implementation', () => {

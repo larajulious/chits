@@ -1,6 +1,6 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ComponentProps } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
@@ -30,6 +30,8 @@ type Props = {
   // if the sheet's own Modal happens to blur the TextInput underneath it (see
   // PHASE: FIX INCONSISTENT CHAT COMPOSER EXPANSION). Mirrors onRecordingChange.
   onOpenChange?: (open: boolean) => void;
+  /** Draws a different button for opening the sheet; the composer's round "+" otherwise. */
+  renderTrigger?: (trigger: { open: () => void; disabled: boolean }) => ReactNode;
 };
 
 export type AttachmentPickerHandle = { startAudio: () => void };
@@ -39,7 +41,7 @@ function formatRecordingTime(durationMillis: number) {
   return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
 }
 
-export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(function AttachmentPicker({ disabled = false, onSelected, onInlineSelected, onError, onRecordingChange, onOpenChange }, ref) {
+export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(function AttachmentPicker({ disabled = false, onSelected, onInlineSelected, onError, onRecordingChange, onOpenChange, renderTrigger }, ref) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -136,7 +138,7 @@ export const AttachmentPicker = forwardRef<AttachmentPickerHandle, Props>(functi
     <Pressable accessibilityRole="button" accessibilityLabel={tr("attachmentpicker.useRecording")} accessibilityHint={tr("attachmentpicker.stopsRecordingAndPreparesItToSend")} onPress={() => void finishRecording()} style={({ pressed }) => [styles.recordingAction, { backgroundColor: theme.accent }, pressed && styles.actionPressed]}><Icon name="checkmark" size={22} color={theme.accentText} /></Pressable>
   </View>;
 
-  return <><Pressable accessibilityRole="button" accessibilityLabel={tr("id.addAttachment")} accessibilityState={{ disabled: disabled || saving }} disabled={disabled || saving} onPress={() => setOpen(true)} style={[styles.trigger, (disabled || saving) && styles.disabled]}><Icon name="add" size={24} color={theme.textSecondary} /></Pressable><Modal transparent visible={open} animationType="slide" onRequestClose={() => setOpen(false)}><Pressable style={styles.backdrop} onPress={() => setOpen(false)}><Pressable style={styles.sheetShield} onPress={() => undefined}><BottomSheetSurface><View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />{choose(tr("id.photo"), 'image-outline', () => void pickMedia('photo'))}{onInlineSelected ? choose(tr("attachmentpicker.insertPhotoInline"), 'image-outline', () => void run(() => pickAndStageMedia('photo'), onInlineSelected)) : null}{choose(tr("addcardattachmentsheet.video"), 'videocam-outline', () => void pickMedia('video'))}{choose(tr("attachments.audio"), 'mic-outline', () => void startRecording())}{choose(tr("addcardattachmentsheet.file"), 'document-outline', () => void pickFile())}{choose(tr("chat.cancel"), 'close-outline', () => setOpen(false))}</BottomSheetSurface></Pressable></Pressable></Modal></>;
+  return <>{renderTrigger ? renderTrigger({ open: () => setOpen(true), disabled: disabled || saving }) : <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addAttachment")} accessibilityState={{ disabled: disabled || saving }} disabled={disabled || saving} onPress={() => setOpen(true)} style={[styles.trigger, (disabled || saving) && styles.disabled]}><Icon name="add" size={24} color={theme.textSecondary} /></Pressable>}<Modal transparent visible={open} animationType="slide" onRequestClose={() => setOpen(false)}><Pressable style={styles.backdrop} onPress={() => setOpen(false)}><Pressable style={styles.sheetShield} onPress={() => undefined}><BottomSheetSurface><View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />{choose(tr("id.photo"), 'image-outline', () => void pickMedia('photo'))}{onInlineSelected ? choose(tr("attachmentpicker.insertPhotoInline"), 'image-outline', () => void run(() => pickAndStageMedia('photo'), onInlineSelected)) : null}{choose(tr("addcardattachmentsheet.video"), 'videocam-outline', () => void pickMedia('video'))}{choose(tr("attachments.audio"), 'mic-outline', () => void startRecording())}{choose(tr("addcardattachmentsheet.file"), 'document-outline', () => void pickFile())}{choose(tr("chat.cancel"), 'close-outline', () => setOpen(false))}</BottomSheetSurface></Pressable></Pressable></Modal></>;
 });
 
 const styles = StyleSheet.create({

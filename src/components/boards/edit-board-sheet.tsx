@@ -1,8 +1,9 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Pressable, StyleSheet, View } from 'react-native';
 
+import { AppDialog } from '@/components/dialogs/app-dialog';
 import { useTheme } from '@/components/theme-provider';
 import { useStickyControls } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
@@ -20,6 +21,10 @@ type Props = {
   board: BoardAppearance;
   onClose: () => void;
   onSave: (next: BoardAppearance) => Promise<void>;
+  /** Permanently deletes the board. When given, the sheet offers "Delete board" behind a type-the-name confirmation. */
+  onDelete?: () => Promise<void>;
+  /** Runs after a successful delete, once the confirmation has closed: leave the board screen here. */
+  onDeleted?: () => void;
 };
 
 const MAX_BOARD_NAME_LENGTH = 80;
@@ -27,7 +32,7 @@ const MAX_BOARD_NAME_LENGTH = 80;
 // Same fields as Create Board (name, icon, accent), saved together — see PHASE:
 // EDIT BOARD APPEARANCE. Reuses BoardAppearanceFields verbatim so the picker is
 // never a second, drifted design.
-export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
+export function EditBoardSheet({ visible, board, onClose, onSave, onDelete, onDeleted }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -43,6 +48,9 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
   const [touched, setTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const deleted = useRef(false);
 
   useEffect(() => {
     if (visible && !wasVisible.current) {
@@ -53,6 +61,9 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
       setTouched(false);
       setSaving(false);
       setError(null);
+      setConfirmingDelete(false);
+      setDeleting(false);
+      deleted.current = false;
       // A freshly reopened sheet (or one opened for a different board) must
       // never inherit the previous scroll position — see PHASE: FIX BOTTOM
       // SHEET KEYBOARD BEHAVIOR. Not animated: this happens before the sheet is
@@ -67,8 +78,37 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
   const hasChanges = trimmedName !== original.name || icon !== original.icon || accent !== original.accent;
   const canSave = Boolean(trimmedName && hasChanges && !saving);
 
+  const busy = saving || deleting;
+
   const close = () => {
-    if (!saving) onClose();
+    if (!busy) onClose();
+  };
+
+  const openDelete = () => {
+    if (busy) return;
+    Keyboard.dismiss();
+    setError(null);
+    setConfirmingDelete(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!onDelete || deleting) return;
+    setDeleting(true);
+    try {
+      await onDelete();
+      deleted.current = true;
+      setConfirmingDelete(false);
+    } catch {
+      setDeleting(false);
+      setConfirmingDelete(false);
+      setError(tr("editboardsheet.couldnTDeleteBoardTryAgain"));
+    }
+  };
+
+  // The dialog sits inside this sheet's modal, so leaving waits until it has
+  // closed: nothing is torn down while a modal is still on screen.
+  const finishDeleteDialog = () => {
+    if (deleted.current) { deleted.current = false; onDeleted?.(); }
   };
 
   const save = async () => {
@@ -92,7 +132,7 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
       visible={visible}
       onRequestClose={close}
       closeAccessibilityLabel={tr("editboardsheet.cancelEditingBoard")}
-      onModalShow={() => requestAnimationFrame(() => inputRef.current?.focus())}
+      // No keyboard on open: the whole sheet, Delete board included, stays in view until the name is tapped.
       contentContainerStyle={styles.content}
     >
       <View style={[styles.handle, { backgroundColor: theme.borderSubtle }]} />
@@ -139,7 +179,7 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
       {error ? <AppText accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</AppText> : null}
 
       <View style={styles.actions}>
-        <Pressable accessibilityRole="button" disabled={saving} onPress={close} style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
+        <Pressable accessibilityRole="button" disabled={busy} onPress={close} style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
           <AppText style={[styles.cancelText, { color: theme.textSecondary }]}>{tr("chat.cancel")}</AppText>
         </Pressable>
         <Pressable
@@ -158,6 +198,43 @@ export function EditBoardSheet({ visible, board, onClose, onSave }: Props) {
           {saving ? <ActivityIndicator accessibilityLabel={tr("editboardsheet.savingChanges")} size="small" color={theme.accentText} /> : <AppText style={[styles.saveText, { color: theme.accentText }]}>{tr("columnmanagementsheet.saveChanges")}</AppText>}
         </Pressable>
       </View>
+
+      {onDelete ? (
+        <View style={[styles.danger, { borderTopColor: theme.borderSubtle }]}>
+          <AppText style={[styles.sectionLabel, { color: theme.textMuted }]}>{tr("columnmanagementsheet.dangerZone")}</AppText>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={tr("editboardsheet.deleteBoardDestructiveAction")}
+            accessibilityState={{ disabled: busy }}
+            disabled={busy}
+            onPress={openDelete}
+            style={({ pressed }) => [styles.deleteAction, busy && styles.disabled, pressed && !busy && styles.pressed]}
+          >
+            <Icon name="trash-outline" size={18} color={theme.danger} />
+            <AppText style={[styles.deleteText, { color: theme.danger }]}>{tr("editboardsheet.deleteBoard")}</AppText>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {onDelete ? (
+        <AppDialog
+          kind="confirm"
+          visible={confirmingDelete}
+          type="destructive"
+          icon="trash-outline"
+          title={tr("editboardsheet.deleteBoardTitle", { value1: original.name })}
+          message={tr("editboardsheet.deleteBoardMessage")}
+          requireText={{ value: original.name, label: tr("editboardsheet.typeBoardNameToConfirm") }}
+          confirmText={tr("editboardsheet.deleteBoard")}
+          cancelText={tr("chat.cancel")}
+          loading={deleting}
+          dismissOnBackdrop={!deleting}
+          onConfirm={() => void confirmDelete()}
+          onCancel={() => { if (!deleting) setConfirmingDelete(false); }}
+          onRequestClose={() => { if (!deleting) setConfirmingDelete(false); }}
+          onDismissComplete={finishDeleteDialog}
+        />
+      ) : null}
     </FormSheet>
   );
 }
@@ -178,6 +255,10 @@ const styles = StyleSheet.create({
   cancelText: { fontSize: 14, fontWeight: '700' },
   saveButton: { minWidth: 140, minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: 12 },
   saveText: { fontSize: 14, fontWeight: '800' },
+  danger: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.lg, paddingTop: spacing.sm },
+  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.7, marginTop: spacing.sm, marginBottom: spacing.xs },
+  deleteAction: { alignSelf: 'flex-start', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  deleteText: { fontSize: 14, fontWeight: '700' },
   disabled: { opacity: 0.36 },
   pressed: { opacity: 0.64 },
 });

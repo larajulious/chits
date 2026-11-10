@@ -18,13 +18,27 @@ import { useDesk } from '@/components/desk/paper-desk';
 import { useKeyboardInset } from '@/hooks/use-keyboard-inset';
 import { GlassSurface } from '@/components/ui/glass-surface';
 import { spacing } from '@/constants/theme';
-import { AttachmentDraftPreview } from '@/components/chat/attachment-draft-preview';
+import { AttachmentPicker } from '@/components/chat/attachment-picker';
+import { NoteAttachmentAddRow, NoteAttachmentList, NoteAttachmentToggle, type NoteAttachmentItem } from '@/components/notes/note-attachment-list';
 import { discardPastedImages, NoteBlocksEditor, noteEditorStyles, NoteToolbar, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
-import { pickAndStageFile, pickAndStageMedia, type AttachmentDraft } from '@/services/attachment-import';
+import type { AttachmentDraft } from '@/services/attachment-import';
+import type { createMessageRepository } from '@/db/repositories';
 import { draftHasRichContent, noteHasChecklist, draftImageCount, noteBlocksText, textDraft, type NoteDraftBlock } from '@/services/note-content';
 
-// `blocks` is set only when the note has pasted images: its text and images in order.
-export type NoteSubmission = { text: string; attachment: AttachmentDraft['attachment'] | null; blocks: NoteDraftBlock[] | null };
+// `blocks` is set only when the note has pasted images: its text and images in
+// order. `attachments` are the ones picked to attach, in the order picked.
+export type NoteSubmission = { text: string; attachments: AttachmentDraft['attachment'][]; blocks: NoteDraftBlock[] | null };
+
+/**
+ * Saves a submitted note as a thought, the same way wherever Add note opened.
+ * Plain words with one attachment stay the plain attachment note chat makes;
+ * anything richer is a note with its attachments.
+ */
+export async function createSubmittedNote(messages: Pick<ReturnType<typeof createMessageRepository>, 'createNote' | 'createAttachmentMessage' | 'createText'>, { text, attachments, blocks }: NoteSubmission): Promise<string> {
+  if (blocks || attachments.length > 1) return messages.createNote({ blocks: blocks ?? textDraft(text), attachments });
+  if (attachments[0]) return (await messages.createAttachmentMessage(attachments[0], text || null)).id;
+  return (await messages.createText(text)).id;
+}
 
 type Props = {
   visible: boolean;
@@ -47,13 +61,10 @@ type Props = {
   initialBlocks?: NoteDraftBlock[];
   /** Open directly into the full-screen editor, without the capture chooser. */
   startFullscreen?: boolean;
+  /** When it opens straight into the editor, put the cursor in the note and raise the keyboard. */
+  focusOnOpen?: boolean;
 };
 
-const ATTACH_OPTIONS = [
-  { key: 'photo', get label() { return tr("id.photo"); }, icon: 'image-outline' },
-  { key: 'video', get label() { return tr("addcardattachmentsheet.video"); }, icon: 'videocam-outline' },
-  { key: 'file', get label() { return tr("addcardattachmentsheet.file"); }, icon: 'document-outline' },
-] as const;
 
 const MAX_NOTE_LENGTH = 10000;
 
@@ -64,7 +75,7 @@ const MAX_NOTE_LENGTH = 10000;
 // text where the cursor was. Picking and storage are the same shared path Chat uses
 // (services/attachment-import), so media is optimized and stored identically; a
 // staged file is deleted again if the sheet is dismissed without adding.
-export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit, title = tr("id.addNote"), context, extra, extraSummary, canSubmit = true, initialBlocks, startFullscreen = false }: Props) {
+export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit, title = tr("id.addNote"), context, extra, extraSummary, canSubmit = true, initialBlocks, startFullscreen = false, focusOnOpen = true }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -80,8 +91,11 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   const [runSubmit] = useState(createSingleFlight);
   const [blocks, setBlocks] = useState<NoteDraftBlock[]>(() => textDraft());
   const [saving, setSaving] = useState(false);
-  const [staging, setStaging] = useState(false);
-  const [draft, setDraft] = useState<AttachmentDraft | null>(null);
+  // Attachments picked so far: staged into Chits storage, deleted again if the note isn't added.
+  const [drafts, setDrafts] = useState<AttachmentDraft[]>([]);
+  // Folded away like Edit Note's until it's wanted; open while a recording runs in it.
+  const [showAttachments, setShowAttachments] = useState(false);
+  const [recording, setRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Full-screen writing mode (like Edit Note) for longer notes; same state, so
   // text and any attachment carry over when switching either way.
@@ -94,8 +108,8 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
       setBlocks(initialBlocks ?? textDraft());
       setStage(initialBlocks || startFullscreen ? 'editor' : 'choice');
       setSaving(false);
-      setStaging(false);
-      setDraft(null);
+      setDrafts([]);
+      setShowAttachments(false);
       setError(null);
     }
     wasVisible.current = visible;
@@ -105,37 +119,31 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
   const imageCount = draftImageCount(blocks);
   const changeBlocks = useCallback((update: (current: NoteDraftBlock[]) => NoteDraftBlock[]) => { setBlocks(update); setError(null); }, [setBlocks, setError]);
   const pasteImage = useNoteImagePaste({ active: visible, blocks, setBlocks: changeBlocks, editor: inputRef, onError: setError });
-  const busy = saving || staging || pasteImage.pasting;
-  const canAdd = (Boolean(trimmed) || noteHasChecklist(blocks) || Boolean(draft) || imageCount > 0) && canSubmit && !busy;
+  const busy = saving || pasteImage.pasting;
+  const canAdd = (Boolean(trimmed) || noteHasChecklist(blocks) || drafts.length > 0 || imageCount > 0) && canSubmit && !busy;
 
-  const discardDraft = () => {
+  const discardDrafts = () => {
+    for (const draft of drafts) void draft.remove().catch(() => undefined);
+    setDrafts([]);
+  };
+  // The same list and the same two ways to add a photo as Edit Note: "Photo"
+  // attaches it, "Insert photo inline" places it in the text at the cursor.
+  const addDraft = (draft: AttachmentDraft) => { setError(null); setDrafts((current) => [...current, draft]); };
+  const insertInline = (draft: AttachmentDraft) => { setError(null); pasteImage.insertAttachment(draft); };
+  const removeDraft = (item: NoteAttachmentItem) => {
+    const draft = drafts.find((candidate) => candidate.attachment.storagePath === item.key);
     if (!draft) return;
+    setDrafts((current) => current.filter((candidate) => candidate !== draft));
     void draft.remove().catch(() => undefined);
-    setDraft(null);
   };
 
   // Dismissing without adding deletes the staged copy so nothing is orphaned.
   const close = () => {
     if (busy) return;
-    discardDraft();
+    discardDrafts();
     discardPastedImages(blocks);
     setBlocks(textDraft());
     onClose();
-  };
-
-  const attach = async (kind: typeof ATTACH_OPTIONS[number]['key'], inline = false) => {
-    if (busy || draft) return;
-    const cursor = inputRef.current?.cursor() ?? null;
-    setStaging(true);
-    setError(null);
-    try {
-      const staged = kind === 'file' ? await pickAndStageFile() : await pickAndStageMedia(kind);
-      if (staged) { if (inline) pasteImage.insertAttachment(staged, cursor); else setDraft(staged); }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : tr("id.thatAttachmentCouldNotBeAdded"));
-    } finally {
-      setStaging(false);
-    }
   };
 
   const toggleFullscreen = () => {
@@ -158,42 +166,25 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
       maxImageHeight={fullscreen ? 320 : 140}
       singleInputStyle={fullscreen
         ? [noteEditorStyles.input, paragraphFont, { color: theme.textPrimary }]
-        : [styles.input, controls.input, draft && styles.inputWithAttachment, { backgroundColor: theme.background, borderColor: theme.borderSubtle, color: theme.textPrimary }]}
+        : [styles.input, controls.input, drafts.length > 0 && styles.inputWithAttachment, { backgroundColor: theme.background, borderColor: theme.borderSubtle, color: theme.textPrimary }]}
       blockContainerStyle={fullscreen
         ? noteEditorStyles.blocks
         : [styles.blocksBox, controls.input as ViewStyle | null, { backgroundColor: theme.background, borderColor: theme.borderSubtle }]}
       blockInputStyle={[fullscreen ? [noteEditorStyles.blockInput, paragraphFont] : styles.blockInput, !fullscreen && controls.input ? { fontFamily: controls.input.fontFamily, fontWeight: controls.input.fontWeight } : null, { color: theme.textPrimary }]}
     />
   );
-  const pasteButton = <PasteImageButton visible={pasteImage.canPaste} pasting={pasteImage.pasting && !pasteImage.picking} disabled={saving || staging || pasteImage.picking} onPress={() => void pasteImage.paste()} />;
+  const pasteButton = <PasteImageButton visible={pasteImage.canPaste} pasting={pasteImage.pasting && !pasteImage.picking} disabled={saving || pasteImage.picking} onPress={() => void pasteImage.paste()} />;
 
-  const attachmentArea = draft ? (
-    <View style={styles.attachmentPreview}>
-      <AttachmentDraftPreview draft={draft} compact={fullscreen} onRemove={discardDraft} />
-      {pasteImage.canPaste || pasteImage.pasting ? <View style={styles.attachRow}>{pasteButton}</View> : null}
+  const attachmentArea = <>
+    <View style={[styles.attachToggle, fullscreen && styles.attachToggleFull, rowStyle]}>
+      <NoteAttachmentToggle count={drafts.length} open={showAttachments} disabled={recording} onPress={() => setShowAttachments((open) => !open)} />
     </View>
-  ) : (
-    <View style={styles.attachRow}>
-      {pasteButton}
-      {ATTACH_OPTIONS.map((option) => (
-        <Pressable
-          key={option.key}
-          accessibilityRole="button"
-          accessibilityLabel={tr("addnotesheet.attachValue", { value1: option.label.toLowerCase() })}
-          accessibilityHint={option.key === 'photo' ? tr("addnotesheet.holdToInsertAPhotoAtTheCursor") : undefined}
-          onLongPress={option.key === 'photo' ? () => void attach('photo', true) : undefined}
-          accessibilityState={{ disabled: busy }}
-          disabled={busy}
-          onPress={() => void attach(option.key)}
-          style={({ pressed }) => [styles.attachChip, controls.panel, { backgroundColor: theme.surfaceElevated, borderColor: theme.borderSubtle }, busy && styles.disabled, pressed && styles.pressed]}
-        >
-          <Icon name={option.icon} size={17} color={theme.textSecondary} />
-          <AppText style={[styles.attachLabel, { color: theme.textPrimary }]}>{option.label}</AppText>
-        </Pressable>
-      ))}
-      {staging ? <ActivityIndicator accessibilityLabel={tr("addnotesheet.preparingAttachment")} size="small" color={theme.textMuted} /> : null}
-    </View>
-  );
+    {showAttachments ? <NoteAttachmentList style={fullscreen ? styles.attachmentsFull : styles.attachments} disabled={busy} onRemove={removeDraft} onError={setError}
+      items={drafts.map((draft) => ({ key: draft.attachment.storagePath, attachment: { ...draft.attachment, id: draft.attachment.storagePath, createdAt: 0 }, saved: false }))}
+      footer={<AttachmentPicker disabled={busy} onSelected={addDraft} onInlineSelected={insertInline} onError={setError} onRecordingChange={setRecording}
+        renderTrigger={({ open, disabled }) => <NoteAttachmentAddRow label={tr('id.addAttachment')} disabled={disabled} onPress={open} />} />} /> : null}
+    {pasteImage.canPaste || pasteImage.pasting ? <View style={[styles.attachRow, fullscreen && styles.attachRowFull]}>{pasteButton}</View> : null}
+  </>;
 
   const contextLine = context ?? (boardName && columnName
     ? <AppText accessibilityLabel={tr("addnotesheet.addingToValueValue", { value1: boardName, value2: columnName })} style={[styles.context, { color: theme.textSecondary }]}>{tr("addnotesheet.addingTo")}{' '}<AppText style={{ color: theme.textPrimary, fontWeight: '700' }}>{boardName}</AppText>  ›  <AppText style={{ color: theme.textPrimary, fontWeight: '700' }}>{columnName}</AppText></AppText>
@@ -205,9 +196,9 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
       setSaving(true);
       setError(null);
       try {
-        await onSubmit({ text: trimmed, attachment: draft?.attachment ?? null, blocks: draftHasRichContent(blocks) ? blocks : null });
-        // Saved: the file now belongs to the note, so it must not be removed.
-        setDraft(null);
+        await onSubmit({ text: trimmed, attachments: drafts.map((draft) => draft.attachment), blocks: draftHasRichContent(blocks) ? blocks : null });
+        // Saved: the files now belong to the note, so they must not be removed.
+        setDrafts([]);
         setBlocks(textDraft());
         onClose();
       } catch (cause) {
@@ -224,7 +215,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
       transparent
       animationType="slide"
       onRequestClose={() => { if (inputRef.current?.dismissActivePanel()) return; if (stage === 'templates') libraryRef.current?.back(); else close(); }}
-      onShow={() => { if (initialBlocks || startFullscreen) requestAnimationFrame(() => inputRef.current?.focus()); }}
+      onShow={() => { if (focusOnOpen && (initialBlocks || startFullscreen)) requestAnimationFrame(() => inputRef.current?.focus()); }}
     >
       <SafeAreaProvider>
       <KeyboardPane style={[styles.backdrop, fullscreen && { backgroundColor: desk.desk }]}>
@@ -251,6 +242,8 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
             />
             <View style={[noteEditorStyles.fullscreenPage, { backgroundColor: theme.cardPaper }]}>
               <View style={styles.fullContext}>{contextLine}</View>
+              {/* Attachments sit above the note, where Edit Note lists them. */}
+              {attachmentArea}
               <View style={noteEditorStyles.fullscreenPage}>{noteInput}</View>
               <View style={styles.fullFooter}>
                 {extra ? (keyboardVisible && extraSummary
@@ -261,9 +254,8 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
                   </Pressable>
                   : <ScrollView bounces={false} keyboardShouldPersistTaps="handled" style={styles.extraFull}>{extra}</ScrollView>) : null}
                 {error ? <AppText accessibilityRole="alert" style={[styles.message, { color: theme.danger }]}>{error}</AppText> : null}
-                {attachmentArea}
               </View>
-              <NoteToolbar editor={inputRef} images={pasteImage} disabled={saving || staging} safeBottom />
+              <NoteToolbar editor={inputRef} images={pasteImage} disabled={saving} safeBottom />
             </View>
           </SafeAreaView>
         ) : (
@@ -343,9 +335,11 @@ const styles = StyleSheet.create({
   context: { marginTop: spacing.xxs, marginBottom: spacing.md, fontSize: 13, lineHeight: 18 },
   inputWithAttachment: { minHeight: 64 },
   attachRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm },
-  attachChip: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth },
-  attachLabel: { fontSize: 14, fontWeight: '600' },
-  attachmentPreview: { marginTop: spacing.sm },
+  attachToggle: { marginTop: spacing.xxs },
+  attachToggleFull: { marginTop: 0, paddingHorizontal: spacing.md },
+  attachments: { marginHorizontal: 0, marginBottom: 0, marginTop: 0 },
+  attachmentsFull: { marginTop: 0 },
+  attachRowFull: { paddingHorizontal: spacing.md, marginTop: 0, marginBottom: spacing.xs },
   input: { minHeight: 96, maxHeight: 220, borderWidth: 1, borderRadius: 16, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, fontSize: 16, lineHeight: 22, textAlignVertical: 'top' },
   // With pasted images the box scrolls as a whole; its inputs grow with their text.
   blocksBox: { flexGrow: 0, minHeight: 96, maxHeight: 280, borderWidth: 1, borderRadius: 16, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },

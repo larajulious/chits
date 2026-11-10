@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { router } from 'expo-router';
 import { memo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -21,6 +22,8 @@ import type { NoteChecklistEntry } from '@/services/note-content';
 import { formatReminder } from '@/services/reminder-time';
 
 /** A note with its place on the board. */
+const openBoard = (item: CardListItem) => { if (item.boardId) router.push({ pathname: '/board/[id]', params: { id: item.boardId } }); };
+
 export type CanvasNote = CanvasRect & { key: string; item: CardListItem; z: number; tilt: number; frame: CanvasCardFrame };
 
 export type CanvasCardHandlers = {
@@ -184,7 +187,13 @@ function FullCard({ note, handlers }: { note: CanvasNote; handlers: CanvasCardHa
 
         <View style={styles.footer}>
           {item.boardAccent && !item.hidden ? <View style={[styles.dot, { backgroundColor: item.boardAccent, borderColor: mix(item.boardAccent, ink, 0.3) }]} /> : null}
-          <AppText family={fonts.text} {...scaling} numberOfLines={1} style={[styles.meta, styles.location, { color: muted }]}>{location}</AppText>
+          {item.boardId ? <Pressable accessibilityRole="link" accessibilityLabel={tr('id.openBoardValue', { value1: location })} hitSlop={6}
+            onPressIn={() => handlers.onInlineTouch(() => openBoard(item))}
+            onPress={(event) => { event.stopPropagation(); handlers.onInlineTap(() => openBoard(item)); }}
+            onLongPress={noop} delayLongPress={300}
+            style={({ pressed }) => [styles.location, pressed && { opacity: 0.6 }]}>
+            <AppText family={fonts.text} {...scaling} numberOfLines={1} style={[styles.meta, { color: muted }]}>{location}</AppText>
+          </Pressable> : <AppText family={fonts.text} {...scaling} numberOfLines={1} style={[styles.meta, styles.location, { color: muted }]}>{location}</AppText>}
           <AppText family={fonts.text} {...scaling} style={[styles.meta, { color: muted }]}>{formatCardDate(item.updatedAt)}</AppText>
           {attachments > 0 && content.kind !== 'file' ? <View style={styles.badge}><Icon name="attach" size={12} color={muted} /><AppText {...scaling} style={[styles.meta, { color: muted }]}>{attachments}</AppText></View> : null}
           {connections > 0 ? <View style={styles.badge}><Icon name="link-outline" size={12} color={muted} /><AppText {...scaling} style={[styles.meta, { color: muted }]}>{connections}</AppText></View> : null}

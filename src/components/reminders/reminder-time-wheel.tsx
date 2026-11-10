@@ -115,9 +115,13 @@ export const ReminderTimeWheel = forwardRef<TimeWheelHandle, Props>(function Rem
 });
 
 const WheelNumber = memo(function WheelNumber({ index, rowHeight, position, family, reduced, text }: { index: number; rowHeight: number; position: SharedValue<number>; family?: string; reduced: boolean; text: string }) {
+  // Primitives only, transform as a string: Reanimated skips a row whose values
+  // match its last frame (shallow compare), so only the rows near the center
+  // update while the wheel turns. A transform array is a new object every frame,
+  // which pushed all 180 minute rows to native on each scroll frame (laggy on Android).
   const focus = useAnimatedStyle(() => {
     const distance = Math.min(2, Math.abs(position.get() / rowHeight - index));
-    return { opacity: Math.max(0.08, 1 - distance * 0.65), transform: [{ scale: reduced ? 1 : 1 - Math.min(1, distance) * 0.22 }] };
+    return { opacity: Math.max(0.08, 1 - distance * 0.65), transform: `scale(${reduced ? 1 : 1 - Math.min(1, distance) * 0.22})` };
   });
   return <Animated.View accessible={false} style={[styles.number, { height: rowHeight }, focus]}>
     <AppText accessible={false} family={family} maxFontSizeMultiplier={1.4} style={styles.digits}>{text}</AppText>

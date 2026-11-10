@@ -220,15 +220,19 @@ async function insertPastedImages(transaction: Pick<SQLiteDatabase, 'runAsync'>,
   }
 }
 
-/** Inserts a new note (text, pasted images and an optional picked attachment); returns its words. */
-async function insertNoteMessage(transaction: Pick<SQLiteDatabase, 'runAsync'>, messageId: string, input: { blocks: NoteContentInput; attachment: StagedAttachment | null }, now: number) {
+/** Inserts a new note (text, pasted images and any picked attachments); returns its words. */
+async function insertNoteMessage(transaction: Pick<SQLiteDatabase, 'runAsync'>, messageId: string, input: { blocks: NoteContentInput; attachments: StagedAttachment[] }, now: number) {
   if (input.blocks.some((block) => block.type === 'image' && block.attachmentId)) throw new Error('Saved images must stay linked to their original thought.');
   const plan = planNoteContent(input.blocks);
-  const attachment = input.attachment;
-  if (!plan.text && !attachment && !plan.imageIds.length && !noteHasChecklist(plan.stored)) throw new Error('Write something or add an image before adding a note.');
-  const type: MessageType = attachment?.type ?? (plan.imageIds.length ? 'photo' : 'text');
+  const attachments = input.attachments;
+  if (!plan.text && !attachments.length && !plan.imageIds.length && !noteHasChecklist(plan.stored)) throw new Error('Write something or add an image before adding a note.');
+  // A note reads as its first video, audio or file, else as a photo note when it has any.
+  const type: MessageType = attachments.find((attachment) => attachment.type !== 'photo')?.type ?? (attachments.length || plan.imageIds.length ? 'photo' : 'text');
   await transaction.runAsync('INSERT INTO messages (id, text, type, created_at, updated_at, archived_at, pinned, deleted_at, content_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', messageId, plan.text, type, now, now, null, 0, null, plan.contentJson);
-  if (attachment) await transaction.runAsync(INSERT_ATTACHMENT_SQL, newId(), messageId, attachment.type, attachment.storagePath, attachment.originalName, attachment.mimeType, attachment.size, attachment.duration, attachment.width, attachment.height, now);
+  // Picked attachments come before the pasted images, in the order they were picked.
+  for (const [index, attachment] of attachments.entries()) {
+    await transaction.runAsync(INSERT_ATTACHMENT_SQL, newId(), messageId, attachment.type, attachment.storagePath, attachment.originalName, attachment.mimeType, attachment.size, attachment.duration, attachment.width, attachment.height, now - attachments.length + index + 1);
+  }
   await insertPastedImages(transaction, messageId, plan.inserts, now);
   return { text: plan.text, type, hasImages: plan.imageIds.length > 0 };
 }
@@ -341,19 +345,26 @@ export function createMessageRepository(database: SQLiteDatabase) {
     },
     // A note from the Add note sheet that carries pasted images (and, optionally,
     // one picked attachment). Plain notes keep using createText/createAttachmentMessage.
-    async createNote(input: { blocks: NoteContentInput; attachment?: StagedAttachment | null }): Promise<string> {
+    async createNote(input: { blocks: NoteContentInput; attachment?: StagedAttachment | null; attachments?: StagedAttachment[] }): Promise<string> {
       const messageId = newId();
       await database.withExclusiveTransactionAsync(async (transaction) => {
-        await insertNoteMessage(transaction, messageId, { blocks: input.blocks, attachment: input.attachment ?? null }, Date.now());
+        await insertNoteMessage(transaction, messageId, { blocks: input.blocks, attachments: [...(input.attachment ? [input.attachment] : []), ...(input.attachments ?? [])] }, Date.now());
       });
       notifyAttachmentsChanged();
       return messageId;
     },
-    // Edit Note's save: the note's words and its photos, in order. A photo left
-    // out of `blocks` was removed by the user — its row goes, and its file too
-    // once nothing else refers to it (returned for the caller to delete after
-    // the write commits). Video, audio and files on the note are never touched.
-    async updateContent(id: string, blocks: NoteContentInput, expected?: Pick<Message, 'updatedAt' | 'text' | 'content' | 'attachments'>): Promise<{ updatedAt: number; removablePaths: string[] }> {
+    // Edit Note's save: the note's words and its photos, in order, plus video,
+    // audio or files picked while editing (`added`, already staged into Chits
+    // storage) and the ones taken off (`removed`, by attachment id). A photo
+    // left out of `blocks` was removed by the user, unless `attachedPhotos`
+    // keeps it as an attachment rather than in the text. A removed attachment's row
+    // goes, and its file too once nothing else refers to it (returned for the
+    // caller to delete after the write commits). Other video, audio and files
+    // on the note are never touched.
+    async updateContent(id: string, blocks: NoteContentInput, expected?: Pick<Message, 'updatedAt' | 'text' | 'content' | 'attachments'>, changes: { added?: StagedAttachment[]; removed?: string[]; attachedPhotos?: string[] } = {}): Promise<{ updatedAt: number; removablePaths: string[] }> {
+      const added = changes.added ?? [];
+      const dropped = new Set(changes.removed ?? []);
+      const attachedPhotos = new Set(changes.attachedPhotos ?? []);
       const now = Date.now();
       const removablePaths: string[] = [];
       let attachmentsChanged = false;
@@ -371,16 +382,18 @@ export function createMessageRepository(database: SQLiteDatabase) {
         if (blocks.some((block) => block.type === 'image' && block.attachmentId && owned.get(block.attachmentId)?.type !== 'photo')) throw new Error('An image is no longer available. Reopen the note before saving.');
         const plan = planNoteContent(blocks);
         const kept = new Set(plan.imageIds);
-        const removed = attachments.filter((attachment) => attachment.type === 'photo' && !kept.has(attachment.id));
+        const removed = attachments.filter((attachment) => dropped.has(attachment.id) || (attachment.type === 'photo' && !kept.has(attachment.id) && !attachedPhotos.has(attachment.id)));
         const remaining = attachments.filter((attachment) => !removed.includes(attachment));
-        if (!plan.text && !remaining.length && !plan.inserts.length && !noteHasChecklist(plan.stored)) throw new Error('Write something or add an image before saving.');
+        if (!plan.text && !remaining.length && !plan.inserts.length && !added.length && !noteHasChecklist(plan.stored)) throw new Error('Write something or add an image before saving.');
         // A note that was never inline and still reads photos-then-words stays a
         // plain note (content_json NULL), so editing a caption changes nothing else.
         const photoIds = attachments.filter((attachment) => attachment.type === 'photo').map((attachment) => attachment.id);
         const firstText = plan.stored.findIndex((block) => block.type === 'text' && block.text.trim());
         const imagesLead = firstText < 0 || plan.stored.slice(firstText).every((block) => block.type === 'text');
-        const legacyLayout = !plan.stored.some((block) => block.type === 'text' && (block.list || hasTextFormatting(block))) && !row.content_json && !plan.inserts.length && imagesLead && plan.imageIds.join() === photoIds.join();
-        const type: MessageType = remaining.find((attachment) => attachment.type !== 'photo')?.type ?? (remaining.length || plan.inserts.length ? 'photo' : 'text');
+        // Photos kept as attachments lead the note anyway, so they count as leading here.
+        const leadingIds = photoIds.filter((photoId) => attachedPhotos.has(photoId));
+        const legacyLayout = !plan.stored.some((block) => block.type === 'text' && (block.list || hasTextFormatting(block))) && !row.content_json && !plan.inserts.length && imagesLead && [...leadingIds, ...plan.imageIds].join() === photoIds.join();
+        const type: MessageType = [...remaining, ...added].find((attachment) => attachment.type !== 'photo')?.type ?? (remaining.length || plan.inserts.length || added.length ? 'photo' : 'text');
         if (removed.length) {
           const paths = removed.map((attachment) => attachment.storagePath);
           await clearChatBackgroundForPaths(transaction, paths);
@@ -389,7 +402,11 @@ export function createMessageRepository(database: SQLiteDatabase) {
         }
         await transaction.runAsync('UPDATE messages SET text = ?, content_json = ?, type = ?, updated_at = ? WHERE id = ?', plan.text, legacyLayout ? null : plan.contentJson, type, now, id);
         await insertPastedImages(transaction, id, plan.inserts, now);
-        attachmentsChanged = removed.length > 0 || plan.inserts.length > 0;
+        // Video, audio and files added while editing go after the images, in the order they were picked.
+        for (const [index, attachment] of added.entries()) {
+          await transaction.runAsync(INSERT_ATTACHMENT_SQL, newId(), id, attachment.type, attachment.storagePath, attachment.originalName, attachment.mimeType, attachment.size, attachment.duration, attachment.width, attachment.height, now + plan.inserts.length + index + 1);
+        }
+        attachmentsChanged = removed.length > 0 || plan.inserts.length > 0 || added.length > 0;
       });
       if (attachmentsChanged) { notifyAttachmentsChanged(); notifyChatBackgroundChanged(); }
       notifyNoteChanged(id);
@@ -664,34 +681,40 @@ export function createBoardRepository(database: SQLiteDatabase) {
   // See the comment on `deleteCard`/`detachCard` below — both user-facing
   // actions ("Delete card" and "Move back to Unorganized") remove the card the
   // same way; only "Delete card" also deletes the thoughts organized into it.
+  // Runs inside the caller's transaction and returns the candidate file paths;
+  // the caller filters them with unreferencedAttachmentPaths once everything it
+  // removes is gone (a board delete removes many cards before that check).
+  const removeCardIn = async (transaction: SQLiteDatabase, cardId: string, deleteThoughts: boolean) => {
+    const attachments = await transaction.getAllAsync<{ storage_path: string }>('SELECT storage_path FROM card_attachments WHERE card_id = ?', cardId);
+    const removableUris = attachments.map((row) => row.storage_path);
+    // A thought also organized into another card is only unlinked, so that card keeps it.
+    const messageIds = deleteThoughts
+      ? (await transaction.getAllAsync<{ id: string }>('SELECT cm.message_id AS id FROM card_messages cm WHERE cm.card_id = ? AND NOT EXISTS (SELECT 1 FROM card_messages other WHERE other.message_id = cm.message_id AND other.card_id != cm.card_id)', cardId)).map(({ id }) => id)
+      : [];
+    const messagePlaceholders = messageIds.map(() => '?').join(', ');
+    if (messageIds.length) {
+      const messageAttachments = await transaction.getAllAsync<{ storage_path: string }>(`SELECT storage_path FROM attachments WHERE message_id IN (${messagePlaceholders})`, ...messageIds);
+      removableUris.push(...messageAttachments.map((row) => row.storage_path));
+    }
+    await clearChatBackgroundForPaths(transaction, removableUris);
+    await transaction.runAsync('DELETE FROM card_attachments WHERE card_id = ?', cardId);
+    await transaction.runAsync('DELETE FROM card_comments WHERE card_id = ?', cardId);
+    await transaction.runAsync('DELETE FROM card_subtasks WHERE card_id = ?', cardId);
+    await transaction.runAsync('DELETE FROM card_messages WHERE card_id = ?', cardId);
+    // The foreign key cascades too; explicit so no reminder row can outlive its card.
+    await transaction.runAsync('DELETE FROM card_reminders WHERE card_id = ?', cardId);
+    const result = await transaction.runAsync('DELETE FROM cards WHERE id = ?', cardId);
+    if (result.changes !== 1) throw new Error('That card is no longer available.');
+    if (messageIds.length) {
+      await transaction.runAsync(`DELETE FROM attachments WHERE message_id IN (${messagePlaceholders})`, ...messageIds);
+      await transaction.runAsync(`DELETE FROM messages WHERE id IN (${messagePlaceholders})`, ...messageIds);
+    }
+    return removableUris;
+  };
   const removeCard = async (cardId: string, deleteThoughts: boolean) => {
     let removableUris: string[] = [];
     await database.withExclusiveTransactionAsync(async (transaction) => {
-      const attachments = await transaction.getAllAsync<{ storage_path: string }>('SELECT storage_path FROM card_attachments WHERE card_id = ?', cardId);
-      removableUris = attachments.map((row) => row.storage_path);
-      // A thought also organized into another card is only unlinked, so that card keeps it.
-      const messageIds = deleteThoughts
-        ? (await transaction.getAllAsync<{ id: string }>('SELECT cm.message_id AS id FROM card_messages cm WHERE cm.card_id = ? AND NOT EXISTS (SELECT 1 FROM card_messages other WHERE other.message_id = cm.message_id AND other.card_id != cm.card_id)', cardId)).map(({ id }) => id)
-        : [];
-      const messagePlaceholders = messageIds.map(() => '?').join(', ');
-      if (messageIds.length) {
-        const messageAttachments = await transaction.getAllAsync<{ storage_path: string }>(`SELECT storage_path FROM attachments WHERE message_id IN (${messagePlaceholders})`, ...messageIds);
-        removableUris.push(...messageAttachments.map((row) => row.storage_path));
-      }
-      await clearChatBackgroundForPaths(transaction, removableUris);
-      await transaction.runAsync('DELETE FROM card_attachments WHERE card_id = ?', cardId);
-      await transaction.runAsync('DELETE FROM card_comments WHERE card_id = ?', cardId);
-      await transaction.runAsync('DELETE FROM card_subtasks WHERE card_id = ?', cardId);
-      await transaction.runAsync('DELETE FROM card_messages WHERE card_id = ?', cardId);
-      // The foreign key cascades too; explicit so no reminder row can outlive its card.
-      await transaction.runAsync('DELETE FROM card_reminders WHERE card_id = ?', cardId);
-      const result = await transaction.runAsync('DELETE FROM cards WHERE id = ?', cardId);
-      if (result.changes !== 1) throw new Error('That card is no longer available.');
-      if (messageIds.length) {
-        await transaction.runAsync(`DELETE FROM attachments WHERE message_id IN (${messagePlaceholders})`, ...messageIds);
-        await transaction.runAsync(`DELETE FROM messages WHERE id IN (${messagePlaceholders})`, ...messageIds);
-      }
-      removableUris = await unreferencedAttachmentPaths(transaction, removableUris);
+      removableUris = await unreferencedAttachmentPaths(transaction, await removeCardIn(transaction, cardId, deleteThoughts));
     });
     notifyChatBackgroundChanged();
     notifyAttachmentsChanged();
@@ -758,6 +781,29 @@ export function createBoardRepository(database: SQLiteDatabase) {
     async markOpened(kind: 'board' | 'card', id: string) { const table = kind === 'board' ? 'boards' : 'cards'; await database.runAsync(`UPDATE ${table} SET last_opened_at = ? WHERE id = ? AND archived_at IS NULL`, Date.now(), id); },
     async archiveBoard(id: string) { const result = await database.runAsync('UPDATE boards SET archived_at = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL', Date.now(), Date.now(), id); if (result.changes !== 1) throw new Error('That board is no longer available.'); },
     async restoreBoard(id: string) { const result = await database.runAsync('UPDATE boards SET archived_at = NULL, updated_at = ? WHERE id = ?', Date.now(), id); if (result.changes !== 1) throw new Error('That board is no longer available.'); },
+    // "Delete board": removes every card on it the way "Delete card" does
+    // (archived cards too), then its Chat lines, columns and the board. Not recoverable. A
+    // thought also organized into a card on another board stays there. Returns
+    // the removed files' paths for the caller to unlink, like deleteCard.
+    async deleteBoard(id: string) {
+      let removableUris: string[] = [];
+      await database.withExclusiveTransactionAsync(async (transaction) => {
+        const board = await transaction.getFirstAsync<{ id: string }>('SELECT id FROM boards WHERE id = ?', id);
+        if (!board) throw new Error('That board is no longer available.');
+        const cards = await transaction.getAllAsync<{ id: string }>('SELECT id FROM cards WHERE board_id = ?', id);
+        const candidates: string[] = [];
+        for (const card of cards) candidates.push(...await removeCardIn(transaction, card.id, true));
+        // Its "board created"/"column created" lines leave Chat too; they would only open a missing board.
+        await transaction.runAsync('DELETE FROM timeline_events WHERE related_board_id = ?', id);
+        await transaction.runAsync('DELETE FROM board_columns WHERE board_id = ?', id);
+        const result = await transaction.runAsync('DELETE FROM boards WHERE id = ?', id);
+        if (result.changes !== 1) throw new Error('That board is no longer available.');
+        removableUris = await unreferencedAttachmentPaths(transaction, candidates);
+      });
+      notifyChatBackgroundChanged();
+      notifyAttachmentsChanged();
+      return removableUris;
+    },
     async restoreCard(id: string) { const result = await database.runAsync('UPDATE cards SET archived_at = NULL, updated_at = ? WHERE id = ?', Date.now(), id); if (result.changes !== 1) throw new Error('That card is no longer available.'); },
     listArchived: () => database.getAllAsync<{ id: string; title: string; kind: 'message' | 'card' | 'board'; archivedAt: number }>(`SELECT id, CASE WHEN is_hidden_content = 1 THEN 'Hidden Chit' ELSE COALESCE(text, 'Attachment') END AS title, 'message' AS kind, archived_at AS archivedAt FROM messages WHERE archived_at IS NOT NULL UNION ALL SELECT id, COALESCE(title, 'Related thoughts') AS title, 'card' AS kind, archived_at AS archivedAt FROM cards WHERE archived_at IS NOT NULL UNION ALL SELECT id, name AS title, 'board' AS kind, archived_at AS archivedAt FROM boards WHERE archived_at IS NOT NULL ORDER BY archivedAt DESC`),
     search: (term: string, includeArchived = false, boardId?: string) => {
@@ -856,9 +902,10 @@ export function createBoardRepository(database: SQLiteDatabase) {
     // A note added straight into a column: text, an already-staged attachment
     // (photo/video/file, stored exactly like a Chat attachment message), or both.
     // `blocks` (optional) carries pasted images in order with the text; `text` alone stays the plain path.
-    async createNoteCard(input: { boardId: string; columnId: string; text: string; attachment?: Omit<Attachment, 'id' | 'messageId' | 'createdAt'> | null; blocks?: NoteContentInput | null }) {
+    async createNoteCard(input: { boardId: string; columnId: string; text: string; attachment?: Omit<Attachment, 'id' | 'messageId' | 'createdAt'> | null; attachments?: StagedAttachment[]; blocks?: NoteContentInput | null }) {
       const trimmed = input.text.trim();
-      const attachment = input.attachment ?? null;
+      const attachments = [...(input.attachment ? [input.attachment] : []), ...(input.attachments ?? [])];
+      const attachment = attachments[0] ?? null;
       const blocks = input.blocks ?? [{ type: 'text', text: trimmed }];
       const words = noteBlocksText(blocks) || null;
       if (!words && !attachment && !blocks.some((block) => block.type === 'image') && !noteHasChecklist(blocks)) throw new Error('Write something or attach a file before adding a note.');
@@ -869,7 +916,7 @@ export function createBoardRepository(database: SQLiteDatabase) {
       await database.withExclusiveTransactionAsync(async (transaction) => {
         const column = await transaction.getFirstAsync<{ id: string }>('SELECT bc.id FROM board_columns bc INNER JOIN boards b ON b.id = bc.board_id WHERE bc.id = ? AND bc.board_id = ? AND b.archived_at IS NULL', input.columnId, input.boardId);
         if (!column) throw new Error('This column is no longer available.');
-        await insertNoteMessage(transaction, messageId, { blocks, attachment }, now);
+        await insertNoteMessage(transaction, messageId, { blocks, attachments }, now);
         const position = await transaction.getFirstAsync<{ position: number }>('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM cards WHERE column_id = ? AND archived_at IS NULL', input.columnId);
         await transaction.runAsync('INSERT INTO cards (id, board_id, column_id, title, position, archived_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', cardId, input.boardId, input.columnId, title, position?.position ?? 0, null, now, now);
         await transaction.runAsync('INSERT INTO card_messages (card_id, message_id, position) VALUES (?, ?, ?)', cardId, messageId, 0);
@@ -1087,7 +1134,7 @@ export function createBoardRepository(database: SQLiteDatabase) {
       await database.withExclusiveTransactionAsync(async (tx) => {
         const card = await tx.getFirstAsync('SELECT c.id FROM cards c JOIN boards b ON b.id = c.board_id WHERE c.id = ? AND c.archived_at IS NULL AND b.archived_at IS NULL', cardId);
         if (!card) throw new Error(tr('focus.unavailable'));
-        await insertNoteMessage(tx, id, { blocks, attachment: null }, now);
+        await insertNoteMessage(tx, id, { blocks, attachments: [] }, now);
         const position = await tx.getFirstAsync<{ value: number }>('SELECT coalesce(max(position),-1) + 1 AS value FROM card_messages WHERE card_id = ?', cardId);
         await tx.runAsync('INSERT INTO card_messages(card_id,message_id,position) VALUES (?,?,?)', cardId, id, position?.value ?? 0);
         await tx.runAsync('UPDATE cards SET updated_at = ? WHERE id = ?', now, cardId);
@@ -1343,13 +1390,13 @@ export function createSpaceRepository(database: SQLiteDatabase) {
   return {
     stick,
     // Creation and destination placement commit together; a full Space writes nothing.
-    async createNote(spaceId: SpaceId, input: { blocks: NoteContentInput; attachment?: StagedAttachment | null }) {
+    async createNote(spaceId: SpaceId, input: { blocks: NoteContentInput; attachment?: StagedAttachment | null; attachments?: StagedAttachment[] }) {
       const messageId = newId();
       await database.withExclusiveTransactionAsync(async (tx) => {
         const taken = await tx.getAllAsync<SpacePoint>(`SELECT p.x, p.y ${LIVE_PLACEMENTS_SQL} AND p.space_id = ?`, spaceId);
         if (taken.length >= SPACE_CAPACITY) throw new Error(tr('spacenoteaction.thisSpaceIsFullRemoveANoteTo'));
         const now = Date.now();
-        await insertNoteMessage(tx, messageId, { blocks: input.blocks, attachment: input.attachment ?? null }, now);
+        await insertNoteMessage(tx, messageId, { blocks: input.blocks, attachments: [...(input.attachment ? [input.attachment] : []), ...(input.attachments ?? [])] }, now);
         const { x, y } = autoPlace(taken, Math.random);
         const z = ((await tx.getFirstAsync<{ z: number | null }>('SELECT MAX(z_index) AS z FROM space_placements WHERE space_id = ?', spaceId))?.z ?? 0) + 1;
         await tx.runAsync('INSERT INTO space_placements (id, message_id, space_id, x, y, rotation, color, z_index, pinned_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', newId(), messageId, spaceId, x, y, randomRotation(Math.random), DEFAULT_STICKY_COLOR, z, now, now);

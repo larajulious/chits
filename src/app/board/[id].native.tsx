@@ -21,6 +21,7 @@ import { headingFontFamily, spacing } from '@/constants/theme';
 import { createBoardRepository } from '@/db/repositories';
 import { formatReminder } from '@/services/reminder-time';
 import { requestReminderSync, subscribeToReminderChanges } from '@/services/reminders';
+import { removeCardAttachmentFile } from '@/services/card-attachment-storage';
 import { useTheme } from '@/components/theme-provider';
 import { useStickySheet, useStickySurface } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
@@ -672,12 +673,12 @@ export default function BoardScreen() {
   // state — no Unorganized round-trip, no board reload/flicker. Position is computed
   // the same way the repository computes it server-side (append after the column's
   // current cards), safe here because this is a local-first, single-writer app.
-  const submitAddNote = useCallback(async ({ text, attachment, blocks }: NoteSubmission) => {
+  const submitAddNote = useCallback(async ({ text, attachments, blocks }: NoteSubmission) => {
     if (!id || !addNoteColumn) return;
     const targetColumn = addNoteColumn;
     const position = cards.filter((card) => card.columnId === targetColumn.id).length;
-    const { cardId } = await repository.createNoteCard({ boardId: id, columnId: targetColumn.id, text, attachment, blocks });
-    if (attachment || blocks) {
+    const { cardId } = await repository.createNoteCard({ boardId: id, columnId: targetColumn.id, text, attachments, blocks });
+    if (attachments.length || blocks) {
       // A card with media: re-read just this column so the new card arrives with
       // its thumbnail/counts exactly as the summary query builds them.
       await fetchColumn(targetColumn.id, { force: true });
@@ -695,6 +696,16 @@ export default function BoardScreen() {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [addNoteColumn, cards, fetchColumn, id, repository]);
   const saveBoardAppearance = async (next: { name: string; icon: BoardIconName | null; accent: string | null }) => { if (!board) throw new Error(tr("id.thisBoardIsNoLongerAvailable")); const previousBoard = board; setBoard({ ...board, name: next.name, icon: next.icon, accent: next.accent, updatedAt: Date.now() }); try { await repository.updateBoard(board.id, next); await Haptics.selectionAsync(); } catch (cause) { setBoard(previousBoard); throw cause; } };
+  // Same clean-up as "Delete card", for every card on the board at once.
+  const deleteBoard = async () => {
+    if (!id) throw new Error(tr("id.thisBoardIsNoLongerAvailable"));
+    const removableUris = await repository.deleteBoard(id);
+    await Promise.all(removableUris.map((uri) => removeCardAttachmentFile(uri)));
+    // The reminder rows went with the cards; cancel their scheduled notifications too.
+    void requestReminderSync();
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+  const leaveDeletedBoard = () => { setRenameOpen(false); if (router.canGoBack()) router.back(); else router.replace('/'); };
   const renameColumn = async (name: string) => { if (!currentColumn) throw new Error(tr("id.thatColumnIsNoLongerAvailable")); await repository.renameColumn(currentColumn.id, name.trim()); setColumns((current) => current.map((column) => column.id === currentColumn.id ? { ...column, name: name.trim() } : column)); await Haptics.selectionAsync(); };
   const deleteColumn = async (destinationColumnId?: string) => { if (!currentColumn) throw new Error(tr("id.thatColumnIsNoLongerAvailable")); await repository.deleteColumn(currentColumn.id, destinationColumnId); void requestReminderSync(); await load(); await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); };
   const getDeleteCardCount = async () => { if (!currentColumn) throw new Error(tr("id.thatColumnIsNoLongerAvailable")); return repository.getColumnCardCount(currentColumn.id); };
@@ -876,7 +887,7 @@ export default function BoardScreen() {
       onGetDeleteCardCount={getDeleteCardCount}
       onDelete={deleteColumn}
     />
-    <EditBoardSheet visible={renameOpen} board={{ name: board.name, icon: board.icon as BoardIconName | null, accent: board.accent }} onClose={() => setRenameOpen(false)} onSave={saveBoardAppearance} />
+    <EditBoardSheet visible={renameOpen} board={{ name: board.name, icon: board.icon as BoardIconName | null, accent: board.accent }} onClose={() => setRenameOpen(false)} onSave={saveBoardAppearance} onDelete={deleteBoard} onDeleted={leaveDeletedBoard} />
     <AddNoteSheet visible={!!addNoteColumn} boardName={board.name} columnName={addNoteColumn?.name ?? ''} onClose={closeAddNote} onSubmit={submitAddNote} />
     {toast ? <View pointerEvents="none" accessibilityLiveRegion="polite" style={styles.toastWrap}><View style={[styles.toast, { backgroundColor: theme.textPrimary }]}><AppText style={[styles.toastText, { color: theme.background }]}>{toast}</AppText></View></View> : null}
   </Screen>;

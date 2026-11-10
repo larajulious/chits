@@ -2,6 +2,7 @@ import { tr } from '@/localization/runtime';
 import { useDirection, useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ConnectedNotes } from '@/components/notes/connected-notes.native';
+import { NoteAttachmentAddRow, NoteAttachmentList, NoteAttachmentToggle, type NoteAttachmentItem } from '@/components/notes/note-attachment-list.native';
 import { FocusEntry } from '@/features/focus/focus-entry';
 import { StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
@@ -9,9 +10,9 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { requestReminderSync } from '@/services/reminders';
 
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
+import { AttachmentPicker, type AttachmentDraft } from '@/components/chat/attachment-picker';
 import { useTheme } from '@/components/theme-provider';
 import { AppText, useFontStyle } from '@/components/ui/app-text';
-import { Icon } from '@/components/ui/icon';
 import { AppHeader, IconButton, Screen, HeaderIcon } from '@/components/ui/primitives';
 import { KeyboardPane } from '@/components/ui/keyboard-pane';
 import { useDesk } from '@/components/desk/paper-desk';
@@ -20,6 +21,7 @@ import { discardPastedImages, NoteBlocksEditor, noteEditorStyles, NoteToolbar, u
 import { createMessageRepository } from '@/db/repositories';
 import { deleteAttachment } from '@/services/attachment-storage';
 import { draftFromNote, noteHasChecklist, draftImageCount, noteBlocksText, textDraft, type NoteDraftBlock } from '@/services/note-content';
+import type { AttachmentLike } from '@/db/types';
 
 // What a save would change: words, and which images sit where.
 const signature = (blocks: NoteDraftBlock[]) => JSON.stringify(blocks.map((block) => block.type === 'text' ? { text: block.text, list: block.list, title: block.title, heading: block.heading, paragraph: block.paragraph, spans: block.spans } : `img:${block.attachmentId ?? block.image.storagePath}`));
@@ -56,8 +58,26 @@ export default function EditContentScreen() {
   // attachment message with no caption yet), so it can't double as "not
   // loaded yet" the way it would for a plain string default.
   const [initialSignature, setInitialSignature] = useState<string | null>(null);
-  // Video, audio and files: kept on save, and enough on their own for a note to stay.
-  const [hasOtherAttachments, setHasOtherAttachments] = useState(false);
+  // Everything attached outside the note's text: video, audio, files, and
+  // photos that aren't placed in the text. Kept on save, and enough on their
+  // own for a note to stay. Photos placed in the text are edited in it.
+  const [otherAttachments, setOtherAttachments] = useState<AttachmentLike[]>([]);
+  // Video, audio and files picked here: already staged into Chits storage,
+  // added to the note on save, and deleted again on any way out without saving.
+  const [added, setAdded] = useState<AttachmentDraft[]>([]);
+  const addedRef = useRef(added);
+  useEffect(() => { addedRef.current = added; }, [added]);
+  // Saved ones taken off here go when the note is saved, like a removed photo.
+  const [removedIds, setRemovedIds] = useState<string[]>([]);
+  const attachmentItems: NoteAttachmentItem[] = [
+    ...otherAttachments.filter((attachment) => !removedIds.includes(attachment.id)).map((attachment) => ({ key: attachment.id, attachment, saved: true })),
+    ...added.map((draft) => ({ key: draft.attachment.storagePath, attachment: { ...draft.attachment, id: draft.attachment.storagePath, createdAt: 0 }, saved: false })),
+  ];
+  const attachmentCount = attachmentItems.length;
+  const hasOtherAttachments = attachmentCount > 0;
+  const [showAttachments, setShowAttachments] = useState(false);
+  // A voice recording runs inside the list, so the list stays open until it ends.
+  const [recording, setRecording] = useState(false);
   const [blocks, setBlocks] = useState<NoteDraftBlock[]>(() => textDraft());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,10 +91,15 @@ export default function EditContentScreen() {
     let active = true;
     void messageRepository.getActiveById(messageId).then((message) => {
       if (!active) return;
-      const loaded = message ? draftFromNote(message) : textDraft();
+      // A photo the text places is edited in the text; any other is listed with the attachments.
+      const inline = new Set((message?.content ?? []).flatMap((block) => block.type === 'image' ? [block.attachmentId] : []));
+      const listed = message?.attachments.filter((attachment) => attachment.type !== 'photo' || !inline.has(attachment.id)) ?? [];
+      const loaded = message ? draftFromNote({ ...message, attachments: message.attachments.filter((attachment) => !listed.includes(attachment)) }) : textDraft();
       setInitialSignature(signature(loaded));
       setBlocks(loaded);
-      setHasOtherAttachments(Boolean(message?.attachments.some((attachment) => attachment.type !== 'photo')));
+      setOtherAttachments(listed);
+      // Show what's attached straight away; the chip folds it away.
+      setShowAttachments(listed.length > 0);
       if (autoFocusOnOpen.current) requestAnimationFrame(() => inputRef.current?.focus());
     });
     return () => { active = false; };
@@ -82,7 +107,7 @@ export default function EditContentScreen() {
 
   const changeBlocks = useCallback((update: (current: NoteDraftBlock[]) => NoteDraftBlock[]) => { setBlocks(update); setError(null); }, []);
   const pasteImage = useNoteImagePaste({ active: initialSignature !== null, blocks, setBlocks: changeBlocks, editor: inputRef, onError: setError });
-  const hasChanges = initialSignature !== null && signature(blocks) !== initialSignature;
+  const hasChanges = initialSignature !== null && (signature(blocks) !== initialSignature || added.length > 0 || removedIds.length > 0);
   const canSave = hasChanges && (noteBlocksText(blocks).length > 0 || noteHasChecklist(blocks) || draftImageCount(blocks) > 0 || hasOtherAttachments) && !saving && !pasteImage.pasting;
   // Images pasted here but not saved are deleted on every way out without saving.
   const blocksRef = useRef(blocks);
@@ -102,7 +127,11 @@ export default function EditContentScreen() {
         message: tr("editcontent.yourEditsHavenTBeenSaved"),
         confirmText: tr("editcontent.discard"),
         cancelText: tr("editcontent.keepEditing"),
-        onConfirm: () => { discardPastedImages(blocksRef.current); navigation.dispatch(event.data.action); },
+        onConfirm: () => {
+          discardPastedImages(blocksRef.current);
+          for (const draft of addedRef.current) void draft.remove().catch(() => undefined);
+          navigation.dispatch(event.data.action);
+        },
       });
     });
     return subscription;
@@ -113,7 +142,11 @@ export default function EditContentScreen() {
     setSaving(true);
     setError(null);
     try {
-      const { removablePaths } = await messageRepository.updateContent(messageId, blocks);
+      const { removablePaths } = await messageRepository.updateContent(messageId, blocks, undefined, {
+        added: added.map((draft) => draft.attachment),
+        removed: removedIds,
+        attachedPhotos: otherAttachments.filter((attachment) => attachment.type === 'photo' && !removedIds.includes(attachment.id)).map((attachment) => attachment.id),
+      });
       // Removed images' files go only once the note no longer refers to them.
       await Promise.all(removablePaths.map((path) => deleteAttachment(path).catch(() => undefined)));
       void requestReminderSync();
@@ -123,7 +156,29 @@ export default function EditContentScreen() {
       setError(tr("editcontent.chitsCouldNotSaveYourChangesTryAgain"));
       setSaving(false);
     }
-  }, [blocks, canSave, messageId, messageRepository, leaveNote]);
+  }, [added, blocks, canSave, messageId, messageRepository, leaveNote, otherAttachments, removedIds]);
+
+  // Two ways to add a photo, as in the chat composer: "Photo" attaches it with
+  // the video, audio and files; "Insert photo inline" places it in the text at
+  // the cursor, as the toolbar's image button does.
+  const addAttachment = useCallback((draft: AttachmentDraft) => {
+    setError(null);
+    setAdded((current) => [...current, draft]);
+    setShowAttachments(true);
+  }, []);
+  const insertInline = useCallback((draft: AttachmentDraft) => {
+    setError(null);
+    pasteImage.insertAttachment(draft);
+  }, [pasteImage]);
+  // Something picked in this edit is deleted straight away; a saved one waits for Save.
+  const removeAttachment = useCallback((item: NoteAttachmentItem) => {
+    setError(null);
+    if (item.saved) { setRemovedIds((current) => [...current, item.attachment.id]); return; }
+    const draft = added.find((candidate) => candidate.attachment.storagePath === item.key);
+    if (!draft) return;
+    setAdded((current) => current.filter((candidate) => candidate !== draft));
+    void draft.remove().catch(() => undefined);
+  }, [added]);
 
   return (
     <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: theme.cardPaper }}>
@@ -135,8 +190,14 @@ export default function EditContentScreen() {
       <View style={[noteEditorStyles.fullscreenPage, { backgroundColor: theme.cardPaper }]}>
       <View style={[styles.noteActions, rowStyle]}>
         <ConnectedNotes noteKey={`thought:${messageId}`} compact inline />
+        {initialSignature !== null ? <NoteAttachmentToggle count={attachmentCount} open={showAttachments} disabled={recording} onPress={() => setShowAttachments((open) => !open)} /> : null}
         {!hasChanges && initialSignature !== null ? <FocusEntry noteKey={`thought:${messageId}`} compact /> : null}
       </View>
+      {/* Each row opens the way it does on the note: video and PDFs in their
+          viewers, audio plays in place, other files open in another app. */}
+      {showAttachments ? <NoteAttachmentList items={attachmentItems} onRemove={removeAttachment} onError={setError} disabled={saving}
+        footer={<AttachmentPicker disabled={saving} onSelected={addAttachment} onInlineSelected={insertInline} onError={setError} onRecordingChange={setRecording}
+          renderTrigger={({ open, disabled }) => <NoteAttachmentAddRow label={tr('id.addAttachment')} disabled={disabled} onPress={open} />} />} /> : null}
       <KeyboardPane>
         {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { borderColor: desk.danger }]}><AppText style={[styles.errorText, { color: desk.danger }]}>{error}</AppText></View> : null}
         <View style={noteEditorStyles.fullscreenPage}>
@@ -170,6 +231,7 @@ export default function EditContentScreen() {
 
 const styles = StyleSheet.create({
   noteActions: { alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md },
+  pressed: { opacity: 0.6 },
   errorBanner: { marginHorizontal: spacing.lg, marginTop: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10 },
   errorText: { fontSize: 13, lineHeight: 18 },
 });

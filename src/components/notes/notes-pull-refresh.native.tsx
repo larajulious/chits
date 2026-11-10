@@ -8,7 +8,7 @@ import { spacing } from '@/constants/theme';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { cancelAnimation, runOnJS, useAnimatedReaction, useAnimatedStyle, useDerivedValue, useSharedValue, withRepeat, withSequence, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
 
-import { PullFabricFolds, type PullFabricGeometry } from '@/components/mascot/pull-fabric';
+import { PullFabricFolds, PullFabricHollow, type PullFabricGeometry } from '@/components/mascot/pull-fabric';
 import { DOT_SPACING, useDesk } from '@/components/desk/desk-surface';
 import { PAPER_YELLOW } from '@/constants/paper';
 import { useMascotReducedMotion } from '@/components/mascot/use-mascot-accessibility';
@@ -21,6 +21,12 @@ const HERO = 0, PULLING = 1, READY = 2, OPENING = 3, RETURNING = 4;
 const THRESHOLD = 112;
 export const NOTES_MAX_PULL = THRESHOLD * 1.2;
 export const NOTES_HEADER_STRETCH = 0.55;
+/** Where the fists hold the hem, below the hero's resting top, at the threshold. */
+const HEM_AT_THRESHOLD = THRESHOLD * 0.4;
+/** Space kept between the status bar and the top of Chits' tape. */
+const HEAD_ROOM = 6;
+/** Chits' art rows: the top of the tape, and where the hands hold the hem. */
+const ART_TOP = 140, ART_CUT = 820;
 const SPRING = { damping: 18, stiffness: 210, mass: 0.9 };
 type HeaderEdge = PullFabricGeometry;
 /** Direct finger tracking while dragging; recoil gets its own single spring. */
@@ -46,6 +52,8 @@ type Controller = {
   pulse: SharedValue<number>;
   labelOpacity: SharedValue<number>;
   progress: SharedValue<number>;
+  /** The notes' opacity: they fade back while a pull is underway, and return as it lets go. */
+  listOpacity: SharedValue<number>;
   reduced: boolean;
   native: NativeGesture;
   stage: HeaderStage | null;
@@ -102,8 +110,8 @@ export function NotesPullToCreate({ children, scrollY, onCreateNote, canvas, wid
   const progress = useSharedValue(0);
   const release = useSharedValue(0);
   const tension = useDerivedValue(() => Math.max(-0.12, Math.min(1.2, pull.get() / THRESHOLD)));
-  // Both clipping boundaries change only on the invisible right/above leg
-  // of the route (.22-.29). The top pose stays tucked even as grip relaxes.
+  // Both clipping boundaries change only on the invisible right-hand leg of
+  // the route (.22-.29). The top pose stays tucked even as grip relaxes.
   const peek = useDerivedValue(() => {
     const p = Math.max(0, Math.min(1, (progress.get() - 0.22) / 0.07));
     return p * p * (3 - 2 * p);
@@ -117,8 +125,13 @@ export function NotesPullToCreate({ children, scrollY, onCreateNote, canvas, wid
     const p = Math.max(0, Math.min(1, (progress.get() - 0.55) / 0.2));
     return p * p * (3 - 2 * p);
   });
+  // Small pulls leave the notes alone; by the threshold they're well back.
+  const listOpacity = useDerivedValue(() => {
+    const p = Math.max(0, Math.min(1, (progress.get() - 0.15) / 0.85));
+    return 1 - 0.65 * p * p * (3 - 2 * p);
+  });
   const stretch = useSharedValue(0);
-  const edge = useSharedValue<HeaderEdge>({ left: 0, right: 0, y: 0, center: 0, width, grip: 0, top: 0, occlusion: 0 });
+  const edge = useSharedValue<HeaderEdge>({ left: 0, right: 0, y: 0, center: 0, width, grip: 0, top: 0, occlusion: 0, bottom: 0 });
   const start = useSharedValue({ x: 0, y: 0, at: 0 });
   const base = useSharedValue(0);
   const baseStretch = useSharedValue(0);
@@ -217,7 +230,7 @@ export function NotesPullToCreate({ children, scrollY, onCreateNote, canvas, wid
     .onFinalize((_, success) => { dragging.set(false); if (!success && phase.get() !== OPENING && phase.get() !== HERO) finish(); }),
   [native, heroHeight, scrollY, phase, canvas, start, base, baseStretch, journeyBase, startsInHero, busy, dragging, pull, stretch, progress, release, hapticSent, haptic, reduced, pulse, openNote, finish, width]);
   /* eslint-enable react-hooks/refs, react-hooks/purity */
-  const controller = useMemo(() => ({ heroHeight, scrollY, pull, stretch, grip, peek, reach, tension, release, edge, phase, pulse, labelOpacity, progress, reduced, native, stage }), [heroHeight, scrollY, pull, stretch, grip, peek, reach, tension, release, edge, phase, pulse, labelOpacity, progress, reduced, native, stage]);
+  const controller = useMemo(() => ({ heroHeight, scrollY, pull, stretch, grip, peek, reach, tension, release, edge, phase, pulse, labelOpacity, progress, listOpacity, reduced, native, stage }), [heroHeight, scrollY, pull, stretch, grip, peek, reach, tension, release, edge, phase, pulse, labelOpacity, progress, listOpacity, reduced, native, stage]);
   // The whole workspace, including its independently sticky filter overlay,
   // moves in one UI-thread transform. Its layout/FlashList measurements stay
   // fixed through both drag and recoil; no onLayout -> JS -> UI feedback loop.
@@ -291,20 +304,35 @@ function HeaderMascot({ controller, stage, sourceFrame, height, unit, width, chi
   // Fit the existing art between measured toolbar action groups. The eye line
   // hangs below the safe-area edge, while the top of the body crops naturally.
   const fitScale = useDerivedValue(() => Math.min(0.92, Math.max(0.35, corridor.get().width / (900 * unit))));
-  const targetScale = useDerivedValue(() => fitScale.get());
+  // The header is clipped at the status bar. Size Chits so the tape-to-hands
+  // span fits under it once the hands have pulled the hem down to the
+  // threshold, so the head is never cut off at the top.
+  const targetScale = useDerivedValue(() => {
+    const room = origin.get().y + HEM_AT_THRESHOLD - HEAD_ROOM;
+    return Math.min(fitScale.get(), Math.max(0.3, room / ((ART_CUT - ART_TOP) * unit)));
+  });
   const targetX = useDerivedValue(() => corridor.get().left + corridor.get().width / 2 - origin.get().x - 625 * unit * targetScale.get());
-  const targetY = useDerivedValue(() => edge.get().y - 820 * unit * targetScale.get());
+  // Until the hem comes down that far, Chits waits lower, behind the cloth,
+  // and pulling the hem down uncovers the face.
+  const targetY = useDerivedValue(() => Math.max(
+    edge.get().y - ART_CUT * unit * targetScale.get(),
+    -origin.get().y + HEAD_ROOM - ART_TOP * unit * targetScale.get(),
+  ));
   const handLeft = useDerivedValue(() => ({ x: edge.get().left, y: edge.get().y }));
   const handRight = useDerivedValue(() => ({ x: edge.get().right, y: edge.get().y }));
   useAnimatedReaction(() => ({
-    left: corridor.get().left + corridor.get().width / 2 - origin.get().x - 325 * unit * fitScale.get(),
-    right: corridor.get().left + corridor.get().width / 2 - origin.get().x + 325 * unit * fitScale.get(),
-    y: reduced ? 0 : pull.get() * 0.4 * grip.get(),
-    center: reduced ? 0 : pull.get() * 0.5 * grip.get(),
+    left: corridor.get().left + corridor.get().width / 2 - origin.get().x - 325 * unit * targetScale.get(),
+    right: corridor.get().left + corridor.get().width / 2 - origin.get().x + 325 * unit * targetScale.get(),
+    // Reduced motion keeps the hem straight and lets it follow the grip only,
+    // so the face is still uncovered.
+    y: reduced ? HEM_AT_THRESHOLD * grip.get() : pull.get() * 0.4 * grip.get(),
+    center: reduced ? HEM_AT_THRESHOLD * grip.get() : pull.get() * 0.5 * grip.get(),
     width: origin.get().width,
     top: -8,
     grip: grip.get(),
     occlusion: peek.get(),
+    // The hero's top, which the cloth reaches down to.
+    bottom: stretch.get(),
   }), next => edge.set(next));
   const clipTop = useDerivedValue(() => origin.get().y * (1 - peek.get()));
   const clip = useAnimatedStyle(() => ({
@@ -322,7 +350,8 @@ function HeaderMascot({ controller, stage, sourceFrame, height, unit, width, chi
   const travel = useMemo(() => ({ progress, pulse, phase, reduced, targetX, targetY, targetScale, grip, reach, tension, handLeft, handRight, cloth: edge }), [progress, pulse, phase, reduced, targetX, targetY, targetScale, grip, reach, tension, handLeft, handRight, edge]);
   return <Animated.View pointerEvents="box-none" style={[styles.headerClip, clip]}>
     <Animated.View pointerEvents="box-none" style={[styles.mascotOrigin, { height }, position]}>
-      {children(travel, <PullFabricFolds geometry={edge} width={width} unit={unit} />)}
+      <PullFabricHollow geometry={edge} width={width} />
+      {children(travel, <PullFabricFolds geometry={edge} width={width} unit={unit} depth={Math.ceil(NOTES_MAX_PULL * NOTES_HEADER_STRETCH + width * 0.23 + 24)} />)}
       <Animated.View pointerEvents="none" style={[styles.label, feedback]}>
         <View style={styles.dots}>{[0, 1, 2].map(index => <ProgressDot key={index} index={index} pulse={pulse} reduced={reduced} color={desk.inkMuted} />)}</View>
         <AppText style={{ color: desk.inkMuted, fontSize: 12 }}>{tr('notesPull.create')}</AppText>

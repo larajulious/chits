@@ -44,6 +44,20 @@ export function dayPeriod(hour: number): DayPeriod {
   return hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
 }
 
+/** Two tasks are the same thing to do when their words match, whatever the case or spacing. */
+export const taskKey = (title: string) => title.normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+
+/** Days (newest first) gathered under their month, `YYYY-MM`, in the same order. */
+export function monthGroups<T extends { date: string }>(days: readonly T[]) {
+  const groups: { month: string; days: T[] }[] = [];
+  for (const day of days) {
+    const month = day.date.slice(0, 7);
+    const last = groups[groups.length - 1];
+    if (last?.month === month) last.days.push(day); else groups.push({ month, days: [day] });
+  }
+  return groups;
+}
+
 export function progressOf(tasks: readonly Pick<DailyTask, 'completedAt'>[]) {
   const done = tasks.filter((task) => task.completedAt !== null).length;
   return { done, total: tasks.length, allDone: tasks.length > 0 && done === tasks.length };

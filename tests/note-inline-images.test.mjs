@@ -158,6 +158,62 @@ test('editing an old photo note\'s caption leaves it a plain note, and its video
   assert.deepEqual(noteRenderContent(mixed).leading.map((attachment) => attachment.type), ['video']);
 });
 
+test('Edit Note can add and remove video, audio and files, and the note reads as what is left', async (t) => {
+  const { messages } = await fixture(t);
+  const id = (await messages.createText('Plain words')).id;
+  const file = { type: 'file', storagePath: 'chits-attachments/chat/plan.pdf', originalName: 'plan.pdf', mimeType: 'application/pdf', size: 2, duration: null, width: null, height: null };
+  const voice = { type: 'audio', storagePath: 'chits-attachments/chat/voice.m4a', originalName: 'Voice note.m4a', mimeType: 'audio/m4a', size: 3, duration: 1200, width: null, height: null };
+  const { removablePaths: none } = await messages.updateContent(id, draftFromNote(await messages.getActiveById(id)), undefined, { added: [file, voice] });
+  assert.deepEqual(none, []);
+  const note = await messages.getActiveById(id);
+  assert.equal(note.type, 'file');
+  assert.equal(note.text, 'Plain words');
+  assert.deepEqual(note.attachments.map((attachment) => [attachment.type, attachment.storagePath]), [['file', file.storagePath], ['audio', voice.storagePath]]);
+  // Attachments alone are enough for a note to save.
+  const empty = (await messages.createText('x')).id;
+  await messages.updateContent(empty, [{ type: 'text', text: '' }], undefined, { added: [{ ...file, storagePath: 'chits-attachments/chat/other.pdf' }] });
+  assert.deepEqual((await messages.getActiveById(empty)).attachments.map((attachment) => attachment.type), ['file']);
+  // Taking the file off leaves a voice note, and hands back the file to delete.
+  const fileId = note.attachments.find((attachment) => attachment.type === 'file').id;
+  const { removablePaths } = await messages.updateContent(id, draftFromNote(await messages.getActiveById(id)), undefined, { removed: [fileId] });
+  assert.deepEqual(removablePaths, [file.storagePath]);
+  const after = await messages.getActiveById(id);
+  assert.deepEqual([after.type, after.attachments.map((attachment) => attachment.type)], ['audio', ['audio']]);
+});
+
+test('Edit Note keeps photos attached outside the text, adds new ones that way, and removes them only when asked', async (t) => {
+  const { messages } = await fixture(t);
+  const old = await messages.createAttachmentMessage({ type: 'photo', storagePath: 'chits-attachments/chat/kept.jpg', originalName: 'kept.jpg', mimeType: 'image/jpeg', size: 1, duration: null, width: 10, height: 10 }, 'Caption');
+  const photoId = old.attachments[0].id;
+  // The photo isn't in the text, so the draft leaves it out; keeping it attached keeps the plain layout.
+  await messages.updateContent(old.id, [{ type: 'text', text: 'New caption' }], undefined, { attachedPhotos: [photoId] });
+  const edited = await messages.getActiveById(old.id);
+  assert.deepEqual([edited.text, edited.content, edited.attachments.map((attachment) => attachment.id)], ['New caption', null, [photoId]]);
+  // A photo added as an attachment stays out of the text and leads the note.
+  const extra = { type: 'photo', storagePath: 'chits-attachments/chat/extra.jpg', originalName: 'extra.jpg', mimeType: 'image/jpeg', size: 1, duration: null, width: 10, height: 10 };
+  await messages.updateContent(old.id, [{ type: 'text', text: 'New caption' }], undefined, { attachedPhotos: [photoId], added: [extra] });
+  const withExtra = await messages.getActiveById(old.id);
+  assert.deepEqual(withExtra.attachments.map((attachment) => attachment.storagePath), ['chits-attachments/chat/kept.jpg', extra.storagePath]);
+  assert.deepEqual(draftFromNote(withExtra).filter((block) => block.type === 'image').length, 2, 'other editors still show them as leading images');
+  // Taking the first one off hands back its file.
+  const extraId = withExtra.attachments[1].id;
+  const { removablePaths } = await messages.updateContent(old.id, [{ type: 'text', text: 'New caption' }], undefined, { attachedPhotos: [extraId], removed: [photoId] });
+  assert.deepEqual(removablePaths, ['chits-attachments/chat/kept.jpg']);
+  assert.deepEqual((await messages.getActiveById(old.id)).attachments.map((attachment) => attachment.id), [extraId]);
+});
+
+test('Add note can save several attachments on a new note or a new board card, in the order picked', async (t) => {
+  const { messages, boards } = await fixture(t);
+  const photo = { type: 'photo', storagePath: 'chits-attachments/chat/p.jpg', originalName: 'p.jpg', mimeType: 'image/jpeg', size: 1, duration: null, width: 10, height: 10 };
+  const file = { type: 'file', storagePath: 'chits-attachments/chat/f.pdf', originalName: 'f.pdf', mimeType: 'application/pdf', size: 1, duration: null, width: null, height: null };
+  const id = await messages.createNote({ blocks: [{ type: 'text', text: 'Two things' }], attachments: [photo, file] });
+  const note = await messages.getActiveById(id);
+  assert.equal(note.type, 'file');
+  assert.deepEqual(note.attachments.map((attachment) => attachment.storagePath), [photo.storagePath, file.storagePath]);
+  const { messageId } = await boards.createNoteCard({ boardId: 'board', columnId: 'column', text: '', attachments: [{ ...file, storagePath: 'chits-attachments/chat/g.pdf' }, { ...photo, storagePath: 'chits-attachments/chat/q.jpg' }] });
+  assert.deepEqual((await messages.getActiveById(messageId)).attachments.map((attachment) => attachment.type), ['file', 'photo']);
+});
+
 test('a chat text edit of an inline note never drops its images', async (t) => {
   const { messages } = await fixture(t);
   const id = await messages.createNote({ blocks: [{ type: 'text', text: 'Before' }, pasted('keep')] });

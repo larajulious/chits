@@ -1,11 +1,12 @@
 import { useDirection } from '@/localization/provider';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
-import { ActivityIndicator, BackHandler, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, BackHandler, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View, type TextInput } from 'react-native';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/components/theme-provider';
-import { useStickySurface } from '@/components/ui/surface';
+import { useStickyControls, useStickySurface } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
+import { AppTextInput } from '@/components/ui/app-text-input';
 import { Icon } from '@/components/ui/icon';
 import { layout, spacing } from '@/constants/theme';
 import { resolveDialogPalette, type DialogType } from './dialog-colors';
@@ -34,14 +35,20 @@ type BaseProps = {
   onDismissComplete?: () => void;
 };
 
+/** Type-to-confirm: the primary action stays disabled until the field matches `value` (case and extra spaces ignored). */
+export type RequireText = { value: string; label: string };
+
 type ConfirmProps = BaseProps & {
   kind: 'confirm';
   confirmText: string;
   cancelText: string;
   loading?: boolean;
+  requireText?: RequireText;
   onConfirm: () => void;
   onCancel: () => void;
 };
+
+const normalizeConfirmation = (value: string) => value.normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
 
 type AlertProps = BaseProps & {
   kind: 'alert';
@@ -68,6 +75,7 @@ export function AppDialog(props: AppDialogProps) {
   const { rowStyle } = useDirection();
   const { tokens: theme, scheme, styleTokens, styleColors } = useTheme();
   const sticky = useStickySurface();
+  const controls = useStickyControls();
   // Sticky: an outlined card on a solid edge; rows divided by ink lines.
   const rowDivider = styleTokens.outline.width ? styleColors.outline : theme.borderSubtle;
   const { visible, type, title, message, icon, accentColor, onRequestClose } = props;
@@ -76,12 +84,16 @@ export function AppDialog(props: AppDialogProps) {
   const resolvedIcon = icon ?? DEFAULT_ICON[type];
 
   const [mounted, setMounted] = useState(visible);
+  const [typed, setTyped] = useState('');
+  const confirmInput = useRef<TextInput>(null);
   // Mount immediately when `visible` flips true (adjusting state during render,
   // per React's own guidance) — the fade-in itself still runs in the effect below.
+  // The confirmation field is cleared once the dialog has finished closing.
   if (visible && !mounted) setMounted(true);
   const progress = useSharedValue(visible ? 1 : 0);
   const finishClosing = () => {
     setMounted(false);
+    setTyped('');
     if (Platform.OS !== 'ios') requestAnimationFrame(() => props.onDismissComplete?.());
   };
 
@@ -113,10 +125,15 @@ export function AppDialog(props: AppDialogProps) {
   const isAlert = props.kind === 'alert';
   const isActionSheet = props.kind === 'actionSheet';
   const busy = isConfirm && Boolean(props.loading);
+  const requireText = isConfirm ? props.requireText : undefined;
+  const confirmBlocked = Boolean(requireText) && normalizeConfirmation(typed) !== normalizeConfirmation(requireText?.value ?? '');
+  const confirmDisabled = busy || confirmBlocked;
 
   return (
-    <Modal transparent visible={mounted} statusBarTranslucent onRequestClose={onRequestClose} onDismiss={props.onDismissComplete} animationType="none">
-      <View style={[styles.wrap, { direction: 'ltr' }]}>
+    // A field focuses once the modal window is up; autoFocus is unreliable inside an Android modal.
+    <Modal transparent visible={mounted} statusBarTranslucent onShow={requireText ? () => confirmInput.current?.focus() : undefined} onRequestClose={onRequestClose} onDismiss={props.onDismissComplete} animationType="none">
+      {/* Only a dialog with a field needs to rise above the keyboard. */}
+      <KeyboardAvoidingView behavior={requireText ? (Platform.OS === 'ios' ? 'padding' : 'height') : undefined} style={[styles.wrap, { direction: 'ltr' }]}>
         <Animated.View style={[styles.backdrop, backdropStyle]}>
           <Pressable
             accessible={false}
@@ -140,15 +157,39 @@ export function AppDialog(props: AppDialogProps) {
           {title ? <AppText accessibilityRole="header" variant="display" style={[styles.title, { color: theme.textPrimary }]}>{title}</AppText> : null}
           {message ? <AppText style={[styles.message, { color: theme.textSecondary }]}>{message}</AppText> : null}
 
+          {requireText ? (
+            <View style={styles.confirmField}>
+              <AppText nativeID="dialog-confirm-label" style={[styles.confirmLabel, { color: theme.textSecondary }]}>{requireText.label}</AppText>
+              <AppTextInput
+                accessibilityLabel={requireText.label}
+                accessibilityLabelledBy="dialog-confirm-label"
+                autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
+                autoComplete="off"
+                editable={!busy}
+                value={typed}
+                onChangeText={setTyped}
+                ref={confirmInput}
+                placeholder={requireText.value}
+                placeholderTextColor={theme.textMuted}
+                returnKeyType="done"
+                onSubmitEditing={() => { if (isConfirm && !confirmDisabled) props.onConfirm(); }}
+                selectionColor={palette.ctaBg}
+                style={[styles.confirmInput, controls.input, { backgroundColor: theme.background, borderColor: confirmBlocked ? theme.borderSubtle : palette.ctaBg, color: theme.textPrimary }]}
+              />
+            </View>
+          ) : null}
+
           {isConfirm ? (
             <View style={styles.actions}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={props.confirmText}
-                accessibilityState={{ disabled: busy, busy }}
-                disabled={busy}
+                accessibilityState={{ disabled: confirmDisabled, busy }}
+                disabled={confirmDisabled}
                 onPress={props.onConfirm}
-                style={({ pressed }) => [styles.primaryButton, { backgroundColor: palette.ctaBg }, sticky({ radius: styleTokens.button.radius, edge: styleTokens.button.edge }, pressed), pressed && !busy && styles.pressed, busy && styles.busy]}
+                style={({ pressed }) => [styles.primaryButton, { backgroundColor: palette.ctaBg }, sticky({ radius: styleTokens.button.radius, edge: styleTokens.button.edge }, pressed), pressed && !confirmDisabled && styles.pressed, busy && styles.busy, confirmBlocked && !busy && styles.disabled]}
               >
                 {busy ? <ActivityIndicator color={palette.ctaText} /> : <AppText style={[styles.primaryButtonText, { color: palette.ctaText }]}>{props.confirmText}</AppText>}
               </Pressable>
@@ -203,7 +244,7 @@ export function AppDialog(props: AppDialogProps) {
             </View>
           ) : null}
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -228,6 +269,9 @@ const styles = StyleSheet.create({
   iconWrap: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
   title: { fontSize: 19, fontWeight: '700', textAlign: 'center' },
   message: { fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: spacing.xxs, paddingHorizontal: spacing.xs },
+  confirmField: { width: '100%', marginTop: spacing.md, gap: spacing.xs },
+  confirmLabel: { fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  confirmInput: { minHeight: 48, width: '100%', borderWidth: 1, borderRadius: 12, paddingHorizontal: spacing.sm, fontSize: 16 },
   actions: { width: '100%', marginTop: spacing.lg, gap: spacing.xxs },
   primaryButton: { minHeight: layout.minimumTouchTarget, width: '100%', borderRadius: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md },
   primaryButtonText: { fontSize: 16, fontWeight: '700' },

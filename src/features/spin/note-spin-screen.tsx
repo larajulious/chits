@@ -13,7 +13,7 @@ import { useDirection, useLocale } from '@/localization/provider';
 import { localizedDate, tr } from '@/localization/runtime';
 import { createSpinRepository } from '@/db/spin-repository';
 import { createRevisitRepository } from '@/db/revisit-repository';
-import { AddNoteSheet, type NoteSubmission } from '@/components/boards/add-note-sheet';
+import { AddNoteSheet, createSubmittedNote, type NoteSubmission } from '@/components/boards/add-note-sheet';
 import { createMessageRepository, createBoardRepository } from '@/db/repositories';
 import { cardNoteRoute } from '@/services/card-note-route';
 import { subscribeToNoteChanges } from '@/services/note-changes';
@@ -227,11 +227,8 @@ export function NoteSpinScreen({ modeAction, modeNotice, onBusyChange }: { modeA
     }
     setAchievements((await repo.achievements()).map(a => a.id));
   });
-  const saveSuggestedNote = async ({ text, attachment, blocks }: NoteSubmission) => {
-    const messages = createMessageRepository(db);
-    if (blocks) await messages.createNote({ blocks, attachment });
-    else if (attachment) await messages.createAttachmentMessage(attachment, text || null);
-    else await messages.createText(text);
+  const saveSuggestedNote = async (submission: NoteSubmission) => {
+    await createSubmittedNote(createMessageRepository(db), submission);
     // From the empty state there's no suggestion to finish: the wheel simply refills.
     if (suggestion === 'new-note') { setSuggestion('saved'); setMessage('completed'); celebrate(); }
     AccessibilityInfo.announceForAccessibility(tr('calendar.noteAdded'));

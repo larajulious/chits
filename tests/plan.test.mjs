@@ -305,3 +305,73 @@ test('Chits’ hand rests on the paper inside the hero, so it is never cropped',
   const hero = readFileSync(new URL('../src/features/plan/plan-hero.tsx', import.meta.url), 'utf8');
   assert.match(hero, /height: heroHeight \+ HAND_ROOM/);
 });
+
+const YESTERDAY = '2026-11-03';
+
+test('recent tasks list each title once, from the latest day it was on, and a search reaches older ones', async (t) => {
+  const { plans } = await fixture(t);
+  await plans.addTask('2026-10-01', 'Water the plants', { messageId: 'old-note' }, 1000);
+  await plans.addTask('2026-10-02', 'Call the bank', {}, 2000);
+  await plans.addTask(YESTERDAY, 'Stretch', {}, 3000);
+  await plans.addTask(YESTERDAY, 'water the  plants', { cardId: 'new-card' }, 3000);
+  await plans.addTask(TODAY, 'Stretch', {}, 4000);
+  const recent = await plans.recentTasks(TODAY);
+  assert.deepEqual(recent.map((task) => [task.title, task.date, task.planned]), [['water the  plants', YESTERDAY, false], ['Stretch', YESTERDAY, true], ['Call the bank', '2026-10-02', false]], 'newest day first, the later one first within a day (ties by position), case and spacing ignored, today’s own rows left out');
+  assert.equal(recent[0].cardId, 'new-card', 'the latest link comes along');
+  assert.deepEqual((await plans.recentTasks(TODAY, 'BANK')).map((task) => task.title), ['Call the bank']);
+  assert.deepEqual(await plans.recentTasks(TODAY, '100%'), [], 'search words are literal');
+  assert.equal(await plans.day('2026-11-05'), null);
+  assert.deepEqual(await plans.recentTasks('2026-11-05', 'x'), [], 'reading never makes a day');
+  assert.equal(await plans.day('2026-11-05'), null);
+});
+
+test('copies land on the day as new unfinished tasks, and the day they came from stays exactly as it was', async (t) => {
+  const { db, plans } = await fixture(t);
+  const done = await plans.addTask(YESTERDAY, 'Finished yesterday', { messageId: 'note' });
+  const open = await plans.addTask(YESTERDAY, 'Still open');
+  await plans.setDone(done, true);
+  await plans.setReminder(open, Date.UTC(2026, 10, 3, 9));
+  await plans.wrapUp(YESTERDAY, TODAY, { reflection: 'Good day' });
+  const before = await db.getAllAsync('SELECT * FROM daily_tasks ORDER BY id');
+  await plans.addTask(TODAY, 'Already here');
+  const yesterday = (await plans.day(YESTERDAY)).tasks;
+  const added = await plans.addCopies(TODAY, yesterday.map((task) => ({ title: task.title, messageId: task.messageId, cardId: task.cardId })));
+  assert.equal(added, 2);
+  const today = (await plans.day(TODAY)).tasks;
+  assert.deepEqual(today.map((task) => [task.title, task.position, task.completedAt, task.reminderAt, task.carriedFrom, task.carriedTo]), [['Already here', 0, null, null, null, null], ['Finished yesterday', 1, null, null, null, null], ['Still open', 2, null, null, null, null]]);
+  assert.equal(today[1].messageId, 'note', 'the linked note comes along');
+  assert.ok(today.every((task) => !yesterday.some((old) => old.id === task.id)), 'every copy has its own id');
+  await plans.setDone(today[2].id, true);
+  assert.deepEqual(await db.getAllAsync("SELECT * FROM daily_tasks WHERE plan_id = (SELECT id FROM daily_plans WHERE plan_date = ?) ORDER BY id", YESTERDAY), before, 'yesterday’s tasks, ticks and reminders are untouched');
+  const day = await plans.day(YESTERDAY);
+  assert.equal(day.plan.status, 'wrapped');
+  assert.equal(day.plan.reflection, 'Good day');
+});
+
+test('copying skips what the day already has, repeats in the batch and blanks, and makes no empty plan', async (t) => {
+  const { plans } = await fixture(t);
+  await plans.addTask(TODAY, 'Walk the dog');
+  assert.equal(await plans.addCopies(TODAY, [{ title: 'walk the DOG ' }, { title: 'Read' }, { title: ' read' }, { title: '   ' }]), 1);
+  assert.deepEqual((await plans.day(TODAY)).tasks.map((task) => task.title), ['Walk the dog', 'Read']);
+  assert.equal(await plans.addCopies(TODAY, [{ title: 'Read' }]), 0, 'running it again adds nothing');
+  assert.equal(await plans.addCopies(TOMORROW, []), 0);
+  assert.equal(await plans.addCopies(TOMORROW, [{ title: '  ' }]), 0);
+  assert.equal(await plans.day(TOMORROW), null, 'nothing to add makes no plan');
+});
+
+test('earlier days to reuse leave out the day being planned and anything after it', async (t) => {
+  const { plans } = await fixture(t);
+  await plans.addTask('2026-11-01', 'Old');
+  await plans.addTask(YESTERDAY, 'Recent');
+  await plans.addTask(TODAY, 'Now');
+  await plans.addTask(TOMORROW, 'Later');
+  assert.deepEqual((await plans.history(60, TODAY)).map((day) => day.date), [YESTERDAY, '2026-11-01']);
+  assert.deepEqual((await plans.history()).map((day) => day.date), [TOMORROW, TODAY, YESTERDAY, '2026-11-01'], 'without a limit date nothing changes');
+});
+
+test('earlier days gather under their month, newest first, without reordering', async () => {
+  const { monthGroups } = await import('../src/features/plan/plan-core.ts');
+  const days = ['2026-11-09', '2026-11-02', '2026-10-30', '2026-10-01', '2025-11-20'].map((date) => ({ date }));
+  assert.deepEqual(monthGroups(days).map((group) => [group.month, group.days.map((day) => day.date)]), [['2026-11', ['2026-11-09', '2026-11-02']], ['2026-10', ['2026-10-30', '2026-10-01']], ['2025-11', ['2025-11-20']]], 'the same month a year apart stays separate');
+  assert.deepEqual(monthGroups([]), []);
+});

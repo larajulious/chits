@@ -14,7 +14,8 @@ import { tr } from '@/localization/runtime';
 import { formatReminderClock } from '@/services/reminder-time';
 import type { DailyTask } from './plan-core';
 
-function Check({ checked, surfaces }: { checked: boolean; surfaces: WelcomeSurfaces }) {
+/** The plan’s tick box, shared by the task list and the reuse sheets. */
+export function PlanCheck({ checked, surfaces }: { checked: boolean; surfaces: WelcomeSurfaces }) {
   const reduced = useReducedMotion();
   const scale = useSharedValue(1);
   useEffect(() => {
@@ -42,7 +43,7 @@ export function PlanTaskRow({ task, surfaces, onToggle, onMore, dense = false }:
   return <View style={[styles.row, dense && styles.dense, rowStyle, // What's left to do is the card on the page; what's finished lies flat and steps back.
     done ? null : { backgroundColor: surfaces.card, boxShadow: `0px 1px 4px ${desk.shadow}` }, { borderRadius: styleTokens.button.radius }]}>
     <Pressable accessibilityRole="checkbox" accessibilityLabel={task.title} accessibilityState={{ checked: done }} onPress={onToggle} style={[styles.checkTarget, dense && styles.dense]}>
-      <Check checked={done} surfaces={surfaces} />
+      <PlanCheck checked={done} surfaces={surfaces} />
     </Pressable>
     <Pressable accessibilityRole={onMore ? 'button' : undefined} accessibilityLabel={onMore ? tr('plan.task.actions', { title: task.title }) : undefined} accessibilityElementsHidden={!onMore} importantForAccessibility={onMore ? 'auto' : 'no-hide-descendants'} onPress={onMore ?? onToggle} style={[styles.body, dense && styles.dense, rowStyle]}>
       <View style={styles.copy}>

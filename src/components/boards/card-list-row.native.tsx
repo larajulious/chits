@@ -3,6 +3,7 @@ import { useLocale } from '@/localization/provider';
 import { memo } from 'react';
 import { Pressable, StyleSheet, View, type AccessibilityActionEvent, type AccessibilityActionInfo } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { router } from 'expo-router';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { NoteMediaPreview } from '@/components/notes/note-media-preview.native';
@@ -263,7 +264,9 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
           <View style={styles.categoryRow}>
             {item.pinned ? <Icon name="pin-outline" size={11} color={muted} /> : null}
             {accent ? <View style={[styles.boardDot, { backgroundColor: accent, borderColor: mix(accent, ink, 0.3) }]} /> : null}
-            <AppText family={fonts.text} numberOfLines={1} style={[styles.location, { color: muted }]}>{location}</AppText>
+            {item.boardId ? <Pressable accessibilityRole="link" accessibilityLabel={tr("id.openBoardValue", { value1: location })} hitSlop={6} onLongPress={() => {}} delayLongPress={300} onPress={(event) => { event.stopPropagation(); router.push({ pathname: '/board/[id]', params: { id: item.boardId! } }); }} style={({ pressed }) => [styles.locationLink, pressed && { opacity: 0.6 }]}>
+              <AppText family={fonts.text} numberOfLines={1} style={[styles.location, { color: muted }]}>{location}</AppText>
+            </Pressable> : <AppText family={fonts.text} numberOfLines={1} style={[styles.location, { color: muted }]}>{location}</AppText>}
           </View>
           <AppText family={fonts.text} style={[styles.date, { color: muted }]}>{formatCardDate(item.updatedAt)}</AppText>
           {showFileBadge ? <View style={styles.badge}><Icon name="attach" size={12} color={muted} /><AppText style={[styles.badgeText, { color: muted }]}>{item.fileCount}</AppText></View> : null}
@@ -319,6 +322,7 @@ const styles = StyleSheet.create({
   categoryRow: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 4 },
   boardDot: { width: 7, height: 7, borderRadius: 3.5, borderWidth: StyleSheet.hairlineWidth },
   location: { flexShrink: 1, fontSize: 11.5, lineHeight: 16 },
+  locationLink: { flexShrink: 1, minWidth: 0 },
   date: { flexShrink: 0, fontSize: 11, lineHeight: 16, fontVariant: ['tabular-nums'] },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 1 },
   badgeText: { fontSize: 10.5, lineHeight: 15, fontVariant: ['tabular-nums'] },

@@ -705,3 +705,6 @@ const styles = StyleSheet.create({
   viewerToast: { position: 'absolute', bottom: spacing.xl * 2, alignSelf: 'center', maxWidth: '86%', paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: radii.control, backgroundColor: 'rgba(255,255,255,0.94)' },
   viewerToastText: { color: '#111111', fontSize: 14, fontWeight: '600', textAlign: 'center' },
 });
+
+// Shared with other attachment lists (Edit Note's), so they read and play the same way.
+export { AudioPlayer, durationSeconds as attachmentSeconds, fileIcon as attachmentFileIcon, formatSeconds as formatAttachmentSeconds, formatSize as formatAttachmentSize, typeLabel as attachmentTypeLabel };

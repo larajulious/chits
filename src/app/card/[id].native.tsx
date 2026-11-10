@@ -21,6 +21,7 @@ import { subscribeToAttachmentChanges } from '@/services/attachment-changes';
 import { AttachmentContent } from '@/components/chat/message-row';
 import { MessageContentRenderer } from '@/components/chat/message-note-cards';
 import { AddCardAttachmentSheet } from '@/components/boards/add-card-attachment-sheet';
+import { noteRenderContent } from '@/services/note-content';
 import { CardSubtasks } from '@/components/boards/card-subtasks.native';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { spaceNoteAction, type SpaceNoteAction } from '@/components/spaces/space-note-action';
@@ -369,7 +370,7 @@ export default function CardDetailScreen() {
     }
   };
 
-  const shareCardAttachment = async (attachment: CardAttachment) => {
+  const shareCardAttachment = async (attachment: AttachmentLike) => {
     if (!await shareAttachment(attachment)) setNotice(tr("id.thisAttachmentCouldNotBeShared"));
   };
 
@@ -383,10 +384,12 @@ export default function CardDetailScreen() {
       { label: tr("attachments.deleteAttachment"), icon: 'trash-outline', destructive: true, onPress: () => attachmentDeletion.confirmDelete(attachment) },
     ],
   });
-  const openCardAttachmentActions = (attachment: CardAttachment) => {
+  // The same actions for the card's own attachments and the note's: deleting
+  // either removes it from wherever it's kept.
+  const openCardAttachmentActions = (attachment: AttachmentLike) => {
     if (attachment.type === 'photo') { openPhotoActions(attachment); return; }
     actionSheet({
-      title: attachment.type === 'file' ? (attachment.originalName ?? tr("addcardattachmentsheet.file")) : tr("addcardattachmentsheet.video"),
+      title: attachment.type === 'file' ? (attachment.originalName ?? tr("addcardattachmentsheet.file")) : attachment.type === 'audio' ? tr("messagerow.audioNote") : tr("addcardattachmentsheet.video"),
       options: [
         { label: tr("attachments.share"), icon: 'share-outline', onPress: () => void shareCardAttachment(attachment) },
         { label: exportActionLabel(attachment), icon: 'download-outline', disabled: download.busy, onPress: () => void download.exportAttachment(attachment) },
@@ -501,6 +504,13 @@ export default function CardDetailScreen() {
   // the board uses — and stays covered here until revealed for this visit.
   const contentHidden = messages.some((message) => message.isHiddenContent);
   const covered = contentHidden && !temporarilyRevealed;
+  // Everything attached, in one place: the note's own attachments outside its
+  // text (video, audio, files, and photos it doesn't place in the text), then
+  // the ones added to the card. A hidden note's stay hidden.
+  const noteAttachments: AttachmentLike[] = covered ? [] : messages.flatMap((message) => noteRenderContent(message)?.leading ?? message.attachments);
+  const allAttachments: AttachmentLike[] = [...noteAttachments, ...cardAttachments];
+  const mediaAttachments = allAttachments.filter((attachment) => attachment.type === 'photo' || attachment.type === 'video');
+  const otherAttachments = allAttachments.filter((attachment) => attachment.type !== 'photo' && attachment.type !== 'video');
 
   const boardAccent = detail.boardAccent;
   const contentAccentStrong = boardAccent && contrast(boardAccent, theme.cardPaper) >= 4.5 ? boardAccent : theme.accentStrong;
@@ -587,7 +597,7 @@ export default function CardDetailScreen() {
               <AppText style={styles.thoughtLabel}>{tr("id.thought")}{' '}{index + 1}</AppText>
               <Pressable accessibilityRole="button" accessibilityLabel={tr('id.editThoughtValue', { value1: index + 1 })} hitSlop={8} onPress={() => openContentEditor(message)} style={styles.headerAction}><Icon name="create-outline" size={17} color={contentAccentStrong} /></Pressable>
             </View> : null}
-            <MessageContentRenderer message={message} mode="detail" accentColor={detail.boardAccent ?? undefined} onPressText={message.text ? () => openContentEditor(message) : undefined} textAccessibilityLabel={messages.length > 1 ? tr("id.editThoughtValue", { value1: index + 1 }) : tr("id.editContent")} onImageLongPress={openPhotoActions} renderAttachments={(items = message.attachments) => <View style={styles.attachmentList}>{items.map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} onLongPress={attachment.type === 'photo' ? () => openPhotoActions(attachment) : undefined} overlay={attachment.type === 'photo' ? <AttachmentActionsButton onPress={() => openPhotoActions(attachment)} style={styles.attachmentActionsOverlay} iconColor="#FFFFFF" /> : undefined} /></View>)}</View>} />
+            <MessageContentRenderer message={message} mode="detail" accentColor={detail.boardAccent ?? undefined} onPressText={message.text ? () => openContentEditor(message) : undefined} textAccessibilityLabel={messages.length > 1 ? tr("id.editThoughtValue", { value1: index + 1 }) : tr("id.editContent")} onImageLongPress={openPhotoActions} renderAttachments={() => null} />
             {!message.text && message.attachments.length ? <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addADescriptionToValue", { value1: messageFallback(message) })} onPress={() => openContentEditor(message)} style={styles.addDescription}><Icon name="add" size={16} color={contentAccentStrong} /><AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>{tr("id.addDescription")}</AppText></Pressable> : null}
             {index < messages.length - 1 ? <View style={styles.contentThoughtDivider} /> : null}
           </View>)}
@@ -636,20 +646,23 @@ export default function CardDetailScreen() {
 
         <View style={styles.sectionHeader}>
           <AppText accessibilityRole="header" style={sectionHeading}>{tr("id.attachments2")}</AppText>
-          {cardAttachments.length ? <View style={styles.countBadge}><AppText style={styles.countText}>{cardAttachments.length}</AppText></View> : null}
+          {allAttachments.length ? <View style={styles.countBadge}><AppText style={styles.countText}>{allAttachments.length}</AppText></View> : null}
         </View>
-        {cardAttachments.length === 0 ? <View style={styles.commentsEmpty}>
+        {allAttachments.length === 0 ? <View style={styles.commentsEmpty}>
           <AppText style={styles.commentsEmptyTitle}>{tr("id.noAttachmentsYet")}</AppText>
           <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addAttachment")} disabled={attachmentBusy} onPress={openAddAttachment} style={styles.addDescription}>
             {showAttachmentLoader ? <ChitsLoader size="small" /> : <Icon name="add" size={16} color={contentAccentStrong} />}
             <AppText style={[styles.inlineEditText, { color: contentAccentStrong }]}>{tr("id.addAttachment")}</AppText>
           </Pressable>
         </View> : <>
-          {cardAttachments.some((attachment) => attachment.type !== 'file') ? <View style={styles.attachmentGrid}>
-            {cardAttachments.filter((attachment) => attachment.type !== 'file').map((attachment) => <View key={attachment.id} style={[styles.cardAttachment, styles.attachmentGridItem]}><AttachmentContent attachment={attachment} variant="board" accentColor={detail.boardAccent ?? undefined} onLongPress={() => openCardAttachmentActions(attachment)} overlay={<AttachmentActionsButton onPress={() => openCardAttachmentActions(attachment)} style={styles.attachmentActionsOverlay} iconColor="#FFFFFF" />} /></View>)}
+          {mediaAttachments.length ? <View style={styles.attachmentGrid}>
+            {mediaAttachments.map((attachment) => <View key={attachment.id} style={[styles.cardAttachment, styles.attachmentGridItem]}><AttachmentContent attachment={attachment} variant="board" accentColor={detail.boardAccent ?? undefined} onLongPress={() => openCardAttachmentActions(attachment)} overlay={<AttachmentActionsButton onPress={() => openCardAttachmentActions(attachment)} style={styles.attachmentActionsOverlay} iconColor="#FFFFFF" />} /></View>)}
           </View> : null}
-          {cardAttachments.some((attachment) => attachment.type === 'file') ? <View style={[styles.attachmentList, styles.attachmentFileList]}>
-            {cardAttachments.filter((attachment) => attachment.type === 'file').map((attachment) => <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} onLongPress={() => openCardAttachmentActions(attachment)} overlay={<AttachmentActionsButton onPress={() => openCardAttachmentActions(attachment)} style={styles.attachmentActionsInline} iconColor={theme.textMuted} />} /></View>)}
+          {otherAttachments.length ? <View style={[styles.attachmentList, styles.attachmentFileList]}>
+            {otherAttachments.map((attachment) => attachment.type === 'audio'
+              // The audio player takes no overlay, so its actions sit beside it.
+              ? <View key={attachment.id} style={[styles.cardAttachment, styles.audioAttachment]}><View style={styles.audioAttachmentPlayer}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} /></View><AttachmentActionsButton onPress={() => openCardAttachmentActions(attachment)} style={styles.attachmentActionsInline} iconColor={theme.textMuted} /></View>
+              : <View key={attachment.id} style={styles.cardAttachment}><AttachmentContent attachment={attachment} variant="detail" accentColor={detail.boardAccent ?? undefined} onLongPress={() => openCardAttachmentActions(attachment)} overlay={<AttachmentActionsButton onPress={() => openCardAttachmentActions(attachment)} style={styles.attachmentActionsInline} iconColor={theme.textMuted} />} /></View>)}
           </View> : null}
           <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addAttachment")} disabled={attachmentBusy} onPress={openAddAttachment} style={styles.addAttachmentRow}>
             {showAttachmentLoader ? <ChitsLoader size="small" /> : <Icon name="add" size={16} color={contentAccentStrong} />}
@@ -841,6 +854,8 @@ const createStyles = (tokens: ThemeTokens) => StyleSheet.create({
   // overlay pill for media thumbnails, a plain inline button for file rows.
   attachmentActionsOverlay: { position: 'absolute', top: spacing.xs, right: spacing.xs, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.58)' },
   attachmentActionsInline: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  audioAttachment: { flexDirection: 'row', alignItems: 'center' },
+  audioAttachmentPlayer: { flex: 1, minWidth: 0 },
   addAttachmentRow: { alignSelf: 'flex-start', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.xxs },
   addDescription: { alignSelf: 'flex-start', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4 },
   // Supporting sheets follow the theme's paper and ink. Metadata becomes stacked

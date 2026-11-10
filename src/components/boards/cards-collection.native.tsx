@@ -3,7 +3,7 @@ import { useLocale } from '@/localization/provider';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode, type Ref } from 'react';
 import { AccessibilityInfo, Platform, ScrollView, StyleSheet, View, useWindowDimensions, type ScrollViewProps } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedRef, useAnimatedStyle, useReducedMotion, useScrollOffset, useSharedValue, withSpring, type SharedValue } from 'react-native-reanimated';
@@ -47,7 +47,15 @@ type Props = {
   backgroundColor?: string;
   /** Optional solid surface separating the filters from the workspace hero. */
   filterBackgroundColor?: string;
+  /** The notes' and headings' opacity, 1 at rest, for a gesture that fades the list back. */
+  dim?: SharedValue<number>;
 };
+
+/** One list row at the list's current opacity. */
+function DimmedCell({ dim, children }: { dim: SharedValue<number>; children: ReactNode }) {
+  const style = useAnimatedStyle(() => ({ opacity: dim.get() }));
+  return <Animated.View style={style}>{children}</Animated.View>;
+}
 
 // The note being dragged in My order: where its cell sat when it lifted (in
 // the list's own coordinates), and its section's order as it reads right now.
@@ -72,7 +80,7 @@ function SectionHeading({ section }: { section: CardSection }) {
 }
 
 /** Real cards remain recycled; only the active date label changes while scrolling. */
-export function CardsCollection({ nativeScrollGesture, sections, chips, filter, onFilter, orderMode, onArrange, onOpen, onMore, onToggleSubtask, onSectionChange, bottomInset, header, estimatedHeaderHeight = 0, scrollOffset: providedScrollOffset, footer, emptyState, backgroundColor, filterBackgroundColor }: Props) {
+export function CardsCollection({ nativeScrollGesture, sections, chips, filter, onFilter, orderMode, onArrange, onOpen, onMore, onToggleSubtask, onSectionChange, bottomInset, header, estimatedHeaderHeight = 0, scrollOffset: providedScrollOffset, footer, emptyState, backgroundColor, filterBackgroundColor, dim }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -279,6 +287,9 @@ export function CardsCollection({ nativeScrollGesture, sections, chips, filter, 
   /* eslint-enable react-hooks/refs */
   useEffect(() => stopScrolling, []);
 
+  // Without a dimming gesture, rows render as they are.
+  const wrapCell = (node: ReactElement) => dim ? <DimmedCell dim={dim}>{node}</DimmedCell> : node;
+
   const liftStyle = useAnimatedStyle(() => {
     const amount = reduceMotion ? 0 : lifted.get();
     return { transform: [{ translateX: dragX.get() }, { translateY: dragY.get() }, { scale: 1 + 0.04 * amount }, { rotate: `${-4 * amount}deg` }] };
@@ -308,7 +319,7 @@ export function CardsCollection({ nativeScrollGesture, sections, chips, filter, 
             keyExtractor={(cell) => cell.kind === 'header' ? `section-${cell.section.key}` : `${cell.item.kind}-${cell.item.id}`}
             getItemType={(cell) => cell.kind}
             onScroll={(event) => updateSection(event.nativeEvent.contentOffset.y)} scrollEventThrottle={16} onLoad={() => updateSection()} onContentSizeChange={() => updateSection()}
-            renderItem={({ item: cell }) => cell.kind === 'header' ? (
+            renderItem={({ item: cell }) => wrapCell(cell.kind === 'header' ? (
               <View style={balanced && columns > 1 && { marginHorizontal: -listInset }}>
                 <SectionHeading section={cell.section} />
               </View>
@@ -319,13 +330,13 @@ export function CardsCollection({ nativeScrollGesture, sections, chips, filter, 
                   arranging={arranging} accessibilityActions={arranging ? stepActions : undefined}
                   onAccessibilityAction={arranging ? (event) => step(cell, event.nativeEvent.actionName === 'decrement' ? -1 : 1) : undefined} />
               </View>
-            )}
+            ))}
             contentContainerStyle={{ paddingTop: header ? 0 : filterHeight + 12, paddingHorizontal: listPadding, paddingBottom: bottomInset + spacing.md }}
             ListHeaderComponent={header ? <View style={{ marginHorizontal: -listPadding }}>
               <View onLayout={({ nativeEvent }) => headerHeight.set(nativeEvent.layout.height)}>{header}</View>
               <View style={{ height: filterHeight + 12 }} />
             </View> : null}
-            ListFooterComponent={footer ? <View style={{ marginHorizontal: -listPadding }}>{footer}</View> : null}
+            ListFooterComponent={footer ? wrapCell(<View style={{ marginHorizontal: -listPadding }}>{footer}</View>) : null}
             ListEmptyComponent={<>{emptyState ?? <EmptyState pose="search" title={tr("cardscollection.noCardsInThisFilter")} description={tr("cardscollection.chooseAnotherBoardOrAllCards")} />}</>}
           />
         </View>

@@ -201,7 +201,7 @@ test('the actual Add Note submission handler creates only once during rapid taps
   const body = source.slice(start, source.indexOf('\n\n  return (', start));
   let release, calls = 0, closed = 0;
   const blocks = templates.instantiateTemplate(document);
-  const context = { canAdd: true, blocks, trimmed: content.noteBlocksText(blocks), draft: null, runSubmit: templates.createSingleFlight(), setSaving: () => {}, setError: () => {}, setDraft: () => {}, setBlocks: () => {}, textDraft: content.textDraft, draftHasRichContent: content.draftHasRichContent, tr: () => '', onClose: () => { closed++; }, onSubmit: async input => { calls++; await new Promise(resolve => { release = resolve; }); return messages.createNote({ blocks: input.blocks }); } };
+  const context = { canAdd: true, blocks, trimmed: content.noteBlocksText(blocks), drafts: [], runSubmit: templates.createSingleFlight(), setSaving: () => {}, setError: () => {}, setDrafts: () => {}, setBlocks: () => {}, textDraft: content.textDraft, draftHasRichContent: content.draftHasRichContent, tr: () => '', onClose: () => { closed++; }, onSubmit: async input => { calls++; await new Promise(resolve => { release = resolve; }); return messages.createNote({ blocks: input.blocks }); } };
   runInNewContext(body + '\nglobalThis.invokeSubmit = submit;', context);
   const pending = context.invokeSubmit();
   await context.invokeSubmit(); assert.equal(calls, 1);

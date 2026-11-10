@@ -6,6 +6,7 @@ import Animated, { FadeIn, FadeInDown, LinearTransition, useReducedMotion } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PaperDesk, useDesk } from '@/components/desk/paper-desk';
+import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
 import { ReminderSheet } from '@/components/reminders/reminder-sheet';
 import { NotePicker } from '@/components/spaces/note-picker';
 import { useTheme } from '@/components/theme-provider';
@@ -25,6 +26,7 @@ import { ensureNotificationPermission } from '@/services/reminders';
 import { useSQLiteContext } from 'expo-sqlite';
 import { PlanAction } from './plan-action';
 import { PlanAddInput } from './plan-add-input';
+import { RecentTasksSheet, ReusePlanSheet } from './plan-copy-sheet';
 import { dateFromKey, moved, planMilestone, progressOf, wrapIsDue, type DailyTask, type PlanMilestone } from './plan-core';
 import { PlanHero } from './plan-hero';
 import { PLAN_LINE, PLAN_LINES } from './plan-lines';
@@ -54,7 +56,8 @@ export default function PlanScreen() {
   const repository = usePlanRepository();
   const { day, ready } = usePlanDay(date);
   const surfaces = usePlanSurfaces();
-  const { tokens } = useTheme();
+  const { actionSheet } = useAppDialog();
+  const { tokens, styleTokens } = useTheme();
   const desk = useDesk();
   const fonts = useWelcomeFonts();
   const reduced = useReducedMotion();
@@ -66,6 +69,7 @@ export default function PlanScreen() {
   const [editing, setEditing] = useState<DailyTask | null>(null);
   const [reminderFor, setReminderFor] = useState<DailyTask | null>(null);
   const [pickerFor, setPickerFor] = useState<'new' | DailyTask | null>(null);
+  const [copying, setCopying] = useState<'recent' | 'reuse' | null>(null);
 
   const loadCandidates = useCallback((term: string) => listNoteCandidates(database, 'plan', term), [database]);
   const plan = day?.plan ?? null;
@@ -141,6 +145,13 @@ export default function PlanScreen() {
     if (target === 'new') void repository.addTask(date, candidate.hidden ? tr('index.hiddenChit') : candidate.title, link).catch(() => undefined);
     else if (target) void repository.setLink(target.id, link).catch(() => undefined);
   };
+  // Copies arrive with the list's own entrance; Chits and a buzz say they landed.
+  const copied = (count: number) => {
+    setCopying(null);
+    if (!count) return;
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+    say(PLAN_LINE.added, 'happy');
+  };
   const openLink = (task: DailyTask) => {
     setEditing(null);
     router.push({ pathname: '/anywhere', params: task.cardId ? { kind: 'card', id: task.cardId } : { kind: 'thought', id: task.messageId ?? '' } });
@@ -151,17 +162,29 @@ export default function PlanScreen() {
   };
 
   const list = reduced ? undefined : LinearTransition.duration(220);
-  const adding = <View style={styles.adding}>
-    <PlanAddInput surfaces={surfaces} autoFocus={params.add === '1'} inputRef={addInput} onAdd={addTask} />
-    <Pressable accessibilityRole="button" onPress={() => setPickerFor('new')} style={({ pressed }) => [styles.link, rowStyle, pressed && styles.pressed]}>
-      <Icon name="document-text-outline" size={16} color={surfaces.inkMuted} />
-      <AppText family={fonts.textBold} style={[styles.linkText, { color: surfaces.inkMuted }]}>{tr('plan.fromNotes')}</AppText>
-    </Pressable>
-  </View>;
+  const adding = <PlanAddInput surfaces={surfaces} autoFocus={params.add === '1'} inputRef={addInput} onAdd={addTask} />;
   // While planning, the box stays put and the list grows under it. Once the day
   // is running the tasks come first, unless a link came here to add one.
   const addFirst = planning || params.add === '1';
   const onPlan = !wrapping && !(wrapped && plan);
+  // The other ways to add sit in the hero as the Notes hero's two actions do: a main
+  // button opening the usual menu (past tasks), and a square icon button for notes.
+  // Bringing tasks back is for a day still ahead, so a past day keeps only notes.
+  const ahead = date >= today;
+  const addFrom = () => actionSheet({ options: [
+    { label: tr('plan.recent.open'), icon: 'time-outline', onPress: () => setCopying('recent') },
+    { label: tr('plan.reuse.open'), icon: 'copy-outline', onPress: () => setCopying('reuse') },
+  ] });
+  const radius = styleTokens.button.radius;
+  const heroAction = ready && onPlan ? <View style={[styles.heroActions, rowStyle]}>
+    {ahead ? <Pressable accessibilityRole="button" accessibilityLabel={tr('plan.addFrom')} onPress={addFrom} style={({ pressed }) => [styles.heroAction, rowStyle, { backgroundColor: surfaces.action, borderRadius: radius }, pressed && styles.heroPressed]}>
+      <Icon name="add" size={18} color={surfaces.onAction} />
+      <AppText numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} family={fonts.display} style={[styles.heroActionText, { color: surfaces.onAction }]}>{tr('plan.addFrom')}</AppText>
+    </Pressable> : null}
+    <Pressable accessibilityRole="button" accessibilityLabel={tr('plan.fromNotes')} onPress={() => setPickerFor('new')} style={({ pressed }) => [styles.heroIcon, { backgroundColor: surfaces.card, borderRadius: radius }, pressed && styles.heroPressed]}>
+      <Icon name="document-text-outline" size={20} color={surfaces.ink} />
+    </Pressable>
+  </View> : null;
   const rows = (items: DailyTask[]) => items.map((task) => <Animated.View key={task.id} layout={list} entering={reduced ? undefined : FadeInDown.duration(200)}>
     <PlanTaskRow task={task} surfaces={surfaces} onToggle={() => toggle(task)} onMore={() => setEditing(task)} />
   </Animated.View>);
@@ -177,7 +200,7 @@ export default function PlanScreen() {
       <PaperDesk faint>
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView keyboardShouldPersistTaps="handled" style={{ backgroundColor: surfaces.paper }} contentContainerStyle={styles.scroll}>
-            <PlanHero rig={rig} title={tr(heading)} body={tr(body)} paper={surfaces.paper} evening={evening} onTap={tapMascot} />
+            <PlanHero rig={rig} title={tr(heading)} body={tr(body)} paper={surfaces.paper} evening={evening} onTap={tapMascot}>{heroAction}</PlanHero>
             {ready ? <Animated.View key={wrapping ? 'wrap' : wrapped ? 'recap' : 'plan'} entering={reduced ? undefined : FadeIn.duration(260)} style={styles.content}>
               {wrapping ? <WrapUpView tasks={tasks} surfaces={surfaces} initialReflection={plan?.reflection ?? null} onCancel={() => setWrapping(false)} onFinish={finish} />
                 : wrapped && plan ? <RecapView key={plan.id} plan={plan} tasks={tasks} surfaces={surfaces} onReopen={() => { void repository.reopen(date).catch(() => undefined); }} onReflect={(text) => { void repository.setReflection(date, text).catch(() => undefined); }} />
@@ -234,6 +257,8 @@ export default function PlanScreen() {
         onRemove={async () => { if (reminderFor) await repository.setReminder(reminderFor.id, null); }}
       />
       <NotePicker visible={pickerFor !== null} spaceName="" title={tr('plan.pickTitle')} loadCandidates={loadCandidates} onClose={() => setPickerFor(null)} onPick={pick} />
+      <RecentTasksSheet visible={copying === 'recent'} date={date} repository={repository} surfaces={surfaces} onClose={() => setCopying(null)} onAdded={copied} />
+      <ReusePlanSheet visible={copying === 'reuse'} date={date} today={today} repository={repository} surfaces={surfaces} onClose={() => setCopying(null)} onAdded={copied} />
     </Screen>
   </SceneMinuteContext.Provider>;
 }
@@ -247,11 +272,14 @@ const styles = StyleSheet.create({
   // The hero's paper already leaves room above, for Chits' hand.
   content: { width: '100%', maxWidth: layout.maxContentWidth, alignSelf: 'center', paddingHorizontal: spacing.md, paddingTop: spacing.xxs, paddingBottom: spacing.md, gap: spacing.sm },
   tasks: { gap: spacing.xs },
-  adding: { gap: spacing.xxs },
+  // The Notes hero's main action, so both heroes offer their next step the same way.
+  heroActions: { alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs },
+  heroAction: { flexShrink: 1, minHeight: layout.minimumTouchTarget, alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm },
+  heroIcon: { width: layout.minimumTouchTarget, height: layout.minimumTouchTarget, alignItems: 'center', justifyContent: 'center' },
+  heroActionText: { flexShrink: 1, fontSize: 14, lineHeight: 18 },
+  heroPressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },
   helper: { fontSize: 13, lineHeight: 18, paddingHorizontal: spacing.xxs },
   section: { fontSize: 17, lineHeight: 23, paddingTop: spacing.xxs },
-  link: { minHeight: layout.minimumTouchTarget, alignItems: 'center', gap: 6, paddingHorizontal: spacing.xxs },
-  linkText: { fontSize: 14 },
   pressed: { opacity: 0.6 },
   footer: { paddingHorizontal: spacing.md, paddingTop: spacing.xs },
   footerAction: { width: '100%', maxWidth: layout.maxContentWidth, alignSelf: 'center' },

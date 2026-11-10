@@ -1,6 +1,6 @@
 import { tr } from '@/localization/runtime';
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type PropsWithChildren, type ReactNode } from 'react';
-import { AppDialog, type ActionSheetOption, type DialogIconName } from './app-dialog';
+import { AppDialog, type ActionSheetOption, type DialogIconName, type RequireText } from './app-dialog';
 import type { DialogType } from './dialog-colors';
 
 export type ConfirmOptions = {
@@ -13,6 +13,8 @@ export type ConfirmOptions = {
   /** Board/card accent hex to tint the icon + primary CTA with (ignored for `destructive`, which always uses the semantic danger color). */
   accentColor?: string | null;
   dismissOnBackdrop?: boolean;
+  /** Type-to-confirm for actions that can't be undone. */
+  requireText?: RequireText;
   onConfirm: () => void | Promise<void>;
   onCancel?: () => void | Promise<void>;
 };
@@ -126,6 +128,7 @@ export function AppDialogProvider({ children }: PropsWithChildren) {
         confirmText={options.confirmText ?? tr("appdialogprovider.confirm")}
         cancelText={options.cancelText ?? tr("chat.cancel")}
         loading={loading}
+        requireText={options.requireText}
         onConfirm={() => void handleConfirmPrimary()}
         onCancel={handleConfirmCancel}
         onRequestClose={handleConfirmCancel}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
-import { useSharedValue } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
 import { CardsCollection } from '@/components/boards/cards-collection.native';
 import { FilterRail } from '@/components/boards/filter-rail';
@@ -40,6 +40,8 @@ function NotesListingContent({ empty, onWrite, onPullCreate: _onPullCreate, foot
   const plan = usePlanHero();
   const refresh = useNotesRefresh();
   const activity = useSharedValue(0);
+  const listOpacity = refresh?.listOpacity;
+  const boardFade = useAnimatedStyle(() => ({ opacity: listOpacity?.get() ?? 1 }));
   const activityNotes = collection.sections.flatMap(section => section.data);
   const changedAt = activityNotes.reduce((latest, item) => Math.max(latest, item.updatedAt), 0);
   const revision = activityNotes.map(item => `${item.kind}:${item.id}:${item.updatedAt}:${item.completedSubtaskCount}:${item.checklistSummary?.completed ?? 0}`).sort().join(';');
@@ -56,7 +58,7 @@ function NotesListingContent({ empty, onWrite, onPullCreate: _onPullCreate, foot
     <View style={{ backgroundColor: surfaces.control }}>
       <FilterRail value={collection.filter} onChange={collection.onFilter} options={collection.chips.map((chip) => ({ ...chip, accessibilityLabel: tr('cardscollection.filterByValueValueValue', { value1: chip.label, value2: chip.count, value3: chip.count === 1 ? 'card' : 'cards' }) }))} />
     </View>
-    <View style={styles.flex}><NotesCanvas {...board} selectedNoteKey={canvasSelection?.filter === collection.filter ? canvasSelection.key : null} onSelectNote={selectCanvasNote} filterKey={collection.filter} onOpen={collection.onOpen} onMore={collection.onMore} onToggleSubtask={collection.onToggleSubtask} bottomInset={collection.bottomInset} activity={activity} paper={surfaces.paper} footer={footer} emptyState={emptyState} /></View>
+    <Animated.View style={[styles.flex, boardFade]}><NotesCanvas {...board} selectedNoteKey={canvasSelection?.filter === collection.filter ? canvasSelection.key : null} onSelectNote={selectCanvasNote} filterKey={collection.filter} onOpen={collection.onOpen} onMore={collection.onMore} onToggleSubtask={collection.onToggleSubtask} bottomInset={collection.bottomInset} activity={activity} paper={surfaces.paper} footer={footer} emptyState={emptyState} /></Animated.View>
   </View>;
 
   return <CardsCollection
@@ -69,6 +71,7 @@ function NotesListingContent({ empty, onWrite, onPullCreate: _onPullCreate, foot
     header={<BoardsMascotHero changedAt={changedAt} revision={revision} revisionScope={collection.filter} variant="notes" width={width} paper={surfaces.paper} scrollY={scrollY} title={plan.title} body={plan.body} action={<PlanHeroActions cta={plan.cta} onWrite={onWrite} />} />}
     emptyState={emptyState}
     footer={footer}
+    dim={refresh?.listOpacity}
   />;
 }
 

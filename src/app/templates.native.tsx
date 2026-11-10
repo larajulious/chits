@@ -5,7 +5,7 @@ import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Screen, EmptyState } from '@/components/ui/primitives';
 import { useDesk } from '@/components/desk/paper-desk';
-import { AddNoteSheet } from '@/components/boards/add-note-sheet';
+import { AddNoteSheet, createSubmittedNote } from '@/components/boards/add-note-sheet';
 import { TemplateLibrary, type TemplateLibraryHandle } from '@/features/templates/template-library';
 import { createMessageRepository } from '@/db/repositories';
 import { templateFromNote } from '@/services/note-templates';
@@ -47,7 +47,7 @@ export default function TemplatesScreen() {
   }, [navigation]);
   return <Screen edges={['top','left','right','bottom']} style={{ backgroundColor: desk.desk }}>
     {loading ? <View style={styles.loading}><ChitsLoader /></View> : source !== undefined || !sourceMessageId ? <TemplateLibrary ref={library} initialDocument={source?.document} initialTitle={source?.title} onClose={close} onSelect={setDraft} /> : <EmptyState title={tr('templates.unavailable')} description={tr('templates.error')} action={{ label: tr('templates.back'), onPress: close }} />}
-    <AddNoteSheet visible={Boolean(draft)} initialBlocks={draft} onClose={() => setDraft(undefined)} onSubmit={async ({ text, attachment, blocks }) => { if (blocks) await repository.createNote({ blocks, attachment }); else await repository.createText(text); }} />
+    <AddNoteSheet visible={Boolean(draft)} initialBlocks={draft} onClose={() => setDraft(undefined)} onSubmit={async (submission) => { await createSubmittedNote(repository, submission); }} />
   </Screen>;
 }
 
