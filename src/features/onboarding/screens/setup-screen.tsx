@@ -2,7 +2,7 @@ import { useDirection, useLocale } from '@/localization/provider';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { useTheme } from '@/components/theme-provider';
 import { BackHeader, Screen } from '@/components/ui/primitives';
@@ -19,6 +19,7 @@ import { Icon, type IconName } from '@/components/ui/icon';
 import { PaperButton, PaperCard, PaperDesk, PAPER_INK, PAPER_WHITE, PAPER_YELLOW, useDesk } from '@/components/desk/paper-desk';
 import { useWelcomeFonts } from '../welcome/welcome-fonts';
 import { welcomeSurfaces } from '../welcome/welcome-surfaces';
+import { useSafeContentWidth } from '@/hooks/use-adaptive-layout';
 
 const CHOICES: { key: OnboardingStringKey; icon: IconName }[] = [
   { key: 'setup.board.personal', icon: 'person-outline' },
@@ -38,7 +39,8 @@ export default function OnboardingSetupScreen() {
   const desk = useDesk();
   const fonts = useWelcomeFonts();
   const { rowStyle, isRTL } = useDirection();
-  const { width } = useWindowDimensions();
+  // Inside the side safe areas, as the screen is.
+  const width = useSafeContentWidth();
   const heroWidth = Math.min(width, 560);
   const heroHeight = 148;
   const mascot = useMascotRig(0, { entrance: false, compact: true, cheerful: true, context: 'welcome' });

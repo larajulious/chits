@@ -7,7 +7,7 @@ import { useTheme } from '@/components/theme-provider';
 import { AppText } from '@/components/ui/app-text';
 import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
 import { PrimaryButton } from '@/components/ui/primitives';
-import { spacing } from '@/constants/theme';
+import { layout, spacing } from '@/constants/theme';
 import { useWelcomeFonts } from '@/features/onboarding/welcome/welcome-fonts';
 import { useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
@@ -62,7 +62,7 @@ export function PlanTaskSheet({ task, canMoveUp, canMoveDown, onClose, onRename,
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000055' },
-  sheet: { paddingTop: spacing.md, paddingBottom: spacing.xs },
+  sheet: { width: '100%', maxWidth: layout.maxSheetWidth, alignSelf: 'center', paddingTop: spacing.md, paddingBottom: spacing.xs },
   title: { fontSize: 18, lineHeight: 24, paddingHorizontal: spacing.md, paddingBottom: spacing.xs },
   edit: { padding: spacing.md, gap: spacing.sm },
   input: { minHeight: 48, fontSize: 16, paddingHorizontal: spacing.sm },

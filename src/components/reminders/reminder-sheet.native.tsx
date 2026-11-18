@@ -13,7 +13,7 @@ import { useTheme } from '@/components/theme-provider';
 import { useStickyControls } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
-import { radii, spacing } from '@/constants/theme';
+import { radii, spacing, layout } from '@/constants/theme';
 import { hasExactReminderAccess } from '@/services/reminder-alarm-access';
 import type { SetReminderResult } from '@/services/reminders';
 import {
@@ -286,7 +286,7 @@ function FieldButton({ text, label, onPress }: { text: string; label: string; on
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,23,0.34)' },
-  sheet: { maxHeight: '92%', flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth, borderBottomWidth: 0 },
+  sheet: { width: '100%', maxWidth: layout.maxSheetWidth, alignSelf: 'center', maxHeight: '92%', flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth, borderBottomWidth: 0 },
   handle: { alignSelf: 'center', width: 36, height: 4, marginTop: spacing.xs, borderRadius: 2 },
   scroll: { flexShrink: 1 },
   content: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.md },

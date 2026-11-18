@@ -200,7 +200,7 @@ export default function EditContentScreen() {
           renderTrigger={({ open, disabled }) => <NoteAttachmentAddRow label={tr('id.addAttachment')} disabled={disabled} onPress={open} />} />} /> : null}
       <KeyboardPane>
         {error ? <View accessibilityRole="alert" style={[styles.errorBanner, { borderColor: desk.danger }]}><AppText style={[styles.errorText, { color: desk.danger }]}>{error}</AppText></View> : null}
-        <View style={noteEditorStyles.fullscreenPage}>
+        <View style={noteEditorStyles.readingColumn}>
         {/* The screen itself is the editing surface — no boxed field, no
             border. Without images, a single flex:1 TextInput handles its own
             scrolling for content of any length, so it never has to compete

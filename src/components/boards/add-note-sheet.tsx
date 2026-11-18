@@ -17,7 +17,7 @@ import { KeyboardPane } from '@/components/ui/keyboard-pane';
 import { useDesk } from '@/components/desk/paper-desk';
 import { useKeyboardInset } from '@/hooks/use-keyboard-inset';
 import { GlassSurface } from '@/components/ui/glass-surface';
-import { spacing } from '@/constants/theme';
+import { spacing, layout } from '@/constants/theme';
 import { AttachmentPicker } from '@/components/chat/attachment-picker';
 import { NoteAttachmentAddRow, NoteAttachmentList, NoteAttachmentToggle, type NoteAttachmentItem } from '@/components/notes/note-attachment-list';
 import { discardPastedImages, NoteBlocksEditor, noteEditorStyles, NoteToolbar, PasteImageButton, useNoteImagePaste, type NoteBlocksEditorControl } from '@/components/notes/note-blocks-editor';
@@ -244,7 +244,7 @@ export function AddNoteSheet({ visible, boardName, columnName, onClose, onSubmit
               <View style={styles.fullContext}>{contextLine}</View>
               {/* Attachments sit above the note, where Edit Note lists them. */}
               {attachmentArea}
-              <View style={noteEditorStyles.fullscreenPage}>{noteInput}</View>
+              <View style={noteEditorStyles.readingColumn}>{noteInput}</View>
               <View style={styles.fullFooter}>
                 {extra ? (keyboardVisible && extraSummary
                   ? <Pressable accessibilityRole="button" accessibilityLabel={tr("addnotesheet.valueHideKeyboardToChange", { value1: extraSummary })} onPress={() => Keyboard.dismiss()} style={({ pressed }) => [styles.summary, { backgroundColor: theme.surfaceElevated }, pressed && styles.pressed]}>
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
   choiceRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
   choiceLabel: { flex: 1, fontSize: 16, lineHeight: 24, fontWeight: '500' },
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,23,0.34)' },
-  safeArea: { width: '100%', flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+  safeArea: { width: '100%', maxWidth: layout.maxSheetWidth, alignSelf: 'center', flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   sheet: { flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth },
   handle: { alignSelf: 'center', width: 36, height: 4, marginTop: spacing.xs, borderRadius: 2 },
   scroll: { flexGrow: 0, flexShrink: 1 },

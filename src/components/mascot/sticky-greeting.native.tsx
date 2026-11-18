@@ -4,7 +4,7 @@ import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { AccessibilityInfo, Animated, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, Animated, Pressable, StyleSheet, View } from 'react-native';
 
 import { useTheme } from '@/components/theme-provider';
 import { AppText } from '@/components/ui/app-text';
@@ -13,6 +13,7 @@ import { surfaceStyle } from '@/components/ui/surface';
 import { spacing } from '@/constants/theme';
 import { OnboardingMascot } from '@/features/onboarding/components/onboarding-mascot';
 import { useMascotGreeting } from '@/hooks/use-mascot-greeting';
+import { useContentDimensions } from '@/hooks/use-adaptive-layout';
 
 /** Transient companion on Notes, centered vertically with the floating Chat icon. */
 const MASCOT_TOUCH_SIZE = 72;
@@ -28,7 +29,7 @@ export function StickyGreeting() {
   const tip = styleTokens.tip;
   const sticky = tip.tail > 0;
   const fill = sticky ? styleColors.controlFill : theme.surface;
-  const { width } = useWindowDimensions();
+  const { width } = useContentDimensions();
   const [mascotOpacity] = useState(() => new Animated.Value(0));
   const [mascotLift] = useState(() => new Animated.Value(14));
   const [mascotScale] = useState(() => new Animated.Value(0.94));

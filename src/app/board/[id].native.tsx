@@ -1,7 +1,7 @@
 import { countLabel, tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { AccessibilityInfo, FlatList, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type LayoutRectangle, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { AccessibilityInfo, FlatList, Modal, Pressable, ScrollView, StyleSheet, View, type LayoutRectangle, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { FadeIn, LinearTransition, measure, runOnJS, useAnimatedRef, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -29,6 +29,7 @@ import { Icon } from '@/components/ui/icon';
 import { PAPERS, PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW, PaperDesk, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { mix, noteColors } from '@/constants/style-tokens';
 import type { Attachment, Board } from '@/db/types';
+import { useContentDimensions } from '@/hooks/use-adaptive-layout';
 
 type Column = { id: string; name: string; position: number };
 // The "Add column" placeholder is presentation-only — it is derived alongside
@@ -36,8 +37,16 @@ type Column = { id: string; name: string; position: number };
 // touched by any business logic (column counts, drag targets, navigator position).
 type CarouselItem = { kind: 'column'; column: Column } | { kind: 'add' };
 type Card = { id: string; columnId: string; title: string | null; position: number; preview: string | null; attachmentCount: number; messageCount: number; subtaskCount: number; completedSubtaskCount: number; reminderAt: number | null; mediaId: string | null; mediaMessageId: string | null; mediaType: 'photo' | 'video' | null; mediaPath: string | null; mediaMimeType: string | null; mediaSize: number | null; mediaDuration: number | null; mediaWidth: number | null; mediaHeight: number | null; mediaCreatedAt: number | null; isHidden: number };
-type DragState = { card: Card; sourceColumnId: string; destinationColumnId: string; fromIndex: number; toIndex: number; height: number; startY: number; overlayTop: number; startScrollY: number };
+type DragState = { card: Card; sourceColumnId: string; destinationColumnId: string; fromIndex: number; toIndex: number; height: number; startY: number; overlayTop: number; overlayLeft: number; startScrollY: number };
 const EDGE_ZONE = 52;
+// A board at least this wide shows whole columns side by side (an unfolded
+// Duo, a wide Split View pane); narrower ones page one column at a time.
+// 560 lets the Duo's inner display on its side fit two columns beside the
+// docked side panel (582pt after its sensor-bar inset), each about as wide as
+// the narrowest phone column.
+const MULTI_COLUMN_MIN_WIDTH = 560;
+const MIN_COLUMN_WIDTH = 264;
+const MAX_VISIBLE_COLUMNS = 3;
 const EDGE_DWELL_MS = 450;
 const COLUMN_CARD_LIMIT = 300;
 // Boards at or under this many total cards are preloaded in full on open, so column
@@ -360,6 +369,11 @@ const BoardCardRow = memo(function BoardCardRow({ card, index, total, translatio
 
 function reorder(items: Card[], from: number, to: number) { const next = [...items]; const [item] = next.splice(from, 1); next.splice(Math.max(0, Math.min(to, next.length)), 0, item); return next.map((card, position) => ({ ...card, position })); }
 
+/** Where a lifted card sits: over its column, wherever that column is on screen. */
+function dragOverlayLeft(geometry: { carouselInset: number; columnIndex: number; firstVisible: number; columnInterval: number; columnGap: number }) {
+  return geometry.carouselInset + (geometry.columnIndex - geometry.firstVisible) * geometry.columnInterval + geometry.columnGap / 2 + spacing.md;
+}
+
 export default function BoardScreen() {
   'use no memo';
   useLocale();
@@ -372,11 +386,21 @@ export default function BoardScreen() {
   // reapply the incoming navigation highlight.
   const highlightAppliedRef = useRef(false);
   const pendingHighlightCardRef = useRef<string | null>(null);
-  const { width: screenWidth } = useWindowDimensions();
-  const columnWidth = Math.min(520, Math.max(272, Math.round(screenWidth * (screenWidth < 390 ? 0.78 : 0.74))));
+  const content = useContentDimensions();
+  // The board lays out in the space it is actually given — beside a docked side
+  // panel, in Split View, folded or unfolded — measured rather than assumed.
+  const [boardFrame, setBoardFrame] = useState({ left: 0, width: 0 });
+  const screenWidth = boardFrame.width || content.width;
   const columnGap = spacing.sm;
+  // Phones and the folded Duo keep one column centred with its neighbours
+  // peeking in; wide boards show two or three whole columns at once.
+  const visibleColumns = screenWidth >= MULTI_COLUMN_MIN_WIDTH ? Math.max(2, Math.min(MAX_VISIBLE_COLUMNS, Math.floor((screenWidth - spacing.md * 2) / MIN_COLUMN_WIDTH))) : 1;
+  const multiColumn = visibleColumns > 1;
+  const columnWidth = multiColumn
+    ? Math.floor((screenWidth - (spacing.md - columnGap / 2) * 2) / visibleColumns - columnGap)
+    : Math.min(520, Math.max(272, Math.round(screenWidth * (screenWidth < 390 ? 0.78 : 0.74))));
   const columnInterval = columnWidth + columnGap;
-  const carouselInset = Math.max(spacing.md, (screenWidth - columnWidth) / 2 - columnGap / 2);
+  const carouselInset = multiColumn ? spacing.md - columnGap / 2 : Math.max(spacing.md, (screenWidth - columnWidth) / 2 - columnGap / 2);
   const [board, setBoard] = useState<Board | null | undefined>();
   const desk = useDesk();
   // Cards are handwritten: the loader covers the moment the face takes, so columns never reflow.
@@ -455,6 +479,40 @@ export default function BoardScreen() {
   // Derived purely for the FlatList's `data` — every count/index/drag calculation
   // below still reads `columns` directly, never this.
   const carouselItems = useMemo<CarouselItem[]>(() => [...columns.map((column): CarouselItem => ({ kind: 'column', column })), { kind: 'add' }], [columns]);
+  // With several columns on screen, `columnIndex` is whichever visible column
+  // you last touched, and `firstVisible` is the one at the leading edge. The
+  // active column is always kept in view. One column at a time, they are the same.
+  const [firstVisibleState, setFirstVisible] = useState(0);
+  const maxFirst = Math.max(0, carouselItems.length - visibleColumns);
+  const firstVisible = multiColumn ? Math.max(0, Math.min(maxFirst, columnIndex, Math.max(firstVisibleState, columnIndex - visibleColumns + 1))) : columnIndex;
+  const isVisibleColumn = (index: number) => index >= firstVisible && index < firstVisible + visibleColumns;
+  // Read by the drag and paging callbacks, so their identities stay stable.
+  const geometryRef = useRef({ multiColumn, visibleColumns, firstVisible, maxFirst, columnIndex, columnInterval, columnGap, carouselInset, boardLeft: boardFrame.left, boardWidth: screenWidth });
+  useEffect(() => { geometryRef.current = { multiColumn, visibleColumns, firstVisible, maxFirst, columnIndex, columnInterval, columnGap, carouselInset, boardLeft: boardFrame.left, boardWidth: screenWidth }; }, [multiColumn, visibleColumns, firstVisible, maxFirst, columnIndex, columnInterval, columnGap, carouselInset, boardFrame.left, screenWidth]);
+  // Each lane's own scroll position, so a drag that starts in (or moves to) a
+  // column measures against that column's scroll and not the last one's.
+  const laneScrollRef = useRef<Record<string, number>>({});
+  // Scrolls just enough to bring a column into view: a page per column on a
+  // phone, or the fewest steps that reveal it when several are showing.
+  const revealColumn = useCallback((index: number, animated: boolean) => {
+    const geometry = geometryRef.current;
+    let first = index;
+    if (geometry.multiColumn) {
+      if (index >= geometry.firstVisible && index < geometry.firstVisible + geometry.visibleColumns) return;
+      first = Math.max(0, Math.min(geometry.maxFirst, index < geometry.firstVisible ? index : index - geometry.visibleColumns + 1));
+      setFirstVisible(first);
+    }
+    boardListRef.current?.scrollToOffset({ offset: first * geometry.columnInterval, animated });
+  }, []);
+  // Folding, unfolding, rotating or resizing changes the column size. Keep the
+  // same columns in view rather than landing part-way between two.
+  const appliedIntervalRef = useRef(columnInterval);
+  useEffect(() => {
+    if (appliedIntervalRef.current === columnInterval) return;
+    appliedIntervalRef.current = columnInterval;
+    const frame = requestAnimationFrame(() => boardListRef.current?.scrollToOffset({ offset: geometryRef.current.firstVisible * columnInterval, animated: false }));
+    return () => cancelAnimationFrame(frame);
+  }, [columnInterval]);
   const currentColumn = columns[columnIndex];
   const currentCards = useMemo(() => currentColumn ? cards.filter((card) => card.columnId === currentColumn.id).sort((a, b) => a.position - b.position) : [], [cards, currentColumn]);
   // Read by callbacks that are passed as BoardCardRow props (beginDrag, evaluateTarget,
@@ -499,7 +557,7 @@ export default function BoardScreen() {
       setBoardStatus('ready');
       if (highlightCardId && !highlightAppliedRef.current) {
         pendingHighlightCardRef.current = highlightCardId;
-        boardListRef.current?.scrollToOffset({ offset: boundedIndex * columnInterval, animated: false });
+        revealColumn(boundedIndex, false);
         // Reuse a measured position if this lane already exists. A cold or
         // progressively loaded lane applies the pending highlight in onLayout.
         requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -515,7 +573,7 @@ export default function BoardScreen() {
     } catch {
       setBoardStatus('error');
     }
-  }, [columnInterval, fetchColumn, highlightCardId, highlightColumnId, id, repository]);
+  }, [revealColumn, fetchColumn, highlightCardId, highlightColumnId, id, repository]);
   // A card's title/preview/messages can change from the Card Detail screen, which
   // this screen has no other way to learn about. Rather than re-running the full
   // board load on every focus (which would fight "returning should preserve loaded
@@ -529,8 +587,21 @@ export default function BoardScreen() {
     if (boardStatusRef.current !== 'ready') { void load(); return; }
     refreshActiveColumn();
   }, [load, refreshActiveColumn]));
-  const goToColumn = useCallback((nextIndex: number) =>{ const bounded = Math.max(0, Math.min(columns.length - 1, nextIndex)); if (drag) return; ensurePrefetched(bounded); boardListRef.current?.scrollToOffset({ offset: bounded * columnInterval, animated: bounded !== columnIndex }); if (bounded === columnIndex) return; setColumnIndex(bounded); void Haptics.selectionAsync(); }, [columnIndex, columnInterval, columns.length, drag, ensurePrefetched]);
-  const settleColumn = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => { const nextIndex = Math.max(0, Math.min(columns.length - 1, Math.round(event.nativeEvent.contentOffset.x / columnInterval))); ensurePrefetched(nextIndex); if (nextIndex === columnIndex) return; setColumnIndex(nextIndex); void Haptics.selectionAsync(); }, [columnIndex, columnInterval, columns.length, ensurePrefetched]);
+  const goToColumn = useCallback((nextIndex: number) =>{ const bounded = Math.max(0, Math.min(columns.length - 1, nextIndex)); if (drag) return; ensurePrefetched(bounded); revealColumn(bounded, bounded !== columnIndex); if (bounded === columnIndex) return; setColumnIndex(bounded); void Haptics.selectionAsync(); }, [revealColumn, columnIndex, columns.length, drag, ensurePrefetched]);
+  const settleColumn = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const geometry = geometryRef.current;
+    if (geometry.multiColumn) {
+      // A swipe moves the visible window; the active column moves with it only
+      // if it would otherwise be left off screen.
+      const first = Math.max(0, Math.min(geometry.maxFirst, Math.round(event.nativeEvent.contentOffset.x / columnInterval)));
+      const last = Math.min(columns.length - 1, first + geometry.visibleColumns - 1);
+      setFirstVisible(first);
+      ensurePrefetched(first + 1, geometry.visibleColumns);
+      const next = Math.max(first, Math.min(last, columnIndex));
+      if (next !== columnIndex && next >= 0) setColumnIndex(next);
+      return;
+    }
+    const nextIndex = Math.max(0, Math.min(columns.length - 1, Math.round(event.nativeEvent.contentOffset.x / columnInterval))); ensurePrefetched(nextIndex); if (nextIndex === columnIndex) return; setColumnIndex(nextIndex); void Haptics.selectionAsync(); }, [columnIndex, columnInterval, columns.length, ensurePrefetched]);
   // Fires while the board is mid-swipe (throttled): as soon as the user has crossed
   // ~15% into the gesture toward a neighbor, start that column's fetch rather than
   // waiting for the swipe to fully settle.
@@ -546,7 +617,10 @@ export default function BoardScreen() {
   // LayoutAnimation.configureNext, which had to be re-armed imperatively before every
   // mutation and couldn't be tuned per-element. Reduced motion gets an instant snap.
   const cardLayoutTransition = useMemo(() => reduceMotion ? undefined : LinearTransition.springify().damping(20).stiffness(220).mass(0.6).overshootClamping(1), [reduceMotion]);
-  const beginDrag = useCallback((card: Card, index: number) => { const column = currentColumnRef.current; const layout = layoutsRef.current[card.id]; if (!layout || dragRef.current || !column) return; const next = { card, sourceColumnId: column.id, destinationColumnId: column.id, fromIndex: index, toIndex: index, height: layout.height, startY: layout.y, overlayTop: 76 + layout.y - scrollYRef.current, startScrollY: scrollYRef.current }; activeDragCardId.set(card.id); gestureTranslationX.set(0); gestureTranslationY.set(0); scrollCompensation.set(0);
+  // Touching a visible column makes it the active one, without moving the board.
+  const focusColumn = useCallback((index: number) => { if (dragRef.current) return; ensurePrefetched(index); setColumnIndex(index); }, [ensurePrefetched]);
+  useEffect(() => { if (currentColumn && !dragRef.current) scrollYRef.current = laneScrollRef.current[currentColumn.id] ?? 0; }, [currentColumn]);
+  const beginDrag = useCallback((card: Card, index: number) => { const column = currentColumnRef.current; const layout = layoutsRef.current[card.id]; if (!layout || dragRef.current || !column) return; const next = { card, sourceColumnId: column.id, destinationColumnId: column.id, fromIndex: index, toIndex: index, height: layout.height, startY: layout.y, overlayTop: 76 + layout.y - scrollYRef.current, overlayLeft: dragOverlayLeft(geometryRef.current), startScrollY: scrollYRef.current }; activeDragCardId.set(card.id); gestureTranslationX.set(0); gestureTranslationY.set(0); scrollCompensation.set(0);
     // ~150ms settle, minimal overshoot — communicates "picked up," not "bounced."
     liftProgress.set(reduceMotion ? 0 : withSpring(1, { damping: 26, stiffness: 380, mass: 0.6 })); dragRef.current = next; setDrag(next); setError(null); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }, [activeDragCardId, gestureTranslationX, gestureTranslationY, liftProgress, reduceMotion, scrollCompensation]);
   // Insertion index is computed from the finger's absolute position against each
@@ -566,16 +640,24 @@ export default function BoardScreen() {
       if (contentY > threshold) nextIndex += 1;
     });
     nextIndex = Math.max(0, Math.min(others.length, nextIndex)); if (nextIndex === active.toIndex) return; const next = { ...active, toIndex: nextIndex }; dragRef.current = next; setDrag(next); void Haptics.selectionAsync(); }, []);
-  const crossColumn = useCallback((direction: -1 | 1) => { const active = dragRef.current; if (!active) return; const fromIndex = columns.findIndex((column) => column.id === active.destinationColumnId); const destinationIndex = fromIndex + direction; const destination = columns[destinationIndex]; if (!destination) return;
+  const crossColumn = useCallback((direction: -1 | 1, target?: number) => { const active = dragRef.current; if (!active) return; const fromIndex = columns.findIndex((column) => column.id === active.destinationColumnId); const destinationIndex = target ?? fromIndex + direction; const destination = columns[destinationIndex]; if (!destination) return;
     // Rebase the scroll reference to the destination column's current (unrelated)
     // scroll position, and zero the compensation shared value immediately, so the
     // overlay doesn't jump when it starts tracking a different ScrollView's deltas.
-    const next = { ...active, destinationColumnId: destination.id, toIndex: 0, startScrollY: scrollYRef.current }; dragRef.current = next; setDrag(next); scrollCompensation.set(0); setColumnIndex(destinationIndex); boardListRef.current?.scrollToOffset({ offset: destinationIndex * columnInterval, animated: !reduceMotion }); fetchColumn(columns[destinationIndex + direction]?.id); void Haptics.selectionAsync(); }, [columnInterval, columns, fetchColumn, reduceMotion, scrollCompensation]);
+    scrollYRef.current = laneScrollRef.current[destination.id] ?? 0;
+    const next = { ...active, destinationColumnId: destination.id, toIndex: 0, startScrollY: scrollYRef.current }; dragRef.current = next; setDrag(next); scrollCompensation.set(0); setColumnIndex(destinationIndex); revealColumn(destinationIndex, !reduceMotion); fetchColumn(columns[destinationIndex + direction]?.id); void Haptics.selectionAsync(); }, [revealColumn, columns, fetchColumn, reduceMotion, scrollCompensation]);
   // Narrow zones at the screen edges: dwelling in one (without leaving) pages the
   // board to the adjacent column while the drag stays active. Returns the side the
   // finger currently sits in, so callers can prioritize edge-paging over vertical
   // auto-scroll near a corner.
-  const evaluateEdge = useCallback((pageX: number) => { const active = dragRef.current; if (!active) { clearEdgeDwell(); return null; } const destIndex = columns.findIndex((column) => column.id === active.destinationColumnId); const canGoLeft = destIndex > 0; const canGoRight = destIndex >= 0 && destIndex < columns.length - 1; const side: -1 | 1 | null = pageX <= EDGE_ZONE && canGoLeft ? -1 : pageX >= screenWidth - EDGE_ZONE && canGoRight ? 1 : null;
+  const evaluateEdge = useCallback((pageX: number) => { const active = dragRef.current; if (!active) { clearEdgeDwell(); return null; } const destIndex = columns.findIndex((column) => column.id === active.destinationColumnId); const canGoLeft = destIndex > 0; const canGoRight = destIndex >= 0 && destIndex < columns.length - 1; const geometry = geometryRef.current; const boardStart = geometry.boardLeft; const boardEnd = geometry.boardLeft + geometry.boardWidth;
+    // With several columns showing, holding a card over another visible column
+    // moves it there straight away; the edges still page to hidden ones.
+    if (geometry.multiColumn && pageX > boardStart + EDGE_ZONE && pageX < boardEnd - EDGE_ZONE) {
+      const hovered = geometry.firstVisible + Math.floor((pageX - boardStart - geometry.carouselInset) / geometry.columnInterval);
+      if (hovered !== destIndex && hovered >= 0 && hovered < columns.length && hovered >= geometry.firstVisible && hovered < geometry.firstVisible + geometry.visibleColumns) { clearEdgeDwell(); crossColumn(hovered > destIndex ? 1 : -1, hovered); return null; }
+    }
+    const side: -1 | 1 | null = pageX <= boardStart + EDGE_ZONE && canGoLeft ? -1 : pageX >= boardEnd - EDGE_ZONE && canGoRight ? 1 : null;
     if (side === null) { if (edgeDwellRef.current !== null) clearEdgeDwell(); return null; }
     // Prefetch the moment the finger enters the zone, well before the dwell timer (and
     // thus the actual page change) completes — fetchColumn dedupes, so this is cheap
@@ -588,7 +670,7 @@ export default function BoardScreen() {
       edgeGlowRight.set(reduceMotion ? (side === 1 ? 1 : 0) : withTiming(side === 1 ? 1 : 0, { duration: 140 }));
       edgeTimerRef.current = setTimeout(() => { edgeTimerRef.current = null; edgeDwellRef.current = null; edgeGlowLeft.set(0); edgeGlowRight.set(0); crossColumn(side); }, EDGE_DWELL_MS);
     }
-    return side; }, [clearEdgeDwell, columns, crossColumn, edgeGlowLeft, edgeGlowRight, fetchColumn, reduceMotion, screenWidth]);
+    return side; }, [clearEdgeDwell, columns, crossColumn, edgeGlowLeft, edgeGlowRight, fetchColumn, reduceMotion]);
   const moveDrag = useCallback((dx: number, dy: number, pageX: number, pageY: number) => { const active = dragRef.current; if (!active) return; gestureTranslationX.set(dx); lastDragPageYRef.current = pageY;
     const side = evaluateEdge(pageX);
     if (!side) { const viewport = viewportRef.current; const edge = 72; let scrollDelta = 0; if (pageY < viewport.top + edge) scrollDelta = -Math.ceil(10 * (1 - Math.max(0, pageY - viewport.top) / edge)); if (pageY > viewport.top + viewport.height - edge) scrollDelta = Math.ceil(10 * (1 - Math.max(0, viewport.top + viewport.height - pageY) / edge)); if (scrollDelta) scrollRef.current?.scrollTo({ y: Math.max(0, scrollYRef.current + scrollDelta), animated: false }); }
@@ -597,7 +679,7 @@ export default function BoardScreen() {
   const finalizeDrag = useCallback(async (cancelled: boolean, targetIndex: number) => { const active = dragRef.current; if (!active) { clearDrag(); return; } if (cancelled || (active.destinationColumnId === active.sourceColumnId && targetIndex === active.fromIndex)) { clearDrag(); return; } const previousCards = cards; if (active.destinationColumnId !== active.sourceColumnId) {
       const destinationColumnIndex = columns.findIndex((column) => column.id === active.destinationColumnId);
       setColumnIndex(destinationColumnIndex);
-      boardListRef.current?.scrollToOffset({ offset: destinationColumnIndex * columnInterval, animated: true });
+      revealColumn(destinationColumnIndex, true);
       // The real card list is only committed (and the overlay/hidden-source-card
       // cleared) once the overlay's settle spring below actually finishes — never
       // before. Committing earlier reflows both columns via LinearTransition while the
@@ -625,15 +707,15 @@ export default function BoardScreen() {
       return;
     }
     const sourceCards = cards.filter((card) => card.columnId === active.sourceColumnId).sort((a, b) => a.position - b.position);
-    const ordered = reorder(sourceCards, active.fromIndex, targetIndex); setCards((all) => [...all.filter((card) => card.columnId !== active.sourceColumnId), ...ordered]); clearDrag(); try { await repository.moveCard(active.card.id, active.sourceColumnId, targetIndex); await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch { setCards(previousCards); setError(tr("id.chitsCouldNotSaveThatCardPositionTry")); } }, [cards, clearDrag, columnInterval, columns, gestureTranslationX, gestureTranslationY, liftProgress, reduceMotion, repository, scrollCompensation]);
+    const ordered = reorder(sourceCards, active.fromIndex, targetIndex); setCards((all) => [...all.filter((card) => card.columnId !== active.sourceColumnId), ...ordered]); clearDrag(); try { await repository.moveCard(active.card.id, active.sourceColumnId, targetIndex); await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch { setCards(previousCards); setError(tr("id.chitsCouldNotSaveThatCardPositionTry")); } }, [revealColumn, cards, clearDrag, columns, gestureTranslationX, gestureTranslationY, liftProgress, reduceMotion, repository, scrollCompensation]);
   const settleDrag = useCallback((cancelled: boolean) => { const active = dragRef.current; if (!active) return; const targetIndex = cancelled ? active.fromIndex : active.toIndex; if (active.destinationColumnId !== active.sourceColumnId && !cancelled) { void finalizeDrag(false, targetIndex); return; }
     if (cancelled && active.destinationColumnId !== active.sourceColumnId) {
       // Cancelling mid cross-column drag: page the board back to the source column
       // too, so the visible column matches where the card actually stayed.
       const sourceIndex = columns.findIndex((column) => column.id === active.sourceColumnId);
-      if (sourceIndex >= 0) { setColumnIndex(sourceIndex); boardListRef.current?.scrollToOffset({ offset: sourceIndex * columnInterval, animated: !reduceMotion }); }
+      if (sourceIndex >= 0) { setColumnIndex(sourceIndex); revealColumn(sourceIndex, !reduceMotion); }
     }
-    if (cancelled && (active.toIndex !== active.fromIndex || active.destinationColumnId !== active.sourceColumnId)) { const next = { ...active, destinationColumnId: active.sourceColumnId, toIndex: active.fromIndex }; dragRef.current = next; setDrag(next); } requestAnimationFrame(() => { const targetY = cancelled ? active.startY : (placeholderYRef.current || active.startY); const destination = targetY - active.startY - scrollCompensation.get(); liftProgress.set(withSpring(0, { damping: 22, stiffness: 280 })); gestureTranslationX.set(withSpring(0, { damping: 22, stiffness: 280 })); if (reduceMotion) { gestureTranslationY.set(destination); void finalizeDrag(cancelled, targetIndex); return; } gestureTranslationY.set(withSpring(destination, { damping: 22, stiffness: 280, mass: 0.72 }, (finished) => { if (finished) runOnJS(finalizeDrag)(cancelled, targetIndex); })); }); }, [columnInterval, columns, finalizeDrag, gestureTranslationX, gestureTranslationY, liftProgress, reduceMotion, scrollCompensation]);
+    if (cancelled && (active.toIndex !== active.fromIndex || active.destinationColumnId !== active.sourceColumnId)) { const next = { ...active, destinationColumnId: active.sourceColumnId, toIndex: active.fromIndex }; dragRef.current = next; setDrag(next); } requestAnimationFrame(() => { const targetY = cancelled ? active.startY : (placeholderYRef.current || active.startY); const destination = targetY - active.startY - scrollCompensation.get(); liftProgress.set(withSpring(0, { damping: 22, stiffness: 280 })); gestureTranslationX.set(withSpring(0, { damping: 22, stiffness: 280 })); if (reduceMotion) { gestureTranslationY.set(destination); void finalizeDrag(cancelled, targetIndex); return; } gestureTranslationY.set(withSpring(destination, { damping: 22, stiffness: 280, mass: 0.72 }, (finished) => { if (finished) runOnJS(finalizeDrag)(cancelled, targetIndex); })); }); }, [revealColumn, columns, finalizeDrag, gestureTranslationX, gestureTranslationY, liftProgress, reduceMotion, scrollCompensation]);
   const reorderAccessible = useCallback(async (card: Card, index: number, direction: -1 | 1) => { const column = currentColumnRef.current; if (!column) return; const target = index + direction; if (target < 0 || target >= currentCardsRef.current.length) { await AccessibilityInfo.announceForAccessibility(tr("id.cardCannotMoveFurther")); return; }
     let previousCards: Card[] = []; const ordered = reorder(currentCardsRef.current, index, target);
     setCards((all) => { previousCards = all; return [...all.filter((item) => item.columnId !== column.id), ...ordered]; });
@@ -654,17 +736,17 @@ export default function BoardScreen() {
     // Derived inside the updater, not from the closed-over `cards`, so it reflects
     // whatever fetchColumn just merged in rather than a pre-fetch snapshot.
     setCards((current) => { previousCards = current; const destinationCards = current.filter((item) => item.columnId === destination.id && item.id !== card.id); destinationIndex = destinationCards.length; const movedCard = { ...card, columnId: destination.id, position: destinationIndex }; return [...current.filter((item) => item.id !== card.id), movedCard]; });
-    setColumnIndex(fromIndex + direction); boardListRef.current?.scrollToOffset({ offset: (fromIndex + direction) * columnInterval, animated: !reduceMotion });
-    try { await repository.moveCard(card.id, destination.id, destinationIndex); await Haptics.selectionAsync(); await AccessibilityInfo.announceForAccessibility(tr("messages.movedTo", { value1: destination.name })); } catch (cause) { setCards(previousCards); setColumnIndex(fromIndex); setError(cause instanceof Error ? cause.message : tr("id.chitsCouldNotMoveThatCard")); } }, [columnInterval, columns, fetchColumn, reduceMotion, repository]);
+    setColumnIndex(fromIndex + direction); revealColumn(fromIndex + direction, !reduceMotion);
+    try { await repository.moveCard(card.id, destination.id, destinationIndex); await Haptics.selectionAsync(); await AccessibilityInfo.announceForAccessibility(tr("messages.movedTo", { value1: destination.name })); } catch (cause) { setCards(previousCards); setColumnIndex(fromIndex); setError(cause instanceof Error ? cause.message : tr("id.chitsCouldNotMoveThatCard")); } }, [revealColumn, columns, fetchColumn, reduceMotion, repository]);
   const move = async (destination: Column) => { if (!moveCard) return; const movingCard = moveCard; await fetchColumn(destination.id);
     let previousCards: Card[] = []; let destinationIndex = 0;
     setCards((current) => { previousCards = current; const destinationCards = current.filter((card) => card.columnId === destination.id && card.id !== movingCard.id); destinationIndex = destinationCards.length; const movedCard = { ...movingCard, columnId: destination.id, position: destinationIndex }; return [...current.filter((card) => card.id !== movingCard.id), movedCard]; });
-    setMoveCard(null); const nextColumnIndex = columns.findIndex((column) => column.id === destination.id); setColumnIndex(nextColumnIndex); requestAnimationFrame(() => boardListRef.current?.scrollToOffset({ offset: nextColumnIndex * columnInterval, animated: true })); try { await repository.moveCard(movingCard.id, destination.id, destinationIndex); await Haptics.selectionAsync(); } catch (cause) { setCards(previousCards); setError(cause instanceof Error ? cause.message : tr("id.chitsCouldNotMoveThatCard")); } };
+    setMoveCard(null); const nextColumnIndex = columns.findIndex((column) => column.id === destination.id); setColumnIndex(nextColumnIndex); requestAnimationFrame(() => revealColumn(nextColumnIndex, true)); try { await repository.moveCard(movingCard.id, destination.id, destinationIndex); await Haptics.selectionAsync(); } catch (cause) { setCards(previousCards); setError(cause instanceof Error ? cause.message : tr("id.chitsCouldNotMoveThatCard")); } };
   const addColumn = async (name: string) => { if (!id) throw new Error(tr("id.thisBoardIsNoLongerAvailable")); await repository.addColumn(id, name.trim()); await load(); await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); };
   // New columns are always appended, so the pre-add column count is exactly the new
   // column's index — used to focus and scroll to it once it lands, animating the
   // "Add column" placeholder smoothly down to its permanent last position.
-  const addColumnFromPlaceholder = async (name: string) => { const newIndex = columns.length; await addColumn(name); setColumnIndex(newIndex); requestAnimationFrame(() => boardListRef.current?.scrollToOffset({ offset: newIndex * columnInterval, animated: !reduceMotion })); };
+  const addColumnFromPlaceholder = async (name: string) => { const newIndex = columns.length; await addColumn(name); setColumnIndex(newIndex); requestAnimationFrame(() => revealColumn(newIndex, !reduceMotion)); };
   const openAddColumnSheet = useCallback(() => { setAddColumnOrigin('placeholder'); setSettingsOpen(true); }, []);
   const openAddNote = useCallback((column: Column) => setAddNoteColumn(column), []);
   const closeAddNote = useCallback(() => setAddNoteColumn(null), []);
@@ -799,7 +881,7 @@ export default function BoardScreen() {
       <HeaderIconButton label={tr("index.searchInValue", { value1: board.name })} onPress={() => router.push({ pathname: '/search', params: { source: 'board', boardId: id, boardName: board.name } })}><Icon name="search-outline" size={21} color={theme.textPrimary} /></HeaderIconButton>
       <HeaderIconButton label={tr("id.editBoard")} onPress={() => setRenameOpen(true)}><Icon name="pencil-outline" size={21} color={theme.textPrimary} /></HeaderIconButton>
     </View>
-    <PaperDesk faint><View style={styles.pager} accessibilityLabel={tr("id.valueBoardColumnValueOfValueValueValue", { value1: board.name, value2: columnIndex + 1, value3: columns.length, value4: countLabel('card', activeCardCount), value5: '' })}>{columns.length ? <View style={styles.carousel} onLayout={(event) => { const height = event.nativeEvent.layout.height; event.currentTarget.measureInWindow((_, y) => { viewportRef.current = { top: y, height }; }); }}>
+    <PaperDesk faint><View style={styles.pager} accessibilityLabel={tr("id.valueBoardColumnValueOfValueValueValue", { value1: board.name, value2: columnIndex + 1, value3: columns.length, value4: countLabel('card', activeCardCount), value5: '' })}>{columns.length ? <View style={styles.carousel} onLayout={(event) => { const { width, height } = event.nativeEvent.layout; event.currentTarget.measureInWindow((x, y) => { viewportRef.current = { top: y, height }; setBoardFrame((current) => current.left === x && current.width === width ? current : { left: x, width }); }); }}>
       <FlatList
         ref={boardListRef}
         style={styles.boardList}
@@ -816,7 +898,7 @@ export default function BoardScreen() {
         scrollEventThrottle={48}
         onMomentumScrollEnd={settleColumn}
         getItemLayout={(_, index) => ({ length: columnInterval, offset: columnInterval * index, index })}
-        initialScrollIndex={columnIndex}
+        initialScrollIndex={firstVisible}
         initialNumToRender={carouselItems.length}
         windowSize={Math.max(21, carouselItems.length * 2)}
         contentContainerStyle={[styles.boardTrack, { paddingHorizontal: carouselInset, paddingBottom: reservedNavigatorHeight ? spacing.sm : spacing.md }]}
@@ -833,11 +915,13 @@ export default function BoardScreen() {
           // current gesture, so it must already show real, stable card content (not
           // the lightweight neighborCards preview) well before the finger gets there,
           // or releasing the swipe pops a different-shaped column into view.
-          const isAdjacent = Math.abs(index - columnIndex) <= 1;
+          const isAdjacent = multiColumn ? index >= firstVisible - 1 && index <= firstVisible + visibleColumns : Math.abs(index - columnIndex) <= 1;
           // The source column of an in-progress drag keeps its full lane mounted
           // even once the board has paged away from it (see buildLaneRows above) —
           // it just renders off-screen, holding the live gesture, until drop.
           const showFullLane = isAdjacent || isSource;
+          // A lane that leaves the screen remounts at the top when it comes back.
+          if (!showFullLane) delete laneScrollRef.current[column.id];
           const laneCards = cards.filter((card) => card.columnId === column.id).sort((a, b) => a.position - b.position);
           const showList = laneCards.length > 0 || isDestination;
           const status = columnStatus[column.id];
@@ -846,14 +930,14 @@ export default function BoardScreen() {
           // here yet" while a prefetch is still in flight.
           const notYetLoaded = !showList && status !== 'loaded' && status !== 'error';
           const loadFailed = !showList && status === 'error';
-          return <View style={[styles.columnFrame, { width: columnWidth, marginHorizontal: columnGap / 2, backgroundColor: columnPaper, borderColor: dropTarget ? PAPER_INK : 'transparent', boxShadow: `0px ${active ? 6 : 3}px ${active ? 14 : 8}px ${desk.shadow}` }, dropTarget && styles.dropTargetColumn]}>
+          return <View onTouchStart={multiColumn && !active && !drag ? () => focusColumn(index) : undefined} style={[styles.columnFrame, { width: columnWidth, marginHorizontal: columnGap / 2, backgroundColor: columnPaper, borderColor: dropTarget ? PAPER_INK : 'transparent', boxShadow: `0px ${active ? 6 : 3}px ${active ? 14 : 8}px ${desk.shadow}` }, dropTarget && styles.dropTargetColumn]}>
             <View style={styles.columnHeader}>
               <View style={[styles.columnIcon, { backgroundColor: PAPER_WHITE }]}><Icon name="albums-outline" size={19} color={mix(accent, PAPER_INK, 0.4)} /></View>
               <View style={styles.columnHeaderCopy}><AppText numberOfLines={1} style={[handwriting.handBold, styles.columnTitle, { color: PAPER_INK }]}>{column.name}</AppText><AppText style={[styles.columnCount, { color: PAPER_INK_MUTED }]}>{columnCardCount(column, laneCards.length)} {columnCardCount(column, laneCards.length) === 1 ? tr("id.card") : tr("index.cards")}</AppText></View>
               <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addNoteToValue", { value1: column.name })} onPress={() => openAddNote(column)} style={({ pressed }) => [styles.columnMenu, pressed && styles.headerButtonPressed]}><Icon name="add" size={22} color={PAPER_INK_MUTED} /></Pressable>
               <Pressable accessibilityRole="button" accessibilityLabel={tr("id.manageValueColumn", { value1: column.name })} onPress={() => { if (!active) goToColumn(index); setSettingsOpen(true); }} style={({ pressed }) => [styles.columnMenu, pressed && styles.headerButtonPressed]}><Icon name="ellipsis-horizontal" size={20} color={PAPER_INK_MUTED} /></Pressable>
             </View>
-            {showFullLane ? <ScrollView ref={active ? scrollRef : undefined} style={styles.activeLane} contentContainerStyle={[styles.cards, { paddingBottom: reservedNavigatorHeight ? reservedNavigatorHeight + spacing.md : spacing.lg }]} scrollEventThrottle={16} onScroll={active ? handleScroll : undefined} scrollEnabled={active} showsVerticalScrollIndicator={false}>{showList ? <View style={styles.cardList}>
+            {showFullLane ? <ScrollView ref={active ? scrollRef : undefined} style={styles.activeLane} contentContainerStyle={[styles.cards, { paddingBottom: reservedNavigatorHeight ? reservedNavigatorHeight + spacing.md : spacing.lg }]} scrollEventThrottle={16} onScroll={(event) => { laneScrollRef.current[column.id] = event.nativeEvent.contentOffset.y; if (active) handleScroll(event); }} scrollEnabled={active || (multiColumn && !drag && isVisibleColumn(index))} showsVerticalScrollIndicator={false}>{showList ? <View style={styles.cardList}>
               {buildLaneRows(column, laneCards)}
               <Animated.View key="add-note-row" layout={cardLayoutTransition}>
                 <Pressable accessibilityRole="button" accessibilityLabel={tr("id.addNoteToValue", { value1: column.name })} onPress={() => openAddNote(column)} style={({ pressed }) => [styles.addNoteRow, { borderColor: 'rgba(43,38,32,0.3)' }, pressed && styles.emptyDropPressed]}>
@@ -867,7 +951,7 @@ export default function BoardScreen() {
           </View>;
         }}
       />
-      {drag ? <Animated.View pointerEvents="none" style={[styles.dragLayer, { top: drag.overlayTop, left: (screenWidth - columnWidth) / 2 + spacing.md, width: columnWidth - spacing.xl }, animatedDragStyle]}><CardSurface card={drag.card} index={drag.fromIndex} total={Math.max(1, currentCards.length)} dragging interactive={false} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} scrollRef={scrollRef} pagerRef={boardListRef} /></Animated.View> : null}
+      {drag ? <Animated.View pointerEvents="none" style={[styles.dragLayer, { top: drag.overlayTop, left: drag.overlayLeft, width: columnWidth - spacing.xl }, animatedDragStyle]}><CardSurface card={drag.card} index={drag.fromIndex} total={Math.max(1, currentCards.length)} dragging interactive={false} accent={accent} accentTint={accentTint} accentBorderColor={accentBorderColor} scrollRef={scrollRef} pagerRef={boardListRef} /></Animated.View> : null}
       {drag ? <Animated.View pointerEvents="none" style={[styles.edgeGlow, styles.edgeGlowLeft, { backgroundColor: accentTint }, edgeGlowLeftStyle]} /> : null}
       {drag ? <Animated.View pointerEvents="none" style={[styles.edgeGlow, styles.edgeGlowRight, { backgroundColor: accentTint }, edgeGlowRightStyle]} /> : null}
       {board.showColumnNavigator ? <View onLayout={(event) => setNavigatorDockHeight(Math.ceil(event.nativeEvent.layout.height))} style={[styles.navigatorDock, { paddingBottom: Math.min(insets.bottom, spacing.sm) || spacing.sm }]}><ColumnNavigator columns={columns} cards={cards} columnStatus={columnStatus} columnCounts={columnCounts} columnIndex={columnIndex} reduceMotion={reduceMotion} accent={accent} onSelect={goToColumn} onAddColumn={openAddColumnSheet} /></View> : null}

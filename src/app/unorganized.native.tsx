@@ -19,7 +19,7 @@ import { useStickySheet } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { useVideoThumbnail } from '@/components/chat/message-row';
-import { spacing, type ThemeTokens } from '@/constants/theme';
+import { spacing, type ThemeTokens, layout } from '@/constants/theme';
 import { createBoardRepository, createMessageRepository } from '@/db/repositories';
 import type { Attachment, Board, Message } from '@/db/types';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
@@ -723,7 +723,7 @@ const mergeStyles = StyleSheet.create({
 
 const sheetStyles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,23,0.34)' },
-  sheetSafeArea: { flexShrink: 1, maxHeight: '86%', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+  sheetSafeArea: { width: '100%', maxWidth: layout.maxSheetWidth, alignSelf: 'center', flexShrink: 1, maxHeight: '86%', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   sheet: { flexShrink: 1, maxHeight: '100%', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: spacing.md, paddingBottom: spacing.md },
   handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginTop: spacing.xs, marginBottom: spacing.xs },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.xs },

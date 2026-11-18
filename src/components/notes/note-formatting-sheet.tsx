@@ -9,6 +9,7 @@ import { useTheme } from '@/components/theme-provider';
 import { NOTE_HIGHLIGHTS, NOTE_TEXT_COLORS, type NoteFormat } from '@/services/note-rich-text';
 import type { NoteCursor } from '@/services/note-content';
 import type { NoteBlocksEditorControl } from './note-blocks-editor';
+import { layout } from '@/constants/theme';
 
 /** An inset bottom sheet participates in the host's keyboard-aware layout.
  * It never places a modal/backdrop over the note or steals native selection. */
@@ -66,7 +67,7 @@ function FormattingAction({ label, text, selected, onPress, onPressIn, textStyle
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected }} onPressIn={onPressIn} onPress={onPress} style={({ pressed }) => [styles.action, { backgroundColor: selected ? tokens.accentSoft : tokens.surfaceElevated, borderColor: selected ? tokens.accentBorder : 'transparent' }, pressed && { opacity: 0.65 }]}><AppText style={[{ color: selected ? tokens.accentStrong : tokens.textPrimary, fontSize: 16, fontWeight: '600' }, textStyle, noteFontStyle({ bold: textStyle?.fontWeight === '800', italic: textStyle?.fontStyle === 'italic' }, font.fontFamily)]}>{text}</AppText></Pressable>;
 }
 const styles = StyleSheet.create({
-  sheet: { overflow: 'hidden', borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: StyleSheet.hairlineWidth },
+  sheet: { width: '100%', maxWidth: layout.maxSheetWidth, alignSelf: 'center', overflow: 'hidden', borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: StyleSheet.hairlineWidth },
   header: { height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 16 },
   close: { minHeight: 44, minWidth: 64, alignItems: 'center', justifyContent: 'center' },
   content: { gap: 4, paddingHorizontal: 12, paddingBottom: 8 },

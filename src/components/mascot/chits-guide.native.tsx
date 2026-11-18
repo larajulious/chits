@@ -1,12 +1,13 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useEffect, useState } from 'react';
-import { AccessibilityInfo, Animated, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, Animated, Pressable, StyleSheet, View } from 'react-native';
 import { useTheme } from '@/components/theme-provider';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { PressableSurface, surfaceStyle } from '@/components/ui/surface';
 import { OnboardingMascot } from '@/features/onboarding/components/onboarding-mascot';
+import { useContentDimensions } from '@/hooks/use-adaptive-layout';
 
 type Action = { label: string; onPress: () => void };
 
@@ -18,7 +19,7 @@ export function ChitsGuide({ text, actions, onClose, onShown, bottom = 0, hint }
   const { tokens, styleTokens, styleColors } = useTheme();
   const tip = styleTokens.tip;
   const sticky = tip.tail > 0;
-  const { width } = useWindowDimensions();
+  const { width } = useContentDimensions();
   const [opacity] = useState(() => new Animated.Value(0));
   const [lift] = useState(() => new Animated.Value(12));
   const [scale] = useState(() => new Animated.Value(0.88));

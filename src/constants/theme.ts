@@ -73,4 +73,6 @@ export function headingFontFamily(font: HeadingFont = 'system'): string | undefi
 
 export const spacing = { xxs: 4, xs: 8, sm: 12, md: 16, lg: 24, xl: 32 } as const;
 export const radii = { control: 12, compactCard: 16, contentCard: 18, pill: 999 } as const;
-export const layout = { maxContentWidth: 720, minimumTouchTarget: 44 } as const;
+// Bottom sheets keep a phone-like width, centred, on unfolded and wide windows
+// instead of running under a docked side panel or into a landscape inset.
+export const layout = { maxContentWidth: 720, maxSheetWidth: 640, minimumTouchTarget: 44 } as const;

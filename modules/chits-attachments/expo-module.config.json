@@ -7,6 +7,9 @@
     "modules": [
       "ChitsPdfModule",
       "ChitsFilesModule"
+    ],
+    "appDelegateSubscribers": [
+      "ChitsOrientationSubscriber"
     ]
   },
   "android": {

@@ -6,7 +6,7 @@ import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Keyboard, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, Keyboard, Pressable, StyleSheet, View } from 'react-native';
 
 import { AddNoteSheet, type NoteSubmission } from '@/components/boards/add-note-sheet';
 import { DayPanel } from '@/components/calendar/calendar-entry';
@@ -45,6 +45,7 @@ import { completeReminder, removeCardReminder, removeMessageReminder, requestRem
 import { openReminderAlarmSettings } from '@/services/reminder-alarm-access';
 import { formatReminder, dateFormat } from '@/services/reminder-time';
 import { subscribeToSpaceChanges } from '@/services/space-changes';
+import { useContentDimensions } from '@/hooks/use-adaptive-layout';
 
 type CalendarView = 'month' | 'week' | 'day' | 'agenda';
 const VIEW_OPTIONS: { key: CalendarView; label: string; icon: React.ComponentProps<typeof Icon>['name'] }[] = [
@@ -104,7 +105,7 @@ export default function CalendarScreen() {
   const { rowStyle, isRTL } = useDirection();
   const tabBarHeight = useBottomTabBarHeight();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width } = useContentDimensions();
   const [weekStart] = useState(() => weekStartFromLocale(getCalendars()[0]?.firstWeekday));
 
   const [today, setToday] = useState(() => startOfLocalDay(new Date()));

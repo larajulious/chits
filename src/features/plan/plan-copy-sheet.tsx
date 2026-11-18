@@ -332,7 +332,7 @@ export function ReusePlanSheet({ visible, date, today, repository, surfaces, onC
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000055' },
-  sheet: { maxHeight: '88%', paddingTop: spacing.xs, paddingBottom: spacing.xs },
+  sheet: { width: '100%', maxWidth: layout.maxSheetWidth, alignSelf: 'center', maxHeight: '88%', paddingTop: spacing.xs, paddingBottom: spacing.xs },
   handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginBottom: spacing.xs },
   header: { alignItems: 'flex-start', gap: spacing.sm, paddingHorizontal: spacing.md, paddingBottom: spacing.sm },
   headerCopy: { flex: 1, minWidth: 0, gap: 2 },

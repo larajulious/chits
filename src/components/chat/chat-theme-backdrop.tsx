@@ -1,7 +1,8 @@
 import { memo, type ReactNode } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { useTheme } from '@/components/theme-provider';
+import { useContentDimensions } from '@/hooks/use-adaptive-layout';
 
 // Deterministic scatter: the same spots on every launch and every render.
 const scatter = (index: number, salt: number) => {
@@ -17,7 +18,7 @@ const scatter = (index: number, salt: number) => {
  */
 export const ChatThemeBackdrop = memo(function ChatThemeBackdrop() {
   const { tokens, look } = useTheme();
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useContentDimensions();
   if (look.chatPattern === 'none') return null;
   const ink = tokens.accent;
   let shapes: ReactNode = null;

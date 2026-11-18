@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
-import { type ScrollView, useWindowDimensions } from 'react-native';
+import { type ScrollView } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
 import { heroStageLayout } from '@/components/mascot/hero-stage-layout';
@@ -9,6 +9,7 @@ import { useMascotRig } from '@/features/onboarding/welcome/use-mascot-rig';
 import { useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
 import { spinWheelLayout } from './spin-layout';
+import { useContentDimensions, useSafeContentWidth } from '@/hooks/use-adaptive-layout';
 
 const FOUND_LINES = ['spin.say.found.0', 'spin.say.found.1', 'spin.say.found.2', 'spin.say.found.3'];
 const IDLE_LINES = ['spin.say.before', 'spin.say.idle.0', 'spin.say.idle.1', 'spin.say.idle.2'];
@@ -28,7 +29,9 @@ export function useSpinEntrance() {
 
 /** The sizes the wheel takes on this screen, known before the first frame. */
 export function useSpinWheelLayout() {
-  const { width, height } = useWindowDimensions();
+  // Inside the side safe areas, as the screen is.
+  const { height } = useContentDimensions();
+  const width = useSafeContentWidth();
   const viewport = useStageViewport();
   return useMemo(() => spinWheelLayout(width, viewport, heroStageLayout(width, height).height), [height, viewport, width]);
 }

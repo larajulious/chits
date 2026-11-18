@@ -13,7 +13,7 @@ import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Keyboard, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { BackHandler, Keyboard, Pressable, StyleSheet, View } from 'react-native';
 
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
@@ -48,6 +48,7 @@ import { PAPER_INK, PAPER_WHITE, PAPER_YELLOW, PaperDesk, useDesk, useHandwritin
 import { welcomeSurfaces } from '@/features/onboarding/welcome/welcome-surfaces';
 import { useScreenReader } from '@/hooks/use-screen-reader';
 import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
+import { useContentDimensions } from '@/hooks/use-adaptive-layout';
 
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 type ViewMode = 'boards' | 'cards';
@@ -116,7 +117,7 @@ export default function BoardsScreen() {
   const { actionSheet, confirm } = useAppDialog();
   const { tokens: theme, styleTokens, styleColors, scheme } = useTheme();
   const desk = useDesk();
-  const { width } = useWindowDimensions();
+  const { width } = useContentDimensions();
   const insets = useSafeAreaInsets();
   const { buttonHidden } = useChatTransition();
   const orderSwitchVisibility = useAnimatedStyle(() => ({ opacity: buttonHidden.get() ? 0 : 1 }));

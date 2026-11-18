@@ -8,7 +8,7 @@ import { useTheme } from '@/components/theme-provider';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
 import { useStickyControls } from '@/components/ui/surface';
-import { radii, spacing } from '@/constants/theme';
+import { radii, spacing, layout } from '@/constants/theme';
 import { reminderInPast, type ScheduleDraft } from '@/features/calendar/calendar-actions';
 
 import { ScheduleFields } from './schedule-fields';
@@ -121,7 +121,7 @@ export function ScheduleSheet({ visible, title, initial, scheduled, onSave, onRe
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,23,0.34)' },
-  sheet: { maxHeight: '92%', flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth, borderBottomWidth: 0 },
+  sheet: { width: '100%', maxWidth: layout.maxSheetWidth, alignSelf: 'center', maxHeight: '92%', flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth, borderBottomWidth: 0 },
   handle: { alignSelf: 'center', width: 36, height: 4, marginTop: spacing.xs, borderRadius: 2 },
   scroll: { flexShrink: 1 },
   content: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.md },

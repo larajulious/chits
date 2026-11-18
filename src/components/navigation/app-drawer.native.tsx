@@ -35,11 +35,13 @@ import { welcomeSurfaces } from '@/features/onboarding/welcome/welcome-surfaces'
 import { subscribeToReminderChanges } from '@/services/reminders';
 import { subscribeToSpaceChanges } from '@/services/space-changes';
 import { dateFormat } from '@/services/reminder-time';
+import { ContentFrameContext, windowClassFor } from '@/hooks/use-adaptive-layout';
 
 // Short, restrained transition for a row's fade and collapse on unpin.
 const PINNED_TRANSITION = LayoutAnimation.create(180, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity);
 
-type DrawerContextValue = { openDrawer: () => void; closeDrawer: () => void };
+// \`docked\`: the panel sits beside the screen instead of sliding over it (wide windows).
+type DrawerContextValue = { openDrawer: () => void; closeDrawer: () => void; docked: boolean };
 type ContextItem = {
   id: string;
   title: string;
@@ -52,6 +54,9 @@ type IconName = ComponentProps<typeof Ionicons>['name'];
 type Destination = { label: string; path: '/' | '/spaces/pick' | '/attachments' | '/calendar' | '/archive' | '/settings' | '/onboarding' | '/revisit' | '/focus' | '/spin' | '/canvases'; icon: IconName };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
+// Screens that take over the whole window, where a docked panel would intrude.
+const UNDOCKED_PATHS = ['/focus', '/onboarding'];
+const noop = () => {};
 // Main destinations live in the side panel; Chat remains a floating button.
 const spacesDestination: Destination = { get label() { return tr("pick.spaces"); }, path: '/spaces/pick', icon: 'magnet-outline' };
 const notesDestination: Destination = { get label() { return tr('index.notes'); }, path: '/', icon: 'reader-outline' };
@@ -277,7 +282,7 @@ function PinnedSection({ items, close, onUnpin }: { items: ContextItem[]; close:
   );
 }
 
-function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }) {
+function DrawerContent({ close, isOpen, docked = false }: { close: () => void; isOpen: boolean; docked?: boolean }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -288,7 +293,7 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   const fonts = useWelcomeFonts();
   const [stylePicker, setStylePicker] = useState(false);
   const [savingStyle, setSavingStyle] = useState(false);
-  const { rowStyle } = useDirection();
+  const { rowStyle, isRTL } = useDirection();
   const desk = useDesk();
   const surfaces = useDrawerSurfaces();
   const insets = useSafeAreaInsets();
@@ -329,11 +334,14 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
     setAppTitle(titleRow?.value.trim() || 'Chits');
   }, [database, repository, spaces, loadReminderCount]);
 
+  // A docked panel stays up while you move around, so its Pinned and Recent
+  // lists refresh on each new screen rather than only when it is opened.
+  const refreshKey = docked ? pathname : '';
   useEffect(() => {
     if (!isOpen) return;
     const frame = requestAnimationFrame(() => { void load(); });
     return () => cancelAnimationFrame(frame);
-  }, [isOpen, load]);
+  }, [isOpen, load, refreshKey]);
   // A note stuck on or taken off a space while the drawer is open updates the badge.
   useEffect(() => (isOpen ? subscribeToSpaceChanges(() => { void load(); }) : undefined), [isOpen, load]);
   useEffect(() => {
@@ -371,7 +379,7 @@ function DrawerContent({ close, isOpen }: { close: () => void; isOpen: boolean }
   const pinnedKeys = new Set(pinned.map((item) => `${item.kind}-${item.id}`));
   const recentUnpinned = recent.filter((item) => !pinnedKeys.has(`${item.kind}-${item.id}`));
   return (
-    <SafeAreaView edges={['top']} accessibilityViewIsModal style={[styles.drawer, { backgroundColor: desk.desk, boxShadow: `0px 0px 16px ${desk.shadow}` }]}>
+    <SafeAreaView edges={['top', isRTL ? 'right' : 'left']} accessibilityViewIsModal={!docked} style={[styles.drawer, { backgroundColor: desk.desk, boxShadow: `0px 0px 16px ${desk.shadow}` }]}>
       <View pointerEvents="none" style={StyleSheet.absoluteFill}><DeskDots /></View>
       <DrawerHero title={appTitle} today={today} paper={surfaces.paper} />
       <View style={[styles.sheet, { backgroundColor: surfaces.paper }]}>
@@ -417,11 +425,28 @@ export function AppDrawerProvider({ children }: PropsWithChildren) {
   const { scheme } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
   const { isRTL } = useDirection();
+  const pathname = usePathname();
   const drawerWidth = Math.min(windowWidth * 0.78, 340);
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [progress] = useState(() => new Animated.Value(0));
+  // With room to spare (an unfolded Duo on its side, a wide Split View pane)
+  // the panel is docked beside the screen. The menu buttons then hide and show
+  // it, so a screen can still take the whole width. Full-screen moments keep it
+  // out of the way.
+  const canDock = windowClassFor(windowWidth) === 'expanded' && !UNDOCKED_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  const [dockHidden, setDockHidden] = useState(false);
+  const docked = canDock && !dockHidden;
+  const dockWidth = docked ? Math.round(Math.min(320, Math.max(272, windowWidth * 0.3))) : 0;
+  const frame = useMemo(() => ({ inset: dockWidth }), [dockWidth]);
+
+  // Growing past the breakpoint with the sliding panel open hands over to the
+  // docked one instead of leaving both on screen.
+  if (canDock && mounted) {
+    setIsOpen(false);
+    setMounted(false);
+  }
 
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
@@ -434,10 +459,12 @@ export function AppDrawerProvider({ children }: PropsWithChildren) {
       .start(({ finished }) => { if (finished) done?.(); });
   }, [progress, reduceMotion]);
   const openDrawer = useCallback(() => {
+    if (canDock) { setDockHidden((hidden) => !hidden); return; }
     if (mounted) return;
+    progress.setValue(0);
     setMounted(true);
     setIsOpen(true);
-  }, [mounted]);
+  }, [canDock, mounted, progress]);
   const closeDrawer = useCallback(() => {
     if (!mounted) return;
     setIsOpen(false);
@@ -446,14 +473,25 @@ export function AppDrawerProvider({ children }: PropsWithChildren) {
     });
   }, [animate, mounted]);
   const responder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (event, gesture) => (isRTL ? event.nativeEvent.pageX > windowWidth - 20 && gesture.dx < -12 : event.nativeEvent.pageX < 20 && gesture.dx > 12) && Math.abs(gesture.dy) < 16,
+    // A docked panel is already showing; the swipe only brings back a hidden one.
+    onMoveShouldSetPanResponder: (event, gesture) => !docked && (isRTL ? event.nativeEvent.pageX > windowWidth - 20 && gesture.dx < -12 : event.nativeEvent.pageX < 20 && gesture.dx > 12) && Math.abs(gesture.dy) < 16,
     onPanResponderRelease: (_, gesture) => { if (isRTL ? gesture.dx < -48 : gesture.dx > 48) openDrawer(); },
-  }), [openDrawer, isRTL, windowWidth]);
-  const value = useMemo(() => ({ openDrawer, closeDrawer }), [closeDrawer, openDrawer]);
+  }), [docked, openDrawer, isRTL, windowWidth]);
+  const value = useMemo(() => ({ openDrawer, closeDrawer, docked }), [closeDrawer, docked, openDrawer]);
 
   return (
     <DrawerContext.Provider value={value}>
-      <View style={styles.root} {...responder.panHandlers}>{children}</View>
+      {/* The screen keeps the same place in the tree whether or not the panel is
+          docked, so folding, unfolding or resizing never remounts it: open notes,
+          unsaved text and scroll positions stay as they were. Its own safe-area
+          provider measures from where it actually sits, so the edge the panel
+          covers adds no inset. */}
+      <View style={[styles.root, styles.split, isRTL && styles.splitReverse]} {...responder.panHandlers}>
+        {docked ? <View style={[styles.sidePanel, { width: dockWidth }]}><DrawerContent close={noop} isOpen docked /></View> : null}
+        <View style={styles.content}>
+          <ContentFrameContext.Provider value={frame}><SafeAreaProvider>{children}</SafeAreaProvider></ContentFrameContext.Provider>
+        </View>
+      </View>
       <Modal transparent visible={mounted} animationType="none" onShow={() => { if (isOpen) animate(1); }} onRequestClose={closeDrawer}>
         <SafeAreaProvider>
           <View style={styles.modal}>
@@ -472,6 +510,10 @@ export function AppDrawerProvider({ children }: PropsWithChildren) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  split: { flexDirection: 'row' },
+  splitReverse: { flexDirection: 'row-reverse' },
+  sidePanel: { height: '100%', zIndex: 1 },
+  content: { flex: 1, minWidth: 0, overflow: 'hidden' },
   modal: { flex: 1 },
   drawerShell: {
     position: 'absolute',

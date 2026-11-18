@@ -12,7 +12,7 @@ import { useTheme } from '@/components/theme-provider';
 import { ChitsLoader } from '@/components/ui/chits-loader';
 import { AppText } from '@/components/ui/app-text';
 import { Icon, type IconName } from '@/components/ui/icon';
-import { radii, spacing } from '@/constants/theme';
+import { radii, spacing, layout } from '@/constants/theme';
 import { createSpaceRepository } from '@/db/repositories';
 import type { SpaceNoteDetail } from '@/db/types';
 import type { CalendarItem } from '@/features/calendar/calendar-data';
@@ -179,7 +179,7 @@ function Row({ icon, label, destructive = false, onPress }: { icon: IconName; la
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,23,0.34)' },
-  sheet: { maxHeight: '90%', flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth, borderBottomWidth: 0 },
+  sheet: { width: '100%', maxWidth: layout.maxSheetWidth, alignSelf: 'center', maxHeight: '90%', flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth, borderBottomWidth: 0 },
   handle: { alignSelf: 'center', width: 36, height: 4, marginTop: spacing.xs, borderRadius: 2 },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: spacing.lg, paddingRight: spacing.xs, paddingTop: spacing.xxs },
   typePill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.sm, paddingVertical: 5, borderRadius: radii.pill },

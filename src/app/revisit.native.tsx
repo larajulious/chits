@@ -3,7 +3,7 @@ import { countLabel, tr } from '@/localization/runtime';
 import { FocusRevisit } from '@/features/focus/focus-revisit';
 import { useLocale } from '@/localization/provider';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { AppState, ScrollView, StyleSheet, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -26,6 +26,7 @@ import { DAY, keywords, pairKey, type ConnectionSuggestion, type NoteKey, type R
 import { getNoteConnections, getRevisitReport, parseNoteKey, type RevisitReport } from '@/services/revisit-service';
 import RevisitUnavailable from '@/features/revisit/unavailable';
 import { RevisitAction as Action, RevisitActions as CardActions, RevisitBody as CardBody, RevisitCaption as Caption, RevisitEmpty as InlineEmpty, RevisitFooter as CardFooter, RevisitHeading as Heading, RevisitMore as More, RevisitNoteContent as NoteContent, RevisitPaper as Paper, RevisitText as AppText, RevisitTitle as CardTitle } from '@/features/revisit/revisit-components';
+import { useContentDimensions } from '@/hooks/use-adaptive-layout';
 
 function ReviewHeader({ title, subtitle, showTitle }: { title: string; subtitle?: string; showTitle?: boolean }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
@@ -46,7 +47,7 @@ function RevisitExperience() {
   const desk = useDesk();
   // Notes here are handwritten: the loader covers the moment the face takes, so nothing reflows.
   const handwriting = useHandwriting();
-  const { width, fontScale } = useWindowDimensions();
+  const { width, fontScale } = useContentDimensions();
   const columns = width < 350 || fontScale >= 1.3 ? 1 : 2;
   const { confirm, actionSheet } = useAppDialog();
   const params = useLocalSearchParams<{ note?: string; a?: string; b?: string; pick?: string; browse?: string }>();

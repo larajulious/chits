@@ -16,6 +16,7 @@ import { tr } from '@/localization/runtime';
 import { COMPACT_EDGE_INSET, compactHeroLayout, heroScroll } from './compact-hero-layout';
 import { NOTES_MAX_PULL, NotesElasticSurface, NotesRefreshMascot, useNotesRefresh } from '@/components/notes/notes-pull-refresh.native';
 import { SleepingZs } from './sleeping-zs';
+import { useMeasuredWidth } from '@/hooks/use-adaptive-layout';
 
 const BOARD_LINES = ['boardsHero.say.0', 'boardsHero.say.1', 'boardsHero.say.2', 'boardsHero.say.3'];
 const NOTE_LINES = ['onboarding.mascot.say.room', 'onboarding.mascot.say.listening', 'onboarding.mascot.say.both', 'onboarding.mascot.say.corner'];
@@ -29,7 +30,7 @@ const DOZE_MS = 600_000;
 const STIR_STEP = 40;
 
 /** Animation and speech state stay here, isolated from the virtualized board list. */
-export const BoardsMascotHero = memo(function BoardsMascotHero({ width, paper, scrollY, activity, action, title, body, variant = 'boards', revision, revisionScope = 'all', changedAt = 0 }: { revision?: string; revisionScope?: string; changedAt?: number; width: number; paper: string; scrollY: SharedValue<number>; /** What keeps Chits awake when nothing scrolls, as a distance moved. */ activity?: SharedValue<number>; action?: ReactNode; title?: string; body?: string; variant?: 'boards' | 'notes' }) {
+export const BoardsMascotHero = memo(function BoardsMascotHero({ width: _givenWidth, paper, scrollY, activity, action, title, body, variant = 'boards', revision, revisionScope = 'all', changedAt = 0 }: { revision?: string; revisionScope?: string; changedAt?: number; width: number; paper: string; scrollY: SharedValue<number>; /** What keeps Chits awake when nothing scrolls, as a distance moved. */ activity?: SharedValue<number>; action?: ReactNode; title?: string; body?: string; variant?: 'boards' | 'notes' }) {
   useLocale();
   const desk = useDesk();
   const { scheme } = useTheme();
@@ -58,6 +59,8 @@ export const BoardsMascotHero = memo(function BoardsMascotHero({ width, paper, s
   useAnimatedReaction(() => Math.round((activity ?? scrollY).get() / STIR_STEP), (step, previous) => {
     if (previous !== null && step !== previous) runOnJS(stir)();
   });
+  // Measured, not passed in: the list it heads may sit inside side safe areas.
+  const { width, onLayout } = useMeasuredWidth();
   const [copyHeight, setCopyHeight] = useState(0);
   const hero = compactHeroLayout(width, copyHeight);
   const heroHeight = hero.height;
@@ -77,7 +80,7 @@ export const BoardsMascotHero = memo(function BoardsMascotHero({ width, paper, s
   const paperFront = useAnimatedStyle(() => ({ opacity: Math.min(1, held.get() / PAPER_LIP) }));
   const tap = () => { rig.tap(); };
 
-  return <Animated.View testID={`${variant}-mascot-hero`} style={{ height: heroHeight }}>
+  return <Animated.View testID={`${variant}-mascot-hero`} onLayout={onLayout} style={{ height: heroHeight }}>
    <Animated.View style={[styles.hero, { backgroundColor: refresh ? 'transparent' : desk.desk }, { height: heroHeight }, pinned]}>
     {refresh ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, backgroundPull]}><NotesElasticSurface width={width} height={hero.height + NOTES_MAX_PULL + width * 0.23} /></Animated.View> : <DeskScenery width={width} height={hero.height} dark={scheme === 'dark'} objects={false} />}
     <NotesRefreshMascot height={hero.height} unit={hero.unit} width={width}>{(travel, gripSurface) => <><ChitsPeekMascot travel={travel} gripSurface={gripSurface}

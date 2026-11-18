@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useEffect } from 'react';
 
@@ -15,6 +15,7 @@ import { useWelcomeFonts } from '@/features/onboarding/welcome/welcome-fonts';
 import { useDirection, useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
 import { PLAN_LINES } from './plan-lines';
+import { useMeasuredWidth } from '@/hooks/use-adaptive-layout';
 
 const release = () => undefined;
 /** Paper below the hero's cut, so Chits' hand rests on it whole instead of being cropped. */
@@ -29,7 +30,7 @@ export function PlanHero({ rig, title, body, paper, evening, onTap, children }: 
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const { width } = useWindowDimensions();
+  const { width, onLayout } = useMeasuredWidth();
   const { scheme } = useTheme();
   const { isRTL } = useDirection();
   const desk = useDesk();
@@ -45,7 +46,7 @@ export function PlanHero({ rig, title, body, paper, evening, onTap, children }: 
   const duskStyle = useAnimatedStyle(() => ({ opacity: dusk.get() * (scheme === 'dark' ? 0.3 : 0.2) }));
   const align = { textAlign: isRTL ? 'right' as const : 'left' as const };
 
-  return <View style={[styles.hero, { height: heroHeight + HAND_ROOM, backgroundColor: desk.desk }]}>
+  return <View onLayout={onLayout} style={[styles.hero, { height: heroHeight + HAND_ROOM, backgroundColor: desk.desk }]}>
     <DeskScenery width={width} height={hero.height} dark={scheme === 'dark'} objects={false} />
     <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dusk, duskStyle]} />
     <ChitsPeekMascot

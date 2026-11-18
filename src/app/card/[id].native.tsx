@@ -3,7 +3,7 @@ import { useDirection, useLocale } from '@/localization/provider';
 import { subscribeToNoteChanges } from '@/services/note-changes';
 import { ConnectedNotes } from '@/components/notes/connected-notes.native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Keyboard, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import { AppState, Keyboard, Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -50,6 +50,7 @@ import type { AttachmentLike, CardAttachment, Message } from '@/db/types';
 import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
 import { KeyboardPane } from '@/components/ui/keyboard-pane';
 import { Reveal } from '@/features/onboarding/welcome/reveal';
+import { useContentDimensions } from '@/hooks/use-adaptive-layout';
 
 type Detail = { id: string; title: string | null; explicitTitle: string | null; boardId: string; boardName: string; boardAccent: string | null; columnId: string; columnName: string; createdAt: number; pinned: number; attachmentCount: number };
 type Comment = { id: string; cardId: string; text: string; createdAt: number; updatedAt: number };
@@ -85,7 +86,7 @@ export default function CardDetailScreen() {
   const database = useSQLiteContext();
   const { rowStyle, isRTL } = useDirection();
   const reducedMotion = useReducedMotion();
-  const { width, fontScale } = useWindowDimensions();
+  const { width, fontScale } = useContentDimensions();
   const { id, fromWidget } = useLocalSearchParams<{ id: string; fromWidget?: string }>();
   const goBack = () => {
     if (fromWidget === '1' && !router.canGoBack()) router.replace('/chat');

@@ -38,6 +38,7 @@ import { DurationSheet } from './duration-sheet';
 import { useSpinVisibility } from '@/features/spin/use-spin-visibility';
 import { SpinEntry } from '@/features/spin/spin-entry';
 import { createSpinRepository } from '@/db/spin-repository';
+import { useSafeContentWidth } from '@/hooks/use-adaptive-layout';
 
 export default function FocusScreen() {
   'use no memo';
@@ -52,7 +53,9 @@ export default function FocusScreen() {
   const { hand, handBold } = useHandwriting();
   const reduced = useReducedMotion();
   const navigation = useNavigation();
-  const { width, height, fontScale } = useWindowDimensions();
+  const { height, fontScale } = useWindowDimensions();
+  // Inside the side safe areas, as the screen is (the Duo's sensor bar, a notch on its side).
+  const width = useSafeContentWidth();
   // Large text needs the room for reading: actions join the page rather than covering the clock.
   const accessibleLayout = fontScale > 1.3;
   const viewport = useStageViewport();

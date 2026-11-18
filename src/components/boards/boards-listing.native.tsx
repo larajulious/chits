@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 
 import { useTheme } from '@/components/theme-provider';
@@ -14,6 +14,7 @@ import { useDirection, useLocale } from '@/localization/provider';
 import { countLabel, tr } from '@/localization/runtime';
 import { BoardListItem } from './board-list-item.native';
 import { BoardsMascotHero } from './boards-mascot-hero.native';
+import { useContentDimensions } from '@/hooks/use-adaptive-layout';
 
 type BoardSummary = Board & { columnCount: number; cardCount: number };
 let boardsRevealedThisLaunch = false;
@@ -34,7 +35,7 @@ export function BoardsListing({ boards, unorganizedCount, onBoard, onUnorganized
   const desk = useDesk();
   const fonts = useWelcomeFonts();
   const { rowStyle, isRTL } = useDirection();
-  const dimensions = useWindowDimensions();
+  const dimensions = useContentDimensions();
   const [width, setWidth] = useState(dimensions.width);
   const [revealBoards, setRevealBoards] = useState(() => !boardsRevealedThisLaunch);
   const scrollY = useSharedValue(0);

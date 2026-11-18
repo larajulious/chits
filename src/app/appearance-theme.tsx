@@ -1,7 +1,7 @@
 import { tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { memo, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,6 +16,7 @@ import { CHITS_THEME_COLLECTIONS, TOP_BAR_IMAGE_SCRIM, topBarForIdentity, type C
 import { THEME_IMAGES } from '@/constants/theme-images';
 import { getThemeTokens, headingFontFamily, radii, spacing } from '@/constants/theme';
 import { AppText } from '@/components/ui/app-text';
+import { useContentDimensions } from '@/hooks/use-adaptive-layout';
 
 const COLUMNS = 2;
 
@@ -85,7 +86,7 @@ export default function AppearanceThemeScreen() {
   const { identity, setIdentity } = useTheme();
   const desk = useDesk();
   const { handBold } = useHandwriting();
-  const { width } = useWindowDimensions();
+  const { width } = useContentDimensions();
   const [toast, setToast] = useState<string | null>(null);
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 2200); return () => clearTimeout(timer); }, [toast]);
   const cardWidth = Math.floor((Math.min(width, 720) - spacing.lg * 2 - spacing.sm * (COLUMNS - 1)) / COLUMNS);

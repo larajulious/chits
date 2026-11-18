@@ -14,7 +14,7 @@ import { useWelcomeFonts } from '@/features/onboarding/welcome/welcome-fonts';
 import { HeaderChromeContext } from '@/components/ui/controls';
 import { EditNoteSpaceNameSheet } from '@/components/settings/edit-notespace-name-sheet';
 import { ChatAppearanceSettings } from '@/components/settings/chat-appearance-settings';
-import { type ChatThemeKey } from '@/constants/theme';
+import { layout, type ChatThemeKey } from '@/constants/theme';
 import { CHITS_THEMES } from '@/constants/chits-themes';
 import { APP_STYLE_NAMES, APP_STYLES, type AppStyle } from '@/constants/style-tokens';
 import { router, useFocusEffect } from 'expo-router';
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   swatch: { width: 32, height: 32, borderRadius: 32 / 2, alignItems: 'center', justifyContent: 'center' },
   preview: { alignSelf: 'flex-end', paddingHorizontal: 12, paddingVertical: 8, marginVertical: 8 },
   pressed: { opacity: 0.65 }, backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000055' },
-  sheet: { maxHeight: '85%' },
+  sheet: { width: '100%', maxWidth: layout.maxSheetWidth, alignSelf: 'center', maxHeight: '85%' },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', paddingLeft: 20, paddingRight: 12, paddingTop: 8 },
   sheetTitle: { flex: 1, fontSize: 18 }, sheetContent: { paddingHorizontal: 20, paddingBottom: 20 },
   choice: { minHeight: 50, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

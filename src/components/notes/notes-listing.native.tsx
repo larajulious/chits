@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ComponentProps, type ReactNode } from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
 import { CardsCollection } from '@/components/boards/cards-collection.native';
@@ -17,6 +17,7 @@ import { useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
 import { NotesPullToCreate, useNotesRefresh } from './notes-pull-refresh.native';
 import { NotesCanvas } from './notes-canvas.native';
+import { useContentDimensions, useSafeContentWidth } from '@/hooks/use-adaptive-layout';
 
 type BoardProps = Pick<ComponentProps<typeof NotesCanvas>, 'notes' | 'shownKeys' | 'focus' | 'onFocusDone' | 'onToast' | 'onToggleChecklist' | 'fullscreen' | 'onToggleFullscreen'>;
 type Props = Omit<ComponentProps<typeof CardsCollection>, 'header' | 'estimatedHeaderHeight' | 'emptyState' | 'backgroundColor' | 'filterBackgroundColor' | 'footer'> & {
@@ -32,7 +33,8 @@ type Props = Omit<ComponentProps<typeof CardsCollection>, 'header' | 'estimatedH
 /** Boards' same hero and paper, above the notes board or, for screen readers, the recycled note grid. */
 function NotesListingContent({ empty, onWrite, onPullCreate: _onPullCreate, footer, board, scrollY, ...collection }: Props & { scrollY: ReturnType<typeof useSharedValue<number>> }) {
   useLocale();
-  const { width } = useWindowDimensions();
+  const { width } = useContentDimensions();
+  const safeWidth = useSafeContentWidth();
   const { scheme } = useTheme();
   const desk = useDesk();
   const fonts = useWelcomeFonts();
@@ -69,7 +71,7 @@ function NotesListingContent({ empty, onWrite, onPullCreate: _onPullCreate, foot
     scrollOffset={scrollY}
     backgroundColor={surfaces.paper}
     filterBackgroundColor={surfaces.control}
-    estimatedHeaderHeight={compactHeroLayout(width).height}
+    estimatedHeaderHeight={compactHeroLayout(safeWidth).height}
     header={<BoardsMascotHero changedAt={changedAt} revision={revision} revisionScope={collection.filter} variant="notes" width={width} paper={surfaces.paper} scrollY={scrollY} title={plan.title} body={plan.body} action={<PlanHeroActions cta={plan.cta} onWrite={onWrite} />} />}
     emptyState={emptyState}
     footer={footer}
@@ -79,7 +81,7 @@ function NotesListingContent({ empty, onWrite, onPullCreate: _onPullCreate, foot
 
 export function NotesListing(props: Props) {
   const scrollY = useSharedValue(0);
-  const { width } = useWindowDimensions();
+  const { width } = useContentDimensions();
   const canvas = Boolean(props.board);
   useEffect(() => { if (canvas) scrollY.set(0); }, [canvas, scrollY]);
   return <NotesPullToCreate scrollY={scrollY} onCreateNote={props.onPullCreate ?? props.onWrite} canvas={Boolean(props.board)} width={width}>

@@ -1,7 +1,7 @@
 import { countLabel, tr } from '@/localization/runtime';
 import { useDirection, useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Modal, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { FlatList, Modal, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -31,6 +31,7 @@ import { useTheme } from '@/components/theme-provider';
 import { spacing } from '@/constants/theme';
 import { createAttachmentRepository } from '@/db/repositories';
 import type { AttachmentFilterType, AttachmentLike, AttachmentSummary } from '@/db/types';
+import { useContentDimensions } from '@/hooks/use-adaptive-layout';
 
 const PAGE_SIZE = 24;
 const GRID_GAP = 12;
@@ -185,7 +186,7 @@ export default function AttachmentsScreen() {
   const desk = useDesk();
   const surfaces = welcomeSurfaces(scheme, desk, { white: PAPER_WHITE, ink: PAPER_INK, yellow: PAPER_YELLOW });
   const handwriting = useHandwriting();
-  const { width: screenWidth, fontScale } = useWindowDimensions();
+  const { width: screenWidth, fontScale } = useContentDimensions();
   const columns = fontScale >= 1.6 ? 1 : screenWidth >= 900 ? 4 : screenWidth >= 600 ? 3 : 2;
   const tabBarHeight = useBottomTabBarHeight();
   const repository = useMemo(() => createAttachmentRepository(database), [database]);

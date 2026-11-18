@@ -1,7 +1,7 @@
 import { countLabel, tr } from '@/localization/runtime';
 import { useDirection, useLocale } from '@/localization/provider';
 import { memo, useCallback, useMemo, useState } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
@@ -22,6 +22,7 @@ import { createMessageRepository, createSpaceRepository } from '@/db/repositorie
 import { useWelcomeFonts } from '@/features/onboarding/welcome/welcome-fonts';
 import { welcomeSurfaces } from '@/features/onboarding/welcome/welcome-surfaces';
 import { markOrganizationAccepted } from '@/services/chits-organization';
+import { useContentDimensions, useSafeContentWidth } from '@/hooks/use-adaptive-layout';
 
 // Two small overlapping notes on every print, so the four spaces compare like for like.
 const SAMPLES = [
@@ -91,7 +92,9 @@ export default function PickSpaceScreen() {
   const surfaces = welcomeSurfaces(scheme, desk, { white: PAPER_WHITE, ink: PAPER_INK, yellow: PAPER_YELLOW });
   // Everything fits on one screen where it can: the prints share the height
   // the header, Chits and the action leave.
-  const { width, height } = useWindowDimensions();
+  // Inside the side safe areas, as the screen is.
+  const { height } = useContentDimensions();
+  const width = useSafeContentWidth();
   const viewport = useStageViewport();
   const grid = useMemo(() => pickGridLayout(width, viewport, heroStageLayout(width, height).height), [height, viewport, width]);
   const [saved, setSaved] = useState(() => repository.getSelectedSpaceSync());

@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useDerivedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -28,6 +28,7 @@ import { SpeechBubble } from '../welcome/speech-bubble';
 import { HERO_GUTTER, heroLayout, PAPER_TILT } from '../welcome/stage-layout';
 import { useWelcomeFonts } from '../welcome/welcome-fonts';
 import { welcomeSurfaces } from '../welcome/welcome-surfaces';
+import { useMeasuredWidth } from '@/hooks/use-adaptive-layout';
 
 /** Below this much height, the page drops what it can live without to stay on one screen. */
 const COMPACT_BELOW = 620;
@@ -46,7 +47,9 @@ export default function OnboardingHubScreen() {
   const surfaces = welcomeSurfaces(scheme, desk, { white: PAPER_WHITE, ink: PAPER_INK, yellow: PAPER_YELLOW });
   const fonts = useWelcomeFonts();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  // Measured inside the side safe areas the screen keeps, so Chits peeks in
+  // from the real edge (the Duo has a sensor bar down one side).
+  const { width, onLayout: measureWidth } = useMeasuredWidth();
   const { done, loaded, settled, homeShown, open, showOnHome } = useChecklist();
   const { rig, tap } = useJourneyMascot(done, loaded);
   const [copyHeight, setCopyHeight] = useState(0);
@@ -95,7 +98,7 @@ export default function OnboardingHubScreen() {
       contentContainerStyle={styles.scroll}
       showsVerticalScrollIndicator={false}
       scrollEnabled={overflows}
-      onLayout={({ nativeEvent }) => setViewport(nativeEvent.layout.height)}
+      onLayout={(event) => { setViewport(event.nativeEvent.layout.height); measureWidth(event); }}
     >
       <View pointerEvents="box-none" style={styles.stage}>
         <DeskScenery width={width} height={heroHeight + 24} dark={scheme === 'dark'} objects={false} />

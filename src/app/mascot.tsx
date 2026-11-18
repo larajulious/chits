@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { ChitsMascot, useMascotReducedMotion, type MascotInteractionHandle } from '@/components/mascot/chits-mascot';
@@ -12,6 +12,7 @@ import { AppHeader, AppText, HeaderIcon, Icon, IconButton, Screen } from '@/comp
 import { useWelcomeFonts } from '@/features/onboarding/welcome/welcome-fonts';
 import { useDirection, useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
+import { useContentDimensions } from '@/hooks/use-adaptive-layout';
 
 function MascotCard({ mascot, selected, disabled, wide, onSelect }: {
   mascot: typeof MASCOT_VARIANTS[number]; selected: boolean; disabled: boolean; wide: boolean; onSelect: () => void;
@@ -50,7 +51,7 @@ export default function MascotScreen() {
   const { tokens } = useTheme();
   const fonts = useWelcomeFonts();
   const { rowStyle } = useDirection();
-  const { width, fontScale } = useWindowDimensions();
+  const { width, fontScale } = useContentDimensions();
   const wide = width >= 560 && fontScale < 1.5;
   const [error, setError] = useState<string | null>(null);
   const choose = (mascot: typeof MASCOT_VARIANTS[number]) => {

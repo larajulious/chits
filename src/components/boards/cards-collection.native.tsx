@@ -4,7 +4,7 @@ import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode, type Ref } from 'react';
-import { AccessibilityInfo, Platform, ScrollView, StyleSheet, View, useWindowDimensions, type ScrollViewProps } from 'react-native';
+import { AccessibilityInfo, Platform, ScrollView, StyleSheet, View, type ScrollViewProps } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedRef, useAnimatedStyle, useReducedMotion, useScrollOffset, useSharedValue, withSpring, type SharedValue } from 'react-native-reanimated';
 
@@ -17,6 +17,7 @@ import { noteKey, reorder, type NoteOrderMode } from '@/services/note-order';
 import { CardListRow } from './card-list-row.native';
 import { findStickySection } from './cards-sticky-section';
 import { FILTER_RAIL_HEIGHT, FilterRail } from './filter-rail';
+import { useContentDimensions } from '@/hooks/use-adaptive-layout';
 
 /** A section with an empty title shows its notes without a heading. */
 export type CardSection = { key: string; title: string; pinned?: boolean; count: number; data: CardListItem[] };
@@ -80,15 +81,27 @@ function SectionHeading({ section }: { section: CardSection }) {
 }
 
 /** Real cards remain recycled; only the active date label changes while scrolling. */
+
+// Phones and the Duo's outer display keep two columns; wider space adds one
+// per ~200pt (three on the inner display, four on its side) instead of
+// stretching each note. Larger text gives each note back some room.
+const MIN_NOTE_WIDTH = 200;
+const MAX_COLUMNS = 4;
+export function gridColumns(width: number, fontScale: number) {
+  if (width < 350 || fontScale >= 1.3) return 1;
+  const fit = Math.floor((width - spacing.md * 2) / MIN_NOTE_WIDTH) - (fontScale >= 1.15 ? 1 : 0);
+  return Math.max(2, Math.min(MAX_COLUMNS, fit));
+}
+
 export function CardsCollection({ nativeScrollGesture, sections, chips, filter, onFilter, orderMode, onArrange, onOpen, onMore, onToggleSubtask, onSectionChange, bottomInset, header, estimatedHeaderHeight = 0, scrollOffset: providedScrollOffset, footer, emptyState, backgroundColor, filterBackgroundColor, dim }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
   const desk = useDesk();
-  const { width, fontScale } = useWindowDimensions();
+  const { width, fontScale } = useContentDimensions();
   const { scheme, styleTokens } = useTheme();
   const reduceMotion = useReducedMotion();
-  const columns = width < 350 || fontScale >= 1.3 ? 1 : 2;
+  const columns = gridColumns(width, fontScale);
   const balanced = styleTokens.card.tinted;
   const arranging = orderMode === 'custom';
   const columnGap = 12;
@@ -159,7 +172,7 @@ export function CardsCollection({ nativeScrollGesture, sections, chips, filter, 
 
   const cellPadding = (column: number) => balanced
     ? { paddingHorizontal: columns === 1 ? spacing.md : columnGap / 2, paddingBottom: rowGap }
-    : { paddingLeft: columns === 1 || column === 0 ? spacing.md : columnGap / 2, paddingRight: columns === 1 || column === 1 ? spacing.md : columnGap / 2, paddingBottom: rowGap };
+    : { paddingLeft: columns === 1 || column === 0 ? spacing.md : columnGap / 2, paddingRight: columns === 1 || column === columns - 1 ? spacing.md : columnGap / 2, paddingBottom: rowGap };
 
   // ── Drag to arrange (My order) ────────────────────────────────────────────
   // One long-press pan over the whole list rather than one per card: cells

@@ -1,7 +1,7 @@
 import { countLabel, tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View, type LayoutRectangle, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View, type LayoutRectangle, type StyleProp, type ViewStyle } from 'react-native';
 import { Icon } from '@/components/ui/icon';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -40,6 +40,7 @@ import type { PinnedNote, SpaceCandidate } from '@/db/types';
 import { subscribeToSpaceChanges } from '@/services/space-changes';
 import { ChitsGuide } from '@/components/mascot/chits-guide.native';
 import { useInkSurface, useSpaceStyles, useSpaceUI, type SpaceUI } from '@/components/spaces/ink-surface';
+import { useContentDimensions } from '@/hooks/use-adaptive-layout';
 
 const EMPTY_COUNTS = Object.fromEntries(SPACE_IDS.map((id) => [id, 0])) as Record<SpaceId, number>;
 
@@ -75,7 +76,7 @@ function SpaceBoard({ initialSpaceId, focusNoteId, guided, relationship }: { ini
   const insets = useSafeAreaInsets();
   const fonts = useSpaceFonts();
   const noteSpaceName = useNoteSpaceName();
-  const window = useWindowDimensions();
+  const window = useContentDimensions();
   const [screenSize, setScreenSize] = useState({ width: window.width, height: window.height });
   const [spaceId, setSpaceId] = useState(initialSpaceId);
   const [notes, setNotes] = useState<PinnedNote[] | null>(null);

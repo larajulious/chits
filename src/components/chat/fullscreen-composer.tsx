@@ -56,7 +56,7 @@ function ComposerPage({ blocks, onChangeBlocks, editorRef, onClose, onSaveDraft,
     <View style={[noteEditorStyles.fullscreenPage, { backgroundColor: tokens.cardPaper }]}>
       <KeyboardPane>
         {attachmentLabel ? <AppText style={[styles.attachment, { color: desk.inkMuted }]}>{attachmentLabel}</AppText> : null}
-        <View style={noteEditorStyles.fullscreenPage}>
+        <View style={noteEditorStyles.readingColumn}>
           <NoteBlocksEditor
             ref={editorRef}
             fillViewport

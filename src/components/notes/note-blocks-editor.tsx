@@ -770,6 +770,9 @@ const styles = StyleSheet.create({
 export const noteEditorStyles = StyleSheet.create({
   // Fullscreen hosts use the whole page; no inset paper panel around the input.
   fullscreenPage: { flex: 1 },
+  // The writing column inside a fullscreen host: phones use the whole width;
+  // an unfolded or wide window keeps lines a comfortable length to read.
+  readingColumn: { flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center' },
   page: { flex: 1, marginHorizontal: spacing.sm, marginTop: spacing.xs, marginBottom: spacing.xs },
   input: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.md, fontSize: 17, lineHeight: 27 },
   blocks: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md },

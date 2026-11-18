@@ -3,6 +3,7 @@ import { Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable,
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/components/theme-provider';
+import { layout } from '@/constants/theme';
 import { useStickySheet } from './surface';
 import { GlassSurface } from '@/components/ui/glass-surface';
 
@@ -173,7 +174,7 @@ export const FormSheet = forwardRef<FormSheetHandle, Props>(function FormSheet(
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,23,0.34)' },
-  safeArea: { width: '100%', flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+  safeArea: { width: '100%', maxWidth: layout.maxSheetWidth, alignSelf: 'center', flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   sheet: { flexShrink: 1, maxHeight: '100%', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth },
   scroll: { flexShrink: 1 },
 });

@@ -1,5 +1,5 @@
 import { useState, type ReactNode, type Ref } from 'react';
-import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, useAnimatedStyle, useDerivedValue, useReducedMotion, type SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -17,6 +17,7 @@ import { welcomeSurfaces } from '@/features/onboarding/welcome/welcome-surfaces'
 import { useDirection, useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
 import { HERO_CONTENT_WIDTH, HERO_EDGE_INSET, heroStageLayout } from './hero-stage-layout';
+import { useContentDimensions, useMeasuredWidth } from '@/hooks/use-adaptive-layout';
 
 const SPEECH_TOP = 6;
 /** How long the footer waits after a moment worth noticing, so it arrives last. */
@@ -24,7 +25,7 @@ const FOOTER_DELAY = 620;
 
 /** The height a page has under its header, known before the first frame. */
 export function useStageViewport() {
-  const { height } = useWindowDimensions();
+  const { height } = useContentDimensions();
   const insets = useSafeAreaInsets();
   const { styleTokens } = useTheme();
   return height - insets.top - insets.bottom - styleTokens.header.minHeight;
@@ -63,7 +64,8 @@ export function MascotStage({ rig, title, body, mascot = true, hint, onTap, line
   const fonts = useWelcomeFonts();
   const reduced = useReducedMotion();
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
+  const { height } = useContentDimensions();
+  const { width, onLayout } = useMeasuredWidth();
   const surfaces = welcomeSurfaces(scheme, desk, { white: PAPER_WHITE, ink: PAPER_INK, yellow: PAPER_YELLOW });
   // The tallest copy seen, so a shorter line doesn't move what's under it.
   const [copy, setCopy] = useState({ width, height: 0 });
@@ -83,7 +85,7 @@ export function MascotStage({ rig, title, body, mascot = true, hint, onTap, line
     <View style={[styles.content, { paddingBottom: (footer ? footerHeight : Math.max(insets.bottom, 12)) + 16 }]}>{children}</View>
   </View>;
 
-  return <View style={[styles.flex, { backgroundColor: desk.desk }]}>
+  return <View onLayout={onLayout} style={[styles.flex, { backgroundColor: desk.desk }]}>
     <ScrollView ref={scrollRef} style={styles.flex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <View pointerEvents="box-none" style={styles.stage}>
         {mascot ? <>

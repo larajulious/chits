@@ -8,7 +8,7 @@ import { useTheme } from '@/components/theme-provider';
 import { useStickyControls } from '@/components/ui/surface';
 import { AppText } from '@/components/ui/app-text';
 import { GlassSurface } from '@/components/ui/glass-surface';
-import { spacing } from '@/constants/theme';
+import { spacing, layout } from '@/constants/theme';
 import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
 
 type Props = {
@@ -151,7 +151,7 @@ export function EditNoteSpaceNameSheet({ visible, currentName, onClose, onSave }
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,23,0.34)' },
-  safeArea: { width: '100%', flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+  safeArea: { width: '100%', maxWidth: layout.maxSheetWidth, alignSelf: 'center', flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
   sheet: { flexShrink: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth },
   handle: { alignSelf: 'center', width: 36, height: 4, marginTop: spacing.xs, borderRadius: 2 },
   content: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.lg },

@@ -30,6 +30,7 @@ import { useAttachmentExport } from '@/components/attachments/use-attachment-exp
 import { exportActionLabel } from '@/services/attachment-export';
 import { noteRenderContent } from '@/services/note-content';
 import { dateFormat } from '@/services/reminder-time';
+import { useContentDimensions } from '@/hooks/use-adaptive-layout';
 
 let activeAudio: { token: symbol; pause: () => void } | null = null;
 const availabilityCache = new Map<string, boolean>();
@@ -319,7 +320,7 @@ function MediaMessageSurface({ focused, onLongPress, children }: { focused: bool
 
   useLocale();
   const { tokens: theme, styleTokens } = useTheme();
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth } = useContentDimensions();
   const sticky = useStickySurface();
   const outlined = styleTokens.elevation === 'edge';
   const border = outlined ? styleTokens.outline.width : focused ? 2 : StyleSheet.hairlineWidth;
@@ -595,7 +596,7 @@ function MessageRowComponent({ message, onLongPress, onReveal, onHideAgain, temp
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useContentDimensions();
   const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
   const attachment = message.attachments[0];
   const inline = noteRenderContent(message);
