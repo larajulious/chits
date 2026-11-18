@@ -27,6 +27,8 @@ type BaseProps = {
   visible: boolean;
   type: DialogType;
   title?: string;
+  /** What screen readers announce for a dialog shown without a visible title. */
+  accessibilityTitle?: string;
   message?: string;
   icon?: DialogIconName;
   accentColor?: string | null;
@@ -78,7 +80,7 @@ export function AppDialog(props: AppDialogProps) {
   const controls = useStickyControls();
   // Sticky: an outlined card on a solid edge; rows divided by ink lines.
   const rowDivider = styleTokens.outline.width ? styleColors.outline : theme.borderSubtle;
-  const { visible, type, title, message, icon, accentColor, onRequestClose } = props;
+  const { visible, type, title, accessibilityTitle, message, icon, accentColor, onRequestClose } = props;
   const dismissOnBackdrop = props.dismissOnBackdrop ?? true;
   const palette = resolveDialogPalette(type, theme, scheme, accentColor);
   const resolvedIcon = icon ?? DEFAULT_ICON[type];
@@ -145,7 +147,7 @@ export function AppDialog(props: AppDialogProps) {
         <Animated.View
           accessibilityViewIsModal
           accessibilityRole="alert"
-          accessibilityLabel={title}
+          accessibilityLabel={title ?? accessibilityTitle}
           style={[styles.card, { backgroundColor: theme.surface }, sticky({ fill: styleColors.controlFill, radius: styleTokens.radius.panel, edge: styleTokens.emptyState.button.edge }), cardStyle]}
         >
           {isActionSheet ? null : (
@@ -219,7 +221,8 @@ export function AppDialog(props: AppDialogProps) {
           ) : null}
 
           {isActionSheet ? (
-            <View style={styles.sheetOptions}>
+            // The gap under a title, dropped when the sheet has none.
+            <View style={[styles.sheetOptions, !title && !message && styles.sheetOptionsBare]}>
               {props.options.map((option, index) => (
                 <Pressable
                   key={option.label}
@@ -278,6 +281,7 @@ const styles = StyleSheet.create({
   cancelButton: { minHeight: layout.minimumTouchTarget, width: '100%', alignItems: 'center', justifyContent: 'center' },
   cancelText: { fontSize: 15, fontWeight: '600' },
   sheetOptions: { width: '100%', marginTop: spacing.lg, gap: 0 },
+  sheetOptionsBare: { marginTop: 0 },
   sheetRow: { minHeight: 50, width: '100%', flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xs },
   sheetRowText: { fontSize: 16, flex: 1 },
   sheetCancel: { marginTop: spacing.sm },

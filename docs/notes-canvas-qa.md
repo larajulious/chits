@@ -32,6 +32,16 @@ the Cards view of `/`. The header's grid icon switches back to the grid, saved a
 - The mini-map draws one Path per color. One native node per note made a 2,000-note
   commit long enough to race the hero's Reveal animation, which reverted to opacity 0.
 - A held tick box stays a tick box: `onInlineTouch` arms it, and `onPick` won't lift.
+- Notes are drawn as stickers: a white edge (`STICKER_EDGE`) and a dashed stitch inside
+  the paper. The edge is a plain View outside the card's frame, so sizes, culling and
+  layout don't count it, and the found ring clears it. Keep it to plain Views: a try with
+  two SVG layers per note made panning lag.
+  The grid uses the same sticker (`StickerStitch`, `STICKER_EDGE` in `card-list-row`), with
+  the edge inside its cell so the gaps stay put, and the same paper as the board (`notePaper`): the board's chosen color, else one pastel
+  per board, and cream for unorganized notes.
+- **Full screen** (top-left button) hides the app header, hero, filters and the Getting
+  Started dock; only that button or Android Back leaves it, as the header's switches go with
+  it. A resize shifts the camera by half the change, so the middle of the view stays put.
 
 ## Validation
 
@@ -71,3 +81,22 @@ React commits for the same six pan strokes (about 320 frames): 20 at 300 notes, 
 log buffer is 256 KB, so stream `logcat -s ReactNativeJS` to a file. Pinch needs the
 emulator console (`event send`, with `ABS_MT_PRESSURE` and `BTN_TOUCH`): `sendevent`
 is denied without root.
+
+## Decorations (scrapbook pieces)
+
+**Decorate** (the sparkle button beside Full screen) opens the tray: stickers, washi tape, doodles,
+labels & stamps, all drawn in code (`canvas-decor-art.ts`) and rendered with SvgXml.
+
+- **Storage.** One `app_settings` row per filter, `notes_canvas_decor.<filter>`, so
+  backups carry it and no migration was needed. `parseDecor` drops anything malformed or
+  from a newer set rather than throwing. A deleted board's row is left behind (harmless).
+- **Drawing.** Pieces sit in the world layer, behind or in front of the notes, and are
+  drawn once; the camera moves them. Not culled: a filter holds at most `MAX_DECOR` (120).
+- **Editing.** While decorating, `DecorEditor` covers the board and takes every touch, so
+  the board's own gesture code is untouched and notes can't be opened or lifted by
+  accident. The selected piece is drawn in screen space from UI-thread values and its
+  board copy hides; React hears only when a touch ends. Panning reaches every piece
+  (`decorBounds` widens the extent); Fit All and the map still frame notes only.
+- **Not verified:** iOS gestures, dark mode, RTL, two-finger rotate on a real device,
+  frame rate with 100+ pieces. `tests/canvas-decor.test.mjs` covers parsing, hit testing
+  and bounds.

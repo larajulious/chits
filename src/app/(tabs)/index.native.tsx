@@ -13,7 +13,7 @@ import { useBottomTabBarHeight } from 'expo-router/tabs';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Keyboard, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { BackHandler, Keyboard, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 
 import { useAppDrawer } from '@/components/navigation/app-drawer';
 import { useAppDialog } from '@/components/dialogs/app-dialog-provider';
@@ -44,7 +44,8 @@ import { createNoteOrderRepository } from '@/db/note-order-repository';
 import { arrangeNotes, moveNote, noteKey, type NoteLayout, type NoteOrderMode } from '@/services/note-order';
 import { removeCardAttachmentFile } from '@/services/card-attachment-storage';
 import { spaceNoteAction } from '@/components/spaces/space-note-action';
-import { PaperDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { PAPER_INK, PAPER_WHITE, PAPER_YELLOW, PaperDesk, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { welcomeSurfaces } from '@/features/onboarding/welcome/welcome-surfaces';
 import { useScreenReader } from '@/hooks/use-screen-reader';
 import { AppTextInput as TextInput } from '@/components/ui/app-text-input';
 
@@ -113,7 +114,8 @@ export default function BoardsScreen() {
   const subtaskRepository = useMemo(() => createCardSubtaskRepository(database), [database]);
   const { openDrawer } = useAppDrawer();
   const { actionSheet, confirm } = useAppDialog();
-  const { tokens: theme, styleTokens, styleColors } = useTheme();
+  const { tokens: theme, styleTokens, styleColors, scheme } = useTheme();
+  const desk = useDesk();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { buttonHidden } = useChatTransition();
@@ -187,6 +189,16 @@ export default function BoardsScreen() {
   const [noteLayout, setNoteLayout] = useState<NoteLayout>('board');
   const noteLayoutRead = useRef(false);
   const showBoard = !listOnly && noteLayout === 'board';
+  // The board over the whole screen: no header, hero or filters. Only the board's own button
+  // (or Back) leaves it, since the header's switches are hidden with it.
+  const [boardFullscreen, setBoardFullscreen] = useState(false);
+  const fullscreenBoard = boardFullscreen && showBoard && viewMode === 'cards';
+  useEffect(() => {
+    if (!fullscreenBoard) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => { setBoardFullscreen(false); return true; });
+    return () => subscription.remove();
+  }, [fullscreenBoard]);
+  const toggleBoardFullscreen = useCallback(() => { void Haptics.selectionAsync(); setBoardFullscreen((value) => !value); }, []);
   const [cardToast, setCardToast] = useState<string | null>(null);
   const [boardFocus, setBoardFocus] = useState<{ key: string; nonce: number } | null>(null);
   // What each message's checklist said when last read, for ticking against that version.
@@ -488,8 +500,9 @@ export default function BoardsScreen() {
     const canvasOption = [{ label: 'Pin to Canvas', icon: 'easel-outline' as const, onPress: () => router.push({ pathname: '/canvas-pin' as const, params: { noteId: item.id, kind: item.kind } }) }];
     const spaceOption = space ? [{ label: space.label, icon: space.icon, onPress: () => void space.run().then(setCardToast, () => setCardToast(tr("chat.thatCouldnTBeSavedPleaseTryAgain"))) }] : [];
     if (item.kind === 'thought') {
+      // No visible title: the note is right there behind the sheet.
       actionSheet({
-        title: item.title,
+        accessibilityTitle: item.title,
         options: [
           { label: tr("index.addToBoard"), icon: 'albums-outline', onPress: () => router.push({ pathname: '/unorganized', params: { messageId: item.id, openBoardPicker: '1' } }) },
           ...(item.hidden ? [] : [{ label: tr('focus.action'), icon: 'timer-outline' as const, onPress: () => router.push({ pathname: '/focus', params: { note: `thought:${item.id}` } }) }]),
@@ -520,7 +533,7 @@ export default function BoardsScreen() {
       return;
     }
     actionSheet({
-      title: item.title,
+      accessibilityTitle: item.title,
       options: [
         ...(item.hidden ? [] : [{ label: tr('focus.action'), icon: 'timer-outline' as const, onPress: () => router.push({ pathname: '/focus', params: { note: `card:${item.id}` } }) }]),
         ...(item.hidden ? [] : [{ label: tr("index.shareNote"), icon: 'images-outline' as const, onPress: () => router.push(shareNoteHref({ cardId: item.id })) }]),
@@ -594,12 +607,14 @@ export default function BoardsScreen() {
     }
   };
 
+  // Full screen, the strip under the status bar takes the board's own paper.
+  const boardPaper = welcomeSurfaces(scheme, desk, { white: PAPER_WHITE, ink: PAPER_INK, yellow: PAPER_YELLOW }).paper;
   const totalCardCount = boards.reduce((sum, board) => sum + board.cardCount, 0) + unorganizedCount;
 
   return (
-    <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: theme.background }}>
+    <Screen edges={['top', 'left', 'right']} style={{ backgroundColor: fullscreenBoard ? boardPaper : theme.background }}>
       <NotesHeaderStage leadingWidth={headerActionsWidth(2)} trailingWidth={headerActionsWidth(viewMode === 'cards' && !listOnly ? 2 : 1)}>
-      <AppHeader
+      {fullscreenBoard ? null : <AppHeader
         showTitle={false}
         title={activeHeaderSection?.title ?? appTitle}
         leadingWidth={headerActionsWidth(2)}
@@ -635,7 +650,7 @@ export default function BoardsScreen() {
             </IconButton>
           </View>
         )}
-      />
+      />}
 
       <PaperDesk faint>
 
@@ -658,7 +673,7 @@ export default function BoardsScreen() {
               onSectionChange={updateHeaderSection}
               bottomInset={tabBarHeight}
               footer={<GettingStartedCard />}
-              board={!showBoard ? null : { notes: boardNotes, shownKeys: shownNoteKeys, focus: boardFocus, onFocusDone: finishBoardFocus, onToast: setCardToast, onToggleChecklist: toggleChecklistItem }}
+              board={!showBoard ? null : { notes: boardNotes, shownKeys: shownNoteKeys, focus: boardFocus, onFocusDone: finishBoardFocus, onToast: setCardToast, onToggleChecklist: toggleChecklistItem, fullscreen: fullscreenBoard, onToggleFullscreen: toggleBoardFullscreen }}
             />
         ) : (
       <BoardsListing

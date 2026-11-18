@@ -49,6 +49,28 @@ export function CanvasCameraControls({ paper, miniMap, onZoomIn, onZoomOut, onFi
   </View>;
 }
 
+/** A board button in the same paper as the rest of the board's controls: icon and word, or the icon alone. */
+export function BoardPill({ icon, label, onPress, paper, tone = 'plain', iconOnly = false, selected }: { icon: IconName; label: string; onPress: () => void; paper: string; tone?: 'plain' | 'primary' | 'danger'; iconOnly?: boolean; selected?: boolean }) {
+  const desk = useDesk();
+  const { styleTokens } = useTheme();
+  const fonts = useWelcomeFonts();
+  const primary = tone === 'primary';
+  const ink = primary ? paper : tone === 'danger' ? desk.danger : desk.ink;
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={selected === undefined ? undefined : { selected }} hitSlop={4} onPress={onPress}
+    style={({ pressed }) => [styles.pill, iconOnly && styles.pillIcon, { backgroundColor: primary ? desk.ink : paper, borderRadius: styleTokens.button.radius, boxShadow: `0px 3px 10px ${desk.shadow}` }, pressed && styles.pressed]}>
+    <Icon name={icon} size={17} color={ink} />
+    {iconOnly ? null : <AppText family={fonts.text} weight="700" numberOfLines={1} style={[styles.pillText, { color: ink }]}>{label}</AppText>}
+  </Pressable>;
+}
+
+/** Opens the board over the whole screen, then brings it back. */
+export function CanvasFullscreenButton({ fullscreen, paper, onPress }: { fullscreen: boolean; paper: string; onPress: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
+  return <BoardPill icon={fullscreen ? 'contract-outline' : 'expand-outline'} label={tr(fullscreen ? 'notesCanvas.exitFullScreen' : 'notesCanvas.fullScreen')} paper={paper} onPress={onPress} />;
+}
+
 /** The one instruction the board gives, once. */
 export function CanvasHint({ bottom, paper, onDismiss }: { bottom: number; paper: string; onDismiss: () => void }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
@@ -74,6 +96,9 @@ const styles = StyleSheet.create({
   button: { width: BUTTON + 2, height: BUTTON + 2, alignItems: 'center', justifyContent: 'center' },
   pressed: { opacity: 0.55 },
   rule: { height: StyleSheet.hairlineWidth, marginHorizontal: 8 },
+  pill: { height: 36, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 },
+  pillIcon: { width: 40, paddingHorizontal: 0, justifyContent: 'center' },
+  pillText: { flexShrink: 1, fontSize: 13, lineHeight: 17 },
   hintAnchor: { position: 'absolute', left: 12, right: 12, alignItems: 'flex-start' },
   hint: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: BUTTON, paddingHorizontal: 12, paddingVertical: 8 },
   hintText: { flexShrink: 1, fontSize: 14, lineHeight: 19 },

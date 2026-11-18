@@ -11,7 +11,8 @@ import { AttachmentContent } from '@/components/chat/message-row';
 import { AppText } from '@/components/ui/app-text';
 import { useTheme } from '@/components/theme-provider';
 import { Icon } from '@/components/ui/icon';
-import { PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { PAPERS, PAPER_INK, PAPER_INK_MUTED, PAPER_WHITE, PAPER_YELLOW, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { stableUnit } from '@/services/note-canvas';
 import { mix, noteColors } from '@/constants/style-tokens';
 import { useWelcomeFonts } from '@/features/onboarding/welcome/welcome-fonts';
 import { formatReminder, dateFormat } from '@/services/reminder-time';
@@ -124,10 +125,39 @@ export function paperFor(accent: string | null, hidden: boolean) {
   const colors = noteColors(accent);
   return { paper: colors.cardTint, muted: colors.cardInkMuted };
 }
+/** Unorganized notes share one cream paper, so they read as one group and the white sticker edge still shows. */
+const UNORGANIZED_PAPER = '#F3EAD8';
+const BOARD_PAPERS = PAPERS.filter((paper) => paper !== UNORGANIZED_PAPER);
+
+/**
+ * A note's paper on the grid and the board, set by where it lives: its board's
+ * color where the user chose one, otherwise one pastel per board, and cream
+ * for unorganized notes.
+ */
+export function notePaper(item: CardListItem) {
+  if (item.hidden || item.boardAccent) return paperFor(item.hidden ? null : item.boardAccent, item.hidden);
+  if (!item.boardId) return { paper: UNORGANIZED_PAPER, muted: PAPER_INK_MUTED };
+  return { paper: BOARD_PAPERS[Math.floor(stableUnit(item.boardId) * BOARD_PAPERS.length)], muted: PAPER_INK_MUTED };
+}
 const KRAFT = '#E6DCC8';
 const PICTURE_MARGIN = 8;
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Read at render on purpose: the slip's color only needs to be right when the list draws. */
+const msUntil = (at: number) => at - Date.now();
 const PRESS_SPRING = { damping: 18, stiffness: 320, mass: 0.6 };
+
+/** How wide a note's white sticker edge is, on the grid and the board alike. */
+export const STICKER_EDGE = 5;
+/** Where the dashed stitch runs, in from the paper's edge: outside every bit of content. */
+const STITCH_INSET = 4;
+
+/** The sticker's dashed stitch, in a deeper cut of the note's own paper. A plain View, so long lists and the board stay smooth. */
+export function StickerStitch({ paper, radius }: { paper: string; radius: number }) {
+  return <View pointerEvents="none" style={[stitchStyles.stitch, { borderColor: mix(paper, PAPER_INK, 0.28), borderRadius: Math.max(0, radius - STITCH_INSET) }]} />;
+}
+const stitchStyles = StyleSheet.create({
+  stitch: { position: 'absolute', top: STITCH_INSET, left: STITCH_INSET, right: STITCH_INSET, bottom: STITCH_INSET, borderWidth: 1.5, borderStyle: 'dashed' },
+});
 
 // Chits rounded paper, board pastels and shared workspace type, with an
 // optional photo and bounded preview. Pin state stays in the metadata. Tapping opens the note; pressing springs
@@ -147,7 +177,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
   const press = useSharedValue(1);
   const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: press.get() }] }));
   const accent = item.hidden ? null : item.boardAccent;
-  const { paper, muted } = paperFor(accent, item.hidden);
+  const { paper, muted } = notePaper(item);
   const ink = PAPER_INK;
   const media = item.hidden ? null : getCardPreviewMedia(item);
   const picture = media && media.type !== 'audio' ? media : null;
@@ -167,7 +197,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
   const reminderLabel = item.reminderAt ? formatReminder(new Date(item.reminderAt), new Date()) : null;
   // A reminder due within a day is a yellow slip; one that has passed (until
   // the list catches up) a red one.
-  const reminderDue = item.reminderAt ? item.reminderAt - Date.now() : null;
+  const reminderDue = item.reminderAt ? msUntil(item.reminderAt) : null;
   const reminder = reminderDue === null ? null
     : reminderDue < 0 ? { fill: '#F6C9C2', ink: '#8E2A22', icon: 'notifications' as const }
       : reminderDue < DAY_MS ? { fill: PAPER_YELLOW, ink, icon: 'notifications' as const }
@@ -175,7 +205,8 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
   const accessibleLabel = `${item.hidden ? tr("entrydetailsheet.hiddenNote") : `Note. ${accessibleTitle(item)}`}. ${checklist ? tr("messages.ofChecklistItemsCompleted", { value1: checklist.completed, value2: checklist.total }) : ''}${mediaPhrase ? `${mediaPhrase} ` : ''}${overflowPhrase ? `${overflowPhrase} ` : ''}${item.pinned ? 'Pinned. ' : ''}${!item.hidden && item.subtaskCount ? tr("messages.ofSubtasksCompleted2", { value1: item.completedSubtaskCount, value2: item.subtaskCount }) : ''}${reminderLabel ? `Reminder ${reminderLabel}. ` : ''}${item.boardName ?? tr("index.unorganized")}${item.columnName ? `, ${item.columnName}` : ''}.`;
 
   return (
-    <Animated.View style={pressStyle}>
+    // The white sticker edge sits inside the grid cell, so the gaps between notes stay as they were.
+    <Animated.View style={[pressStyle, styles.edge, { borderRadius: radius + STICKER_EDGE, boxShadow: `0px 3px 8px ${desk.shadow}` }]}>
     <Pressable
       accessible={!(audio || picture?.type === 'video')}
       accessibilityRole="button"
@@ -189,8 +220,9 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
       accessibilityActions={accessibilityActions}
       onAccessibilityAction={onAccessibilityAction}
       delayLongPress={350}
-      style={({ pressed }) => [styles.card, { backgroundColor: paper, borderRadius: radius, boxShadow: `0px ${pressed ? 1 : 3}px ${pressed ? 3 : 8}px ${desk.shadow}` }, reduceMotion && pressed && styles.reducedPressed]}
+      style={({ pressed }) => [styles.card, { backgroundColor: paper, borderRadius: radius }, reduceMotion && pressed && styles.reducedPressed]}
     >
+      <StickerStitch paper={paper} radius={radius} />
       {picture ? (
         <View pointerEvents={picture.type === 'video' ? 'auto' : 'none'} style={styles.pictureInset}>
           <View style={[styles.picture, { backgroundColor: wash, borderColor: rule, borderRadius: Math.max(2, radius - PICTURE_MARGIN) }]}>
@@ -282,6 +314,7 @@ export const CardListRow = memo(function CardListRow({ item, onPress, onMore, on
 });
 
 const styles = StyleSheet.create({
+  edge: { padding: STICKER_EDGE, backgroundColor: '#FFFFFF' },
   card: { minHeight: 104 },
   reducedPressed: { opacity: 0.82 },
   noteContent: { minWidth: 0, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 2 },

@@ -138,12 +138,14 @@ test('Default\'s header is the desk Chits sits on, and a custom photo still repl
   assert.match(bar, /deskDots: \{ position: 'absolute', left: 0, right: 0, bottom: 0, height: DOT_SPACING \* \d+, transform: \[\{ scaleY: -1 \}\] \}/);
 });
 
-test('note cards are the same rounded, level paper as the Boards list', () => {
+test('grid notes are stickers: level rounded paper in a white edge, with the dashed stitch the board uses', () => {
   const card = read('src/components/boards/card-list-row.native.tsx');
-  assert.match(card, /radius = styleTokens\.button\.radius/);
+  assert.match(card, /radius = styleTokens\.noteCard\.radius\.topLeft/);
   assert.match(card, /backgroundColor: paper, borderRadius: radius/);
   assert.match(card, /transform: \[\{ scale: press\.get\(\) \}\]/);
-  assert.doesNotMatch(card, /borderStyle: 'dashed'/);
+  assert.match(card, /edge: \{ padding: STICKER_EDGE, backgroundColor: '#FFFFFF' \}/);
+  assert.match(card, /<StickerStitch paper=\{paper\} radius=\{radius\} \/>/);
+  assert.match(read('src/components/notes/canvas-note-card.native.tsx'), /<StickerStitch paper=\{paper\} radius=\{radius\} \/>/);
 });
 
 test('Revisit\'s overview is Chits\' page, and its settings use the shared rows', () => {

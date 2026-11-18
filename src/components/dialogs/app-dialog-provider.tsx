@@ -31,6 +31,8 @@ export type AlertOptions = {
 
 export type ActionSheetOptions = {
   title?: string;
+  /** Announced by screen readers in place of a visible title. */
+  accessibilityTitle?: string;
   message?: string;
   options: ActionSheetOption[];
   cancelText?: string;
@@ -160,6 +162,7 @@ export function AppDialogProvider({ children }: PropsWithChildren) {
         onDismissComplete={finishDismiss}
         type="default"
         title={options.title}
+        accessibilityTitle={options.accessibilityTitle}
         message={options.message}
         options={options.options.map((option) => ({ ...option, onPress: () => dismiss(option.onPress) }))}
         cancelText={options.cancelText ?? tr("chat.cancel")}

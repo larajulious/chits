@@ -3,6 +3,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { I18nManager, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { runOnJS, useAnimatedReaction, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withSequence, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { DOT_SPACING, DeskDots } from '@/components/desk/desk-surface';
@@ -17,8 +18,12 @@ import { boundsOf, canvasCardFrame, canvasRangeKey, canvasTilt, CANVAS_HALF, cla
 import { placeConnectedNotes } from '@/services/canvas-connections';
 import { createCanvasReader } from '@/services/canvas-read';
 import { noteKey } from '@/services/note-order';
-import { CanvasCameraControls, CanvasHint } from './canvas-camera-controls';
-import { CanvasNoteCard, canvasCardInput, canvasPaper, type CanvasCardHandlers, type CanvasNote } from './canvas-note-card.native';
+import { BoardPill, CanvasCameraControls, CanvasFullscreenButton, CanvasHint } from './canvas-camera-controls';
+import { DECOR_ART } from './canvas-decor-art';
+import { DecorEditor, DecorLayer, useCanvasDecor } from './canvas-decor.native';
+import { DecorToolbar, DecorTray } from './canvas-decor-tools.native';
+import { decorBounds } from '@/services/canvas-decor';
+import { CanvasNoteCard, STICKER_EDGE, canvasCardInput, canvasPaper, type CanvasCardHandlers, type CanvasNote } from './canvas-note-card.native';
 import { NotesMiniMap, type MiniMapNote } from './notes-mini-map';
 import { useCanvasCamera, type CanvasCameraApi } from './use-canvas-camera';
 import { DRAG_ACTIVE, DRAG_NONE, useCanvasGestures, type CanvasDrag } from './use-canvas-gestures';
@@ -44,6 +49,9 @@ type Props = Pick<CanvasCardHandlers, 'onOpen' | 'onMore' | 'onToggleSubtask' | 
   paper: string;
   footer?: ReactNode;
   emptyState?: ReactNode;
+  /** Whether the board has the whole screen; with `onToggleFullscreen`, it shows the button that switches. */
+  fullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 };
 
 const LIFT_SPRING = { damping: 22, stiffness: 340, mass: 0.6 };
@@ -115,6 +123,9 @@ function CanvasDragGhost({ note, lite, camera, drag, handlers }: { note: CanvasN
   </Animated.View>;
 }
 
+/** Clear of the sticker's white edge. */
+const RING_GAP = STICKER_EDGE + 6;
+
 /** A ring around a note just found, drawn over it so the note itself never re-renders. */
 function FoundRing({ rect, tilt, ink }: { rect: CanvasRect; tilt: number; ink: string }) {
   const reduced = useReducedMotion();
@@ -125,7 +136,7 @@ function FoundRing({ rect, tilt, ink }: { rect: CanvasRect; tilt: number; ink: s
     glow.set(withSequence(withTiming(1, { duration: 220 }), withTiming(0.45, { duration: 360 }), withTiming(1, { duration: 300 }), withDelay(500, withTiming(0, { duration: 420 }))));
   }, [glow, reduced]);
   const style = useAnimatedStyle(() => ({ opacity: glow.get() }));
-  return <Animated.View pointerEvents="none" style={[styles.ring, { [PHYSICAL_LEFT]: rect.x + CANVAS_HALF - 6, top: rect.y + CANVAS_HALF - 6, width: rect.width + 12, height: rect.height + 12, borderColor: ink, borderRadius: styleTokens.button.radius + 6, transform: [{ rotate: `${tilt}deg` }] }, style]} />;
+  return <Animated.View pointerEvents="none" style={[styles.ring, { [PHYSICAL_LEFT]: rect.x + CANVAS_HALF - RING_GAP, top: rect.y + CANVAS_HALF - RING_GAP, width: rect.width + RING_GAP * 2, height: rect.height + RING_GAP * 2, borderColor: ink, borderRadius: styleTokens.button.radius + RING_GAP, transform: [{ rotate: `${tilt}deg` }] }, style]} />;
 }
 
 /**
@@ -135,7 +146,7 @@ function FoundRing({ rect, tilt, ink }: { rect: CanvasRect; tilt: number; ink: s
  * and then mounts just the notes in those cells; notes already there are memoized
  * and stay put, so a board costs about the same at 50 notes or 5,000.
  */
-export function NotesCanvas({ notes, shownKeys, filterKey, selectedNoteKey, onSelectNote, focus, onFocusDone, onToast, onOpen, onMore, onToggleSubtask, onToggleChecklist, bottomInset, activity, paper, footer, emptyState }: Props) {
+export function NotesCanvas({ notes, shownKeys, filterKey, selectedNoteKey, onSelectNote, focus, onFocusDone, onToast, onOpen, onMore, onToggleSubtask, onToggleChecklist, bottomInset, activity, paper, footer, emptyState, fullscreen = false, onToggleFullscreen }: Props) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
@@ -166,6 +177,9 @@ export function NotesCanvas({ notes, shownKeys, filterKey, selectedNoteKey, onSe
   const viewport = useRef<View | null>(null);
   const viewportOrigin = useRef({ x: 0, y: 0 });
   const bottomClearance = useSharedValue(bottomInset);
+  const insets = useSafeAreaInsets();
+  const decor = useCanvasDecor({ database, filterKey, onToast });
+  const [trayOpen, setTrayOpen] = useState(false);
 
   // ── Where notes are ───────────────────────────────────────────────────────
 
@@ -185,7 +199,16 @@ export function NotesCanvas({ notes, shownKeys, filterKey, selectedNoteKey, onSe
   const view = useMemo(() => size ? { width: size.width, height: Math.max(120, size.height - bottomInset - dockHeight) } : null, [bottomInset, dockHeight, size]);
   useEffect(() => { bottomClearance.set(bottomInset + dockHeight); }, [bottomClearance, bottomInset, dockHeight]);
   useEffect(() => { if (view) camera.minZoom.set(floorZoom(bounds, view)); }, [bounds, camera, view]);
-  useEffect(() => { if (bounds) camera.extent.set([bounds.x, bounds.y, bounds.x + bounds.width, bounds.y + bounds.height]); }, [bounds, camera]);
+  // Panning reaches the decorations too, wherever they were put.
+  const decorReach = useMemo(() => decorBounds(decor.pieces, (key) => DECOR_ART.get(key)), [decor.pieces]);
+  useEffect(() => {
+    if (!bounds) return;
+    const left = Math.min(bounds.x, decorReach?.x ?? Infinity);
+    const top = Math.min(bounds.y, decorReach?.y ?? Infinity);
+    const right = Math.max(bounds.x + bounds.width, decorReach ? decorReach.x + decorReach.width : -Infinity);
+    const bottom = Math.max(bounds.y + bounds.height, decorReach ? decorReach.y + decorReach.height : -Infinity);
+    camera.extent.set([left, top, right, bottom]);
+  }, [bounds, camera, decorReach]);
 
   // ── Remembering the view ──────────────────────────────────────────────────
 
@@ -439,12 +462,20 @@ export function NotesCanvas({ notes, shownKeys, filterKey, selectedNoteKey, onSe
     const zoom = camera.zoom.get();
     return { transform: [{ translateX: camera.x.get() - CANVAS_HALF * zoom }, { translateY: camera.y.get() - CANVAS_HALF * zoom }, { scale: zoom }] };
   });
+  const laidOut = useRef<{ width: number; height: number } | null>(null);
   const lite = range?.lite ?? false;
   const overlayBottom = bottomInset + dockHeight + 10;
   const hasNotes = shown.length > 0;
 
   return <View ref={viewport} style={[styles.flex, { backgroundColor: paper }]} onLayout={({ nativeEvent: { layout } }) => {
     viewport.current?.measureInWindow((x, y) => { viewportOrigin.current = { x, y }; });
+    // Going full screen (or back) resizes the board: shift the camera so the same spot stays in the middle.
+    const before = laidOut.current;
+    if (before && (before.width !== layout.width || before.height !== layout.height)) {
+      camera.x.set(camera.x.get() + (layout.width - before.width) / 2);
+      camera.y.set(camera.y.get() + (layout.height - before.height) / 2);
+    }
+    laidOut.current = { width: layout.width, height: layout.height };
     camera.width.set(layout.width);
     camera.height.set(layout.height);
     setSize((previous) => previous?.width === layout.width && previous.height === layout.height ? previous : { width: layout.width, height: layout.height });
@@ -461,9 +492,11 @@ export function NotesCanvas({ notes, shownKeys, filterKey, selectedNoteKey, onSe
         }}>
         {size ? <CanvasDots camera={camera} width={size.width} height={size.height} /> : null}
         <Animated.View style={[styles.world, { [PHYSICAL_LEFT]: 0 }, worldStyle]}>
+          <DecorLayer pieces={decor.pieces} behind hiddenId={decor.selected?.id ?? null} />
           <CanvasConnectionLines edges={connections.edges} range={range?.rect ?? null} ink={desk.inkMuted} camera={camera} drag={dragValues} dragKey={drag?.key ?? null} motion={connections.motion} progress={connections.progress} />
           {mounted.map((note) => <CanvasSlot key={note.key} note={note} lite={lite} away={drag?.key === note.key} handlers={handlers} highlighted={connections.highlight.has(note.key)} dim={connections.highlight.size > 0 && !connections.highlight.has(note.key)} motion={connections.motion} progress={connections.progress}
             phase={transition?.entering.has(note.key) ? 'entering' : transition?.leaving.has(note.key) ? 'leaving' : 'steady'} />)}
+          <DecorLayer pieces={decor.pieces} behind={false} hiddenId={decor.selected?.id ?? null} />
           {found ? <FoundRing rect={found} tilt={found.tilt} ink={desk.ink} /> : null}
           {drag ? <CanvasDragGhost note={drag} lite={lite} camera={camera} drag={dragValues} handlers={handlers} /> : null}
         </Animated.View>
@@ -472,12 +505,31 @@ export function NotesCanvas({ notes, shownKeys, filterKey, selectedNoteKey, onSe
     {connections.busy ? <View style={StyleSheet.absoluteFill} /> : null}
     {ready && !hasNotes ? <View pointerEvents="none" style={[styles.empty, { paddingBottom: bottomInset + dockHeight }]}>{emptyState}</View> : null}
     {loadFailed ? <View pointerEvents="box-none" style={styles.loadError}><Pressable accessibilityRole="button" onPress={() => { setLoadFailed(false); setLoadAttempt((value) => value + 1); }} style={[styles.retry, { backgroundColor: paper }]}><AppText style={{ color: desk.ink }}>{tr('id.tryAgain')}</AppText></Pressable></View> : null}
-    {hasNotes && miniMap && bounds ? <NotesMiniMap notes={mapNotes} bounds={bounds} camera={camera} paper={paper} onJump={jumpTo} onFit={fit} /> : null}
-    {hasNotes ? <CanvasConnectionTools connections={connections} bottom={overlayBottom} paper={paper} /> : null}
-    {hasNotes && hint && !connections.selected && !connections.source ? <CanvasHint bottom={overlayBottom} paper={paper} onDismiss={dismissHint} /> : null}
+    {decor.editing ? <DecorEditor camera={camera} pieces={decor.pieces} selected={decor.selected} onSelect={decor.select} onCommit={decor.commit} onSettled={remember} /> : null}
+    {hasNotes && miniMap && bounds && !decor.editing ? <NotesMiniMap notes={mapNotes} bounds={bounds} camera={camera} paper={paper} onJump={jumpTo} onFit={fit} /> : null}
+    {hasNotes && !decor.editing ? <CanvasConnectionTools connections={connections} bottom={overlayBottom} paper={paper} /> : null}
+    {hasNotes && !decor.editing && hint && !connections.selected && !connections.source ? <CanvasHint bottom={overlayBottom} paper={paper} onDismiss={dismissHint} /> : null}
     {footer ? <View onLayout={({ nativeEvent }) => setDockHeight(Math.ceil(nativeEvent.layout.height))} style={[styles.dock, { bottom: bottomInset, backgroundColor: paper }]}>{footer}</View> : null}
+    {/* The board's own buttons top left, or the decorating tools while decorating. */}
+    {hasNotes && decor.editing ? <DecorToolbar paper={paper} selected={decor.selected} onAdd={() => setTrayOpen(true)} onDone={decor.stopEditing}
+      onText={(text) => { if (decor.selected) decor.update(decor.selected.id, { text }); }}
+      onInk={(ink) => { if (decor.selected) decor.update(decor.selected.id, { ink }); }}
+      onToggleBehind={() => { if (decor.selected) decor.update(decor.selected.id, { behind: !decor.selected.behind }); }}
+      onDuplicate={() => { if (decor.selected) decor.duplicate(decor.selected.id, 18 / camera.read().zoom); }}
+      onRemove={() => { if (decor.selected) decor.remove(decor.selected.id); }} /> : null}
+    {hasNotes && !decor.editing ? <View pointerEvents="box-none" style={[styles.topButtons, { [PHYSICAL_LEFT]: 12 }]}>
+      {onToggleFullscreen ? <CanvasFullscreenButton fullscreen={fullscreen} paper={paper} onPress={onToggleFullscreen} /> : null}
+      <BoardPill icon="sparkles-outline" label={tr('notesDecor.decorate')} paper={paper} iconOnly onPress={() => { decor.startEditing(); if (decor.pieces.length === 0) setTrayOpen(true); }} />
+    </View> : null}
+    <DecorTray visible={trayOpen} paper={paper} bottomInset={insets.bottom} onClose={() => setTrayOpen(false)} onPick={(key) => {
+      setTrayOpen(false);
+      if (!view) return;
+      // Into the middle of what's on screen, a little above center so the tray's hand isn't over it.
+      const { x, y, zoom } = camera.read();
+      decor.add(key, { x: (view.width / 2 - x) / zoom, y: (view.height * 0.42 - y) / zoom }, zoom);
+    }} />
     {/* Last, so it opens over the dock rather than under it. */}
-    {hasNotes ? <CanvasCameraControls paper={paper} miniMap={miniMap} onZoomIn={() => zoomBy(ZOOM_STEP)} onZoomOut={() => zoomBy(1 / ZOOM_STEP)} onFit={fit} onReset={reset} onToggleMiniMap={toggleMiniMap} /> : null}
+    {hasNotes && !decor.editing ? <CanvasCameraControls paper={paper} miniMap={miniMap} onZoomIn={() => zoomBy(ZOOM_STEP)} onZoomOut={() => zoomBy(1 / ZOOM_STEP)} onFit={fit} onReset={reset} onToggleMiniMap={toggleMiniMap} /> : null}
   </View>;
 }
 
@@ -491,6 +543,8 @@ const styles = StyleSheet.create({
   ghost: { position: 'absolute', top: 0, zIndex: 10 },
   deepShadow: { borderRadius: 12 },
   ring: { position: 'absolute', borderWidth: 3 },
+  // One row, Full screen then the icon-only Decorate, narrow enough to clear the map.
+  topButtons: { position: 'absolute', top: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
   empty: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   dock: { position: 'absolute', left: 0, right: 0 },
   loadError: { position: 'absolute', top: 16, left: 16, right: 16, alignItems: 'center' },

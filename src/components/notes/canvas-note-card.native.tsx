@@ -4,9 +4,9 @@ import { memo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
 
-import { fileKindLabel, formatCardDate, getCardPreviewMedia, noteContent, paperFor } from '@/components/boards/card-list-row.native';
+import { STICKER_EDGE, StickerStitch, fileKindLabel, formatCardDate, getCardPreviewMedia, noteContent, notePaper } from '@/components/boards/card-list-row.native';
 import { NoteMediaPreview } from './note-media-preview.native';
-import { PAPERS, PAPER_INK, PAPER_INK_MUTED, PAPER_YELLOW, PushPin, useDesk, useHandwriting } from '@/components/desk/paper-desk';
+import { PAPER_INK, PAPER_YELLOW, PushPin, useDesk, useHandwriting } from '@/components/desk/paper-desk';
 import { useTheme } from '@/components/theme-provider';
 import { AppText } from '@/components/ui/app-text';
 import { Icon } from '@/components/ui/icon';
@@ -16,8 +16,7 @@ import { useWelcomeFonts } from '@/features/onboarding/welcome/welcome-fonts';
 import { useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
 import { resolveAttachmentUri } from '@/services/attachment-storage';
-import { CANVAS_MAX_FONT_SCALE, stableUnit, type CanvasCardFrame, type CanvasCardInput, type CanvasRect } from '@/services/note-canvas';
-import { noteKey } from '@/services/note-order';
+import { CANVAS_MAX_FONT_SCALE, type CanvasCardFrame, type CanvasCardInput, type CanvasRect } from '@/services/note-canvas';
 import type { NoteChecklistEntry } from '@/services/note-content';
 import { formatReminder } from '@/services/reminder-time';
 
@@ -35,6 +34,8 @@ export type CanvasCardHandlers = {
   onInlineTouch: (action: () => void) => void;
   onInlineTap: (action: () => void) => void;
 };
+
+export { STICKER_EDGE };
 
 const MAX_ROWS = 4;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -75,10 +76,7 @@ export function canvasCardInput(item: CardListItem): CanvasCardInput {
 }
 
 /** A board's color where the user chose one; other notes take a stable pastel of their own. */
-export function canvasPaper(item: CardListItem) {
-  if (item.hidden || item.boardAccent) return paperFor(item.hidden ? null : item.boardAccent, item.hidden);
-  return { paper: PAPERS[Math.floor(stableUnit(noteKey(item)) * PAPERS.length)], muted: PAPER_INK_MUTED };
-}
+export const canvasPaper = notePaper;
 
 /** Yellow within a day and red once passed, the same slips the list uses. */
 function reminderChip(at: number, wash: string) {
@@ -125,6 +123,8 @@ function FullCard({ note, handlers }: { note: CanvasNote; handlers: CanvasCardHa
   const words = content.kind === 'hidden' ? tr('entrydetailsheet.hiddenNote') : content.kind === 'file' ? content.name : [content.title, content.body].filter(Boolean).join('. ') || item.title;
 
   return <Animated.View style={pressStyle}>
+    {/* The sticker's white edge, outside the card's frame so sizes and layout don't change. */}
+    <View pointerEvents="none" style={[styles.edge, { borderRadius: radius + STICKER_EDGE, boxShadow: `0px 4px 10px ${desk.shadow}` }]} />
     <Pressable
       accessible={!(audio || picture?.type === 'video')}
       accessibilityRole="button"
@@ -136,11 +136,10 @@ function FullCard({ note, handlers }: { note: CanvasNote; handlers: CanvasCardHa
       // Set so letting go after a hold never counts as a tap; the hold itself belongs to the board.
       onLongPress={noop}
       delayLongPress={300}
-      style={{ width: note.width, height: note.height, borderRadius: radius, backgroundColor: paper, boxShadow: `0px 4px 10px ${desk.shadow}` }}
+      style={{ width: note.width, height: note.height, borderRadius: radius, backgroundColor: paper }}
     >
       <View style={[styles.fill, styles.clip, { borderRadius: radius }]}>
-        {/* The band of a real sticky's gum strip: all the paper texture a card needs. */}
-        <View pointerEvents="none" style={styles.gum} />
+        <StickerStitch paper={paper} radius={radius} />
         {picture ? <View pointerEvents={picture.type === 'video' ? 'auto' : 'none'} style={[styles.picture, { height: frame.pictureHeight, backgroundColor: wash, borderRadius: Math.max(2, radius - 8) }]}>
           {picture.type === 'video' ? <NoteMediaPreview attachment={picture} caption={item.title} color={paper} onEdit={() => handlers.onOpen(item)} onInlineTouch={handlers.onInlineTouch} onInlineTap={handlers.onInlineTap} /> : uri ? <CardPhoto uri={uri} wash={wash} muted={muted} /> : <View style={[styles.fill, styles.center]}><Icon name="image-outline" size={22} color={muted} /></View>}
           {overflow > 0 ? <View pointerEvents="none" style={[styles.overflow, picture.type === 'video' && { top: 6, bottom: undefined }]}><AppText weight="700" {...scaling} style={styles.overflowText}>+{overflow}</AppText></View> : null}
@@ -207,11 +206,11 @@ function FullCard({ note, handlers }: { note: CanvasNote; handlers: CanvasCardHa
   </Animated.View>;
 }
 
-/** Too small to read: just the paper, which is all a zoomed-out board needs. */
+/** Too small to read: just the paper in its white edge, which is all a zoomed-out board needs. */
 function LiteCard({ note, handlers }: { note: CanvasNote; handlers: CanvasCardHandlers }) {
   const { styleTokens } = useTheme();
   return <Pressable accessibilityRole="button" accessibilityLabel={note.item.hidden ? tr('entrydetailsheet.hiddenNote') : note.item.title} onPress={() => handlers.onOpen(note.item)} onLongPress={noop} delayLongPress={300}
-    style={{ width: note.width, height: note.height, borderRadius: styleTokens.button.radius, backgroundColor: canvasPaper(note.item).paper }} />;
+    style={{ width: note.width, height: note.height, borderRadius: styleTokens.button.radius, backgroundColor: canvasPaper(note.item).paper, boxShadow: `0px 0px 0px ${STICKER_EDGE}px #FFFFFF` }} />;
 }
 
 export const CanvasNoteCard = memo(function CanvasNoteCard({ note, lite, handlers }: { note: CanvasNote; lite: boolean; handlers: CanvasCardHandlers }) {
@@ -224,7 +223,7 @@ const styles = StyleSheet.create({
   fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   center: { alignItems: 'center', justifyContent: 'center' },
   clip: { overflow: 'hidden' },
-  gum: { position: 'absolute', top: 0, left: 0, right: 0, height: 14, backgroundColor: 'rgba(255,255,255,0.2)' },
+  edge: { position: 'absolute', top: -STICKER_EDGE, left: -STICKER_EDGE, right: -STICKER_EDGE, bottom: -STICKER_EDGE, backgroundColor: '#FFFFFF' },
   picture: { marginTop: 8, marginHorizontal: 8, overflow: 'hidden' },
   overflow: { position: 'absolute', right: 6, bottom: 6, minWidth: 24, height: 20, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.55)' },
   overflowText: { color: '#FFFFFF', fontSize: 11 },
