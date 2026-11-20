@@ -1,0 +1,23 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+		A1000001 /* StoreCaptureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001; };
+		A2000001 /* StoreCaptureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreCaptureTests.swift; sourceTree = "<group>"; };
+		A2000002 /* StoreCaptureTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StoreCaptureTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A3000001 = {isa = PBXGroup; children = (A3000002, A3000003); sourceTree = "<group>"; };
+		A3000002 = {isa = PBXGroup; children = (A2000001); path = .; sourceTree = "<group>"; };
+		A3000003 /* Products */ = {isa = PBXGroup; children = (A2000002); name = Products; sourceTree = "<group>"; };
+		A4000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A1000001); runOnlyForDeploymentPostprocessing = 0; };
+		A4000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A5000001 /* DuoQATests */ = {isa = PBXNativeTarget; buildConfigurationList = A6000002; buildPhases = (A4000001, A4000002); buildRules = (); dependencies = (); name = StoreCaptureTests; productName = StoreCaptureTests; productReference = A2000002; productType = "com.apple.product-type.bundle.ui-testing"; };
+		A7000001 /* Project object */ = {isa = PBXProject; attributes = {LastUpgradeCheck = 2700; TargetAttributes = {A5000001 = {CreatedOnToolsVersion = 27.2; }; }; }; buildConfigurationList = A6000001; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = A3000001; productRefGroup = A3000003; projectDirPath = ""; projectRoot = ""; targets = (A5000001); };
+		A8000001 /* Debug project */ = {isa = XCBuildConfiguration; buildSettings = {SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 26.0; SWIFT_VERSION = 5.0; CODE_SIGNING_ALLOWED = NO; CODE_SIGN_IDENTITY = ""; ONLY_ACTIVE_ARCH = YES; }; name = Debug; };
+		A8000002 /* Debug target */ = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.chits.storecapture.tests; PRODUCT_NAME = "$(TARGET_NAME)"; TARGETED_DEVICE_FAMILY = 1; USES_XCTRUNNER = YES; CODE_SIGNING_ALLOWED = NO; }; name = Debug; };
+		A6000001 = {isa = XCConfigurationList; buildConfigurations = (A8000001); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+		A6000002 = {isa = XCConfigurationList; buildConfigurations = (A8000002); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+	};
+	rootObject = A7000001;
+}

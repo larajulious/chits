@@ -80,5 +80,10 @@
     "check:localization": "node scripts/check-localization.mjs",
     "test:localization": "node --import ./tests/helpers/localization-loader.mjs --test tests/localization.test.mjs"
   },
+  "reanimated": {
+    "staticFeatureFlags": {
+      "ANDROID_SYNCHRONOUSLY_UPDATE_UI_PROPS": true
+    }
+  },
   "private": true
 }

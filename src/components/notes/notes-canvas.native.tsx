@@ -14,11 +14,11 @@ import { createNoteCanvasRepository } from '@/db/note-canvas-repository';
 import type { CardListItem } from '@/db/types';
 import { useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
-import { boundsOf, canvasCardFrame, canvasRangeKey, canvasTilt, CANVAS_HALF, clampToWorld, clampZoom, createCanvasIndex, fitCamera, floorZoom, focusCamera, frameCamera, homeCamera, nextTapZoom, noteAtPoint, openingCamera, parseCanvasRange, queryCanvasIndex, zoomAround, type CanvasCamera, type CanvasPosition, type CanvasPrefs, type CanvasRect } from '@/services/note-canvas';
+import { boundsOf, canvasCardFrame, canvasTilt, CANVAS_HALF, clampToWorld, clampZoom, createCanvasIndex, fitCamera, floorZoom, focusCamera, frameCamera, homeCamera, keepCanvasRange, nextTapZoom, noteAtPoint, openingCamera, parseCanvasRange, queryCanvasIndex, zoomAround, type CanvasCamera, type CanvasPosition, type CanvasPrefs, type CanvasRect } from '@/services/note-canvas';
 import { placeConnectedNotes } from '@/services/canvas-connections';
 import { createCanvasReader } from '@/services/canvas-read';
 import { noteKey } from '@/services/note-order';
-import { BoardPill, CanvasCameraControls, CanvasFullscreenButton, CanvasHint } from './canvas-camera-controls';
+import { CanvasCameraControls, CanvasFullscreenButton, CanvasHint, CanvasStickerButton } from './canvas-camera-controls';
 import { DECOR_ART } from './canvas-decor-art';
 import { DecorEditor, DecorLayer, useCanvasDecor } from './canvas-decor.native';
 import { DecorToolbar, DecorTray } from './canvas-decor-tools.native';
@@ -142,8 +142,8 @@ function FoundRing({ rect, tilt, ink }: { rect: CanvasRect; tilt: number; ink: s
 /**
  * The Notes board. The camera is three shared values on one transformed layer,
  * so a pan or pinch runs entirely on the UI thread and React renders nothing.
- * React hears about the camera only when it crosses a grid cell (canvasRangeKey),
- * and then mounts just the notes in those cells; notes already there are memoized
+ * React hears about the camera only when the view is about to leave the mounted
+ * cells (keepCanvasRange), and then mounts just the notes in the new ones; notes already there are memoized
  * and stay put, so a board costs about the same at 50 notes or 5,000.
  */
 export function NotesCanvas({ notes, shownKeys, filterKey, selectedNoteKey, onSelectNote, focus, onFocusDone, onToast, onOpen, onMore, onToggleSubtask, onToggleChecklist, bottomInset, activity, paper, footer, emptyState, fullscreen = false, onToggleFullscreen }: Props) {
@@ -178,7 +178,7 @@ export function NotesCanvas({ notes, shownKeys, filterKey, selectedNoteKey, onSe
   const viewportOrigin = useRef({ x: 0, y: 0 });
   const bottomClearance = useSharedValue(bottomInset);
   const insets = useSafeAreaInsets();
-  const decor = useCanvasDecor({ database, filterKey, onToast });
+  const decor = useCanvasDecor({ database, onToast });
   const [trayOpen, setTrayOpen] = useState(false);
 
   // ── Where notes are ───────────────────────────────────────────────────────
@@ -242,9 +242,10 @@ export function NotesCanvas({ notes, shownKeys, filterKey, selectedNoteKey, onSe
 
   // ── Which notes are mounted ───────────────────────────────────────────────
 
+  const heldRange = useSharedValue<string | null>(null);
   useAnimatedReaction(
-    () => camera.width.get() > 0 ? canvasRangeKey(camera.x.get(), camera.y.get(), camera.zoom.get(), camera.width.get(), camera.height.get()) : null,
-    (next, previous) => { if (next !== null && next !== previous) runOnJS(setRangeKey)(next); },
+    () => camera.width.get() > 0 ? keepCanvasRange(heldRange.get(), camera.x.get(), camera.y.get(), camera.zoom.get(), camera.width.get(), camera.height.get()) : null,
+    (next) => { if (next !== null && next !== heldRange.get()) { heldRange.set(next); runOnJS(setRangeKey)(next); } },
   );
   useAnimatedReaction(() => Math.abs(camera.x.get()) + Math.abs(camera.y.get()), (distance) => { activity.set(distance); });
   const range = useMemo(() => rangeKey ? parseCanvasRange(rangeKey) : null, [rangeKey]);
@@ -519,7 +520,7 @@ export function NotesCanvas({ notes, shownKeys, filterKey, selectedNoteKey, onSe
       onRemove={() => { if (decor.selected) decor.remove(decor.selected.id); }} /> : null}
     {hasNotes && !decor.editing ? <View pointerEvents="box-none" style={[styles.topButtons, { [PHYSICAL_LEFT]: 12 }]}>
       {onToggleFullscreen ? <CanvasFullscreenButton fullscreen={fullscreen} paper={paper} onPress={onToggleFullscreen} /> : null}
-      <BoardPill icon="sparkles-outline" label={tr('notesDecor.decorate')} paper={paper} iconOnly onPress={() => { decor.startEditing(); if (decor.pieces.length === 0) setTrayOpen(true); }} />
+      <CanvasStickerButton onPress={() => { decor.startEditing(); if (decor.pieces.length === 0) setTrayOpen(true); }} />
     </View> : null}
     <DecorTray visible={trayOpen} paper={paper} bottomInset={insets.bottom} onClose={() => setTrayOpen(false)} onPick={(key) => {
       setTrayOpen(false);
@@ -543,7 +544,7 @@ const styles = StyleSheet.create({
   ghost: { position: 'absolute', top: 0, zIndex: 10 },
   deepShadow: { borderRadius: 12 },
   ring: { position: 'absolute', borderWidth: 3 },
-  // One row, Full screen then the icon-only Decorate, narrow enough to clear the map.
+  // One row: the icon-only Full screen, then the Stickers sticker, narrow enough to clear the map.
   topButtons: { position: 'absolute', top: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
   empty: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   dock: { position: 'absolute', left: 0, right: 0 },

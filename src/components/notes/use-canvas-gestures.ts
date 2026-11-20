@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { Gesture } from 'react-native-gesture-handler';
 import { cancelAnimation, runOnJS, useFrameCallback, useReducedMotion, useSharedValue, withDecay, type SharedValue } from 'react-native-reanimated';
 
-import { cameraLimits, clampZoom, panLimits } from '@/services/note-canvas';
+import { cameraLimits, clampZoom, panLimits, pinchFrame } from '@/services/note-canvas';
 import type { CanvasCameraApi } from './use-canvas-camera';
 
 export const DRAG_NONE = 0;
@@ -73,6 +73,7 @@ export function useCanvasGestures(camera: CanvasCameraApi, bottomClearance: Shar
   const startZoom = useSharedValue(1);
   const focalX = useSharedValue(0);
   const focalY = useSharedValue(0);
+  const pinchPointers = useSharedValue(2);
   const gliding = useSharedValue(false);
   const lifting = useSharedValue(false);
 
@@ -113,7 +114,9 @@ export function useCanvasGestures(camera: CanvasCameraApi, bottomClearance: Shar
         x.set(Math.max(minX, Math.min(maxX, startX.get() + event.translationX)));
         y.set(Math.max(minY, Math.min(maxY, startY.get() + event.translationY)));
       })
-      .onEnd((event) => {
+      .onEnd((event, success) => {
+        // Cancelled means a second finger turned this into a pinch, which takes the camera from here.
+        if (!success) return;
         if (reduced) { runOnJS(settled)(); return; }
         gliding.set(true);
         const [left, top, right, bottom] = extent.get();
@@ -127,16 +130,16 @@ export function useCanvasGestures(camera: CanvasCameraApi, bottomClearance: Shar
     const pinch = Gesture.Pinch()
       .onStart((event) => {
         cancelAnimation(x); cancelAnimation(y); cancelAnimation(zoom);
-        startZoom.set(zoom.get()); startX.set(x.get()); startY.set(y.get());
-        focalX.set(event.focalX); focalY.set(event.focalY);
+        startZoom.set(zoom.get());
+        focalX.set(event.focalX); focalY.set(event.focalY); pinchPointers.set(event.numberOfPointers);
       })
       .onUpdate((event) => {
-        // The world point first under the fingers stays under them, wherever they go.
-        const next = clampZoom(startZoom.get() * event.scale, minZoom.get());
-        const ratio = next / startZoom.get();
-        zoom.set(next);
-        x.set(event.focalX - (focalX.get() - startX.get()) * ratio);
-        y.set(event.focalY - (focalY.get() - startY.get()) * ratio);
+        // The world point under the fingers stays under them, wherever they go, even
+        // when one lifts before the other (see pinchFrame).
+        const next = pinchFrame({ x: x.get(), y: y.get(), zoom: zoom.get() }, { focalX: focalX.get(), focalY: focalY.get(), pointers: pinchPointers.get() },
+          event.focalX, event.focalY, event.numberOfPointers, clampZoom(startZoom.get() * event.scale, minZoom.get()));
+        zoom.set(next.zoom); x.set(next.x); y.set(next.y);
+        focalX.set(event.focalX); focalY.set(event.focalY); pinchPointers.set(event.numberOfPointers);
       })
       .onEnd(() => { runOnJS(settled)(); });
 
@@ -169,7 +172,7 @@ export function useCanvasGestures(camera: CanvasCameraApi, bottomClearance: Shar
       .onEnd((event, success) => { if (success) runOnJS(doubleTap)(event.x, event.y); });
 
     return Gesture.Race(lift, Gesture.Simultaneous(pan, pinch), tapTwice);
-  }, [caughtGlide, doubleTap, drop, extent, fingerX, fingerY, focalX, focalY, gliding, height, lifting, minZoom, panStarted, phase, pick, reduced, settled, startX, startY, startZoom, width, x, y, zoom]);
+  }, [caughtGlide, doubleTap, drop, extent, fingerX, fingerY, focalX, focalY, gliding, height, lifting, minZoom, panStarted, phase, pick, pinchPointers, reduced, settled, startX, startY, startZoom, width, x, y, zoom]);
   /* eslint-enable react-hooks/refs */
 
   const drag = useMemo<CanvasDrag>(() => ({ phase, fingerX, fingerY, grabX, grabY, lifted, setEdgePanning: setActive }), [fingerX, fingerY, grabX, grabY, lifted, phase, setActive]);

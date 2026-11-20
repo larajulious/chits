@@ -153,7 +153,8 @@ export function useCanvasConnections(args: Args) {
     if (source) { void connect(noteKey(item)); return; }
     const key = noteKey(item); setSelected(key); setSelectedEdge(null);
     const connected = links?.filter((link) => link.note_a === key || link.note_b === key) ?? [];
-    actionSheet({ title: item.hidden ? tr('entrydetailsheet.hiddenNote') : item.title || tr('calendardata.untitledNote'), options: [
+    // No visible heading, like the grid's note actions; screen readers still hear which note it is.
+    actionSheet({ accessibilityTitle: item.hidden ? tr('entrydetailsheet.hiddenNote') : item.title || tr('calendardata.untitledNote'), options: [
       { label: tr('canvasConnections.connect'), icon: 'link-outline', disabled: links === null || item.hidden, onPress: () => { setSource(key); } },
       { label: tr('canvasConnections.focus'), icon: 'scan-outline', disabled: !connected.length, onPress: () => focusConnections(key) },
       { label: tr('canvasConnections.arrange'), icon: 'git-network-outline', disabled: !connected.length, onPress: () => arrange(key) },

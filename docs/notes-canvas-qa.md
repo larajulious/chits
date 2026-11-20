@@ -43,6 +43,35 @@ the Cards view of `/`. The header's grid icon switches back to the grid, saved a
   Started dock; only that button or Android Back leaves it, as the header's switches go with
   it. A resize shifts the camera by half the change, so the middle of the view stays put.
 
+## Frame cost (Galaxy S23, debug build, 2026-11-18)
+
+Measured with `adb shell dumpsys gfxinfo com.larajulious.chitsapp framestats`; zoom by the
+controls' +/- (adb can't pinch), pan by `input swipe`.
+
+| | Before | After |
+| --- | --- | --- |
+| Zoom: median frame, janky | 36ms, 60% | 16ms, 28% |
+| Pan: median frame, janky | 32ms, 56% | 15ms, 3% |
+| Idle (mascot breathing): median frame | 31ms | 14ms |
+
+What it took, and what to keep:
+- **`ANDROID_SYNCHRONOUSLY_UPDATE_UI_PROPS`** (Reanimated static flag in `package.json`). Without
+  it every transform or opacity frame went through a full shadow-tree commit, about 11ms with
+  the board mounted. It is native: changing it needs a rebuild, not a reload. The iOS flag is
+  still off, untested.
+- **`keepCanvasRange`** keeps the mounted cells through a pinch: zooming in no longer unmounts
+  notes every frame, and lite drawing switches with some give around 0.42.
+- **Straight stitch.** One dashed rounded border per note cost ~2ms a frame: Android re-dashes
+  curved paths on the CPU on every draw. `StickerStitch` is four dashed sides and four solid
+  corners. Don't put a dashed rounded border back on anything drawn many times.
+  That's Android only: iOS keeps the one dashed rounded border (it caches border drawing), because
+  one-sided dashed borders on zero-height views lost their bottom and right sides there.
+- **Pinch steps frame to frame** (`pinchFrame`). Android's pinch only ends when every finger is
+  up, so lifting one first moved the focal point to the other and the board jumped by half the
+  spread. A change in finger count now re-anchors in place. A pan cancelled by a second finger
+  doesn't fling. Synthetic emulator pinches lift both fingers at once, so they never showed this.
+- The note's soft shadow costs ~2ms whether blurred or not; it was kept for the look.
+
 ## Validation
 
 | Spec item | Result |
@@ -87,14 +116,19 @@ is denied without root.
 **Decorate** (the sparkle button beside Full screen) opens the tray: stickers, washi tape, doodles,
 labels & stamps, all drawn in code (`canvas-decor-art.ts`) and rendered with SvgXml.
 
-- **Storage.** One `app_settings` row per filter, `notes_canvas_decor.<filter>`, so
-  backups carry it and no migration was needed. `parseDecor` drops anything malformed or
-  from a newer set rather than throwing. A deleted board's row is left behind (harmless).
+- **Storage.** One `app_settings` row for the whole board, `notes_canvas_decor`, shown under
+  every filter, because notes keep their spot whatever the filter. Until 2026-11-18 each filter
+  had its own row (`notes_canvas_decor.<filter>`), so a sticker put on a note under a board was
+  missing from All. `loadSharedDecor` merges those old rows into the shared one the first time
+  and leaves them in place. Backups carry it; no migration was needed. `parseDecor` drops anything
+  malformed or from a newer set rather than throwing.
 - **Drawing.** Pieces sit in the world layer, behind or in front of the notes, and are
-  drawn once; the camera moves them. Not culled: a filter holds at most `MAX_DECOR` (120).
+  drawn once; the camera moves them. Not culled: the board holds at most `MAX_DECOR` (120).
 - **Editing.** While decorating, `DecorEditor` covers the board and takes every touch, so
   the board's own gesture code is untouched and notes can't be opened or lifted by
-  accident. The selected piece is drawn in screen space from UI-thread values and its
+  accident. Two fingers on or near the selected piece (`TWO_FINGER_SLOP`) resize and
+  turn it; anywhere else they zoom with `pinchFrame`, like the board. Before, any pinch
+  while a piece was selected resized it, and a sticker is selected as soon as it's added. The selected piece is drawn in screen space from UI-thread values and its
   board copy hides; React hears only when a touch ends. Panning reaches every piece
   (`decorBounds` widens the extent); Fit All and the map still frame notes only.
 - **Not verified:** iOS gestures, dark mode, RTL, two-finger rotate on a real device,

@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { loadModule, migration, runtime } from './helpers/backup-runtime.mjs';
 import {
-  boundsOf, canvasCardFrame, canvasRangeKey, canvasTilt, CANVAS_HALF, CANVAS_MAX_TILT, clampCamera, clampToWorld, clampZoom, createCanvasIndex, fitCamera, floorZoom, focusCamera, frameCamera, homeCamera,
+  boundsOf, canvasCardFrame, canvasRangeKey, canvasTilt, CANVAS_HALF, CANVAS_MAX_TILT, clampCamera, clampToWorld, clampZoom, createCanvasIndex, fitCamera, floorZoom, focusCamera, frameCamera, homeCamera, keepCanvasRange, pinchFrame,
   LITE_ZOOM, MAX_ZOOM, MIN_ZOOM, nextTapZoom, noteAtPoint, openingCamera, panLimits, parseCanvasPrefs, parseCanvasRange, placeBoard, placeNear, queryCanvasIndex, zoomAround,
 } from '../src/services/note-canvas.ts';
 
@@ -131,6 +131,28 @@ test('a dropped note lands in the same world spot at any zoom', () => {
   }
 });
 
+test('lifting one finger before the other leaves the board where the pinch put it', () => {
+  // Two fingers spread apart around (200, 300), then the left one lifts and the right one rests.
+  let camera = { x: -100, y: -80, zoom: 1 };
+  let anchor = { focalX: 200, focalY: 300, pointers: 2 };
+  const world = { x: (200 - camera.x) / camera.zoom, y: (300 - camera.y) / camera.zoom };
+  for (let step = 1; step <= 30; step += 1) {
+    const zoom = 1 + step / 30;
+    camera = pinchFrame(camera, anchor, 200, 300, 2, zoom);
+    anchor = { focalX: 200, focalY: 300, pointers: 2 };
+    assert.ok(Math.abs(world.x * camera.zoom + camera.x - 200) < 1e-9 && Math.abs(world.y * camera.zoom + camera.y - 300) < 1e-9);
+  }
+  const settled = { ...camera };
+  // The focal point jumps to the finger still down, 120 points to the right.
+  camera = pinchFrame(camera, anchor, 320, 300, 1, camera.zoom);
+  assert.deepEqual(camera, settled);
+  anchor = { focalX: 320, focalY: 300, pointers: 1 };
+  // That finger then drags the board with it, from where it is.
+  camera = pinchFrame(camera, anchor, 330, 300, 1, camera.zoom);
+  assert.equal(camera.x, settled.x + 10);
+  assert.equal(camera.y, settled.y);
+});
+
 test('zoom stays in range, and Fit All can reach past the pinch floor only when it has to', () => {
   assert.equal(clampZoom(0.1), MIN_ZOOM);
   assert.equal(clampZoom(9), MAX_ZOOM);
@@ -233,6 +255,46 @@ test('the view range covers the screen, and says when notes are too small to rea
   assert.equal(parseCanvasRange(canvasRangeKey(0, 0, LITE_ZOOM - 0.01, VIEW.width, VIEW.height)).lite, true);
 });
 
+test('a pinch keeps the mounted notes instead of re-mounting them every frame', () => {
+  const center = (zoom) => ({ x: VIEW.width / 2 - 600 * zoom, y: VIEW.height / 2 - 600 * zoom });
+  const run = (from, to) => {
+    let held = null; let changes = -1;
+    for (let step = 0; step <= 120; step += 1) {
+      const zoom = from * (to / from) ** (step / 120);
+      const { x, y } = center(zoom);
+      const next = keepCanvasRange(held, x, y, zoom, VIEW.width, VIEW.height);
+      if (next !== held) changes += 1;
+      held = next;
+      // Whatever is kept still covers the screen.
+      const { rect } = parseCanvasRange(held);
+      assert.ok(rect.x <= -x / zoom && rect.y <= -y / zoom, `uncovered at ${zoom}`);
+      assert.ok(rect.x + rect.width >= (VIEW.width - x) / zoom && rect.y + rect.height >= (VIEW.height - y) / zoom, `uncovered at ${zoom}`);
+    }
+    return changes;
+  };
+  let plain = -1; let previous = null;
+  for (let step = 0; step <= 120; step += 1) {
+    const zoom = 1 * 0.6 ** (step / 120); const { x, y } = center(zoom);
+    const next = canvasRangeKey(x, y, zoom, VIEW.width, VIEW.height);
+    if (next !== previous) plain += 1;
+    previous = next;
+  }
+  const out = run(1, 0.6);
+  assert.ok(out < plain, `zooming out: ${out} updates, a plain cell key made ${plain}`);
+  assert.ok(run(0.6, 1.6) <= 3, 'zooming in barely updates');
+});
+
+test('the lite switch has give, so a pinch resting on the line does not flip it', () => {
+  let held = keepCanvasRange(null, 0, 0, LITE_ZOOM - 0.01, VIEW.width, VIEW.height);
+  assert.equal(parseCanvasRange(held).lite, true);
+  held = keepCanvasRange(held, 0, 0, LITE_ZOOM + 0.01, VIEW.width, VIEW.height);
+  assert.equal(parseCanvasRange(held).lite, true);
+  held = keepCanvasRange(held, 0, 0, LITE_ZOOM + 0.05, VIEW.width, VIEW.height);
+  assert.equal(parseCanvasRange(held).lite, false);
+  held = keepCanvasRange(held, 0, 0, LITE_ZOOM - 0.01, VIEW.width, VIEW.height);
+  assert.equal(parseCanvasRange(held).lite, false);
+});
+
 test('only notes near the view are found, however many are on the board', () => {
   const list = rects(notes(5000), placeBoard(notes(5000)));
   const index = createCanvasIndex(list);
@@ -268,7 +330,7 @@ test('the board never rerenders per frame: the camera stays off React state', ()
   const canvas = read('src/components/notes/notes-canvas.native.tsx');
   const gestures = read('src/components/notes/use-canvas-gestures.ts');
   assert.match(canvas, /runOnJS\(setRangeKey\)/);
-  assert.match(canvas, /next !== previous/);
+  assert.match(canvas, /next !== heldRange.get\(\)/);
   // Everything that runs per frame stays on the UI thread: each handler body up to the next one.
   for (const handler of gestures.matchAll(/\.(onUpdate|onChange)\(([^]*?)\n\s*\.on/g)) assert.doesNotMatch(handler[2], /runOnJS/, handler[1]);
 });

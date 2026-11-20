@@ -215,6 +215,40 @@ export function canvasRangeKey(x: number, y: number, zoom: number, width: number
   return `${firstColumn},${firstRow},${lastColumn},${lastRow},${zoom < LITE_ZOOM ? 1 : 0}`;
 }
 
+/** Mounted cells may number this many times a fresh range's before zooming in trims them. */
+const RANGE_SLACK = 2.5;
+/** How much of the viewport past each edge must already be mounted. */
+const RANGE_MARGIN = 0.1;
+/** Lite drawing switches with this much give, so a pinch resting on the line doesn't flip every note. */
+const LITE_GIVE = 0.03;
+
+/**
+ * Like canvasRangeKey, but keeps `held` while it still covers the view. A pinch
+ * changes the view's size every frame, so a plain cell key changed many times per
+ * gesture and React mounted, unmounted and remounted notes mid-pinch. Zooming in now
+ * keeps what's mounted until it's far more than needed; zooming out or panning
+ * replaces it, with overscan, only once the view is about to reach past it.
+ */
+export function keepCanvasRange(held: string | null, x: number, y: number, zoom: number, width: number, height: number) {
+  'worklet';
+  const wasLite = held !== null && held.charCodeAt(held.length - 1) === 49;
+  const lite = held === null ? zoom < LITE_ZOOM : wasLite ? zoom < LITE_ZOOM + LITE_GIVE : zoom < LITE_ZOOM - LITE_GIVE;
+  const fresh = canvasRangeKey(x, y, zoom, width, height);
+  const freshKey = `${fresh.slice(0, fresh.lastIndexOf(','))},${lite ? 1 : 0}`;
+  if (held === null || lite !== wasLite) return freshKey;
+  const [firstColumn, firstRow, lastColumn, lastRow] = held.split(',').map(Number);
+  const [freshFirstColumn, freshFirstRow, freshLastColumn, freshLastRow] = fresh.split(',').map(Number);
+  const left = -x / zoom;
+  const top = -y / zoom;
+  const viewWidth = width / zoom;
+  const viewHeight = height / zoom;
+  const covers = firstColumn * CANVAS_CELL <= left - viewWidth * RANGE_MARGIN && firstRow * CANVAS_CELL <= top - viewHeight * RANGE_MARGIN
+    && (lastColumn + 1) * CANVAS_CELL >= left + viewWidth * (1 + RANGE_MARGIN) && (lastRow + 1) * CANVAS_CELL >= top + viewHeight * (1 + RANGE_MARGIN);
+  const heldCells = (lastColumn - firstColumn + 1) * (lastRow - firstRow + 1);
+  const freshCells = (freshLastColumn - freshFirstColumn + 1) * (freshLastRow - freshFirstRow + 1);
+  return covers && heldCells <= freshCells * RANGE_SLACK ? held : freshKey;
+}
+
 export function parseCanvasRange(key: string): { rect: CanvasRect; lite: boolean } {
   const [firstColumn, firstRow, lastColumn, lastRow, lite] = key.split(',').map(Number);
   return {
@@ -235,6 +269,25 @@ export function zoomAround(camera: CanvasCamera, zoom: number, screenX: number, 
   'worklet';
   const ratio = zoom / camera.zoom;
   return { x: screenX - (screenX - camera.x) * ratio, y: screenY - (screenY - camera.y) * ratio, zoom };
+}
+
+/** Where the last pinch frame's fingers were, and how many there were. */
+export type PinchAnchor = { focalX: number; focalY: number; pointers: number };
+
+/**
+ * One frame of a pinch: the world point under last frame's fingers stays under
+ * this frame's, at the new zoom. It steps frame to frame rather than from where the
+ * pinch began, because the fingers can change mid-pinch. On Android a pinch only ends
+ * when every finger is up, so lifting one first moves the focal point from between
+ * the fingers to the one still down. Measured from the start, that jumped the board by
+ * half the fingers' spread. When the count changes, the frame zooms in place around
+ * the fingers now down, and the next frame follows them from there.
+ */
+export function pinchFrame(camera: CanvasCamera, anchor: PinchAnchor, focalX: number, focalY: number, pointers: number, zoom: number): CanvasCamera {
+  'worklet';
+  if (pointers !== anchor.pointers) return zoomAround(camera, zoom, focalX, focalY);
+  const ratio = zoom / camera.zoom;
+  return { x: focalX - (anchor.focalX - camera.x) * ratio, y: focalY - (anchor.focalY - camera.y) * ratio, zoom };
 }
 
 /** The furthest the camera can go along one axis before the view leaves the world. */

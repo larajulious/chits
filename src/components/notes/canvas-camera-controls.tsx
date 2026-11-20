@@ -9,6 +9,8 @@ import { useTheme } from '@/components/theme-provider';
 import { AppText } from '@/components/ui/app-text';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { spacing } from '@/constants/theme';
+import { StickerStitch } from '@/components/boards/card-list-row.native';
+import { PAPER_INK, PAPER_YELLOW } from '@/constants/paper';
 import { useWelcomeFonts } from '@/features/onboarding/welcome/welcome-fonts';
 import { useLocale } from '@/localization/provider';
 import { tr } from '@/localization/runtime';
@@ -63,12 +65,49 @@ export function BoardPill({ icon, label, onPress, paper, tone = 'plain', iconOnl
   </Pressable>;
 }
 
-/** Opens the board over the whole screen, then brings it back. */
+/** The peeled corner's size, and the sticker's white die-cut rim. */
+const PEEL = 11;
+const STICKER_RIM = 3;
+
+/**
+ * A board button drawn as one of the stickers Decorate hands out: paper in a white
+ * die-cut rim, the notes' dashed stitch, a slight lean and a peeled corner. Plain
+ * Views only, like the notes. The corner is one border triangle in the sticker's
+ * pale back, folded over the tip; nothing is cut away, so it looks right over the
+ * board or over a note.
+ */
+function StickerPill({ icon, label, accessibilityLabel = label, paper, tilt, onPress }: { icon: IconName; label: string; accessibilityLabel?: string; paper: string; tilt: number; onPress: () => void }) {
+  const desk = useDesk();
+  const { styleTokens } = useTheme();
+  const fonts = useWelcomeFonts();
+  const radius = styleTokens.button.radius;
+  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} hitSlop={4} onPress={onPress}
+    style={({ pressed }) => [styles.sticker, { transform: [{ rotate: `${tilt}deg` }, { scale: pressed ? 0.95 : 1 }] }]}>
+    <View style={[styles.stickerRim, { borderRadius: radius + STICKER_RIM, boxShadow: `0px 3px 8px ${desk.shadow}` }]}>
+      <View style={[styles.stickerPaper, { backgroundColor: paper, borderRadius: radius }]}>
+        <StickerStitch paper={paper} radius={radius} />
+        <Icon name={icon} size={17} color={PAPER_INK} />
+        <AppText family={fonts.text} weight="700" numberOfLines={1} style={[styles.pillText, { color: PAPER_INK }]}>{label}</AppText>
+      </View>
+    </View>
+    <View pointerEvents="none" style={styles.peelFlap} />
+  </Pressable>;
+}
+
+/** Opens Decorate, as a yellow sticker. */
+export function CanvasStickerButton({ onPress }: { onPress: () => void }) {
+  "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
+
+  useLocale();
+  return <StickerPill icon="happy-outline" label={tr('notesDecor.stickers')} accessibilityLabel={tr('notesDecor.decorate')} paper={PAPER_YELLOW} tilt={-3} onPress={onPress} />;
+}
+
+/** Opens the board over the whole screen, then brings it back. A plain paper button, icon only; the label is for screen readers. */
 export function CanvasFullscreenButton({ fullscreen, paper, onPress }: { fullscreen: boolean; paper: string; onPress: () => void }) {
   "use no memo"; // Global i18next copy must refresh when the locale subscription fires.
 
   useLocale();
-  return <BoardPill icon={fullscreen ? 'contract-outline' : 'expand-outline'} label={tr(fullscreen ? 'notesCanvas.exitFullScreen' : 'notesCanvas.fullScreen')} paper={paper} onPress={onPress} />;
+  return <BoardPill icon={fullscreen ? 'contract-outline' : 'expand-outline'} label={tr(fullscreen ? 'notesCanvas.exitFullScreen' : 'notesCanvas.fullScreen')} paper={paper} iconOnly onPress={onPress} />;
 }
 
 /** The one instruction the board gives, once. */
@@ -99,6 +138,11 @@ const styles = StyleSheet.create({
   pill: { height: 36, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 },
   pillIcon: { width: 40, paddingHorizontal: 0, justifyContent: 'center' },
   pillText: { flexShrink: 1, fontSize: 13, lineHeight: 17 },
+  sticker: { alignSelf: 'flex-start' },
+  stickerRim: { padding: STICKER_RIM, backgroundColor: '#FFFFFF' },
+  stickerPaper: { height: 32, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 12, paddingRight: 14, overflow: 'hidden' },
+  // The corner peels the same way in every language.
+  peelFlap: { position: 'absolute', top: 0, right: PEEL, width: 0, height: 0, borderBottomWidth: PEEL, borderRightWidth: PEEL, borderBottomColor: '#EFE8DA', borderRightColor: 'transparent', transform: [{ translateX: PEEL }] },
   hintAnchor: { position: 'absolute', left: 12, right: 12, alignItems: 'flex-start' },
   hint: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: BUTTON, paddingHorizontal: 12, paddingVertical: 8 },
   hintText: { flexShrink: 1, fontSize: 14, lineHeight: 19 },

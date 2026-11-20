@@ -1,0 +1,163 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test-without-building -project /Users/larajulious/Development/Chits/assets/store-listing/source/capture/StoreCapture.xcodeproj -scheme StoreCaptureTests -destination id=2E382855-58FE-42A0-8291-9B974AAA1D44 -parallel-testing-enabled NO -derivedDataPath /private/tmp/claude-501/-Users-larajulious-Development-Chits/e4d88aa1-24e9-4959-8f0e-35c3f4f81de1/scratchpad/dd-cap-u
+
+2026-11-18 22:16:59.137 xcodebuild[54975:8638424] [MT] IDERunDestination: Supported platforms for the buildables in the current scheme is empty.
+2026-11-18 22:17:02.014 xcodebuild[54975:8638424] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
+2026-11-18 22:17:33.132517+0800 StoreCaptureTests-Runner[55212:8640384] [Default] Running tests...
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'All tests' started at 2026-11-18 22:17:35.884.
+Test Suite 'StoreCaptureTests.xctest' started at 2026-11-18 22:17:35.884.
+Test Suite 'StoreCaptureTests' started at 2026-11-18 22:17:35.885.
+Test Case '-[StoreCaptureTests.StoreCaptureTests testCaptureStoreScreens]' started.
+    t =     0.01s Start Test at 2026-11-18 22:17:35.891
+    t =     0.21s Set Up
+    t =     0.21s Pressing Home button
+objc[55212]: Class UIAccessibilityLoaderWebShared is implemented in both /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.91016.19.u3Tc5I/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.2.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x10a1ec310) and /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.91016.19.u3Tc5I/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.2.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x106b64398). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =     7.82s Open com.larajulious.chitsapp
+    t =     7.83s     Launch com.larajulious.chitsapp
+    t =     8.22s         Setting up automation session
+    t =    11.36s         Wait for com.larajulious.chitsapp to idle
+    t =    15.76s Checking existence of `"Allow" Button`
+    t =    16.78s Checking existence of `"Not Now" Button`
+    t =    16.83s Checking existence of `"Don’t Allow" Button`
+    t =    16.89s Checking existence of `"OK" Button`
+    t =    16.96s Waiting 5.0s for Any (First Match) to exist
+    t =    18.01s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =    18.01s         Checking existence of `Any (First Match)`
+    t =    18.08s Tap Any (First Match)
+    t =    18.09s     Wait for com.larajulious.chitsapp to idle
+    t =    78.13s App animations complete notification not received, will attempt to continue.
+    t =    78.14s     Find the Any (First Match)
+    t =    78.22s     Check for interrupting elements affecting "Open navigation" Button
+    t =    78.34s         Wait for com.apple.springboard to idle
+    t =    78.40s     Synthesize event
+    t =    78.73s     Wait for com.larajulious.chitsapp to idle
+    t =   138.75s App animations complete notification not received, will attempt to continue.
+    t =   139.77s Waiting 5.0s for Any (First Match) to exist
+    t =   140.85s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   140.85s         Checking existence of `Any (First Match)`
+    t =   140.87s Tap Any (First Match)
+    t =   140.87s     Wait for com.larajulious.chitsapp to idle
+    t =   200.90s App animations complete notification not received, will attempt to continue.
+    t =   200.90s     Find the Any (First Match)
+    t =   200.94s     Check for interrupting elements affecting "Spaces, 7 notes" Button
+    t =   200.98s         Wait for com.apple.springboard to idle
+    t =   201.01s     Synthesize event
+    t =   201.30s     Wait for com.larajulious.chitsapp to idle
+    t =   206.76s Checking existence of `"Allow" Button`
+    t =   206.83s Checking existence of `"Not Now" Button`
+    t =   206.85s Checking existence of `"Don’t Allow" Button`
+    t =   206.88s Checking existence of `"OK" Button`
+STORE ready 03a-spaces-pick
+    t =   208.45s Waiting 3.0s for Any (First Match) to exist
+    t =   209.54s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   209.54s         Checking existence of `Any (First Match)`
+    t =   209.56s Tap Any (First Match)
+    t =   209.56s     Wait for com.larajulious.chitsapp to idle
+    t =   209.57s     Find the Any (First Match)
+    t =   209.58s     Check for interrupting elements affecting "Stick them on the Fridge" Button
+    t =   209.60s         Wait for com.apple.springboard to idle
+    t =   209.64s     Synthesize event
+    t =   209.92s     Wait for com.larajulious.chitsapp to idle
+    t =   215.31s Checking existence of `"Allow" Button`
+    t =   215.35s Checking existence of `"Not Now" Button`
+    t =   215.38s Checking existence of `"Don’t Allow" Button`
+    t =   215.41s Checking existence of `"OK" Button`
+STORE ready 03b-fridge
+    t =   216.46s Checking existence of `Button (First Match)`
+    t =   216.48s Checking existence of `Any (First Match)`
+    t =   216.50s Checking existence of `Any (First Match)`
+    t =   216.51s Waiting 5.0s for Any (First Match) to exist
+    t =   217.59s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   217.59s         Checking existence of `Any (First Match)`
+    t =   217.61s Tap Any (First Match)
+    t =   217.61s     Wait for com.larajulious.chitsapp to idle
+    t =   217.61s     Find the Any (First Match)
+    t =   217.63s     Check for interrupting elements affecting "Open navigation" Button
+    t =   217.64s         Wait for com.apple.springboard to idle
+    t =   217.68s     Synthesize event
+    t =   217.97s     Wait for com.larajulious.chitsapp to idle
+    t =   218.98s Waiting 5.0s for Any (First Match) to exist
+    t =   220.06s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   220.06s         Checking existence of `Any (First Match)`
+    t =   220.09s Tap Any (First Match)
+    t =   220.09s     Wait for com.larajulious.chitsapp to idle
+    t =   220.09s     Find the Any (First Match)
+    t =   220.11s     Check for interrupting elements affecting "Notes" Button
+    t =   220.13s         Wait for com.apple.springboard to idle
+    t =   220.16s     Synthesize event
+    t =   220.45s     Wait for com.larajulious.chitsapp to idle
+    t =   280.49s App animations complete notification not received, will attempt to continue.
+    t =   283.50s Waiting 5.0s for Any (First Match) to exist
+    t =   284.58s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   284.58s         Checking existence of `Any (First Match)`
+    t =   284.64s Tap Any (First Match)
+    t =   284.64s     Wait for com.larajulious.chitsapp to idle
+    t =   344.67s App animations complete notification not received, will attempt to continue.
+    t =   344.68s     Find the Any (First Match)
+    t =   344.74s     Check for interrupting elements affecting "View Today’s Plan" Button
+    t =   344.77s         Wait for com.apple.springboard to idle
+    t =   344.82s     Synthesize event
+    t =   345.11s     Wait for com.larajulious.chitsapp to idle
+    t =   350.63s Checking existence of `"Allow" Button`
+    t =   350.68s Checking existence of `"Not Now" Button`
+    t =   350.70s Checking existence of `"Don’t Allow" Button`
+    t =   350.73s Checking existence of `"OK" Button`
+STORE ready 04-plan
+    t =   352.03s Checking existence of `Button (First Match)`
+    t =   352.07s Find the Button (First Match)
+    t =   352.09s Tap "Go back" Button
+    t =   352.09s     Wait for com.larajulious.chitsapp to idle
+    t =   352.09s     Find the "Go back" Button
+    t =   352.10s     Check for interrupting elements affecting "Go back" Button
+    t =   352.14s         Wait for com.apple.springboard to idle
+    t =   352.16s     Synthesize event
+    t =   352.45s     Wait for com.larajulious.chitsapp to idle
+    t =   412.48s App animations complete notification not received, will attempt to continue.
+    t =   414.50s Checking existence of `Button (First Match)`
+    t =   414.56s Checking existence of `Any (First Match)`
+    t =   414.59s Tear Down
+Test Case '-[StoreCaptureTests.StoreCaptureTests testCaptureStoreScreens]' passed (415.715 seconds).
+Test Case '-[StoreCaptureTests.StoreCaptureTests testWake]' started.
+    t =     0.00s Start Test at 2026-11-18 22:24:31.609
+    t =     0.06s Set Up
+    t =     0.06s Pressing Home button
+    t =     7.57s Press Application 'com.apple.springboard'[0.50, 0.98] for 0.1 seconds, then drag to Application 'com.apple.springboard'[0.50, 0.30] with velocity of 500.00 pixels per second, and then hold for 0.0 seconds 
+    t =     7.57s     Wait for com.apple.springboard to idle
+    t =     7.58s     Find the Application 'com.apple.springboard'
+    t =     7.62s     Check for interrupting elements affecting " " Application
+    t =     7.64s         Wait for com.larajulious.chitsapp to idle
+    t =    67.69s App animations complete notification not received, will attempt to continue.
+    t =    67.80s     Synthesize event
+    t =    67.80s         Find the Application 'com.apple.springboard'
+    t =    67.82s         Find the Application 'com.apple.springboard'
+    t =    67.85s         Find the Application 'com.apple.springboard'
+    t =    67.87s         Find the Application 'com.apple.springboard'
+    t =    67.89s         Find the Application 'com.apple.springboard'
+    t =    69.19s     Wait for com.apple.springboard to idle
+    t =    71.21s Open com.larajulious.chitsapp
+    t =    71.21s     Activate com.larajulious.chitsapp
+    t =    71.50s         Wait for com.larajulious.chitsapp to idle
+    t =   131.55s App animations complete notification not received, will attempt to continue.
+STORE woke; chits state=4
+    t =   134.56s Tear Down
+Test Case '-[StoreCaptureTests.StoreCaptureTests testWake]' passed (134.760 seconds).
+Test Suite 'StoreCaptureTests' passed at 2026-11-18 22:26:46.368.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 550.475 (550.484) seconds
+Test Suite 'StoreCaptureTests.xctest' passed at 2026-11-18 22:26:46.377.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 550.475 (550.492) seconds
+Test Suite 'All tests' passed at 2026-11-18 22:26:46.377.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 550.475 (550.493) seconds
+2026-11-18 22:26:46.476 xcodebuild[54975:8638424] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
+2026-11-18 22:26:46.479 xcodebuild[54975:8638424] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
+2026-11-18 22:26:46.491 xcodebuild[54975:8638424] [MT] IDESchemeActionDeviceRecord: versionAndBuild = 27.2 (24B91016s), error = invalidDigitCount(91016).
+2026-11-18 22:26:46.790 xcodebuild[54975:8638424] [MT] IDETestOperationsObserverDebug: 587.548 elapsed -- Testing started completed.
+2026-11-18 22:26:46.790 xcodebuild[54975:8638424] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-18 22:26:46.790 xcodebuild[54975:8638424] [MT] IDETestOperationsObserverDebug: 587.548 sec, +587.548 sec -- end
+
+Test session results, code coverage, and logs:
+	/tmp/claude-501/-Users-larajulious-Development-Chits/e4d88aa1-24e9-4959-8f0e-35c3f4f81de1/scratchpad/dd-cap-u/Logs/Test/Test-StoreCaptureTests-2026.11.18_22-16-59-+0800.xcresult
+
+** TEST EXECUTE SUCCEEDED **
+
+Testing started

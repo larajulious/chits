@@ -1,7 +1,7 @@
 import { countLabel, tr } from '@/localization/runtime';
 import { useLocale } from '@/localization/provider';
 import { memo } from 'react';
-import { Pressable, StyleSheet, View, type AccessibilityActionEvent, type AccessibilityActionInfo } from 'react-native';
+import { I18nManager, Platform, Pressable, StyleSheet, View, type AccessibilityActionEvent, type AccessibilityActionInfo } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -151,12 +151,47 @@ export const STICKER_EDGE = 5;
 /** Where the dashed stitch runs, in from the paper's edge: outside every bit of content. */
 const STITCH_INSET = 4;
 
-/** The sticker's dashed stitch, in a deeper cut of the note's own paper. A plain View, so long lists and the board stay smooth. */
+/**
+ * The sticker's dashed stitch, in a deeper cut of the note's own paper. Plain Views,
+ * so long lists and the board stay smooth.
+ *
+ * Four straight dashed sides and four short solid corners, not one dashed rounded
+ * border: Android re-dashes a curved path on the CPU every frame it draws, and with
+ * a board of notes that alone cost about 2ms a frame on a Galaxy S23. Straight dashes
+ * take the GPU's fast path. The corners are too short to show they aren't dashed.
+ * Each corner is a quarter of a whole solid ring, clipped: a border on only two sides
+ * left faint seams along the others.
+ *
+ * iOS keeps the one dashed rounded border. It draws a view's border once and caches
+ * it, so there is no per-frame cost to avoid, and it can't draw the pieces: a one-sided
+ * dashed border on a zero-height view lost its bottom and right sides there.
+ */
 export function StickerStitch({ paper, radius }: { paper: string; radius: number }) {
-  return <View pointerEvents="none" style={[stitchStyles.stitch, { borderColor: mix(paper, PAPER_INK, 0.28), borderRadius: Math.max(0, radius - STITCH_INSET) }]} />;
+  const color = mix(paper, PAPER_INK, 0.28);
+  const corner = Math.max(0, radius - STITCH_INSET);
+  if (Platform.OS === 'ios') return <View pointerEvents="none" style={[stitchStyles.whole, { borderColor: color, borderRadius: corner }]} />;
+  const run = STITCH_INSET + corner;
+  return <>
+    <View pointerEvents="none" style={[stitchStyles.across, { top: STITCH_INSET, left: run, right: run, borderColor: color }]} />
+    <View pointerEvents="none" style={[stitchStyles.across, { bottom: STITCH_INSET, left: run, right: run, borderColor: color }]} />
+    <View pointerEvents="none" style={[stitchStyles.down, { left: STITCH_INSET, top: run, bottom: run, borderColor: color }]} />
+    <View pointerEvents="none" style={[stitchStyles.down, { right: STITCH_INSET, top: run, bottom: run, borderColor: color }]} />
+    {corner > 0 ? CORNERS.map(([top, left]) => <View key={`${top}${left}`} pointerEvents="none" style={[stitchStyles.corner, { width: corner, height: corner, [top ? 'top' : 'bottom']: STITCH_INSET, [left ? PHYSICAL_LEFT : PHYSICAL_RIGHT]: STITCH_INSET }]}>
+      <View style={[stitchStyles.arc, { width: corner * 2, height: corner * 2, borderRadius: corner, top: top ? 0 : -corner, [PHYSICAL_LEFT]: left ? 0 : -corner, borderColor: color }]} />
+    </View>) : null}
+  </>;
 }
+const STITCH_WIDTH = 1.5;
+/** [top, left] for each corner, on screen: RTL swaps `left` and `right`, which would mirror the quarter rings. */
+const PHYSICAL_LEFT = I18nManager.isRTL ? 'right' : 'left';
+const PHYSICAL_RIGHT = I18nManager.isRTL ? 'left' : 'right';
+const CORNERS = [[true, true], [true, false], [false, true], [false, false]] as const;
 const stitchStyles = StyleSheet.create({
-  stitch: { position: 'absolute', top: STITCH_INSET, left: STITCH_INSET, right: STITCH_INSET, bottom: STITCH_INSET, borderWidth: 1.5, borderStyle: 'dashed' },
+  across: { position: 'absolute', height: 0, borderTopWidth: STITCH_WIDTH, borderStyle: 'dashed' },
+  down: { position: 'absolute', width: 0, borderLeftWidth: STITCH_WIDTH, borderStyle: 'dashed' },
+  corner: { position: 'absolute', overflow: 'hidden' },
+  arc: { position: 'absolute', borderWidth: STITCH_WIDTH },
+  whole: { position: 'absolute', top: STITCH_INSET, left: STITCH_INSET, right: STITCH_INSET, bottom: STITCH_INSET, borderWidth: STITCH_WIDTH, borderStyle: 'dashed' },
 });
 
 // Chits rounded paper, board pastels and shared workspace type, with an

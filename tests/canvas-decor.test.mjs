@@ -1,12 +1,33 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { decorBounds, decorSettingKey, hitDecor, MAX_DECOR, parseDecor } from '../src/services/canvas-decor.ts';
+import { DECOR_SETTING_KEY, decorBounds, decorSettingKey, hitDecor, loadSharedDecor, MAX_DECOR, parseDecor } from '../src/services/canvas-decor.ts';
 
 const piece = (extra = {}) => ({ id: 'a', key: 'heart', x: 10, y: 20, scale: 1, rot: 0, behind: false, z: 1, ...extra });
 
-test('each filter keeps its decorations under its own setting', () => {
-  assert.equal(decorSettingKey('all'), 'notes_canvas_decor.all');
-  assert.notEqual(decorSettingKey('all'), decorSettingKey('unorganized'));
+test('the board keeps one set of decorations, the same under every filter', () => {
+  const known = () => true;
+  const shared = { key: DECOR_SETTING_KEY, value: JSON.stringify([piece({ id: 's' })]) };
+  const old = { key: decorSettingKey('board-1'), value: JSON.stringify([piece({ id: 'x' })]) };
+  // The shared row wins, and old per-filter rows are ignored once it exists.
+  assert.deepEqual(loadSharedDecor([old, shared], known), { pieces: [piece({ id: 's' })], merged: false });
+  assert.deepEqual(loadSharedDecor([], known), { pieces: [], merged: false });
+});
+
+test('the old per-filter decorations merge into the shared set once: All first, each keeping its stacking', () => {
+  const known = (key) => key === 'heart';
+  const rows = [
+    { key: decorSettingKey('board-b'), value: JSON.stringify([piece({ id: 'b2', z: 9 }), piece({ id: 'b1', z: 2 })]) },
+    { key: decorSettingKey('all'), value: JSON.stringify([piece({ id: 'a1', z: 5 }), piece({ id: 'gone', key: 'retired' })]) },
+    { key: decorSettingKey('board-a'), value: JSON.stringify([piece({ id: 'c1', z: 1 }), piece({ id: 'a1', z: 1 })]) },
+    { key: 'notes_canvas_view', value: '{}' },
+  ];
+  const { pieces, merged } = loadSharedDecor(rows, known);
+  assert.equal(merged, true);
+  assert.deepEqual(pieces.map((p) => [p.id, p.z]), [['a1', 1], ['c1', 2], ['b1', 3], ['b2', 4]]);
+  // Positions come through untouched, so nothing moves.
+  assert.deepEqual([pieces[0].x, pieces[0].y], [10, 20]);
+  const many = [{ key: decorSettingKey('all'), value: JSON.stringify(Array.from({ length: MAX_DECOR }, (_, i) => piece({ id: `p${i}` }))) }, { key: decorSettingKey('z'), value: JSON.stringify([piece({ id: 'extra' })]) }];
+  assert.equal(loadSharedDecor(many, known).pieces.length, MAX_DECOR);
 });
 
 test('saved pieces read back, and anything malformed or unknown is dropped rather than thrown', () => {

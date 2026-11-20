@@ -30,7 +30,38 @@ export const DECOR_MIN_SCALE = 0.35;
 export const DECOR_MAX_SCALE = 3;
 export const DECOR_TEXT_MAX = 16;
 
+/** Before 2026-11-18 each filter kept its own pieces under this key; now they only seed the shared row once. */
 export const decorSettingKey = (filterKey: string) => `${DECOR_SETTING_PREFIX}${filterKey}`;
+/**
+ * The board's one set of pieces, shown under every filter. Notes keep the same
+ * spot whatever the filter, so a sticker put on one has to stay with it: per-filter
+ * sets made a sticker placed under a board missing from All, where All's own
+ * pieces showed instead and read as the sticker having moved.
+ */
+export const DECOR_SETTING_KEY = 'notes_canvas_decor';
+
+/**
+ * The shared pieces from the saved rows: the shared row when there is one, else
+ * the old per-filter rows merged, All's first and then each filter's in key order,
+ * each set keeping its own stacking. `merged` says the shared row should be written.
+ */
+export function loadSharedDecor(rows: readonly { key: string; value: string }[], canDraw: (key: string) => boolean): { pieces: DecorPiece[]; merged: boolean } {
+  const shared = rows.find((row) => row.key === DECOR_SETTING_KEY);
+  if (shared) return { pieces: parseDecor(shared.value, canDraw), merged: false };
+  const legacy = rows.filter((row) => row.key.startsWith(DECOR_SETTING_PREFIX))
+    .sort((a, b) => a.key === decorSettingKey('all') ? -1 : b.key === decorSettingKey('all') ? 1 : a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+  if (!legacy.length) return { pieces: [], merged: false };
+  const seen = new Set<string>();
+  const pieces: DecorPiece[] = [];
+  for (const row of legacy) {
+    for (const piece of [...parseDecor(row.value, canDraw)].sort((a, b) => a.z - b.z)) {
+      if (seen.has(piece.id) || pieces.length >= MAX_DECOR) continue;
+      seen.add(piece.id);
+      pieces.push({ ...piece, z: pieces.length + 1 });
+    }
+  }
+  return { pieces, merged: true };
+}
 
 export function newDecorId() {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;

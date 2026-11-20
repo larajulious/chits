@@ -1,0 +1,365 @@
+{
+  "_note": "Edit wording, colours or captures here, then run: python3 -I compose.py. Captures are real simulator screenshots in captures/<set>/. 'width' is a fraction of the canvas width; 'top' places a shot under the headline, 'y' at a fixed height; 'crop' is [left, top, right, bottom] as fractions of the capture.",
+  "slides": [
+    {
+      "file": "main-value",
+      "eyebrow": "Chat-style notes",
+      "headline": "Notes that feel\nlike chats",
+      "sub": "Text yourself a thought. Sort it out later.",
+      "theme": {
+        "background": "#EADFCB",
+        "ink": "#2B2620",
+        "muted": "#5E5444",
+        "accent": "#8A6A2E"
+      },
+      "layouts": {
+        "default": {
+          "shots": [
+            {
+              "capture": "01-chat",
+              "width": 0.8,
+              "x": 0.5,
+              "top": 0.0
+            }
+          ]
+        },
+        "iphone-duo-inner": {
+          "shots": [
+            {
+              "capture": "01-chat",
+              "width": 0.8,
+              "x": 0.5,
+              "top": 0.0,
+              "radius": 0.035
+            }
+          ]
+        }
+      }
+    },
+    {
+      "file": "kanban-boards",
+      "eyebrow": "Boards",
+      "headline": "Turn notes\ninto plans",
+      "sub": "Cards, columns and checklists you can drag around.",
+      "theme": {
+        "background": "#FBE47E",
+        "ink": "#2B2620",
+        "muted": "#574E41",
+        "accent": "#7A5A00"
+      },
+      "layouts": {
+        "default": {
+          "shots": [
+            {
+              "capture": "02-board",
+              "width": 0.6,
+              "x": 0.335,
+              "top": 0.06,
+              "rotate": 4
+            },
+            {
+              "capture": "02b-board-doing",
+              "width": 0.66,
+              "x": 0.635,
+              "top": 0.02,
+              "rotate": -3
+            }
+          ]
+        },
+        "iphone-duo-inner": {
+          "shots": [
+            {
+              "capture": "02-board",
+              "width": 0.8,
+              "x": 0.5,
+              "top": 0.0,
+              "radius": 0.035
+            }
+          ]
+        }
+      }
+    },
+    {
+      "file": "spaces",
+      "eyebrow": "Spaces",
+      "headline": "Stick notes where\nyou'll see them",
+      "sub": "On the Fridge, Desk, Cork Board or Wall.",
+      "theme": {
+        "background": "#CFE6F7",
+        "ink": "#2B2620",
+        "muted": "#3F4A55",
+        "accent": "#2D5E86"
+      },
+      "layouts": {
+        "default": {
+          "shots": [
+            {
+              "capture": "03a-spaces-pick",
+              "width": 0.6,
+              "x": 0.335,
+              "top": 0.06,
+              "rotate": 4
+            },
+            {
+              "capture": "03b-fridge",
+              "width": 0.66,
+              "x": 0.635,
+              "top": 0.02,
+              "rotate": -3
+            }
+          ]
+        },
+        "iphone-duo-inner": {
+          "shots": [
+            {
+              "capture": "03a-spaces-pick",
+              "width": 0.8,
+              "x": 0.5,
+              "top": 0.0,
+              "radius": 0.035
+            }
+          ]
+        }
+      }
+    },
+    {
+      "file": "plan-my-day",
+      "eyebrow": "Plan My Day",
+      "headline": "Plan your day,\nthen wrap it up",
+      "sub": "A few little things. One evening check-in.",
+      "theme": {
+        "background": "#FFD6AE",
+        "ink": "#2B2620",
+        "muted": "#5E4632",
+        "accent": "#9A4B12"
+      },
+      "layouts": {
+        "default": {
+          "shots": [
+            {
+              "capture": "04-plan",
+              "width": 0.8,
+              "x": 0.5,
+              "top": 0.0
+            }
+          ]
+        },
+        "iphone-duo-inner": {
+          "shots": [
+            {
+              "capture": "04-plan",
+              "width": 0.8,
+              "x": 0.5,
+              "top": 0.0,
+              "radius": 0.035
+            }
+          ]
+        }
+      }
+    },
+    {
+      "file": "checklists",
+      "eyebrow": "Checklists",
+      "headline": "Tick off the\nlittle things",
+      "sub": "Checklists live right inside your notes and cards.",
+      "theme": {
+        "background": "#D2F0C4",
+        "ink": "#2B2620",
+        "muted": "#3E5236",
+        "accent": "#3C6B2A"
+      },
+      "layouts": {
+        "default": {
+          "shots": [
+            {
+              "capture": "05-notes-checklists",
+              "width": 0.86,
+              "x": 0.5,
+              "top": 0.0,
+              "crop": [
+                0,
+                0.335,
+                1,
+                1
+              ],
+              "radius": 0.06
+            }
+          ]
+        },
+        "iphone-duo-inner": {
+          "shots": [
+            {
+              "capture": "05-notes-checklists",
+              "width": 0.8,
+              "x": 0.5,
+              "top": 0.0,
+              "radius": 0.035
+            }
+          ]
+        },
+        "iphone-duo-outer": {
+          "shots": [
+            {
+              "capture": "05-notes-checklists",
+              "width": 0.8,
+              "x": 0.5,
+              "top": 0.0,
+              "crop": [
+                0,
+                0.335,
+                0.81,
+                1
+              ],
+              "radius": 0.06
+            }
+          ]
+        }
+      }
+    },
+    {
+      "file": "calendar",
+      "eyebrow": "Calendar & reminders",
+      "headline": "Remember\nwhat matters",
+      "sub": "Give any note a date, a time and a nudge.",
+      "theme": {
+        "background": "#FFC7CC",
+        "ink": "#2B2620",
+        "muted": "#5A3D41",
+        "accent": "#9B3346"
+      },
+      "layouts": {
+        "default": {
+          "shots": [
+            {
+              "capture": "06-calendar",
+              "width": 0.8,
+              "x": 0.5,
+              "top": 0.0
+            }
+          ]
+        },
+        "iphone-duo-inner": {
+          "shots": [
+            {
+              "capture": "06-calendar",
+              "width": 0.8,
+              "x": 0.5,
+              "top": 0.0,
+              "radius": 0.035
+            }
+          ]
+        }
+      }
+    },
+    {
+      "file": "rich-notes",
+      "eyebrow": "Voice notes & files",
+      "headline": "More than\njust text",
+      "sub": "Voice notes, photos, videos and PDFs.",
+      "theme": {
+        "background": "#FBFAF6",
+        "ink": "#2B2620",
+        "muted": "#574E41",
+        "accent": "#8A6A2E"
+      },
+      "layouts": {
+        "default": {
+          "shots": [
+            {
+              "capture": "01-chat",
+              "width": 0.86,
+              "x": 0.5,
+              "top": 0.0,
+              "crop": [
+                0,
+                0.33,
+                1,
+                0.75
+              ],
+              "radius": 0.05
+            },
+            {
+              "capture": "07-attachments",
+              "width": 0.42,
+              "x": 0.73,
+              "y": 0.84,
+              "rotate": -3,
+              "frame": true
+            }
+          ]
+        },
+        "iphone-duo-inner": {
+          "shots": [
+            {
+              "capture": "07-attachments",
+              "width": 0.8,
+              "x": 0.5,
+              "top": 0.0,
+              "radius": 0.035
+            }
+          ]
+        },
+        "iphone-duo-outer": {
+          "shots": [
+            {
+              "capture": "01-chat",
+              "width": 0.8,
+              "x": 0.5,
+              "top": 0.0,
+              "crop": [
+                0,
+                0.08,
+                0.81,
+                0.63
+              ],
+              "radius": 0.05
+            },
+            {
+              "capture": "07-attachments",
+              "width": 0.4,
+              "x": 0.74,
+              "y": 0.83,
+              "rotate": -3,
+              "frame": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "file": "offline",
+      "eyebrow": "Private by design",
+      "headline": "No account.\nWorks offline.",
+      "sub": "Your notes are saved right on your iPhone.",
+      "theme": {
+        "background": "#2B2620",
+        "ink": "#FFFDF6",
+        "muted": "#D9CDB8",
+        "accent": "#FBE47E"
+      },
+      "layouts": {
+        "default": {
+          "shots": [
+            {
+              "capture": "08-notes-board",
+              "width": 0.8,
+              "x": 0.5,
+              "top": 0.0
+            }
+          ]
+        },
+        "iphone-duo-inner": {
+          "shots": [
+            {
+              "capture": "08-notes-board",
+              "width": 0.8,
+              "x": 0.5,
+              "top": 0.0,
+              "radius": 0.035
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

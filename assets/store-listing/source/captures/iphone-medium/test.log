@@ -1,0 +1,336 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test-without-building -project /Users/larajulious/Development/Chits/assets/store-listing/source/capture/StoreCapture.xcodeproj -scheme StoreCaptureTests -destination id=CF45E21F-22F1-498E-9F4E-63EACA9C81B9 -parallel-testing-enabled NO -derivedDataPath /private/tmp/claude-501/-Users-larajulious-Development-Chits/e4d88aa1-24e9-4959-8f0e-35c3f4f81de1/scratchpad/dd-cap-m
+
+2026-11-18 20:08:46.983 xcodebuild[19895:8407147] [MT] IDERunDestination: Supported platforms for the buildables in the current scheme is empty.
+2026-11-18 20:08:56.050581+0800 StoreCaptureTests-Runner[19963:8407854] [Default] Running tests...
+objc[19963]: Class UIAccessibilityLoaderWebShared is implemented in both /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.T8XHFu/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.2.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x10a388310) and /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.T8XHFu/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.2.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x10a83c398). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'All tests' started at 2026-11-18 20:09:22.520.
+Test Suite 'StoreCaptureTests.xctest' started at 2026-11-18 20:09:22.544.
+Test Suite 'StoreCaptureTests' started at 2026-11-18 20:09:22.545.
+Test Case '-[StoreCaptureTests.StoreCaptureTests testCaptureStoreScreens]' started.
+    t =     0.05s Start Test at 2026-11-18 20:09:22.598
+    t =     1.30s Set Up
+    t =     1.31s Open com.larajulious.chitsapp
+    t =     1.31s     Activate com.larajulious.chitsapp
+    t =     1.45s         Wait for com.larajulious.chitsapp to idle
+    t =     4.62s Checking existence of `"Allow" Button`
+    t =     5.60s Checking existence of `"Not Now" Button`
+    t =     5.64s Checking existence of `"Don’t Allow" Button`
+    t =     5.67s Checking existence of `"OK" Button`
+    t =     7.71s Checking existence of `"Allow" Button`
+    t =     7.74s Checking existence of `"Not Now" Button`
+    t =     7.77s Checking existence of `"Don’t Allow" Button`
+    t =     7.80s Checking existence of `"OK" Button`
+STORE ready 05-notes-checklists
+    t =    10.66s Waiting 5.0s for Any (First Match) to exist
+    t =    11.73s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =    11.74s         Checking existence of `Any (First Match)`
+    t =    12.12s Tap Any (First Match)
+    t =    12.12s     Wait for com.larajulious.chitsapp to idle
+    t =    12.13s     Find the Any (First Match)
+    t =    12.25s     Check for interrupting elements affecting "Open Chat" Button
+    t =    12.61s     Synthesize event
+    t =    13.29s     Wait for com.larajulious.chitsapp to idle
+    t =    18.32s Checking existence of `"Allow" Button`
+    t =    18.53s Checking existence of `"Not Now" Button`
+    t =    18.56s Checking existence of `"Don’t Allow" Button`
+    t =    18.58s Checking existence of `"OK" Button`
+STORE ready 01-chat
+    t =    20.13s Checking existence of `Button (First Match)`
+    t =    20.27s Find the Button (First Match)
+    t =    20.48s Tap "Back" Button
+    t =    20.50s     Wait for com.larajulious.chitsapp to idle
+    t =    20.50s     Find the "Back" Button
+    t =    20.53s     Check for interrupting elements affecting "Back" Button
+    t =    20.74s     Synthesize event
+    t =    21.07s     Wait for com.larajulious.chitsapp to idle
+    t =    23.29s Checking existence of `Button (First Match)`
+    t =    23.50s Checking existence of `Any (First Match)`
+    t =    23.64s Waiting 5.0s for Any (First Match) to exist
+    t =    24.67s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =    24.72s         Checking existence of `Any (First Match)`
+    t =    24.73s Tap Any (First Match)
+    t =    24.73s     Wait for com.larajulious.chitsapp to idle
+    t =    24.74s     Find the Any (First Match)
+    t =    24.77s     Check for interrupting elements affecting "Open navigation" Button
+    t =    24.90s     Synthesize event
+    t =    25.23s     Wait for com.larajulious.chitsapp to idle
+    t =    26.43s Waiting 5.0s for Any (First Match) to exist
+    t =    27.47s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =    27.49s         Checking existence of `Any (First Match)`
+    t =    27.54s Tap Any (First Match)
+    t =    27.54s     Wait for com.larajulious.chitsapp to idle
+    t =    27.54s     Find the Any (First Match)
+    t =    27.57s     Check for interrupting elements affecting "Apartment Move. Board." Button
+    t =    27.66s     Synthesize event
+    t =    27.97s     Wait for com.larajulious.chitsapp to idle
+    t =    33.31s Checking existence of `"Allow" Button`
+    t =    33.55s Checking existence of `"Not Now" Button`
+    t =    33.57s Checking existence of `"Don’t Allow" Button`
+    t =    33.60s Checking existence of `"OK" Button`
+STORE ready 02-board
+    t =    36.67s Waiting 3.0s for Any (First Match) to exist
+    t =    37.70s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =    37.72s         Checking existence of `Any (First Match)`
+    t =    37.88s Tap Any (First Match)
+    t =    37.88s     Wait for com.larajulious.chitsapp to idle
+    t =    37.89s     Find the Any (First Match)
+    t =    37.94s     Check for interrupting elements affecting "Doing" StaticText
+    t =    38.19s     Synthesize event
+    t =    38.33s         Scroll element to visible
+    t =    38.40s         Find the "Doing" StaticText
+    t =    38.49s         Computed hit point {231.83332824707031, 159.00000032782555} after scrolling to visible
+    t =    38.85s     Wait for com.larajulious.chitsapp to idle
+    t =    42.86s Checking existence of `"Allow" Button`
+    t =    42.95s Checking existence of `"Not Now" Button`
+    t =    42.98s Checking existence of `"Don’t Allow" Button`
+    t =    43.00s Checking existence of `"OK" Button`
+STORE ready 02b-board-doing
+    t =    44.30s Checking existence of `Button (First Match)`
+    t =    44.34s Find the Button (First Match)
+    t =    44.40s Tap "Go back" Button
+    t =    44.40s     Wait for com.larajulious.chitsapp to idle
+    t =    44.40s     Find the "Go back" Button
+    t =    44.42s     Check for interrupting elements affecting "Go back" Button
+    t =    44.50s     Synthesize event
+    t =    44.82s     Wait for com.larajulious.chitsapp to idle
+    t =    47.37s Checking existence of `Button (First Match)`
+    t =    47.48s Checking existence of `Any (First Match)`
+    t =    47.58s Waiting 5.0s for Any (First Match) to exist
+    t =    48.61s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =    48.64s         Checking existence of `Any (First Match)`
+    t =    48.67s Tap Any (First Match)
+    t =    48.67s     Wait for com.larajulious.chitsapp to idle
+    t =   108.78s App animations complete notification not received, will attempt to continue.
+    t =   108.79s     Find the Any (First Match)
+    t =   109.07s     Check for interrupting elements affecting "Open navigation" Button
+    t =   109.55s     Synthesize event
+    t =   110.04s     Wait for com.larajulious.chitsapp to idle
+    t =   170.17s App animations complete notification not received, will attempt to continue.
+    t =   171.19s Waiting 5.0s for Any (First Match) to exist
+    t =   172.21s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   172.22s         Checking existence of `Any (First Match)`
+    t =   172.29s Tap Any (First Match)
+    t =   172.29s     Wait for com.larajulious.chitsapp to idle
+    t =   232.36s App animations complete notification not received, will attempt to continue.
+    t =   232.36s     Find the Any (First Match)
+    t =   232.56s     Check for interrupting elements affecting "Spaces, 7 notes" Button
+    t =   232.87s     Synthesize event
+    t =   233.32s     Wait for com.larajulious.chitsapp to idle
+    t =   239.49s Checking existence of `"Allow" Button`
+    t =   239.57s Checking existence of `"Not Now" Button`
+    t =   239.60s Checking existence of `"Don’t Allow" Button`
+    t =   239.63s Checking existence of `"OK" Button`
+STORE ready 03a-spaces-pick
+    t =   241.94s Waiting 3.0s for Any (First Match) to exist
+    t =   242.98s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   242.98s         Checking existence of `Any (First Match)`
+    t =   243.02s Tap Any (First Match)
+    t =   243.02s     Wait for com.larajulious.chitsapp to idle
+    t =   243.03s     Find the Any (First Match)
+    t =   243.06s     Check for interrupting elements affecting "Stick them on the Fridge" Button
+    t =   243.14s     Synthesize event
+    t =   243.45s     Wait for com.larajulious.chitsapp to idle
+    t =   248.46s Checking existence of `"Allow" Button`
+    t =   248.55s Checking existence of `"Not Now" Button`
+    t =   248.59s Checking existence of `"Don’t Allow" Button`
+    t =   248.62s Checking existence of `"OK" Button`
+STORE ready 03b-fridge
+    t =   250.69s Checking existence of `Button (First Match)`
+    t =   250.73s Checking existence of `Any (First Match)`
+    t =   250.76s Checking existence of `Any (First Match)`
+    t =   250.78s Waiting 5.0s for Any (First Match) to exist
+    t =   251.83s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   251.85s         Checking existence of `Any (First Match)`
+    t =   251.90s Tap Any (First Match)
+    t =   251.90s     Wait for com.larajulious.chitsapp to idle
+    t =   251.90s     Find the Any (First Match)
+    t =   251.94s     Check for interrupting elements affecting "Open navigation" Button
+    t =   252.02s     Synthesize event
+    t =   252.45s     Wait for com.larajulious.chitsapp to idle
+    t =   253.54s Waiting 5.0s for Any (First Match) to exist
+    t =   254.58s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   254.59s         Checking existence of `Any (First Match)`
+    t =   254.65s Tap Any (First Match)
+    t =   254.65s     Wait for com.larajulious.chitsapp to idle
+    t =   254.66s     Find the Any (First Match)
+    t =   254.69s     Check for interrupting elements affecting "Notes" Button
+    t =   254.79s     Synthesize event
+    t =   255.16s     Wait for com.larajulious.chitsapp to idle
+    t =   258.59s Waiting 5.0s for Any (First Match) to exist
+    t =   259.62s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   259.62s         Checking existence of `Any (First Match)`
+    t =   259.70s Tap Any (First Match)
+    t =   259.70s     Wait for com.larajulious.chitsapp to idle
+    t =   319.82s App animations complete notification not received, will attempt to continue.
+    t =   319.87s     Find the Any (First Match)
+    t =   320.38s     Check for interrupting elements affecting "View Today’s Plan" Button
+    t =   320.89s     Synthesize event
+    t =   321.25s     Wait for com.larajulious.chitsapp to idle
+    t =   327.85s Checking existence of `"Allow" Button`
+    t =   327.93s Checking existence of `"Not Now" Button`
+    t =   327.96s Checking existence of `"Don’t Allow" Button`
+    t =   328.00s Checking existence of `"OK" Button`
+STORE ready 04-plan
+    t =   334.69s Checking existence of `Button (First Match)`
+    t =   334.72s Find the Button (First Match)
+    t =   334.79s Tap "Go back" Button
+    t =   334.79s     Wait for com.larajulious.chitsapp to idle
+    t =   334.79s     Find the "Go back" Button
+    t =   334.82s     Check for interrupting elements affecting "Go back" Button
+    t =   334.91s     Synthesize event
+    t =   335.22s     Wait for com.larajulious.chitsapp to idle
+    t =   395.40s App animations complete notification not received, will attempt to continue.
+    t =   397.47s Checking existence of `Button (First Match)`
+    t =   398.64s Checking existence of `Any (First Match)`
+    t =   398.83s Waiting 5.0s for Any (First Match) to exist
+    t =   399.86s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   399.99s         Checking existence of `Any (First Match)`
+    t =   400.05s Tap Any (First Match)
+    t =   400.05s     Wait for com.larajulious.chitsapp to idle
+    t =   460.41s App animations complete notification not received, will attempt to continue.
+    t =   460.48s     Find the Any (First Match)
+    t =   461.40s     Check for interrupting elements affecting "Open navigation" Button
+    t =   462.45s     Synthesize event
+    t =   463.64s     Wait for com.larajulious.chitsapp to idle
+    t =   524.08s App animations complete notification not received, will attempt to continue.
+    t =   525.14s Waiting 5.0s for Any (First Match) to exist
+    t =   526.18s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   526.27s         Checking existence of `Any (First Match)`
+    t =   526.50s Tap Any (First Match)
+    t =   526.50s     Wait for com.larajulious.chitsapp to idle
+    t =   586.71s App animations complete notification not received, will attempt to continue.
+    t =   586.77s     Find the Any (First Match)
+    t =   587.78s     Check for interrupting elements affecting "Calendar, 7 reminders" Button
+    t =   588.77s     Synthesize event
+    t =   589.50s     Wait for com.larajulious.chitsapp to idle
+    t =   599.20s Checking existence of `"Allow" Button`
+    t =   599.84s Checking existence of `"Not Now" Button`
+    t =   599.88s Checking existence of `"Don’t Allow" Button`
+    t =   599.91s Checking existence of `"OK" Button`
+STORE ready 06-calendar
+    t =   613.19s Checking existence of `Button (First Match)`
+    t =   614.66s Checking existence of `Any (First Match)`
+    t =   615.17s Checking existence of `Any (First Match)`
+    t =   615.46s Waiting 5.0s for Any (First Match) to exist
+    t =   616.50s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   616.58s         Checking existence of `Any (First Match)`
+    t =   616.62s Tap Any (First Match)
+    t =   616.62s     Wait for com.larajulious.chitsapp to idle
+    t =   616.62s     Find the Any (First Match)
+    t =   616.68s     Check for interrupting elements affecting "Open navigation" Button
+    t =   617.19s     Synthesize event
+    t =   617.90s     Wait for com.larajulious.chitsapp to idle
+    t =   618.92s Waiting 5.0s for Any (First Match) to exist
+    t =   620.12s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   620.15s         Checking existence of `Any (First Match)`
+    t =   620.22s Tap Any (First Match)
+    t =   620.22s     Wait for com.larajulious.chitsapp to idle
+    t =   620.23s     Find the Any (First Match)
+    t =   620.27s     Check for interrupting elements affecting "Notes" Button
+    t =   620.51s     Synthesize event
+    t =   620.84s     Wait for com.larajulious.chitsapp to idle
+    t =   623.86s Waiting 5.0s for Any (First Match) to exist
+    t =   624.90s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   624.92s         Checking existence of `Any (First Match)`
+    t =   625.02s Tap Any (First Match)
+    t =   625.02s     Wait for com.larajulious.chitsapp to idle
+    t =   685.19s App animations complete notification not received, will attempt to continue.
+    t =   685.23s     Find the Any (First Match)
+    t =   685.81s     Check for interrupting elements affecting "Open navigation" Button
+    t =   686.65s     Synthesize event
+    t =   687.26s     Wait for com.larajulious.chitsapp to idle
+    t =   747.49s App animations complete notification not received, will attempt to continue.
+    t =   748.53s Waiting 5.0s for Any (First Match) to exist
+    t =   749.68s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   749.79s         Checking existence of `Any (First Match)`
+    t =   750.38s Tap Any (First Match)
+    t =   750.38s     Wait for com.larajulious.chitsapp to idle
+    t =   810.62s App animations complete notification not received, will attempt to continue.
+    t =   810.67s     Find the Any (First Match)
+    t =   811.42s     Check for interrupting elements affecting "Attachments" Button
+    t =   812.29s     Synthesize event
+    t =   812.85s     Wait for com.larajulious.chitsapp to idle
+    t =   819.07s Checking existence of `"Allow" Button`
+    t =   819.60s Checking existence of `"Not Now" Button`
+    t =   819.68s Checking existence of `"Don’t Allow" Button`
+    t =   819.74s Checking existence of `"OK" Button`
+STORE ready 07-attachments
+    t =   830.85s Waiting 3.0s for Any (First Match) to exist
+    t =   831.97s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   832.08s         Checking existence of `Any (First Match)`
+    t =   832.28s Tap Any (First Match)
+    t =   832.28s     Wait for com.larajulious.chitsapp to idle
+    t =   832.28s     Find the Any (First Match)
+    t =   832.34s     Check for interrupting elements affecting "Lisbon itinerary.pdf. PDF · 77 KB" Button
+    t =   832.62s     Synthesize event
+    t =   833.13s     Wait for com.larajulious.chitsapp to idle
+    t =   838.14s Checking existence of `"Allow" Button`
+    t =   838.23s Checking existence of `"Not Now" Button`
+    t =   838.29s Checking existence of `"Don’t Allow" Button`
+    t =   838.37s Checking existence of `"OK" Button`
+STORE ready 07b-pdf
+    t =   845.34s Waiting 2.0s for Any (First Match) to exist
+    t =   846.41s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   846.41s         Checking existence of `Any (First Match)`
+    t =   846.43s Tap Any (First Match)
+    t =   846.43s     Wait for com.larajulious.chitsapp to idle
+    t =   846.44s     Find the Any (First Match)
+    t =   846.46s     Check for interrupting elements affecting "Close" Button
+    t =   846.50s     Synthesize event
+    t =   846.81s     Wait for com.larajulious.chitsapp to idle
+    t =   848.00s Checking existence of `Button (First Match)`
+    t =   848.08s Checking existence of `Any (First Match)`
+    t =   848.14s Checking existence of `Any (First Match)`
+    t =   848.20s Waiting 5.0s for Any (First Match) to exist
+    t =   849.28s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   849.28s         Checking existence of `Any (First Match)`
+    t =   849.30s Tap Any (First Match)
+    t =   849.30s     Wait for com.larajulious.chitsapp to idle
+    t =   849.30s     Find the Any (First Match)
+    t =   849.33s     Check for interrupting elements affecting "Open navigation" Button
+    t =   849.53s     Synthesize event
+    t =   849.85s     Wait for com.larajulious.chitsapp to idle
+    t =   850.87s Waiting 5.0s for Any (First Match) to exist
+    t =   851.97s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   852.00s         Checking existence of `Any (First Match)`
+    t =   852.09s Tap Any (First Match)
+    t =   852.09s     Wait for com.larajulious.chitsapp to idle
+    t =   852.10s     Find the Any (First Match)
+    t =   852.16s     Check for interrupting elements affecting "Notes" Button
+    t =   852.33s     Synthesize event
+    t =   852.68s     Wait for com.larajulious.chitsapp to idle
+    t =   855.70s Waiting 3.0s for Any (First Match) to exist
+    t =   856.78s     Checking `Expect predicate `existsNoRetry == 1` for object Any (First Match)`
+    t =   856.78s         Checking existence of `Any (First Match)`
+    t =   856.81s Tap Any (First Match)
+    t =   856.81s     Wait for com.larajulious.chitsapp to idle
+    t =   917.05s App animations complete notification not received, will attempt to continue.
+    t =   917.10s     Find the Any (First Match)
+    t =   917.97s     Check for interrupting elements affecting "Switch to board view" Button
+    t =   918.91s     Synthesize event
+    t =   919.59s     Wait for com.larajulious.chitsapp to idle
+    t =   926.97s Checking existence of `"Allow" Button`
+    t =   927.40s Checking existence of `"Not Now" Button`
+    t =   927.45s Checking existence of `"Don’t Allow" Button`
+    t =   927.49s Checking existence of `"OK" Button`
+STORE ready 08-notes-board
+    t =   937.56s Tear Down
+Test Case '-[StoreCaptureTests.StoreCaptureTests testCaptureStoreScreens]' passed (941.618 seconds).
+Test Suite 'StoreCaptureTests' passed at 2026-11-18 20:25:04.224.
+	 Executed 1 test, with 0 failures (0 unexpected) in 941.618 (941.680) seconds
+Test Suite 'StoreCaptureTests.xctest' passed at 2026-11-18 20:25:04.243.
+	 Executed 1 test, with 0 failures (0 unexpected) in 941.618 (941.699) seconds
+Test Suite 'All tests' passed at 2026-11-18 20:25:04.244.
+	 Executed 1 test, with 0 failures (0 unexpected) in 941.618 (941.723) seconds
+2026-11-18 20:25:05.444 xcodebuild[19895:8407147] [MT] IDETestOperationsObserverDebug: 978.181 elapsed -- Testing started completed.
+2026-11-18 20:25:05.447 xcodebuild[19895:8407147] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-18 20:25:05.447 xcodebuild[19895:8407147] [MT] IDETestOperationsObserverDebug: 978.181 sec, +978.181 sec -- end
+
+Test session results, code coverage, and logs:
+	/tmp/claude-501/-Users-larajulious-Development-Chits/e4d88aa1-24e9-4959-8f0e-35c3f4f81de1/scratchpad/dd-cap-m/Logs/Test/Test-StoreCaptureTests-2026.11.18_20-08-47-+0800.xcresult
+
+** TEST EXECUTE SUCCEEDED **
+
+Testing started
